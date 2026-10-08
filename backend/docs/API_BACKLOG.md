@@ -33,15 +33,15 @@ Register every new router in `app/api/v1/router.py`.
 
 | ID | API / task | Frontend need | Status | Owner |
 |---|---|---|---|---|
-| P0-1 | PostgreSQL + `campus_id` on all tables | Multi-campus ready | NEXT | You |
-| P0-2 | `POST /api/v1/auth/login` (password/OTP later) | Replace fake OTP | DONE (password seed) | You |
-| P0-3 | `GET /api/v1/auth/me` | Session / profile | DONE | You |
-| P0-4 | `POST /api/v1/auth/otp/challenge` + `verify` | Sign-in flow | NEXT | You |
-| P0-5 | Roles seed (25 frontend roles + MD later) | Select profile / RBAC | NEXT | You |
-| P0-6 | Permission matrix CRUD | Admin RBAC screens | NEXT | You |
-| P0-7 | Immutable system audit log middleware | Architecture Rule 5 | NEXT | You |
+| P0-1 | PostgreSQL + `campus_id` on all tables | Multi-campus ready | DONE | You |
+| P0-2 | `POST /api/v1/auth/login` (password/OTP later) | Replace fake OTP | DONE | You |
+| P0-3 | `GET /api/v1/auth/me` (+ permissions) | Session / profile | DONE | You |
+| P0-4 | `POST /api/v1/auth/otp/challenge` + `verify` | Sign-in flow | DONE | You |
+| P0-5 | Roles seed (25 frontend roles + MD later) | Select profile / RBAC | DONE | You |
+| P0-6 | Permission matrix CRUD | Admin RBAC screens | DONE | You |
+| P0-7 | Immutable system audit log middleware | Architecture Rule 5 | DONE | You |
 | P0-8 | File upload stub `POST /api/v1/files` | Documents / attachments | PLANNED | You |
-| P0-9 | Masters: classes, sections, subjects, academic year | Admin / Teacher forms | NEXT | You |
+| P0-9 | Masters: classes, sections, subjects, academic year | Admin / Teacher forms | DONE | You |
 
 ---
 

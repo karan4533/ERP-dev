@@ -9,8 +9,11 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.db.base import Base  # noqa: F401 — registers models
 from app.db.session import SessionLocal, engine
+from app.middleware.audit_middleware import AuditMiddleware
 from app.services.auth_service import ensure_seed_admin
 from app.services.campus_service import ensure_default_campus
+from app.services.masters_service import ensure_master_seeds
+from app.services.role_service import ensure_role_permissions, ensure_roles
 
 
 @asynccontextmanager
@@ -22,7 +25,10 @@ async def lifespan(_: FastAPI):
         db = SessionLocal()
         try:
             ensure_default_campus(db)
+            ensure_roles(db)
+            ensure_role_permissions(db)
             ensure_seed_admin(db)
+            ensure_master_seeds(db)
         finally:
             db.close()
     except OperationalError as exc:
@@ -40,13 +46,13 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=__version__,
         description=(
-            "QMIS School ERP backend API. "
-            "Frontend lives at the repo root (Vite React demo). "
-            "All new domain modules should go under app/api/v1/endpoints."
+            "QMIS School ERP backend API — Phase 0 foundation. "
+            "Auth, RBAC, masters, audit log, and HR employee starter."
         ),
         lifespan=lifespan,
     )
 
+    application.add_middleware(AuditMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

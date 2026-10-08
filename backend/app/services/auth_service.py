@@ -2,11 +2,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.role import ROLE_LABELS
 from app.models.user import User
+from app.schemas.auth import MeResponse
+from app.services.role_service import get_permissions_map
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(User.email == email.lower().strip()).first()
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
@@ -26,6 +29,20 @@ def issue_token_for_user(user: User) -> str:
             "campus_id": user.campus_id,
             "email": user.email,
         },
+    )
+
+
+def build_me_response(db: Session, user: User) -> MeResponse:
+    permissions = get_permissions_map(db, user.role)
+    return MeResponse(
+        id=user.id,
+        campus_id=user.campus_id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        role_label=ROLE_LABELS.get(user.role, user.role),
+        permissions=permissions,
     )
 
 

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-to-a-long-random-string"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 480
+    otp_expire_minutes: int = 10
 
     default_campus_id: int = 1
 
