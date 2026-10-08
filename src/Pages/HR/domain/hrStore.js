@@ -3,8 +3,11 @@ import { SEED, ONBOARDING_ITEMS } from './hrSeed'
 import { PAYROLL_CONFIG } from './payrollConfig'
 import { buildSalaryRow, calculateReferralBonus, summarizePayroll } from './payrollCalculations'
 import { isLockedStatus } from './hrStatus'
+import { connectHrApi, markHrSeeded, pullHrSnapshot, pushHrKey } from '../../../services/hrApi'
 
 const cache = {}
+let remote = false
+const pushTimers = {}
 
 const asList = (value, fallback) => {
     const source = Array.isArray(value) ? value : fallback
@@ -23,10 +26,56 @@ const read = (key, fallback) => {
     return cache[key] && typeof cache[key] === 'object' ? cache[key] : fallback
 }
 
-const write = (key, value) => {
+const write = (key, value, sync = true) => {
     const stored = Array.isArray(value) ? asList(value, []) : value
     cache[key] = stored
     saveHrCollection(key, stored)
+    if (sync && remote) schedulePush(key, stored)
+}
+
+const schedulePush = (key, value) => {
+    window.clearTimeout(pushTimers[key])
+    pushTimers[key] = window.setTimeout(() => {
+        pushHrKey(key, value).catch(() => {})
+    }, 400)
+}
+
+const rememberRemote = (key, value) => {
+    if (Array.isArray(SEED[storageName(key)] || value)) {
+        cache[key] = asList(value, [])
+    } else {
+        cache[key] = value
+    }
+    saveHrCollection(key, cache[key])
+}
+
+const storageName = (key) => Object.keys(HR_KEYS).find((name) => HR_KEYS[name] === key)
+
+export async function hydrateHrStore() {
+    remote = false
+    try {
+        const connected = await connectHrApi()
+        if (!connected) return false
+        Object.values(HR_KEYS).forEach((key) => read(key, fallbackFor(key)))
+        const snapshot = await pullHrSnapshot()
+        if (!snapshot.seeded) {
+            await Promise.all(Object.values(HR_KEYS).map((key) => pushHrKey(key, read(key, fallbackFor(key)))))
+            await markHrSeeded()
+        } else {
+            Object.entries(snapshot.collections).forEach(([key, value]) => rememberRemote(key, value))
+        }
+        remote = true
+        return true
+    } catch {
+        remote = false
+        return false
+    }
+}
+
+const fallbackFor = (key) => {
+    const name = storageName(key)
+    if (name === 'exit') return SEED.exits
+    return SEED[name]
 }
 
 export const getEmployees = () => read(HR_KEYS.employees, SEED.employees)
