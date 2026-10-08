@@ -30,6 +30,7 @@ dist-ssr
 *.md
 !README.md
 !backend/README.md
+!backend/docs/**/*.md
 
 # Python / FastAPI backend
 backend/.venv/

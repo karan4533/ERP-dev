@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.db.base import Base  # noqa: F401 — registers models
 from app.db.session import SessionLocal, engine
 from app.services.auth_service import ensure_seed_admin
+from app.services.campus_service import ensure_default_campus
 
 
 @asynccontextmanager
@@ -20,6 +21,7 @@ async def lifespan(_: FastAPI):
         Base.metadata.create_all(bind=engine)
         db = SessionLocal()
         try:
+            ensure_default_campus(db)
             ensure_seed_admin(db)
         finally:
             db.close()

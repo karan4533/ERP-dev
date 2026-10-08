@@ -6,6 +6,15 @@ The React frontend lives at the **repo root**. This `backend/` folder is the API
 
 **Database:** PostgreSQL (required for this project).
 
+### Team docs (start here)
+
+| Doc | Purpose |
+|---|---|
+| [docs/TEAM_ROADMAP.md](docs/TEAM_ROADMAP.md) | You vs partner — where each person starts |
+| [docs/API_BACKLOG.md](docs/API_BACKLOG.md) | Priority APIs mapped to folders |
+
+HR starter APIs (partner): `/api/v1/hr/employees` — see Swagger tag **hr**.
+
 ---
 
 ## Quick start (Windows)
