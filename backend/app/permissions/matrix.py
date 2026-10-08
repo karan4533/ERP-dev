@@ -44,15 +44,16 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("hr.employees.write", "Create HR employees"),
     ("hr.read", "View HR records"),
     ("hr.write", "Change HR records"),
+    ("hr.self", "View own staff profile, leave, attendance, and payslip"),
     ("admissions.write", "Create enquiries and enroll students"),
     ("students.read", "View students and guardians"),
 ]
 
 ALL_PERMISSION_CODES = [code for code, _ in PERMISSIONS]
 
-_CORE = ["auth.me", "masters.read"]
+_CORE = ["auth.me", "masters.read", "hr.self"]
 _ADMIN = ALL_PERMISSION_CODES
-_HR = ["auth.me", "hr.employees.read", "hr.employees.write", "hr.read", "hr.write"]
+_HR = ["auth.me", "hr.employees.read", "hr.employees.write", "hr.read", "hr.write", "hr.self"]
 _ADMISSIONS = ["auth.me", "masters.read", "admissions.write", "students.read"]
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {code: list(_CORE) for code, _ in ALL_ROLES}

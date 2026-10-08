@@ -36,4 +36,5 @@ class HrEmployee(Base):
     special_deduction: Mapped[int | None] = mapped_column(Integer, default=0)
     other_employer_benefits: Mapped[int | None] = mapped_column(Integer, default=0)
     extra: Mapped[dict | None] = mapped_column(JSON)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

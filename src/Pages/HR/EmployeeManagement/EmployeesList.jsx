@@ -3,8 +3,12 @@ import { NavLink, useSearchParams } from 'react-router-dom'
 import { Download, EllipsisIcon } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import { toast } from 'react-toastify'
+import { ROLES } from '../../../constants/roles'
 import { DEPARTMENTS, EMPLOYEE_CATEGORIES, EMPLOYEE_STATUSES } from '../domain/hrStatus'
 import { getEmployees, nextId, saveEmployees } from '../domain/hrStore'
+import { createStaff } from '../../../services/hrApi'
+
+const STAFF_ROLES = Object.values(ROLES).filter((code) => !['superadmin', 'admin', 'student', 'parent'].includes(code))
 import { HrExport, Modal, PageIntro, PrimaryButton, SearchBox, Select, TableWrap, Badge, inputClass, td, th, useFilters, useHrTick, matches } from '../components/HrUi'
 
 const emptyForm = {
@@ -29,19 +33,31 @@ const EmployeesList = () => {
         && (!filters.category || row.category === filters.category)
     ))
 
-    const save = (event) => {
+    const save = async (event) => {
         event.preventDefault()
-        if (!form.name.trim()) return toast.error('Employee name is required.')
+        if (!form.name.trim() || !form.email.trim()) return toast.error('Name and email are required.')
+        if (!form.role) return toast.error('Pick a role from the fixed list.')
         if (!form.designation.trim() || !form.joiningDate) return toast.error('Designation and joining date are required.')
         const current = getEmployees()
+        const payload = { ...form, grossSalary: Number(form.grossSalary) || 0, otherAllowance: 0, specialDeduction: 0, otherEmployerBenefits: 0 }
         if (form.id) {
-            saveEmployees(current.map((row) => (row.id === form.id ? { ...row, ...form, grossSalary: Number(form.grossSalary) || 0 } : row)))
-            toast.success('Employee updated.')
+            saveEmployees(current.map((row) => (row.id === form.id ? { ...row, department: form.department, role: form.role, reportingManager: form.reportingManager } : row)))
+            toast.success('Transfer saved. The previous department and role stay in history.')
         } else {
             const id = nextId('EMP-2026', current)
             if (current.some((row) => row.id === id)) return toast.error('Employee ID must be unique.')
-            saveEmployees([{ ...form, id, grossSalary: Number(form.grossSalary) || 0, otherAllowance: 0, specialDeduction: 0, otherEmployerBenefits: 0 }, ...current])
-            toast.success('Employee created.')
+            const draft = { ...payload, id }
+            try {
+                const created = await createStaff(draft)
+                const { temporaryPassword, ...row } = created
+                saveEmployees([row, ...current.filter((item) => item.id !== row.id)])
+                toast.success(temporaryPassword
+                    ? `Staff login created. Temporary password: ${temporaryPassword}. It must be changed on first login.`
+                    : 'Staff record saved.')
+            } catch {
+                saveEmployees([draft, ...current])
+                toast.success('Employee saved on this device. The HR API did not create the login.')
+            }
         }
         setForm(null)
     }
@@ -53,7 +69,7 @@ const EmployeesList = () => {
 
     return (
         <section>
-            <PageIntro text='Create, view, and update one employee record used across recruitment, payroll, and exit.'>
+            <PageIntro text='HR creates each staff profile once. After saving, only a department or role transfer is allowed. Salary changes go through increment, and leaving goes through exit.'>
                 <div className='flex justify-end mb-4'><PrimaryButton onClick={clear}>Clear Filters</PrimaryButton></div>
                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
                     <SearchBox value={filters.search} onChange={set('search')} placeholder='Employee ID, name...' />
@@ -85,7 +101,7 @@ const EmployeesList = () => {
                                 <td className={td}>
                                     <Dropdown buttonContent={<EllipsisIcon size={16} />}>
                                         <NavLink to={`/hr/employee-management/employee-profile/${employee.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded'>View Profile</NavLink>
-                                        <button type='button' className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded' onClick={() => setForm(employee)}>Edit</button>
+                                        <button type='button' className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded' onClick={() => setForm(employee)}>Transfer</button>
                                         <button type='button' className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded' onClick={() => setStatus(employee, employee.status === 'Inactive' ? 'Active' : 'Inactive')}>{employee.status === 'Inactive' ? 'Activate' : 'Deactivate'}</button>
                                     </Dropdown>
                                 </td>
@@ -96,21 +112,25 @@ const EmployeesList = () => {
                 <p className='text-sm text-[#515DEF] mt-4'>Showing {filtered.length} of {rows.length} employees</p>
             </TableWrap>
             {form && (
-                <Modal title={form.id ? 'Edit Employee' : 'Add Employee'} onClose={() => setForm(null)} wide>
+                <Modal title={form.id ? 'Transfer department or role' : 'Add Employee'} onClose={() => setForm(null)} wide>
                     <form onSubmit={save} className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                        {['name', 'gender', 'dateOfBirth', 'contact', 'email', 'address', 'designation', 'joiningDate', 'reportingManager', 'role', 'qualification', 'experience', 'emergencyContact', 'grossSalary'].map((key) => (
+                        {form.id ? null : ['name', 'gender', 'dateOfBirth', 'contact', 'email', 'address', 'designation', 'joiningDate', 'qualification', 'experience', 'emergencyContact', 'grossSalary'].map((key) => (
                             <label key={key} className='text-sm text-[#808080] capitalize'>{key}
                                 <input className={`${inputClass} mt-1`} value={form[key] || ''} onChange={(event) => setForm({ ...form, [key]: event.target.value })} />
                             </label>
                         ))}
+                        <Select label='Role' value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} options={STAFF_ROLES} allLabel='Select role' />
                         <Select label='Department' value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })} options={DEPARTMENTS} allLabel='Select' />
-                        <Select label='Category' value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} options={EMPLOYEE_CATEGORIES} allLabel='Select' />
-                        <Select label='Status' value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} options={EMPLOYEE_STATUSES} allLabel='Select' />
-                        <label className='text-sm text-[#808080]'>Employment Type
+                        <label className='text-sm text-[#808080]'>Reporting head
+                            <input className={`${inputClass} mt-1`} value={form.reportingManager || ''} onChange={(event) => setForm({ ...form, reportingManager: event.target.value })} />
+                        </label>
+                        {form.id ? null : <Select label='Category' value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} options={EMPLOYEE_CATEGORIES} allLabel='Select' />}
+                        {form.id ? null : <Select label='Status' value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} options={EMPLOYEE_STATUSES} allLabel='Select' />}
+                        {form.id ? null : <label className='text-sm text-[#808080]'>Employment Type
                             <select className={`${inputClass} mt-1`} value={form.employmentType} onChange={(event) => setForm({ ...form, employmentType: event.target.value })}>
                                 <option>Full Time</option><option>Part Time</option>
                             </select>
-                        </label>
+                        </label>}
                         <div className='md:col-span-2 flex justify-end'><PrimaryButton type='submit'>Save</PrimaryButton></div>
                     </form>
                 </Modal>

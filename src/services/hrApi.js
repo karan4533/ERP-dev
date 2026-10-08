@@ -23,6 +23,13 @@ const LIST_BY_KEY = {
     [HR_KEYS.performance]: 'performance',
     [HR_KEYS.notifications]: 'notifications',
     [HR_KEYS.comms]: 'comms',
+    [HR_KEYS.claims]: 'claims',
+}
+
+export async function createStaff(employee) {
+    const connected = await connectHrApi()
+    if (!connected) throw new Error('HR API is not available')
+    return request('/api/v1/hr/staff', { method: 'POST', body: JSON.stringify(employee) })
 }
 
 let token = null

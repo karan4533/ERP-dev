@@ -51,6 +51,16 @@ def require_permission(code: str):
     return checker
 
 
+def require_any(*codes: str):
+    def checker(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+        allowed = set(permission_codes_for(db, user))
+        if not any(code in allowed for code in codes):
+            fail(403, "forbidden", "You do not have permission for this action.")
+        return user
+
+    return checker
+
+
 def role_code_for(db: Session, user: User) -> str:
     role = db.get(Role, user.role_id)
     return role.code if role else ""

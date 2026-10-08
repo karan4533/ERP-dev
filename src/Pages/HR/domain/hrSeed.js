@@ -152,6 +152,7 @@ export const SEED = {
         { id: 'HR-NTF-003', type: 'Payroll', title: 'Salary Advance Pending', message: 'Salary advance ADV-2026-002 is waiting at Finance review.', relatedDate: '12-09-2026', notificationDate: '13-09-2026', postedBy: 'HR', isRead: true },
         { id: 'HR-NTF-004', type: 'Internal Job', title: 'Internal Job Opening', message: 'Mathematics Teacher is open for internal applicants.', relatedDate: '30-09-2026', notificationDate: '01-09-2026', postedBy: 'HR', isRead: false },
     ],
+    claims: [],
     comms: [
         { id: 'COM-001', channel: 'Email', subject: 'Offer letter — Farah Qureshi', audience: 'farah.qureshi@email.com', status: 'DEMO_SENT', at: '22-08-2026 11:05' },
         { id: 'COM-002', channel: 'WhatsApp', subject: 'Interview schedule — Amit Khanna', audience: '+91 98700 11122', status: 'QUEUED', at: '10-09-2026 09:10' },

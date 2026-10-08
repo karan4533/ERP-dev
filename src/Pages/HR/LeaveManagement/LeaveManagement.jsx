@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { EMPLOYEE_CATEGORIES } from '../domain/hrStatus'
-import { employeeName, getEmployees, getLeaveBundle, nextId, pushNotification, saveLeaveBundle } from '../domain/hrStore'
+import { employeeName, getAttendance, getEmployees, getLeaveBundle, nextId, pushNotification, saveAttendance, saveLeaveBundle } from '../domain/hrStore'
 import { Badge, Modal, PageIntro, PrimaryButton, Select, TableWrap, inputClass, td, th, useHrTick } from '../components/HrUi'
 
 const LeaveManagement = () => {
@@ -17,6 +17,12 @@ const LeaveManagement = () => {
     const decide = (request, next) => {
         const requestsNext = getLeaveBundle().requests.map((item) => item.id === request.id ? { ...item, status: next, approvedBy: next === 'Approved' ? 'Reporting Manager' : item.approvedBy } : item)
         saveLeaveBundle({ ...getLeaveBundle(), requests: requestsNext })
+        if (next === 'Approved') {
+            const attendanceId = `LVE-${request.id}`
+            const attendance = getAttendance().filter((row) => row.id !== attendanceId)
+            const attendanceStatus = String(request.leaveType || '').toLowerCase().includes('permission') ? 'Permission' : 'Leave'
+            saveAttendance([{ id: attendanceId, employeeId: request.employeeId, date: request.fromDate, status: attendanceStatus, source: 'Leave approval', checkIn: '—', checkOut: '—', punchIn: '', punchOut: '' }, ...attendance])
+        }
         if (next === 'Pending') pushNotification({ type: 'Leave', title: 'Leave Approval Pending', message: `${employeeName(request.employeeId)} requested ${request.leaveType}.`, relatedDate: request.fromDate })
         toast.success(`Leave ${next.toLowerCase()}.`)
     }

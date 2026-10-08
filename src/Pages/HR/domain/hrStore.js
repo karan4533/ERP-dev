@@ -164,6 +164,9 @@ export const saveNotifications = (rows) => write(HR_KEYS.notifications, rows)
 export const getComms = () => read(HR_KEYS.comms, SEED.comms)
 export const saveComms = (rows) => write(HR_KEYS.comms, rows)
 
+export const getClaims = () => read(HR_KEYS.claims, SEED.claims || [])
+export const saveClaims = (rows) => write(HR_KEYS.claims, rows)
+
 export const nextId = (prefix, rows) => {
     const numbers = asList(rows, []).map((row) => Number(String(row.id).split('-').pop())).filter((n) => !Number.isNaN(n))
     const next = (numbers.length ? Math.max(...numbers) : 0) + 1

@@ -42,11 +42,12 @@ def test_hr_vertical_round_trip(client):
         ],
     )
     assert employees.status_code == 200, employees.text
-    assert employees.json()[0]["name"] == "Priya Sharma"
+    priya_portal = next(row for row in employees.json() if row["id"] == "EMP-2026-001")
+    assert priya_portal["name"] == "Priya Sharma"
     listed = client.get("/api/v1/hr/employees", headers=headers)
     assert listed.status_code == 200
-    assert listed.json()[0]["employee_code"] == "EMP-2026-001"
-    assert listed.json()[0]["department"] == "Academic"
+    priya = next(row for row in listed.json() if row["employee_code"] == "EMP-2026-001")
+    assert priya["department"] == "Academic"
 
     document = client.post(
         "/api/v1/hr/documents",

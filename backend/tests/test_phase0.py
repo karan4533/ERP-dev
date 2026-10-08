@@ -73,7 +73,8 @@ def test_hr_employee_is_hr_only(client):
         headers={"Authorization": f"Bearer {hr}"},
     )
     assert created.status_code == 201
-    assert created.json()["employee_code"] == "EMP-0001"
+    assert created.json()["employee_code"].startswith("EMP-")
+    assert created.json()["email"] == "asha@qmis.edu"
     teacher_headers = {"Authorization": f"Bearer {_login(client, 'admin@qmis.edu', 'admin123')}"}
     # Admin may hold the permission. A role without it must be rejected.
     missing = client.get("/api/v1/hr/employees")

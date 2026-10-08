@@ -2,12 +2,13 @@ from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.deps import require_permission
+from app.deps import require_any, require_permission
 from app.models import User
 from app.schemas.phase0 import EmployeeCreate, EmployeeOut
 from app.services.hr import (
     LIST_COLLECTIONS,
     create_employee,
+    create_staff,
     create_item,
     documents_for_employee,
     get_employee,
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
 @router.get("/employees", response_model=list[EmployeeOut])
 def list_employees_route(
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("hr.employees.read")),
+    user: User = Depends(require_any("hr.employees.read", "hr.self")),
 ) -> list:
     return list_employees(db, user)
 
@@ -43,11 +44,20 @@ def create_employee_route(
     return create_employee(db, user, body)
 
 
+@router.post("/staff", status_code=201)
+def create_staff_route(
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("hr.write")),
+) -> dict:
+    return create_staff(db, user, body)
+
+
 @router.get("/employees/{employee_code}", response_model=EmployeeOut)
 def get_employee_route(
     employee_code: str,
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("hr.employees.read")),
+    user: User = Depends(require_any("hr.employees.read", "hr.self")),
 ):
     return get_employee(db, user, employee_code)
 
@@ -56,7 +66,7 @@ def get_employee_route(
 def employee_documents_route(
     employee_code: str,
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("hr.read")),
+    user: User = Depends(require_any("hr.read", "hr.self")),
 ) -> list[dict]:
     return documents_for_employee(db, user, employee_code)
 
@@ -64,7 +74,7 @@ def employee_documents_route(
 @router.get("/portal/employees")
 def list_portal_employees_route(
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("hr.read")),
+    user: User = Depends(require_any("hr.read", "hr.self")),
 ) -> list[dict]:
     return portal_employees(db, user)
 
@@ -83,7 +93,7 @@ def _register_collection(collection: str) -> None:
 
     def list_route(
         db: Session = Depends(get_db),
-        user: User = Depends(require_permission("hr.read")),
+        user: User = Depends(require_any("hr.read", "hr.self")),
     ) -> list[dict]:
         return list_items(db, user, collection)
 
@@ -133,7 +143,7 @@ for _name in LIST_COLLECTIONS:
 @router.get("/leave", operation_id="get_hr_leave")
 def get_leave_route(
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("hr.read")),
+    user: User = Depends(require_any("hr.read", "hr.self")),
 ) -> dict:
     return leave_bundle(db, user)
 
@@ -150,7 +160,7 @@ def save_leave_route(
 @router.get("/payroll", operation_id="get_hr_payroll")
 def get_payroll_route(
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("hr.read")),
+    user: User = Depends(require_any("hr.read", "hr.self")),
 ) -> dict:
     return payroll_bundle(db, user)
 

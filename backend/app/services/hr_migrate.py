@@ -23,6 +23,7 @@ _EMPLOYEE_COLUMNS = (
     ("special_deduction", "INTEGER"),
     ("other_employer_benefits", "INTEGER"),
     ("extra", "JSON"),
+    ("user_id", "VARCHAR(36)"),
 )
 
 

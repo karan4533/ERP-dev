@@ -7,7 +7,7 @@ import { formatInr } from '../domain/payrollCalculations'
 import { buildPayslipModel, payslipHtml } from './payslipFormat'
 import { downloadHtml, openPrintDocument } from '../../../Common/printDocument'
 import { ADVANCE_ACTORS } from '../domain/hrSeed'
-import { advanceNext, canMutate, employeeName, getAdvances, getEmployees, getPayrollBundle, getReferrals, nextId, payrollSummary, pushNotification, queueCommunication, referralAmountFor, salaryRows, saveAdvances, savePayrollBundle, saveReferrals, upsertPayslip } from '../domain/hrStore'
+import { advanceNext, canMutate, employeeName, getAdvances, getClaims, getEmployees, getPayrollBundle, getReferrals, nextId, payrollSummary, pushNotification, queueCommunication, referralAmountFor, salaryRows, saveAdvances, saveClaims, savePayrollBundle, saveReferrals, upsertPayslip } from '../domain/hrStore'
 import { Badge, Modal, PageIntro, PrimaryButton, td, th, useHrTick } from '../components/HrUi'
 
 const moneyKeys = ['grossSalary', 'payableGross', 'basicSalary', 'lopDeduction', 'advance', 'pfEmployee', 'esiEmployee', 'netSalary']
@@ -221,31 +221,25 @@ const ReferralBonus = () => {
     )
 }
 
-const CLAIM_KEY = 'school-erp-hr-claims-v1'
-
 const ClaimCompensation = () => {
-    const [rows, setRows] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(CLAIM_KEY) || '[]') } catch { return [] }
-    })
-    const [form, setForm] = useState({ employee: 'Priya Sharma', claimType: 'Medical', amount: '', remarks: '' })
+    const tick = useHrTick()
+    const rows = useMemo(() => getClaims(), [tick])
+    const [form, setForm] = useState({ employee: 'Priya Sharma', claimType: 'Extra work time', amount: '', approver: 'HR', remarks: '' })
     const save = (event) => {
         event.preventDefault()
-        const next = [{ id: `CLM-${rows.length + 1}`, ...form, status: 'Submitted', amount: Number(form.amount) || 0 }, ...rows]
-        localStorage.setItem(CLAIM_KEY, JSON.stringify(next))
-        setRows(next)
-        toast.success('Claim saved for HR review. Official claim format is still pending.')
+        const next = [{ id: nextId('CLM', rows), ...form, status: 'Submitted', amount: Number(form.amount) || 0 }, ...rows]
+        saveClaims(next)
+        toast.success('Claim saved for HR review.')
     }
     const review = (id) => {
-        const next = rows.map((row) => row.id === id ? { ...row, status: row.status === 'Submitted' ? 'HR Reviewed' : 'Closed' } : row)
-        localStorage.setItem(CLAIM_KEY, JSON.stringify(next))
-        setRows(next)
+        saveClaims(rows.map((row) => row.id === id ? { ...row, status: row.status === 'Submitted' ? 'HR Reviewed' : 'Closed' } : row))
     }
     return (
         <section className='space-y-4'>
             <PageIntro text='Demo claim form. The official compensation format has not been supplied, so these fields are a working placeholder.' />
             <form onSubmit={save} className='bg-white rounded-2xl shadow-md p-4 grid md:grid-cols-4 gap-3'>
                 <input className='border rounded-md px-2 py-2' value={form.employee} onChange={(e) => setForm({ ...form, employee: e.target.value })} placeholder='Employee' />
-                <select className='border rounded-md px-2 py-2' value={form.claimType} onChange={(e) => setForm({ ...form, claimType: e.target.value })}><option>Medical</option><option>Travel</option><option>Other</option></select>
+                <select className='border rounded-md px-2 py-2' value={form.claimType} onChange={(e) => setForm({ ...form, claimType: e.target.value })}><option>Extra work time</option><option>Admission referral</option><option>Staff joining referral</option><option>Medical</option><option>Travel</option></select>
                 <input className='border rounded-md px-2 py-2' value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder='Amount' />
                 <button className='bg-[#515DEF] text-white rounded-md text-sm cursor-pointer'>Submit claim</button>
             </form>
