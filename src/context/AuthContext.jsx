@@ -1,4 +1,4 @@
-﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
     clearActiveAdminSession,
     findActiveAdminByEmail,
@@ -19,6 +19,9 @@ import { deviceLabel, logActivity } from '../Common/demoDomain/activityLog'
 export { ROLES }
 
 const SUPER_ADMIN_EMAILS = ['superadmin@school.com', 'superadmin2@school.com']
+
+/** Shared password for seeded demo accounts until the API issues real credentials. */
+export const DEMO_PASSWORD = 'Qmis@2026'
 
 export const FAKE_CREDENTIALS = {
     [ROLES.SUPER_ADMIN]: { email: 'superadmin@school.com' },
@@ -130,6 +133,113 @@ export const AuthProvider = ({ children }) => {
             })
         )
     }, [])
+
+    const establishSession = useCallback((expectedRole, normalizedEmail, sessionName, createdUser, createdAdmin) => {
+        setIsAuthenticated(true)
+        setRole(expectedRole)
+        setEmail(normalizedEmail)
+        setName(sessionName)
+        setPendingRole(null)
+        persistAuth(expectedRole, normalizedEmail, sessionName)
+        logActivity({
+            actor: sessionName || normalizedEmail,
+            role: expectedRole,
+            action: 'LOGIN',
+            module: 'Authentication',
+            details: `${deviceLabel()} · ${navigator.userAgent.split(' ').slice(-2).join(' ')}`,
+            recordId: crypto.randomUUID?.() || `SES-${Date.now()}`,
+        })
+
+        clearActiveCreatedUserSession()
+
+        if (expectedRole === ROLES.ADMIN) {
+            const createdAdminUser = createdAdmin || getAdminUserByEmail(normalizedEmail)
+            if (createdAdminUser && !createdAdminUser.isSystem) {
+                setActiveAdminSession(createdAdminUser)
+            } else {
+                clearActiveAdminSession()
+            }
+        } else {
+            clearActiveAdminSession()
+            if (createdUser) {
+                setActiveCreatedUserSession(createdUser)
+            }
+        }
+
+        return { success: true, role: expectedRole }
+    }, [persistAuth])
+
+    const passwordMatches = (storedPassword, enteredPassword) => {
+        const stored = String(storedPassword || '').trim()
+        if (stored) return stored === enteredPassword
+        return enteredPassword === DEMO_PASSWORD
+    }
+
+    const resolveAccount = (normalizedEmail) => {
+        if (SUPER_ADMIN_EMAILS.includes(normalizedEmail)) {
+            return { role: ROLES.SUPER_ADMIN, sessionName: null }
+        }
+
+        const seededRole = Object.entries(FAKE_CREDENTIALS).find(
+            ([, creds]) => creds.email.toLowerCase() === normalizedEmail
+        )?.[0]
+        if (seededRole) {
+            return { role: seededRole, sessionName: null }
+        }
+
+        const createdAdmin = findActiveAdminByEmail(normalizedEmail)
+        if (createdAdmin) {
+            return {
+                role: ROLES.ADMIN,
+                sessionName: createdAdmin.name || null,
+                createdAdmin,
+                storedPassword: createdAdmin.password,
+            }
+        }
+
+        const createdUser = findActiveCreatedUserByEmail(normalizedEmail)
+        if (createdUser) {
+            return {
+                role: createdUser.role,
+                sessionName: createdUser.name || null,
+                createdUser,
+                storedPassword: createdUser.password,
+            }
+        }
+
+        const registeredParent = findActiveParentByEmail(normalizedEmail)
+        if (registeredParent) {
+            return {
+                role: ROLES.PARENT,
+                sessionName: registeredParent.name || null,
+                storedPassword: registeredParent.password,
+            }
+        }
+
+        return null
+    }
+
+    const loginWithCredentials = useCallback((emailInput, password) => {
+        const normalizedEmail = String(emailInput || '').trim().toLowerCase()
+        const enteredPassword = String(password || '')
+
+        if (!normalizedEmail || !enteredPassword) {
+            return { success: false, message: 'Enter your email and password.' }
+        }
+
+        const account = resolveAccount(normalizedEmail)
+        if (!account || !passwordMatches(account.storedPassword, enteredPassword)) {
+            return { success: false, message: 'Invalid email or password.' }
+        }
+
+        return establishSession(
+            account.role,
+            normalizedEmail,
+            account.sessionName,
+            account.createdUser,
+            account.createdAdmin
+        )
+    }, [establishSession])
 
     const login = useCallback((emailInput, otp, expectedRole) => {
         const creds = FAKE_CREDENTIALS[expectedRole]
@@ -253,9 +363,10 @@ export const AuthProvider = ({ children }) => {
             pendingRole,
             setPendingRole,
             login,
+            loginWithCredentials,
             logout,
         }),
-        [isAuthenticated, role, email, name, pendingRole, login, logout]
+        [isAuthenticated, role, email, name, pendingRole, login, loginWithCredentials, logout]
     )
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -31,7 +31,7 @@ const ChildSelection = () => {
                         type='button'
                         onClick={() => {
                             logout()
-                            navigate('/select-profile')
+                            navigate('/signin')
                         }}
                         className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
                     >

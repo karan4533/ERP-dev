@@ -76,7 +76,7 @@ const UserDropdown = () => {
                                     className='block w-full text-left py-2 px-4 text-sm hover:bg-gray-100 cursor-pointer'
                                     onClick={() => {
                                         logout()
-                                        navigate('/select-profile')
+                                        navigate('/signin')
                                         setOpen(false)
                                     }}
                                 >

@@ -1,4 +1,4 @@
-﻿import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import AuthLayout from "./Layout/AuthLayout";
 import SuperAdminLayout from "./Layout/SuperAdminLayout";
 import AdminLayout from "./Layout/AdminLayout";
@@ -45,7 +45,7 @@ const App = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/select-profile" replace />;
+    return <Navigate to="/signin" replace />;
   }
 
   if (pathname.startsWith("/van-driver")) {

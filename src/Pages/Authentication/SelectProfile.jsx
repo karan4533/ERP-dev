@@ -1,8 +1,8 @@
-﻿import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react'
 import select_profile_img from '../../assets/images/select-profile-img.png'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { FAKE_CREDENTIALS, useAuth } from '../../context/AuthContext'
 import { PROFILE_BY_ROLE } from './profileOptions'
 import { ADMIN_PROFILE, SUPER_ADMIN_PROFILE, getModuleById, ROLE_MODULES } from './roleModuleConfig'
 import AuthHeader from './AuthHeader'
@@ -26,7 +26,7 @@ const SelectProfile = () => {
 
     const handleSelect = (role) => {
         setPendingRole(role)
-        navigate('/signin')
+        navigate('/signin', { state: { email: FAKE_CREDENTIALS[role]?.email || '' } })
     }
 
     const SuperAdminIcon = SUPER_ADMIN_PROFILE.icon
