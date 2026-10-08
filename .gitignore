@@ -23,6 +23,27 @@ dist-ssr
 *.sln
 *.sw?
 
-#miscelaneous
+# miscellaneous
 /scripts
+
+# Keep project READMEs; ignore other local notes if needed
 *.md
+!README.md
+!backend/README.md
+!backend/docs/**/*.md
+
+# Python / FastAPI backend
+backend/.venv/
+backend/venv/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/**/*.egg-info/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.env
+backend/*.db
+backend/*.sqlite3
+backend/qmis_erp.db
