@@ -1,0 +1,107 @@
+export const CATEGORIES = ['Cleaning Chemical', 'Equipment', 'Consumable']
+
+export const UNITS = ['Bottle', 'Packet', 'Box']
+
+export const STATUS_OPTIONS = ['Available', 'Low Stock', 'Out of Stock']
+
+export const INVENTORY_ITEMS = [
+    {
+        productId: 'HK-PRD-0088',
+        productName: 'Floor Cleaner — Lemon (5L)',
+        category: 'Cleaning Chemical',
+        supplier: 'CleanPro India',
+        supplierContact: '+91 98765 11223',
+        unit: 'Bottle',
+        availableQuantity: 24,
+        reorderLevel: 15,
+        lastPurchaseDate: '15-03-2026',
+        status: 'Available',
+        description: 'Multi-surface floor cleaner concentrate, 5 litre bottle.',
+        purchaseDate: '15-03-2026',
+        invoiceNumber: 'INV-CP-4421',
+    },
+    {
+        productId: 'HK-PRD-0075',
+        productName: 'Garbage Bags — Large (Roll of 50)',
+        category: 'Consumable',
+        supplier: 'EcoPack Supplies',
+        supplierContact: '+91 91234 88776',
+        unit: 'Packet',
+        availableQuantity: 8,
+        reorderLevel: 20,
+        lastPurchaseDate: '02-05-2026',
+        status: 'Low Stock',
+        description: 'Heavy-duty black garbage bags, 50 per packet.',
+        purchaseDate: '02-05-2026',
+        invoiceNumber: 'INV-EP-3312',
+    },
+    {
+        productId: 'HK-PRD-0062',
+        productName: 'Disinfectant Spray (500ml)',
+        category: 'Cleaning Chemical',
+        supplier: 'HygieneFirst',
+        supplierContact: '+91 99887 55443',
+        unit: 'Bottle',
+        availableQuantity: 4,
+        reorderLevel: 12,
+        lastPurchaseDate: '20-04-2026',
+        status: 'Low Stock',
+        description: 'Hospital-grade disinfectant spray for restrooms and high-touch surfaces.',
+        purchaseDate: '20-04-2026',
+        invoiceNumber: 'INV-HF-2290',
+    },
+    {
+        productId: 'HK-PRD-0051',
+        productName: 'Mop Head — Cotton (Standard)',
+        category: 'Equipment',
+        supplier: 'CleanPro India',
+        supplierContact: '+91 98765 11223',
+        unit: 'Box',
+        availableQuantity: 0,
+        reorderLevel: 10,
+        lastPurchaseDate: '10-01-2026',
+        status: 'Out of Stock',
+        description: 'Replaceable cotton mop head for standard mop handles.',
+        purchaseDate: '10-01-2026',
+        invoiceNumber: 'INV-CP-1109',
+    },
+    {
+        productId: 'HK-PRD-0043',
+        productName: 'Rubber Gloves — Large (Box of 12)',
+        category: 'Consumable',
+        supplier: 'SafeHands Traders',
+        supplierContact: '+91 97654 32109',
+        unit: 'Box',
+        availableQuantity: 18,
+        reorderLevel: 10,
+        lastPurchaseDate: '28-05-2026',
+        status: 'Available',
+        description: 'Reusable rubber cleaning gloves, large size, box of 12 pairs.',
+        purchaseDate: '28-05-2026',
+        invoiceNumber: 'INV-SH-7701',
+    },
+    {
+        productId: 'HK-PRD-0030',
+        productName: 'Toilet Bowl Cleaner (1L)',
+        category: 'Cleaning Chemical',
+        supplier: 'HygieneFirst',
+        supplierContact: '+91 99887 55443',
+        unit: 'Bottle',
+        availableQuantity: 32,
+        reorderLevel: 20,
+        lastPurchaseDate: '01-06-2026',
+        status: 'Available',
+        description: 'Acid-based toilet bowl cleaner with angled neck bottle.',
+        purchaseDate: '01-06-2026',
+        invoiceNumber: 'INV-HF-8821',
+    },
+]
+
+export const statusBadgeColor = {
+    Available: 'bg-[#4CAF5033] text-[#4CAF50]',
+    'Low Stock': 'bg-[#FF980033] text-[#FF9800]',
+    'Out of Stock': 'bg-[#FF000033] text-[#FF0000]',
+}
+
+export const getInventoryItemById = (id) =>
+    INVENTORY_ITEMS.find((entry) => entry.productId === id)

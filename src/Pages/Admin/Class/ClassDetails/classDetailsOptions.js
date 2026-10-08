@@ -1,0 +1,16 @@
+export const CLASS_LEVEL_OPTIONS = [
+    'L.K.G',
+    'U.K.G',
+    'I',
+    'II',
+    'III',
+    'IV',
+    'V',
+    'VI',
+    'VII',
+    'VIII',
+    'IX',
+    'X',
+    'XI',
+    'XII',
+]
