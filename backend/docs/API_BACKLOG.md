@@ -40,7 +40,7 @@ Register every new router in `app/api/v1/router.py`.
 | P0-5 | Roles seed (25 frontend roles + MD later) | Select profile / RBAC | DONE | You |
 | P0-6 | Permission matrix CRUD | Admin RBAC screens | DONE | You |
 | P0-7 | Immutable system audit log middleware | Architecture Rule 5 | DONE | You |
-| P0-8 | File upload stub `POST /api/v1/files` | Documents / attachments | PLANNED | You |
+| P0-8 | File upload stub `POST /api/v1/files` | Documents / attachments | DONE | You |
 | P0-9 | Masters: classes, sections, subjects, academic year | Admin / Teacher forms | DONE | You |
 
 ---
@@ -49,11 +49,11 @@ Register every new router in `app/api/v1/router.py`.
 
 | ID | API | Frontend screens | Status | Owner |
 |---|---|---|---|---|
-| P1-1 | Enquiry CRUD | PRM / Admin admission enquiry | PLANNED | You |
-| P1-2 | Admission CRUD + convert | Add admission | PLANNED | You |
-| P1-3 | Enroll → student + guardian link | Enroll action | PLANNED | You |
-| P1-4 | `GET /api/v1/parents/me/children` | Parent select-child | PLANNED | You |
-| P1-5 | Student / employee list & detail | Shared databases | PLANNED | You |
+| P1-1 | Enquiry CRUD | PRM / Admin admission enquiry | DONE | You |
+| P1-2 | Admission CRUD + convert | Add admission | DONE | You |
+| P1-3 | Enroll → student + guardian link | Enroll action | DONE | You |
+| P1-4 | `GET /api/v1/parents/me/children` | Parent select-child | DONE | You |
+| P1-5 | Student list & detail | Shared student database | DONE | You |
 
 > Product note: Architecture wants student create only after fee confirm, and parent via student profile. Confirm with school before locking P1-3/P1-4.
 
@@ -74,7 +74,6 @@ Register every new router in `app/api/v1/router.py`.
 
 ### Partner (HR — full vertical)
 
-See `TEAM_ROADMAP.md` → Partner HR roadmap.
 
 | ID | Area | Key APIs |
 |---|---|---|

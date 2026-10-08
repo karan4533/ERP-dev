@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -47,3 +49,4 @@ backend/.env
 backend/*.db
 backend/*.sqlite3
 backend/qmis_erp.db
+backend/uploads/

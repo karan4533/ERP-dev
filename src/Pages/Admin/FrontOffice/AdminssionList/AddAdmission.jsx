@@ -27,6 +27,9 @@ const AddAdmission = () => {
     const listPath = getAdmissionListPath(pathname)
 
     const [form, setForm] = useState(() => {
+        if (locationState?.admission) {
+            return toAdmissionFormState(locationState.admission)
+        }
         const prefill = locationState?.enquiry
             ? mapEnquiryToAdmissionPrefill(locationState.enquiry)
             : null
@@ -34,31 +37,43 @@ const AddAdmission = () => {
     })
     const [error, setError] = useState('')
     const [notFound, setNotFound] = useState(false)
+    const apiAdmissionId = locationState?.admissionId || locationState?.admission?.id || null
 
     useEffect(() => {
-        if (!isEdit) return
-        const record = getAdmissionById(id)
-        if (!record) {
-            setNotFound(true)
-            return
+        const loadId = isEdit ? id : apiAdmissionId
+        if (!loadId || (!isEdit && locationState?.admission)) return
+        let cancelled = false
+        ;(async () => {
+            const record = await getAdmissionById(loadId)
+            if (cancelled) return
+            if (!record) {
+                if (isEdit) setNotFound(true)
+                return
+            }
+            setNotFound(false)
+            setForm(toAdmissionFormState(record))
+        })()
+        return () => {
+            cancelled = true
         }
-        setNotFound(false)
-        setForm(toAdmissionFormState(record))
-    }, [id, isEdit])
+    }, [id, isEdit, apiAdmissionId, locationState?.admission])
 
     const updateField = (key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }))
     }
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setError('')
-        const result = isEdit ? updateAdmission(id, form) : createAdmission(form)
+        const targetId = isEdit ? id : apiAdmissionId
+        const result = targetId
+            ? await updateAdmission(targetId, form)
+            : await createAdmission(form)
         if (!result.success) {
             setError(result.message)
             return
         }
 
-        toast.success(isEdit ? 'Admission updated successfully.' : 'Admission saved successfully.')
+        toast.success(targetId ? 'Admission updated successfully.' : 'Admission saved successfully.')
         navigate(listPath)
     }
 

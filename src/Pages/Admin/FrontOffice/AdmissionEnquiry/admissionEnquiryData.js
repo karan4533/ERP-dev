@@ -1,7 +1,16 @@
 import noProfile from '../../../../assets/images/no-profile.png'
 import { CLASS_LEVEL_OPTIONS } from '../../Class/ClassDetails/classDetailsOptions'
+import { isApiAdmissionsEnabled } from '../../../../services/apiClient'
+import {
+    convertEnquiryApi,
+    createEnquiryApi,
+    getEnquiryApi,
+    listEnquiriesApi,
+    updateEnquiryApi,
+} from '../../../../services/admissionsApi'
 
 const STORAGE_KEY = 'schoolerp-admin-admission-enquiries'
+const useApi = () => isApiAdmissionsEnabled()
 export const ROUTE_BASE = '/admin/front-office/admission-enquiry'
 export const FRONT_OFFICE_ROUTE_BASE = '/front-office/admission-enquiry'
 
@@ -69,6 +78,7 @@ export const DEFAULT_ENQUIRY_FORM = {
     city: '',
     state: '',
     profileImage: '',
+    profileImageFileId: null,
     status: 'Active',
 }
 
@@ -85,7 +95,13 @@ const formatDate = (date) => {
 const parseStoredDate = (value) => {
     if (!value) return null
     if (value instanceof Date) return value
-    const [day, month, year] = String(value).split('-').map(Number)
+    const raw = String(value)
+    // ISO yyyy-mm-dd from API
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        const date = new Date(raw)
+        return Number.isNaN(date.getTime()) ? null : date
+    }
+    const [day, month, year] = raw.split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
@@ -107,10 +123,28 @@ const saveEnquiries = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
-export const getAllAdmissionEnquiries = () => loadEnquiries()
+export const getAllAdmissionEnquiries = async () => {
+    if (useApi()) {
+        try {
+            return await listEnquiriesApi()
+        } catch (error) {
+            console.error(error)
+            return []
+        }
+    }
+    return loadEnquiries()
+}
 
-export const getAdmissionEnquiryById = (id) =>
-    loadEnquiries().find((item) => item.id === id) ?? null
+export const getAdmissionEnquiryById = async (id) => {
+    if (useApi()) {
+        try {
+            return await getEnquiryApi(id)
+        } catch {
+            return null
+        }
+    }
+    return loadEnquiries().find((item) => item.id === id) ?? null
+}
 
 export const generateEnquiryId = () => {
     const records = loadEnquiries()
@@ -121,13 +155,22 @@ export const generateEnquiryId = () => {
     return `AE-${String(max + 1).padStart(4, '0')}`
 }
 
-export const createAdmissionEnquiry = (payload) => {
+export const createAdmissionEnquiry = async (payload) => {
     const name = String(payload.name || '').trim()
     const mobileNumber = String(payload.mobileNumber || '').trim()
 
     if (!name) return { success: false, message: 'Name is required.' }
     if (!mobileNumber) return { success: false, message: 'Mobile number is required.' }
     if (!payload.className) return { success: false, message: 'Class is required.' }
+
+    if (useApi()) {
+        try {
+            const record = await createEnquiryApi(payload)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to save enquiry.' }
+        }
+    }
 
     const records = loadEnquiries()
     const record = {
@@ -157,17 +200,26 @@ export const createAdmissionEnquiry = (payload) => {
     return { success: true, record }
 }
 
-export const updateAdmissionEnquiry = (id, payload) => {
-    const records = loadEnquiries()
-    const index = records.findIndex((item) => item.id === id)
-    if (index < 0) return { success: false, message: 'Enquiry not found.' }
-
+export const updateAdmissionEnquiry = async (id, payload) => {
     const name = String(payload.name || '').trim()
     const mobileNumber = String(payload.mobileNumber || '').trim()
 
     if (!name) return { success: false, message: 'Name is required.' }
     if (!mobileNumber) return { success: false, message: 'Mobile number is required.' }
     if (!payload.className) return { success: false, message: 'Class is required.' }
+
+    if (useApi()) {
+        try {
+            const record = await updateEnquiryApi(id, payload)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to update enquiry.' }
+        }
+    }
+
+    const records = loadEnquiries()
+    const index = records.findIndex((item) => String(item.id) === String(id))
+    if (index < 0) return { success: false, message: 'Enquiry not found.' }
 
     records[index] = {
         ...records[index],
@@ -196,12 +248,21 @@ export const updateAdmissionEnquiry = (id, payload) => {
     return { success: true, record: records[index] }
 }
 
-export const updateAdmissionEnquiryStatus = (id, status) => {
+export const updateAdmissionEnquiryStatus = async (id, status) => {
     if (!STATUS_OPTIONS.includes(status)) {
         return { success: false, message: 'Invalid status.' }
     }
+    if (useApi()) {
+        try {
+            const current = await getEnquiryApi(id)
+            const record = await updateEnquiryApi(id, { ...current, status })
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to update status.' }
+        }
+    }
     const records = loadEnquiries()
-    const index = records.findIndex((item) => item.id === id)
+    const index = records.findIndex((item) => String(item.id) === String(id))
     if (index < 0) return { success: false, message: 'Enquiry not found.' }
 
     records[index] = { ...records[index], status }
@@ -209,8 +270,32 @@ export const updateAdmissionEnquiryStatus = (id, status) => {
     return { success: true, record: records[index] }
 }
 
-export const deleteAdmissionEnquiry = (id) => {
-    const records = loadEnquiries().filter((item) => item.id !== id)
+export const convertEnquiryToAdmission = async (id) => {
+    if (useApi()) {
+        try {
+            const admission = await convertEnquiryApi(id)
+            return { success: true, admission }
+        } catch (error) {
+            return { success: false, message: error.message || 'Convert failed.' }
+        }
+    }
+    const statusResult = await updateAdmissionEnquiryStatus(id, 'Success')
+    if (!statusResult.success) return statusResult
+    return { success: true, admission: null, enquiry: statusResult.record }
+}
+
+export const deleteAdmissionEnquiry = async (id) => {
+    if (useApi()) {
+        // Backend has no hard-delete yet — soft-close as In Active
+        try {
+            const current = await getEnquiryApi(id)
+            await updateEnquiryApi(id, { ...current, status: 'In Active' })
+            return { success: true }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to delete enquiry.' }
+        }
+    }
+    const records = loadEnquiries().filter((item) => String(item.id) !== String(id))
     saveEnquiries(records)
     return { success: true }
 }

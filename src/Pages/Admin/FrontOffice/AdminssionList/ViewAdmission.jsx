@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
@@ -20,9 +20,39 @@ const ViewAdmission = () => {
     const navigate = useNavigate()
     const { pathname } = useLocation()
     const listPath = getAdmissionListBase(pathname)
-    const record = useMemo(() => getAdmissionById(id), [id])
+    const [record, setRecord] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [notFound, setNotFound] = useState(false)
 
-    if (!record) {
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            setLoading(true)
+            const row = await getAdmissionById(id)
+            if (cancelled) return
+            if (!row) {
+                setNotFound(true)
+                setRecord(null)
+            } else {
+                setNotFound(false)
+                setRecord(row)
+            }
+            setLoading(false)
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [id])
+
+    if (loading) {
+        return (
+            <section className='bg-white rounded-2xl shadow-md p-8 text-center'>
+                <p className='text-sm text-[#667085]'>Loading admission…</p>
+            </section>
+        )
+    }
+
+    if (notFound || !record) {
         return (
             <section className='bg-white rounded-2xl shadow-md p-8 text-center'>
                 <h2 className='text-xl font-semibold text-[#0C1E5B]'>Admission not found</h2>

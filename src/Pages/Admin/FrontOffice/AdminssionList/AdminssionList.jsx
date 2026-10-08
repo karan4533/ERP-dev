@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import DatePicker from 'react-datepicker'
@@ -29,9 +29,16 @@ const AdminssionList = () => {
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [search, setSearch] = useState('')
     const [entriesPerPage, setEntriesPerPage] = useState(10)
-    const [records, setRecords] = useState(() => getAllAdmissions())
+    const [records, setRecords] = useState([])
 
-    const refresh = () => setRecords(getAllAdmissions())
+    const refresh = async () => {
+        const rows = await getAllAdmissions()
+        setRecords(rows)
+    }
+
+    useEffect(() => {
+        refresh()
+    }, [])
 
     const filteredRecords = useMemo(
         () => filterAdmissions(records, { search }),
@@ -46,21 +53,44 @@ const AdminssionList = () => {
         setToDate(null)
     }
 
-    const handleDelete = (id) => {
-        deleteAdmission(id)
-        refresh()
+    const handleDelete = async (id) => {
+        const result = await deleteAdmission(id)
+        if (!result.success) {
+            toast.error(result.message || 'Delete failed.')
+            return
+        }
+        await refresh()
         toast.success('Admission deleted.')
     }
 
-    const handleEnroll = (record) => {
-        const result = enrollAdmissionAsStudent(record.id)
+    const handleEnroll = async (record) => {
+        const email = record.parentAccountEmail || ''
+        if (!email) {
+            toast.error('Set Parent Username / Email on the admission before enrolling.')
+            return
+        }
+        const entered = window.prompt(
+            `Create parent login for ${email}.\nEnter parent password (min 6 characters):`,
+            'parent123',
+        )
+        if (entered == null) return
+        const password = String(entered).trim()
+        if (password.length < 6) {
+            toast.error('Parent password must be at least 6 characters.')
+            return
+        }
+
+        const result = await enrollAdmissionAsStudent(record.id, {
+            parentAccountEmail: email,
+            parentAccountPassword: password,
+        })
         if (!result.success) {
             toast.error(result.message)
             return
         }
-        refresh()
+        await refresh()
         if (result.parentCreated) {
-            toast.success(`${getStudentDisplayName(record)} enrolled. Parent account created.`)
+            toast.success(`${getStudentDisplayName(record)} enrolled. Parent: ${email}`)
         } else if (result.parentMapped) {
             toast.success(`${getStudentDisplayName(record)} enrolled and linked to existing parent account.`)
         } else {

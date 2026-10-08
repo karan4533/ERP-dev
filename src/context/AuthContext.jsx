@@ -15,6 +15,8 @@ import {
 import { findActiveParentByEmail } from '../Common/ParentAccounts/parentAccountsData'
 import { ROLES } from '../constants/roles'
 import { deviceLabel, logActivity } from '../Common/demoDomain/activityLog'
+import { clearAccessToken, isApiAuthEnabled } from '../services/apiClient'
+import { apiLogin, apiLogout } from '../services/authApi'
 
 export { ROLES }
 
@@ -219,12 +221,42 @@ export const AuthProvider = ({ children }) => {
         return null
     }
 
-    const loginWithCredentials = useCallback((emailInput, password) => {
+    const loginWithCredentials = useCallback(async (emailInput, password) => {
         const normalizedEmail = String(emailInput || '').trim().toLowerCase()
         const enteredPassword = String(password || '')
 
         if (!normalizedEmail || !enteredPassword) {
             return { success: false, message: 'Enter your email and password.' }
+        }
+
+        if (isApiAuthEnabled()) {
+            try {
+                const data = await apiLogin(normalizedEmail, enteredPassword)
+                const apiRole = data?.user?.role
+                const apiName = data?.user?.full_name || null
+                if (!apiRole) {
+                    clearAccessToken()
+                    return { success: false, message: 'Login succeeded but role was missing.' }
+                }
+                return establishSession(apiRole, normalizedEmail, apiName, null, null)
+            } catch (error) {
+                // Fall through to local demo accounts if API is down / wrong password for API-only users
+                const account = resolveAccount(normalizedEmail)
+                if (!account || !passwordMatches(account.storedPassword, enteredPassword)) {
+                    return {
+                        success: false,
+                        message: error?.message || 'Invalid email or password.',
+                    }
+                }
+                clearAccessToken()
+                return establishSession(
+                    account.role,
+                    normalizedEmail,
+                    account.sessionName,
+                    account.createdUser,
+                    account.createdAdmin,
+                )
+            }
         }
 
         const account = resolveAccount(normalizedEmail)
@@ -342,8 +374,13 @@ export const AuthProvider = ({ children }) => {
         return { success: true }
     }, [persistAuth])
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
         logActivity({ actor: email || 'Demo User', role, action: 'LOGOUT', module: 'Authentication' })
+        if (isApiAuthEnabled()) {
+            await apiLogout()
+        } else {
+            clearAccessToken()
+        }
         sessionStorage.removeItem(STORAGE_KEY)
         clearActiveAdminSession()
         clearActiveCreatedUserSession()

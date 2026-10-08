@@ -8,8 +8,18 @@ import {
     updateEnrolledStudentRecord,
 } from '../../../../Common/StudentDatabase/enrolledStudentsData'
 import { ensureStudentAllocationRecord } from '../../../../Common/StudentAllocation/studentAllocationData'
+import { isApiAdmissionsEnabled } from '../../../../services/apiClient'
+import {
+    createAdmissionApi,
+    enrollAdmissionApi,
+    getAdmissionApi,
+    listAdmissionsApi,
+    mapAdmissionFromApi,
+    updateAdmissionApi,
+} from '../../../../services/admissionsApi'
 
 const STORAGE_KEY = 'schoolerp-admin-admissions'
+const useApi = () => isApiAdmissionsEnabled()
 
 export const FEES_GROUP_OPTIONS = [
     'Annual Fees',
@@ -48,6 +58,7 @@ export const DEFAULT_ADMISSION_FORM = {
     weight: '',
     medicalHistory: '',
     profileImage: '',
+    profileImageFileId: null,
     modeOfTransport: '',
     route: '',
     busStop: '',
@@ -86,7 +97,12 @@ const formatDate = (date) => {
 const parseStoredDate = (value) => {
     if (!value) return null
     if (value instanceof Date) return value
-    const [day, month, year] = String(value).split('-').map(Number)
+    const raw = String(value)
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        const date = new Date(raw)
+        return Number.isNaN(date.getTime()) ? null : date
+    }
+    const [day, month, year] = raw.split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
@@ -115,10 +131,28 @@ const saveAdmissions = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
-export const getAllAdmissions = () => loadAdmissions()
+export const getAllAdmissions = async () => {
+    if (useApi()) {
+        try {
+            return await listAdmissionsApi()
+        } catch (error) {
+            console.error(error)
+            return []
+        }
+    }
+    return loadAdmissions()
+}
 
-export const getAdmissionById = (id) =>
-    loadAdmissions().find((item) => item.id === id) ?? null
+export const getAdmissionById = async (id) => {
+    if (useApi()) {
+        try {
+            return await getAdmissionApi(id)
+        } catch {
+            return null
+        }
+    }
+    return loadAdmissions().find((item) => String(item.id) === String(id)) ?? null
+}
 
 export const generateAdmissionId = () => {
     const records = loadAdmissions()
@@ -239,7 +273,16 @@ const buildAdmissionRecord = (payload, existing = null) => {
     }
 }
 
-export const createAdmission = (payload) => {
+export const createAdmission = async (payload) => {
+    if (useApi()) {
+        try {
+            const record = await createAdmissionApi(payload)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to save admission.' }
+        }
+    }
+
     const built = buildAdmissionRecord(payload)
     if (!built.success) return built
 
@@ -248,26 +291,68 @@ export const createAdmission = (payload) => {
     return { success: true, record: built.record }
 }
 
-export const updateAdmission = (id, payload) => {
+export const updateAdmission = async (id, payload) => {
+    if (useApi()) {
+        try {
+            const record = await updateAdmissionApi(id, payload)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to update admission.' }
+        }
+    }
+
     const records = loadAdmissions()
-    const existing = records.find((item) => item.id === id)
+    const existing = records.find((item) => String(item.id) === String(id))
     if (!existing) return { success: false, message: 'Admission not found.' }
 
     const built = buildAdmissionRecord(payload, existing)
     if (!built.success) return built
 
-    const nextRecords = records.map((item) => (item.id === id ? built.record : item))
+    const nextRecords = records.map((item) => (String(item.id) === String(id) ? built.record : item))
     saveAdmissions(nextRecords)
     return { success: true, record: built.record }
 }
 
-export const deleteAdmission = (id) => {
-    saveAdmissions(loadAdmissions().filter((item) => item.id !== id))
+export const deleteAdmission = async (id) => {
+    if (useApi()) {
+        return { success: false, message: 'Delete is disabled for API admissions. Leave as Active or Enrolled.' }
+    }
+    saveAdmissions(loadAdmissions().filter((item) => String(item.id) !== String(id)))
     return { success: true }
 }
-export const enrollAdmissionAsStudent = (id) => {
+
+export const enrollAdmissionAsStudent = async (id, extra = {}) => {
+    if (useApi()) {
+        try {
+            const current = await getAdmissionApi(id)
+            const parentEmail = extra.parentAccountEmail || current.parentAccountEmail
+            const parentPassword = extra.parentAccountPassword
+            if (parentEmail && (!parentPassword || String(parentPassword).trim().length < 6)) {
+                return {
+                    success: false,
+                    message: 'Parent password is required (min 6 characters) when creating the parent login.',
+                }
+            }
+            const result = await enrollAdmissionApi(id, {
+                parentAccountEmail: parentEmail,
+                parentAccountPassword: parentPassword,
+                skipParentAccount: !parentEmail,
+            })
+            return {
+                success: true,
+                record: result.admission ? mapAdmissionFromApi(result.admission) : current,
+                student: { id: result.student_id, studentCode: result.student_code },
+                parentCreated: Boolean(result.parent_created),
+                parentMapped: Boolean(result.parent_user_id && !result.parent_created),
+                parentSkipped: !result.parent_user_id,
+            }
+        } catch (error) {
+            return { success: false, message: error.message || 'Enrollment failed.' }
+        }
+    }
+
     const records = loadAdmissions()
-    const index = records.findIndex((item) => item.id === id)
+    const index = records.findIndex((item) => String(item.id) === String(id))
     if (index < 0) return { success: false, message: 'Admission not found.' }
     if (records[index].status === 'Enrolled') {
         return { success: false, message: 'Student is already enrolled.' }

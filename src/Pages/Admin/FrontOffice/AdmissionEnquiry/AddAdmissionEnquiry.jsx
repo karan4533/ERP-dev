@@ -27,13 +27,20 @@ const AddAdmissionEnquiry = () => {
 
     useEffect(() => {
         if (!isEdit) return
-        const record = getAdmissionEnquiryById(id)
-        if (!record) {
-            setNotFound(true)
-            return
+        let cancelled = false
+        ;(async () => {
+            const record = await getAdmissionEnquiryById(id)
+            if (cancelled) return
+            if (!record) {
+                setNotFound(true)
+                return
+            }
+            setNotFound(false)
+            setForm(toFormState(record))
+        })()
+        return () => {
+            cancelled = true
         }
-        setNotFound(false)
-        setForm(toFormState(record))
     }, [id, isEdit])
 
     const updateField = (key, value) => {
@@ -44,11 +51,11 @@ const AddAdmissionEnquiry = () => {
         navigate(listPath)
     }
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setError('')
         const result = isEdit
-            ? updateAdmissionEnquiry(id, form)
-            : createAdmissionEnquiry(form)
+            ? await updateAdmissionEnquiry(id, form)
+            : await createAdmissionEnquiry(form)
 
         if (!result.success) {
             setError(result.message)

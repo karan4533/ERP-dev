@@ -6,10 +6,16 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { DEMO_PASSWORD, FAKE_CREDENTIALS, ROLE_HOME_PATHS, useAuth } from '../../context/AuthContext'
 import { getProfileLabel } from './profileOptions'
 
+const API_ACCOUNTS = [
+    { role: 'admin', label: 'API Admin', email: 'admin@qmis.edu', password: 'admin123' },
+    { role: 'hr', label: 'API HR', email: 'hr@qmis.edu', password: 'hr12345' },
+]
+
 const DEMO_ACCOUNTS = Object.entries(FAKE_CREDENTIALS).map(([role, creds]) => ({
     role,
     label: getProfileLabel(role),
     email: creds.email,
+    password: DEMO_PASSWORD,
 }))
 
 const SignIn = () => {
@@ -28,25 +34,30 @@ const SignIn = () => {
     const [showDemoAccounts, setShowDemoAccounts] = useState(false)
     const [showResetNote, setShowResetNote] = useState(false)
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
         setSubmitting(true)
 
-        const result = loginWithCredentials(email, password)
-        if (!result.success) {
+        try {
+            const result = await loginWithCredentials(email, password)
+            if (!result.success) {
+                setError(result.message)
+                return
+            }
+
+            if (remember) {
+                localStorage.setItem('schoolerp_remember_email', email.trim())
+            } else {
+                localStorage.removeItem('schoolerp_remember_email')
+            }
+
+            navigate(ROLE_HOME_PATHS[result.role] ?? '/dashboard', { replace: true })
+        } catch (err) {
+            setError(err?.message || 'Unable to sign in.')
+        } finally {
             setSubmitting(false)
-            setError(result.message)
-            return
         }
-
-        if (remember) {
-            localStorage.setItem('schoolerp_remember_email', email.trim())
-        } else {
-            localStorage.removeItem('schoolerp_remember_email')
-        }
-
-        navigate(ROLE_HOME_PATHS[result.role] ?? '/dashboard', { replace: true })
     }
 
     const fieldClass =
@@ -165,8 +176,27 @@ const SignIn = () => {
 
                     {showDemoAccounts && (
                         <div className="mt-3 rounded-xl bg-[#F3F6FB] p-3">
+                            <p className="mb-2 px-1 text-xs font-medium text-[#1B2B4B]">Backend API accounts (password admin123)</p>
+                            <ul className="mb-3 flex flex-col gap-0.5">
+                                {API_ACCOUNTS.map((account) => (
+                                    <li key={`api-${account.role}`}>
+                                        <button
+                                            type="button"
+                                            className="w-full cursor-pointer rounded-lg px-2 py-1.5 text-left hover:bg-white"
+                                            onClick={() => {
+                                                setEmail(account.email)
+                                                setPassword(account.password)
+                                                setError('')
+                                            }}
+                                        >
+                                            <span className="text-sm font-medium text-[#1B2B4B]">{account.label}</span>
+                                            <span className="block break-all text-xs text-[#5C6B82]">{account.email}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
                             <p className="mb-2 px-1 text-xs text-[#5C6B82]">
-                                Password <span className="font-semibold text-[#1B2B4B]">{DEMO_PASSWORD}</span>
+                                Local demo fallback password <span className="font-semibold text-[#1B2B4B]">{DEMO_PASSWORD}</span>
                             </p>
                             <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
                                 {DEMO_ACCOUNTS.map((account) => (
@@ -176,7 +206,7 @@ const SignIn = () => {
                                             className="w-full cursor-pointer rounded-lg px-2 py-1.5 text-left hover:bg-white"
                                             onClick={() => {
                                                 setEmail(account.email)
-                                                setPassword(DEMO_PASSWORD)
+                                                setPassword(account.password)
                                                 setError('')
                                             }}
                                         >
