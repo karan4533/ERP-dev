@@ -58,8 +58,8 @@ def header_footer(canvas, doc, subtitle):
 def bullets(items, s):
     flow = []
     for item in items:
-        flow.append(ListItem(Paragraph(item, s["body"]), leftIndent=8, bulletColor=BLUE, value="bullet"))
-    return ListFlowable(flow, bulletType="bullet", start="bullet", leftIndent=14, bulletFontName="ZapfDingbats", bulletFontSize=6, spaceBefore=1, spaceAfter=2)
+        flow.append(ListItem(Paragraph(item, s["body"]), leftIndent=8, bulletColor=BLUE, value="l"))
+    return ListFlowable(flow, bulletType="bullet", start="l", leftIndent=14, bulletFontName="ZapfDingbats", bulletFontSize=6, spaceBefore=1, spaceAfter=2)
 
 
 def work_pdf(path):
