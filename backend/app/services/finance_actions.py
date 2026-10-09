@@ -12,6 +12,7 @@ from app.models import HrRecord, User
 from app.services import finance as fin
 from app.services.audit import write_audit
 from app.services.errors import fail
+from app.services.integrations import notify, payments
 
 
 def _now() -> str:
@@ -230,11 +231,32 @@ def settle_cheque(db: Session, actor: User, payload: dict) -> dict:
     return {"success": True, "cheque": cheque, "state": saved}
 
 
+def _find_finance_student(students: list, hr: dict):
+    """Prefer admission number, then exact student name (case-insensitive)."""
+    admission = str(hr.get("admissionNumber") or hr.get("admissionNo") or "").strip().lower()
+    if admission:
+        match = next(
+            (
+                s
+                for s in students
+                if str(s.get("admissionNo") or s.get("admissionNumber") or "").strip().lower() == admission
+            ),
+            None,
+        )
+        if match is not None:
+            return match
+    student_name = str(hr.get("studentName") or "").strip().lower()
+    if not student_name:
+        return None
+    return next((s for s in students if str(s.get("name") or "").strip().lower() == student_name), None)
+
+
 def send_receipt(db: Session, actor: User, payload: dict) -> dict:
-    """Stub delivery — records a queue attempt only; does not claim real delivery."""
+    """Deliver via SMTP/WhatsApp when configured; otherwise honest stub (not fake delivered)."""
     state = fin.get_state(db, actor)
     data = dict(state["data"])
     receipts = list(data.get("receipts") or [])
+    students = list(data.get("students") or [])
     audit = list(data.get("auditLog") or [])
     receipt_id = payload.get("receiptId")
     channel = (payload.get("channel") or "email").lower()
@@ -243,40 +265,44 @@ def send_receipt(db: Session, actor: User, payload: dict) -> dict:
     receipt = next((r for r in receipts if r.get("id") == receipt_id), None)
     if receipt is None:
         fail(404, "not_found", "Receipt not found.")
+
+    student = next((s for s in students if str(s.get("id")) == str(receipt.get("studentId"))), None) or {}
+    receipt_no = receipt.get("receiptNo") or receipt_id
+    amount = receipt.get("amountPaid") or receipt.get("amount") or ""
+    text = f"QMIS fee receipt {receipt_no}. Amount: {amount}."
+
+    if channel == "email":
+        to = payload.get("to") or student.get("guardianEmail") or student.get("email") or ""
+        delivery = notify.send_email(to=to, subject=f"Fee receipt {receipt_no}", body=text)
+    else:
+        to_phone = payload.get("to") or student.get("guardianPhone") or student.get("phone") or ""
+        delivery = notify.send_whatsapp(to_phone=to_phone, text=text)
+
+    status = delivery.get("status") or "queued_stub"
+    delivered = bool(delivery.get("delivered"))
     comm = dict(receipt.get("communication") or {})
-    comm[channel] = False
-    comm[f"{channel}Status"] = "queued_stub"
+    comm[channel] = delivered
+    comm[f"{channel}Status"] = status
     receipt["communication"] = comm
     receipt[f"last{channel.title()}At"] = _now()
-    receipt[f"{channel}Status"] = "queued_stub"
+    receipt[f"{channel}Status"] = status
     audit.insert(
         0,
         {
             "id": f"AUD-{uuid4().hex[:8]}",
             "performedAt": _now(),
             "performedBy": actor.email,
-            "action": f"RECEIPT_SEND_QUEUED_{channel.upper()}",
+            "action": f"RECEIPT_SEND_{status.upper()}",
             "entity": "Receipt",
             "entityId": receipt_id,
-            "newValue": receipt.get("receiptNo"),
-            "reason": "queued_stub — configure SMTP/WhatsApp before real delivery",
+            "newValue": receipt_no,
+            "reason": delivery.get("message") or status,
         },
     )
     data["receipts"] = receipts
     data["auditLog"] = audit
     saved = _save(db, actor, data)
-    return {
-        "success": True,
-        "receipt": receipt,
-        "delivery": {
-            "channel": channel,
-            "status": "queued_stub",
-            "delivered": False,
-            "providerConfigured": False,
-            "message": "Not sent — stub queue only until real keys are configured",
-        },
-        "state": saved,
-    }
+    return {"success": True, "receipt": receipt, "delivery": delivery, "state": saved}
 
 
 def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
@@ -287,15 +313,23 @@ def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
     seq = _seq(data)
     seq["link"] += 1
     reference = f"PAY-{seq['link']:04d}"
+    amount = float(payload.get("amount") or 0)
+    provider = payments.create_payment_intent(
+        amount=amount,
+        reference=reference,
+        student_id=payload.get("studentId"),
+    )
     link = {
         "id": f"LNK-{reference}",
         "reference": reference,
         "studentId": payload.get("studentId"),
-        "amount": float(payload.get("amount") or 0),
+        "amount": amount,
         "installmentIds": payload.get("installmentIds") or [],
-        "url": f"/student/payment/fees-payment?ref={reference}",
-        "status": "OPEN",
-        "gateway": "stub",
+        "url": provider.get("url") or f"/student/payment/fees-payment?ref={reference}",
+        "status": provider.get("status") or "OPEN",
+        "gateway": provider.get("gateway") or "stub",
+        "providerOrderId": provider.get("providerOrderId"),
+        "razorpayKeyId": provider.get("razorpayKeyId"),
         "createdAt": _now(),
     }
     links.insert(0, link)
@@ -309,11 +343,68 @@ def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
             "entity": "PaymentLink",
             "entityId": link["id"],
             "newValue": reference,
-            "reason": "Stub gateway intent (set real Razorpay/etc. keys later)",
+            "reason": provider.get("message") or link["gateway"],
         },
     )
     data["paymentLinks"] = links
     data["auditLog"] = audit
+    saved = _save(db, actor, data)
+    return {"success": True, "intent": link, "state": saved}
+
+
+def confirm_gateway_payment(db: Session, actor: User, payload: dict) -> dict:
+    """Verify provider payment (Razorpay signature) and mark link PAID once (idempotent)."""
+    state = fin.get_state(db, actor)
+    data = dict(state["data"])
+    links = list(data.get("paymentLinks") or [])
+    audit = list(data.get("auditLog") or [])
+    reference = payload.get("reference") or payload.get("receipt")
+    link = next((row for row in links if row.get("reference") == reference or row.get("id") == payload.get("linkId")), None)
+    if link is None:
+        fail(404, "not_found", "Payment link not found.")
+    if str(link.get("status") or "").upper() == "PAID":
+        return {"success": True, "skipped": True, "reason": "already_paid", "intent": link, "state": state}
+
+    gateway = str(link.get("gateway") or "stub").lower()
+    if gateway == "razorpay":
+        order_id = payload.get("razorpay_order_id") or link.get("providerOrderId")
+        payment_id = payload.get("razorpay_payment_id")
+        signature = payload.get("razorpay_signature")
+        if not order_id or not payment_id or not signature:
+            fail(400, "validation_error", "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required.")
+        if not payments.verify_razorpay_signature(order_id=order_id, payment_id=payment_id, signature=signature):
+            fail(400, "invalid_signature", "Razorpay signature verification failed.")
+        link["providerPaymentId"] = payment_id
+    else:
+        # Stub confirm for local demos only — never invent a paid Razorpay result.
+        link["providerPaymentId"] = payload.get("providerPaymentId") or payments.stub_confirm_token()
+
+    link["status"] = "PAID"
+    link["paidAt"] = _now()
+    audit.insert(
+        0,
+        {
+            "id": f"AUD-{uuid4().hex[:8]}",
+            "performedAt": _now(),
+            "performedBy": actor.email,
+            "action": "PAYMENT_GATEWAY_CONFIRMED",
+            "entity": "PaymentLink",
+            "entityId": link["id"],
+            "newValue": link.get("providerPaymentId"),
+            "reason": f"gateway={gateway}",
+        },
+    )
+    data["paymentLinks"] = links
+    data["auditLog"] = audit
+    write_audit(
+        db,
+        action="PAYMENT_GATEWAY_CONFIRMED",
+        entity_type="payment_link",
+        entity_id=str(link.get("id")),
+        actor_id=actor.id,
+        campus_id=actor.campus_id,
+        details=link.get("reference"),
+    )
     saved = _save(db, actor, data)
     return {"success": True, "intent": link, "state": saved}
 
@@ -334,14 +425,16 @@ def apply_hr_concessions(db: Session, actor: User) -> dict:
     installments = list(data.get("installments") or [])
     concessions = list(data.get("concessions") or [])
     applied = 0
+    skipped = 0
 
     for hr in approved:
-        student_name = str(hr.get("studentName") or "").strip().lower()
         percent = float(hr.get("percent") or 0)
-        if not student_name or percent <= 0:
+        if percent <= 0:
+            skipped += 1
             continue
-        student = next((s for s in students if str(s.get("name") or "").strip().lower() == student_name), None)
+        student = _find_finance_student(students, hr)
         if student is None:
+            skipped += 1
             continue
         cid = f"CON-HR-{hr.get('id') or uuid4().hex[:6]}"
         if not any(c.get("id") == cid for c in concessions):
@@ -354,8 +447,10 @@ def apply_hr_concessions(db: Session, actor: User) -> dict:
                     "amount": percent,
                     "amountType": "PERCENT",
                     "status": "Approved",
-                    "academicYear": student.get("academicYear") or "2026-2027",
+                    "academicYear": student.get("academicYear") or hr.get("academicYear") or "2026-2027",
                     "source": "hr",
+                    "admissionNumber": hr.get("admissionNumber") or hr.get("admissionNo") or student.get("admissionNo"),
+                    "employeeId": hr.get("employeeId"),
                 }
             )
             applied += 1
@@ -378,10 +473,10 @@ def apply_hr_concessions(db: Session, actor: User) -> dict:
         entity_id="current",
         actor_id=actor.id,
         campus_id=actor.campus_id,
-        details=f"applied={applied}",
+        details=f"applied={applied};skipped={skipped}",
     )
     db.commit()
-    return {"success": True, "applied": applied, "state": saved}
+    return {"success": True, "applied": applied, "skipped": skipped, "state": saved}
 
 
 def post_payroll_voucher(db: Session, actor: User, month_row: dict) -> dict:

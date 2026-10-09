@@ -10,10 +10,12 @@ from app.models import AcademicYear, SchoolClass, Section, Subject, User
 from app.schemas.phase0 import (
     AcademicYearCreate,
     AcademicYearOut,
+    AcademicYearUpdate,
     ClassCreate,
     ClassOut,
     SectionCreate,
     SectionOut,
+    SectionUpdate,
     SubjectCreate,
     SubjectOut,
 )
@@ -32,16 +34,14 @@ def _clear_current_years(db: Session, campus_id: UUID) -> None:
 
 @router.get("/academic-years", response_model=list[AcademicYearOut])
 def list_academic_years(
+    include_inactive: bool = Query(default=False),
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("masters.read")),
 ) -> list[AcademicYear]:
-    return list(
-        db.scalars(
-            select(AcademicYear)
-            .where(AcademicYear.campus_id == user.campus_id)
-            .order_by(AcademicYear.is_current.desc(), AcademicYear.name.desc())
-        ).all()
-    )
+    q = select(AcademicYear).where(AcademicYear.campus_id == user.campus_id)
+    if not include_inactive:
+        q = q.where(AcademicYear.is_active.is_(True))
+    return list(db.scalars(q.order_by(AcademicYear.is_current.desc(), AcademicYear.name.desc())).all())
 
 
 @router.post("/academic-years", response_model=AcademicYearOut, status_code=201)
@@ -58,12 +58,15 @@ def create_academic_year(
         fail(409, "academic_year_exists", "That academic year already exists on this campus.")
     if body.is_current:
         _clear_current_years(db, user.campus_id)
+    if body.start_date and body.end_date and body.end_date < body.start_date:
+        fail(400, "validation_error", "end_date must be on or after start_date.")
     row = AcademicYear(
         campus_id=user.campus_id,
         name=name,
         start_date=body.start_date,
         end_date=body.end_date,
         is_current=body.is_current,
+        is_active=True,
     )
     db.add(row)
     db.flush()
@@ -106,6 +109,100 @@ def set_current_academic_year(
     db.commit()
     db.refresh(row)
     return row
+
+
+@router.get("/academic-years/current", response_model=AcademicYearOut)
+def get_current_academic_year(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.read")),
+) -> AcademicYear:
+    row = db.scalar(
+        select(AcademicYear).where(
+            AcademicYear.campus_id == user.campus_id,
+            AcademicYear.is_current.is_(True),
+            AcademicYear.is_active.is_(True),
+        )
+    )
+    if row is None:
+        fail(404, "academic_year_not_found", "No current academic year is set.")
+    return row
+
+
+@router.get("/academic-years/{year_id}", response_model=AcademicYearOut)
+def get_academic_year(
+    year_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.read")),
+) -> AcademicYear:
+    row = db.scalar(
+        select(AcademicYear).where(AcademicYear.id == year_id, AcademicYear.campus_id == user.campus_id)
+    )
+    if row is None:
+        fail(404, "academic_year_not_found", "Academic year not found.")
+    return row
+
+
+@router.patch("/academic-years/{year_id}", response_model=AcademicYearOut)
+def update_academic_year(
+    year_id: UUID,
+    body: AcademicYearUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> AcademicYear:
+    row = db.scalar(
+        select(AcademicYear).where(AcademicYear.id == year_id, AcademicYear.campus_id == user.campus_id)
+    )
+    if row is None:
+        fail(404, "academic_year_not_found", "Academic year not found.")
+    if body.name is not None:
+        name = body.name.strip()
+        clash = db.scalar(
+            select(AcademicYear).where(
+                AcademicYear.campus_id == user.campus_id,
+                AcademicYear.name == name,
+                AcademicYear.id != year_id,
+            )
+        )
+        if clash is not None:
+            fail(409, "academic_year_exists", "That academic year already exists on this campus.")
+        row.name = name
+    if body.start_date is not None:
+        row.start_date = body.start_date
+    if body.end_date is not None:
+        row.end_date = body.end_date
+    if body.start_date and body.end_date and body.end_date < body.start_date:
+        fail(400, "validation_error", "end_date must be on or after start_date.")
+    if body.is_active is not None:
+        row.is_active = body.is_active
+        if not body.is_active:
+            row.is_current = False
+    if body.is_current is True:
+        _clear_current_years(db, user.campus_id)
+        row.is_current = True
+        row.is_active = True
+    elif body.is_current is False:
+        row.is_current = False
+    write_audit(
+        db,
+        action="ACADEMIC_YEAR_UPDATED",
+        entity_type="academic_year",
+        entity_id=str(row.id),
+        actor_id=user.id,
+        campus_id=user.campus_id,
+        details=row.name,
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/academic-years/{year_id}", response_model=AcademicYearOut)
+def deactivate_academic_year(
+    year_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> AcademicYear:
+    return update_academic_year(year_id, AcademicYearUpdate(is_active=False, is_current=False), db, user)
 
 
 @router.get("/classes", response_model=list[ClassOut])
@@ -176,12 +273,15 @@ def create_class(
 @router.get("/sections", response_model=list[SectionOut])
 def list_sections(
     class_id: UUID | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
     db: Session = Depends(get_db),
     user: User = Depends(require_permission("masters.read")),
 ) -> list[Section]:
     q = select(Section).where(Section.campus_id == user.campus_id)
     if class_id is not None:
         q = q.where(Section.class_id == class_id)
+    if not include_inactive:
+        q = q.where(Section.is_active.is_(True))
     return list(db.scalars(q.order_by(Section.name.asc())).all())
 
 
@@ -206,7 +306,7 @@ def create_section(
     )
     if existing is not None:
         fail(409, "section_exists", "That section already exists for this class.")
-    row = Section(campus_id=user.campus_id, class_id=body.class_id, name=name)
+    row = Section(campus_id=user.campus_id, class_id=body.class_id, name=name, is_active=True)
     db.add(row)
     db.flush()
     if not school_class.section:
@@ -223,6 +323,70 @@ def create_section(
     db.commit()
     db.refresh(row)
     return row
+
+
+@router.get("/sections/{section_id}", response_model=SectionOut)
+def get_section(
+    section_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.read")),
+) -> Section:
+    row = db.scalar(
+        select(Section).where(Section.id == section_id, Section.campus_id == user.campus_id)
+    )
+    if row is None:
+        fail(404, "section_not_found", "Section not found.")
+    return row
+
+
+@router.patch("/sections/{section_id}", response_model=SectionOut)
+def update_section(
+    section_id: UUID,
+    body: SectionUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> Section:
+    row = db.scalar(
+        select(Section).where(Section.id == section_id, Section.campus_id == user.campus_id)
+    )
+    if row is None:
+        fail(404, "section_not_found", "Section not found.")
+    if body.name is not None:
+        name = body.name.strip().upper()
+        clash = db.scalar(
+            select(Section).where(
+                Section.campus_id == user.campus_id,
+                Section.class_id == row.class_id,
+                Section.name == name,
+                Section.id != section_id,
+            )
+        )
+        if clash is not None:
+            fail(409, "section_exists", "That section already exists for this class.")
+        row.name = name
+    if body.is_active is not None:
+        row.is_active = body.is_active
+    write_audit(
+        db,
+        action="SECTION_UPDATED",
+        entity_type="section",
+        entity_id=str(row.id),
+        actor_id=user.id,
+        campus_id=user.campus_id,
+        details=row.name,
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/sections/{section_id}", response_model=SectionOut)
+def deactivate_section(
+    section_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> Section:
+    return update_section(section_id, SectionUpdate(is_active=False), db, user)
 
 
 @router.get("/subjects", response_model=list[SubjectOut])

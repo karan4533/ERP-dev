@@ -90,6 +90,21 @@ def test_gateway_intent_and_approval(client):
     )
     assert intent.status_code == 200, intent.text
     assert intent.json()["intent"]["gateway"] == "stub"
+    reference = intent.json()["intent"]["reference"]
+    confirmed = client.post(
+        "/api/v1/finance/actions/gateway-confirm",
+        headers=headers,
+        json={"reference": reference},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["intent"]["status"] == "PAID"
+    again = client.post(
+        "/api/v1/finance/actions/gateway-confirm",
+        headers=headers,
+        json={"reference": reference},
+    )
+    assert again.status_code == 200
+    assert again.json().get("skipped") is True
     decided = client.post(
         "/api/v1/finance/actions/decide-approval",
         headers=headers,
@@ -109,7 +124,8 @@ def test_hr_concession_and_payroll_voucher(client):
         json={
             "id": "CON-MOD-FIN",
             "employeeId": "EMP-2026-001",
-            "studentName": "Aarav Sharma",
+            "studentName": "Wrong Name Should Still Match Adm",
+            "admissionNumber": "ADM-1",
             "percent": 50,
             "status": "Approved",
         },

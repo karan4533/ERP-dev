@@ -31,8 +31,9 @@ Clearing site `localStorage` must **not** wipe employees, payroll, fees, or rece
 |---|---|
 | HR employees, leave, payroll months, concessions, documents | **API-only** |
 | Finance fees, receipts, books, approvals, wallets, fleet register | **API-only** (snapshot + actions) |
-| Receipt email / WhatsApp send | **Stub** `queued_stub` until SMTP / WhatsApp keys |
-| Payment gateway intent | **Stub** `gateway: stub` until Razorpay/Paytm keys |
+| Receipt email / WhatsApp send | `INTEGRATIONS_MODE=demo` → local outbox (`demo_sent`); `live` + real keys → real send; else `queued_stub` |
+| Payment gateway intent | Demo Razorpay HMAC orders (`order_demo_*`); live keys call Razorpay API; else stub. Confirm via `POST …/gateway-confirm` |
+| RFID / eSSL | **Off** (`RFID_IMPORT_ENABLED=false`) until school confirms |
 | SuperAdmin income trend chart months | **Static series** (KPI cards are live) |
 | Transport maintenance/compliance demo tables (non-fleet) | Mostly static UI chrome |
 | RFID, Academics | Not on API yet |

@@ -103,6 +103,7 @@ def _seed_current_academic_year(db: Session, campus: Campus) -> None:
             start_date=date(2026, 4, 1),
             end_date=date(2027, 3, 31),
             is_current=has_current is None,
+            is_active=True,
         )
     )
 

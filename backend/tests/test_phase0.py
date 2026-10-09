@@ -91,6 +91,9 @@ def test_academic_year_set_current(client):
     )
     assert created.status_code == 201
     assert created.json()["is_current"] is True
+    current = client.get("/api/v1/masters/academic-years/current", headers=headers)
+    assert current.status_code == 200
+    assert current.json()["name"] == "2027-28"
     years = client.get("/api/v1/masters/academic-years", headers=headers).json()
     currents = [row for row in years if row["is_current"]]
     assert len(currents) == 1
@@ -99,6 +102,42 @@ def test_academic_year_set_current(client):
     restored = client.post(f"/api/v1/masters/academic-years/{older['id']}/set-current", headers=headers)
     assert restored.status_code == 200
     assert restored.json()["is_current"] is True
+    patched = client.patch(
+        f"/api/v1/masters/academic-years/{created.json()['id']}",
+        headers=headers,
+        json={"is_active": False},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["is_active"] is False
+    listed = client.get("/api/v1/masters/academic-years", headers=headers).json()
+    assert all(row["name"] != "2027-28" for row in listed)
+
+
+def test_section_update_and_deactivate(client):
+    token = _login(client, "admin@qmis.edu", "admin123")
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        "/api/v1/masters/classes",
+        json={"name": "Grade 5", "section": "A"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    class_id = created.json()["id"]
+    sections = client.get(f"/api/v1/masters/sections?class_id={class_id}", headers=headers).json()
+    section_id = sections[0]["id"]
+    renamed = client.patch(
+        f"/api/v1/masters/sections/{section_id}",
+        headers=headers,
+        json={"name": "c"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "C"
+    gone = client.delete(f"/api/v1/masters/sections/{section_id}", headers=headers)
+    assert gone.status_code == 200
+    assert gone.json()["is_active"] is False
+    active = client.get(f"/api/v1/masters/sections?class_id={class_id}", headers=headers).json()
+    assert active == []
+
 
 
 def test_hr_employee_is_hr_only(client):

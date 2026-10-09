@@ -57,12 +57,21 @@ class AcademicYearCreate(BaseModel):
     is_current: bool = False
 
 
+class AcademicYearUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=4, max_length=50)
+    start_date: date | None = None
+    end_date: date | None = None
+    is_current: bool | None = None
+    is_active: bool | None = None
+
+
 class AcademicYearOut(BaseModel):
     id: UUID
     name: str
     start_date: date | None
     end_date: date | None
     is_current: bool
+    is_active: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -87,10 +96,16 @@ class SectionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=20)
 
 
+class SectionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=20)
+    is_active: bool | None = None
+
+
 class SectionOut(BaseModel):
     id: UUID
     class_id: UUID
     name: str
+    is_active: bool = True
 
     model_config = {"from_attributes": True}
 

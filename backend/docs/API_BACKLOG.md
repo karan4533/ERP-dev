@@ -43,7 +43,7 @@ Register every new router in `app/api/v1/router.py`.
 | P0-8 | File upload stub `POST /api/v1/files` | Documents / attachments | DONE | You |
 | P0-9 | Masters: classes, sections, subjects, academic year | Admin / Teacher forms | DONE | You |
 
-> P0-9 on this stack: `GET/POST /masters/academic-years`, `…/set-current`, `GET/POST /classes`, `GET/POST /sections`, `GET/POST /subjects`. Seed year `2026-27`.
+> P0-9: academic-years (list/create/get/current/patch/set-current/deactivate), sections (list/create/get/patch/deactivate), classes + subjects. Seed `2026-27`.
 
 ---
 

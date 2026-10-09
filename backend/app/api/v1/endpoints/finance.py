@@ -71,6 +71,15 @@ def gateway_intent_route(
     return actions.create_gateway_intent(db, user, body)
 
 
+@router.post("/actions/gateway-confirm")
+def gateway_confirm_route(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("finance.write")),
+) -> dict:
+    return actions.confirm_gateway_payment(db, user, body)
+
+
 @router.post("/actions/apply-hr-concessions")
 def apply_hr_concessions_route(
     db: Session = Depends(get_db),
