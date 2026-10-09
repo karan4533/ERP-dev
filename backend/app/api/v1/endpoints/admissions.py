@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.deps import require_permission
+from app.deps import require_any, require_permission
 from app.models import User
 from app.schemas.admissions import (
     AdmissionCreate,
@@ -96,6 +96,15 @@ def create_admission_route(
     user: User = Depends(require_permission("admissions.write")),
 ):
     return svc.create_admission(db, user, body)
+
+
+@router.get("/enrolled-students")
+def list_enrolled_students_route(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_any("students.read", "hr.read", "admissions.write", "finance.read")),
+) -> list[dict]:
+    """Campus enrolled students for HR concessions / finance pickers — API SoT."""
+    return svc.list_enrolled_students(db, user)
 
 
 @router.get("/{admission_id}", response_model=AdmissionOut)

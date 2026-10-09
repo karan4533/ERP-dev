@@ -291,6 +291,21 @@ def list_admissions(db: Session, actor: User, status: str | None = None) -> list
     return [admission_to_out(row) for row in db.scalars(stmt).all()]
 
 
+def list_enrolled_students(db: Session, actor: User) -> list[dict]:
+    rows = db.scalars(
+        select(Student).where(Student.campus_id == actor.campus_id).order_by(Student.full_name)
+    ).all()
+    return [
+        {
+            "id": str(row.id),
+            "name": row.full_name,
+            "admissionNumber": row.admission_number,
+            "className": row.class_name or "",
+        }
+        for row in rows
+    ]
+
+
 def get_admission(db: Session, actor: User, admission_id: UUID) -> dict:
     return admission_to_out(_get_admission(db, actor, admission_id))
 

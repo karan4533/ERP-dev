@@ -51,15 +51,15 @@ Register every new router in `app/api/v1/router.py`.
 
 | ID | API | Frontend screens | Status | Owner |
 |---|---|---|---|---|
-| P1-1 | Enquiry CRUD | PRM / Admin admission enquiry | PARTIAL | You |
-| P1-2 | Admission CRUD + convert | Add admission | PLANNED | You |
-| P1-3 | Enroll → student + guardian link | Enroll action | PARTIAL | You |
+| P1-1 | Enquiry CRUD | PRM / Admin admission enquiry | DONE | You |
+| P1-2 | Admission CRUD + convert | Add admission | DONE | You |
+| P1-3 | Enroll → student + guardian + parent user | Enroll action | DONE | You |
 | P1-4 | `GET /api/v1/parents/me/children` | Parent select-child | PLANNED | You |
-| P1-5 | Student list & detail | Shared student database | PLANNED | You |
+| P1-5 | Student list & detail | Shared student database | PARTIAL | You |
 
-> Running stack today: `POST /admissions/enquiries` and `POST /admissions/enquiries/{id}/enroll`. Rich list/edit/convert/parent APIs are not on this UUID app yet. Keep `VITE_USE_API_ADMISSIONS=false` until that port is done.
+> Running stack today: rich enquiry list/create/patch, convert, admission CRUD, enroll with optional parent login. Set `VITE_USE_API_ADMISSIONS=true`. Students merge into Finance snapshot on GET. Parent “my children” API (P1-4) still open.
 
-> Product note: Architecture wants student create only after fee confirm, and parent via student profile. Confirm with school before locking P1-3/P1-4.
+> Product note: Architecture wants student create only after fee confirm, and parent via student profile. Confirm with school before locking P1-4.
 
 ---
 
@@ -74,7 +74,7 @@ Register every new router in `app/api/v1/router.py`.
 | Y-3 | Marks / exams | entry + approval |
 | Y-4 | Leave engine | request + decision + balances |
 | Y-5 | Tasks / escalations | shared workflows |
-| Y-6 | Fee structures + collection skeleton | Account Head |
+| Y-6 | Fee structures + collection + books + actions | Account Head — **DONE** (snapshot + finance actions) |
 
 ### Partner (HR — full vertical) — DONE on this stack
 
@@ -88,7 +88,8 @@ Register every new router in `app/api/v1/router.py`.
 | H-6 | Payroll / advances / claims / incentives | DONE |
 | H-7 | Performance / training / disciplinary / exit / announcements | DONE |
 
-Deferred outside HR: RFID punches, production SMTP, Finance voucher, Academics substitution.
+Cross-module links done: HR paid payroll → Finance OUT voucher; HR staff-child concession → Finance apply action.  
+Deferred outside closeout: RFID punches, production SMTP / WhatsApp / gateway keys, Academics substitution.
 
 ---
 

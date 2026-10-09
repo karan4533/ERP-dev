@@ -55,7 +55,7 @@ ALL_PERMISSION_CODES = [code for code, _ in PERMISSIONS]
 
 _CORE = ["auth.me", "masters.read", "hr.self"]
 _ADMIN = ALL_PERMISSION_CODES
-_HR = ["auth.me", "hr.employees.read", "hr.employees.write", "hr.read", "hr.write", "hr.self"]
+_HR = ["auth.me", "hr.employees.read", "hr.employees.write", "hr.read", "hr.write", "hr.self", "students.read"]
 _ADMISSIONS = ["auth.me", "masters.read", "admissions.write", "students.read"]
 _FINANCE = ["auth.me", "masters.read", "finance.read", "finance.write", "students.read", "audit.read"]
 

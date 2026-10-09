@@ -231,7 +231,7 @@ def settle_cheque(db: Session, actor: User, payload: dict) -> dict:
 
 
 def send_receipt(db: Session, actor: User, payload: dict) -> dict:
-    """Stub delivery — marks communication channel true and logs the attempt."""
+    """Stub delivery — records a queue attempt only; does not claim real delivery."""
     state = fin.get_state(db, actor)
     data = dict(state["data"])
     receipts = list(data.get("receipts") or [])
@@ -244,7 +244,8 @@ def send_receipt(db: Session, actor: User, payload: dict) -> dict:
     if receipt is None:
         fail(404, "not_found", "Receipt not found.")
     comm = dict(receipt.get("communication") or {})
-    comm[channel] = True
+    comm[channel] = False
+    comm[f"{channel}Status"] = "queued_stub"
     receipt["communication"] = comm
     receipt[f"last{channel.title()}At"] = _now()
     receipt[f"{channel}Status"] = "queued_stub"
@@ -254,11 +255,11 @@ def send_receipt(db: Session, actor: User, payload: dict) -> dict:
             "id": f"AUD-{uuid4().hex[:8]}",
             "performedAt": _now(),
             "performedBy": actor.email,
-            "action": f"RECEIPT_SENT_{channel.upper()}",
+            "action": f"RECEIPT_SEND_QUEUED_{channel.upper()}",
             "entity": "Receipt",
             "entityId": receipt_id,
             "newValue": receipt.get("receiptNo"),
-            "reason": "Stub delivery (configure SMTP/WhatsApp provider later)",
+            "reason": "queued_stub — configure SMTP/WhatsApp before real delivery",
         },
     )
     data["receipts"] = receipts
@@ -267,7 +268,13 @@ def send_receipt(db: Session, actor: User, payload: dict) -> dict:
     return {
         "success": True,
         "receipt": receipt,
-        "delivery": {"channel": channel, "status": "queued_stub", "providerConfigured": False},
+        "delivery": {
+            "channel": channel,
+            "status": "queued_stub",
+            "delivered": False,
+            "providerConfigured": False,
+            "message": "Not sent — stub queue only until real keys are configured",
+        },
         "state": saved,
     }
 

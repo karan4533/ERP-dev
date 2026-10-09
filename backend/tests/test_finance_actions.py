@@ -75,7 +75,9 @@ def test_collect_payment_and_send_receipt(client):
     )
     assert sent.status_code == 200, sent.text
     assert sent.json()["delivery"]["status"] == "queued_stub"
-    assert sent.json()["receipt"]["communication"]["whatsapp"] is True
+    assert sent.json()["delivery"]["delivered"] is False
+    assert sent.json()["receipt"]["communication"]["whatsapp"] is False
+    assert sent.json()["receipt"]["communication"]["whatsappStatus"] == "queued_stub"
 
 
 def test_gateway_intent_and_approval(client):

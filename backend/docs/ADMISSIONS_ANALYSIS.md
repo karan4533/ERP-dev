@@ -9,7 +9,7 @@ Stack: UUID FastAPI (`main`) + Admin / Front Office React screens
 |---|---|---|
 | Enquiry list / add / view | `/admin/front-office/admission-enquiry/*` and `/front-office/...` | `admissionEnquiryData.js` → `admissionsApi.js` when flag on |
 | Admission list / add / view / enroll | `/admin/front-office/admission-list/*` and `/front-office/...` | `admissionListData.js` → `admissionsApi.js` when flag on |
-| Flag | `VITE_USE_API_ADMISSIONS` (default **false**) | localStorage fallback while off |
+| Flag | `VITE_USE_API_ADMISSIONS` (set **true** in `.env.example`) | localStorage fallback while off |
 
 ### Enquiry fields the UI saves
 
@@ -69,13 +69,18 @@ Responses are snake_case; mapper produces camelCase for screens.
 - SMS / email on parent create (password returned only if debug policy matches HR pattern — not required for FE)  
 - Separate PRM-only UI changes (same data layer)
 
+## Status (as of 9 October 2026)
+
+Rich admissions are **live on the UUID stack**. Use `VITE_USE_API_ADMISSIONS=true`.  
+Covered by `tests/test_admissions.py` and the chained campus E2E / smoke scripts.
+
 ## Test case results
 
 Last run: 9 October 2026  
-Suite result: **32 passed, 0 failed** (~13 seconds)
+Full suite: **39 passed, 0 failed** (~22 seconds)
 
 ```
-python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v
+python -m pytest tests/ -q
 ```
 
 ### Admissions cases (`tests/test_admissions.py`)
@@ -90,6 +95,7 @@ python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr
 | Area | Result | Notes |
 |---|---|---|
 | Phase 0 legacy enroll | Passed | `POST /admissions/enquiries/{id}/enroll` shortcut still works |
-| HR modules + HR round trip | Passed | Existing closeout suite unchanged |
+| Campus E2E | Passed | Admissions hand-off into HR concession + Finance collect |
+| HR modules + HR round trip | Passed | Partner closeout suite unchanged |
 
 Full module table: `reports/testing-report.md`

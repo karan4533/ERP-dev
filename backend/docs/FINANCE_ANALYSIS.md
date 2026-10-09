@@ -49,7 +49,7 @@ Gateway / WhatsApp / SMTP persist as `queued_stub` until real keys are configure
 ## Test case results
 
 Last run: 9 October 2026  
-Suite with Finance actions: **38 passed, 0 failed** (~20 seconds)
+Full suite: **39 passed, 0 failed** (~22 seconds) + **21/21 live smoke**
 
 | Test | Result | What was checked |
 |---|---|---|
@@ -59,13 +59,16 @@ Suite with Finance actions: **38 passed, 0 failed** (~20 seconds)
 | `test_collect_payment_and_send_receipt` | Passed | Collect + WhatsApp stub |
 | `test_gateway_intent_and_approval` | Passed | Gateway stub + decide approval |
 | `test_hr_concession_and_payroll_voucher` | Passed | HR concession → fees; payroll → OUT voucher |
+| `test_phase0_through_finance_campus_journey` | Passed | Chained Phase 0 → Admissions → HR → Finance |
 
 ```
-python -m pytest tests/test_finance.py tests/test_finance_actions.py tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -q
+python -m pytest tests/ -q
+python scripts/smoke_campus_flow.py http://127.0.0.1:8001
 ```
 
 ```env
 VITE_USE_API_FINANCE=true
 ```
 
-Seed login: `accounthead@qmis.edu` / `accounts123`
+Seed login: `accounthead@qmis.edu` / `accounts123`  
+Full module table: `reports/testing-report.md`
