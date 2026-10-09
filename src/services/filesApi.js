@@ -54,6 +54,6 @@ export const resolveProfileImageFileId = async (form, resourceType = 'profile') 
         return asset.id
     }
     if (!dataUrl) return null
-    if (form?.profileImageFileId) return Number(form.profileImageFileId)
+    if (form?.profileImageFileId) return form.profileImageFileId
     return form?.profileImageFileId ?? null
 }

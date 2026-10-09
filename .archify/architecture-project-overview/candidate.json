@@ -10,7 +10,7 @@
       "url": "https://github.com/karan4533/ERP-dev.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "fd16f8263a909403df21befa2d94c0674bc191b1"
+      "revision": "9f4024043dac15d43280df417f0bab1edb18162b"
     },
     "output": ".archify/architecture-project-overview/qmis-erp-overview.html",
     "legend": {
@@ -270,7 +270,7 @@
       "id": "mod_admissions",
       "type": "backend",
       "label": "Admissions",
-      "sublabel": "enquiry + enroll",
+      "sublabel": "enquiry \u2192 enroll",
       "pos": [
         1250,
         180
@@ -281,9 +281,9 @@
       ],
       "sources": [
         {
-          "path": "backend/app/api/v1/endpoints/admissions.py",
-          "line": 12,
-          "end_line": 30
+          "path": "backend/app/main.py",
+          "line": 46,
+          "end_line": 46
         }
       ]
     },
@@ -527,7 +527,7 @@
         "Auth \u2014 /api/v1/auth",
         "Audit \u2014 /api/v1/audit-logs",
         "Masters \u2014 classes / subjects",
-        "Admissions \u2014 enquiry + enroll",
+        "Admissions \u2014 enquiry \u2192 enroll",
         "HR \u2014 full vertical",
         "Files \u2014 upload stub",
         "React role portals (Admin, HR, Teacher, PRM, \u2026)"

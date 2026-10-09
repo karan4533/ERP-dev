@@ -114,7 +114,7 @@ export const enquiryFormToApi = (form) => ({
 })
 
 export const admissionFormToApi = (form) => ({
-    enquiry_id: form.fromEnquiryId ? Number(form.fromEnquiryId) : null,
+    enquiry_id: form.fromEnquiryId ? String(form.fromEnquiryId) : null,
     admission_date: toIsoDate(form.admissionDate),
     class_name: form.className || '',
     registration_fees: form.registrationFees || null,

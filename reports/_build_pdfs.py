@@ -68,11 +68,11 @@ def work_pdf(path):
     story = [
         Paragraph("DAILY WORK REPORT", s["kicker"]),
         Paragraph("9 October 2026", s["title"]),
-        Paragraph("Queen Mira International School ERP  ·  HR department  ·  Manager update", s["sub"]),
+        Paragraph("Queen Mira International School ERP  ·  HR + Admissions  ·  Manager update", s["sub"]),
         HRFlowable(width="100%", thickness=1, color=LINE, spaceAfter=8),
     ]
     badge = Table(
-        [[Paragraph("<b>Status.</b> HR vertical closed for Phase 2 handoff. Shared auth token, file upload stub, forced password change, and announcement sync are live. 30 API tests passed.", s["body"])]],
+        [[Paragraph("<b>Status.</b> HR closeout done; rich Admissions (enquiry → admission → enroll) ported onto the UUID stack. 32 API tests passed.", s["body"])]],
         colWidths=[178 * mm],
     )
     badge.setStyle(TableStyle([
@@ -86,28 +86,27 @@ def work_pdf(path):
     story.append(badge)
     story.append(Paragraph("Done today", s["h"]))
     story.append(bullets([
-        "HR API client uses the shared schoolerp_api_token and VITE_API_BASE_URL, with the HR seed login as fallback.",
-        "File upload stub stores bytes under backend/uploads and is wired into the HR documents screen.",
-        "New staff must change the temporary password through POST /api/v1/auth/change-password and the /change-password screen.",
-        "HR announcements save through /api/v1/hr/announcements via hrStore.",
-        "Staff create, locked profiles, leave and payroll locks, exit deactivation, and incentives remain enforced.",
-        "Backlog and frontend integration docs now match the running UUID stack.",
+        "HR closeout: shared auth token, file upload stub, forced password change, announcement sync.",
+        "Admissions frontend analysed; gaps documented in backend/docs/ADMISSIONS_ANALYSIS.md.",
+        "Rich admissions API: enquiry CRUD, convert, admission CRUD, enroll with optional parent login.",
+        "Frontend UUID fixes for enquiry id and profile file id; VITE_USE_API_ADMISSIONS=true in .env.example.",
+        "Single project Archify at .archify/architecture-project-overview/qmis-erp-overview.html.",
     ], s))
     story.append(Paragraph("Test result", s["h"]))
-    story.append(Paragraph("30 automated tests passed in about 13 seconds. The module-by-module detail is in the HR testing report.", s["body"]))
+    story.append(Paragraph("32 automated tests passed in about 13 seconds. The module-by-module detail is in the testing report.", s["body"]))
     story.append(Paragraph("Still open", s["h"]))
-    story.append(Paragraph("These items depend on other systems and are deferred outside the HR closeout.", s["body"]))
+    story.append(Paragraph("These items depend on other systems or a browser pass.", s["body"]))
     story.append(bullets([
         "RFID device punches",
         "A real email server. The temporary password is returned for local testing.",
         "Finance paying payroll and applying the staff-child concession on the fee",
         "Academics reassigning periods when a teacher takes emergency leave",
-        "Click-through of every HR screen in the browser",
+        "Browser click-through of every admissions screen against the live API",
     ], s))
     story.append(Paragraph("How to see it", s["h"]))
     story.append(bullets([
-        "HR screens: open the school portal, then open HR.",
-        "API tests: from the backend folder, run python -m pytest tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v",
+        "Admissions: Admin or Front Office → Admission Enquiry / Admission List with VITE_USE_API_ADMISSIONS=true.",
+        "API tests: from backend, run python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v",
     ], s))
     doc.build(story, onFirstPage=lambda c, d: header_footer(c, d, "Daily work report"), onLaterPages=lambda c, d: header_footer(c, d, "Daily work report"))
 
@@ -136,13 +135,13 @@ def testing_pdf(path):
     story = [
         Paragraph("HR TESTING REPORT", s["kicker"]),
         Paragraph("Module results for 9 October 2026", s["title"]),
-        Paragraph("API tests. Each HR module is called the way the screen calls it, using the HR login. The browser was not clicked through in this run.", s["sub"]),
+        Paragraph("API tests for HR modules plus rich Admissions. The browser was not clicked through in this run.", s["sub"]),
     ]
     summary = Table([[
-        Paragraph("<b>30 passed</b>", s["body"]),
+        Paragraph("<b>32 passed</b>", s["body"]),
         Paragraph("<b>0 failed</b>", s["body"]),
         Paragraph("About 13 seconds", s["body"]),
-        Paragraph("Last run: 9 October 2026 closeout", s["body"]),
+        Paragraph("Last run: 9 October 2026 admissions", s["body"]),
     ]], colWidths=[60 * mm, 50 * mm, 55 * mm, 90 * mm])
     summary.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, 0), GREEN_BG),
@@ -158,10 +157,12 @@ def testing_pdf(path):
     ]))
     story.append(summary)
     story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Command, from the backend folder:  python -m pytest tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v", s["small"]))
+    story.append(Paragraph("Command, from the backend folder:  python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v", s["small"]))
     story.append(Paragraph("Module results", s["h"]))
 
     rows_data = [
+        ("Admissions enquiry → enroll", "test_rich_enquiry_admission_enroll_with_parent", "Create enquiry, convert, patch, enroll with parent user, reject double enroll"),
+        ("Admissions create", "test_create_admission_direct", "Direct admission create and list"),
         ("Staff user creation", "test_module_staff_user_creation", "HR creates the person, the temporary password logs in, first login must change the password, and the assignment is stored"),
         ("Password change", "test_staff_must_change_password_then_clears", "Temporary password forces change; after change, login no longer requires it"),
         ("File upload", "test_file_upload_stub", "File bytes are stored and downloaded through /api/v1/files"),
@@ -186,7 +187,7 @@ def testing_pdf(path):
         ("Locked profile", "test_saved_staff_profile_cannot_be_rewritten", "Name and salary stay fixed. Department and role can transfer, and the old department stays in history"),
         ("HR data round trip", "test_hr_vertical_round_trip", "Employees and HR collections save and load again"),
         ("Login required", "test_hr_routes_require_a_token", "HR routes reject a request with no token"),
-        ("Health, login, OTP, masters, admission", "Phase 0 tests", "The shared login, class and subject masters, and the admission path still work"),
+        ("Health, login, OTP, masters, legacy enroll", "Phase 0 tests", "Shared login, masters, and the legacy enquiry enroll shortcut still work"),
     ]
     header = [Paragraph(t, s["cell_h"]) for t in ("Module", "Test", "Result", "What was checked")]
     data = [header]

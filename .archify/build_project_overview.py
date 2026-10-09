@@ -53,10 +53,10 @@ ROUTER_META = {
     "admissions_router": {
         "id": "mod_admissions",
         "label": "Admissions",
-        "sublabel": "enquiry + enroll",
-        "path": "backend/app/api/v1/endpoints/admissions.py",
-        "line": 12,
-        "end_line": 30,
+        "sublabel": "enquiry → enroll",
+        "path": "backend/app/main.py",
+        "line": 46,
+        "end_line": 46,
     },
     "hr_router": {
         "id": "mod_hr",
