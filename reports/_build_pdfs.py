@@ -72,7 +72,7 @@ def work_pdf(path):
         HRFlowable(width="100%", thickness=1, color=LINE, spaceAfter=8),
     ]
     badge = Table(
-        [[Paragraph("<b>Status.</b> HR closeout for Phase 2 is done on this stack. Shared auth token, file upload stub, forced password change, and announcement sync are live. 30 API tests passed.", s["body"])]],
+        [[Paragraph("<b>Status.</b> HR vertical closed for Phase 2 handoff. Shared auth token, file upload stub, forced password change, and announcement sync are live. 30 API tests passed.", s["body"])]],
         colWidths=[178 * mm],
     )
     badge.setStyle(TableStyle([

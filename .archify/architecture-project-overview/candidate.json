@@ -1,0 +1,557 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "QMIS School ERP \u2014 project overview",
+    "subtitle": "Live routers from main.py; new modules appear when mounted",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/karan4533/ERP-dev.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "fd16f8263a909403df21befa2d94c0674bc191b1"
+    },
+    "output": ".archify/architecture-project-overview/qmis-erp-overview.html",
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "API module"
+        },
+        "cloud": {
+          "label": "Planned module"
+        },
+        "frontend": {
+          "label": "Browser app"
+        },
+        "database": {
+          "label": "Store"
+        },
+        "security": {
+          "label": "Auth path"
+        },
+        "external": {
+          "label": "People"
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "live",
+        "label": "Live API",
+        "focus": [
+          "api",
+          "mod_auth",
+          "mod_audit",
+          "mod_masters",
+          "mod_admissions",
+          "mod_hr",
+          "mod_files"
+        ],
+        "note": "Routers mounted in main.py"
+      },
+      {
+        "id": "planned",
+        "label": "Planned",
+        "focus": [
+          "api",
+          "mod_finance",
+          "mod_academics",
+          "mod_ops"
+        ],
+        "note": "Phase 2 / 3+"
+      },
+      {
+        "id": "path",
+        "label": "User path",
+        "focus": [
+          "users",
+          "web",
+          "client",
+          "api",
+          "db"
+        ]
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "users",
+      "type": "external",
+      "label": "School users",
+      "sublabel": "role portals",
+      "pos": [
+        40,
+        280
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "icon": "person",
+      "sources": [
+        {
+          "path": "src/App.jsx",
+          "line": 34,
+          "end_line": 60
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "React portal",
+      "sublabel": "Vite :5173",
+      "pos": [
+        220,
+        280
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/App.jsx",
+          "line": 1,
+          "end_line": 32
+        }
+      ]
+    },
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "API clients",
+      "sublabel": "admissionsApi, authApi, filesApi\u2026",
+      "pos": [
+        400,
+        280
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/services/apiClient.js",
+          "line": 1,
+          "end_line": 30
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "FastAPI",
+      "sublabel": "QMIS ERP :8000",
+      "pos": [
+        600,
+        160
+      ],
+      "size": [
+        160,
+        200
+      ],
+      "tag": "UUID stack",
+      "sources": [
+        {
+          "path": "backend/app/main.py",
+          "line": 35,
+          "end_line": 53
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "qmis_erp",
+      "pos": [
+        610,
+        420
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/core/config.py",
+          "line": 4,
+          "end_line": 18
+        }
+      ]
+    },
+    {
+      "id": "uploads",
+      "type": "database",
+      "label": "Uploads",
+      "sublabel": "backend/uploads",
+      "pos": [
+        610,
+        540
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/services/files.py",
+          "line": 18,
+          "end_line": 25
+        }
+      ]
+    },
+    {
+      "id": "mod_auth",
+      "type": "backend",
+      "label": "Auth",
+      "sublabel": "/api/v1/auth",
+      "pos": [
+        1080,
+        80
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/endpoints/auth.py",
+          "line": 19,
+          "end_line": 48
+        }
+      ]
+    },
+    {
+      "id": "mod_audit",
+      "type": "backend",
+      "label": "Audit",
+      "sublabel": "/api/v1/audit-logs",
+      "pos": [
+        1250,
+        80
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/endpoints/audit.py",
+          "line": 9,
+          "end_line": 20
+        }
+      ]
+    },
+    {
+      "id": "mod_masters",
+      "type": "backend",
+      "label": "Masters",
+      "sublabel": "classes / subjects",
+      "pos": [
+        1080,
+        180
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/endpoints/masters.py",
+          "line": 12,
+          "end_line": 40
+        }
+      ]
+    },
+    {
+      "id": "mod_admissions",
+      "type": "backend",
+      "label": "Admissions",
+      "sublabel": "enquiry + enroll",
+      "pos": [
+        1250,
+        180
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/endpoints/admissions.py",
+          "line": 12,
+          "end_line": 30
+        }
+      ]
+    },
+    {
+      "id": "mod_hr",
+      "type": "backend",
+      "label": "HR",
+      "sublabel": "full vertical",
+      "pos": [
+        1080,
+        280
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/endpoints/hr.py",
+          "line": 27,
+          "end_line": 50
+        }
+      ]
+    },
+    {
+      "id": "mod_files",
+      "type": "backend",
+      "label": "Files",
+      "sublabel": "upload stub",
+      "pos": [
+        1250,
+        280
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/endpoints/files.py",
+          "line": 13,
+          "end_line": 39
+        }
+      ]
+    },
+    {
+      "id": "mod_finance",
+      "type": "cloud",
+      "label": "Finance",
+      "sublabel": "Phase 2",
+      "pos": [
+        1080,
+        400
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/main.py",
+          "line": 43,
+          "end_line": 48
+        }
+      ],
+      "tag": "planned"
+    },
+    {
+      "id": "mod_academics",
+      "type": "cloud",
+      "label": "Academics",
+      "sublabel": "Phase 2",
+      "pos": [
+        1250,
+        400
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/main.py",
+          "line": 43,
+          "end_line": 48
+        }
+      ],
+      "tag": "planned"
+    },
+    {
+      "id": "mod_ops",
+      "type": "cloud",
+      "label": "Ops",
+      "sublabel": "Phase 3+",
+      "pos": [
+        1080,
+        500
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/main.py",
+          "line": 43,
+          "end_line": 48
+        }
+      ],
+      "tag": "planned"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Frontend (Vite + React)",
+      "wraps": [
+        "web",
+        "client"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Backend (FastAPI)",
+      "wraps": [
+        "api",
+        "mod_auth",
+        "mod_audit",
+        "mod_masters",
+        "mod_admissions",
+        "mod_hr",
+        "mod_files"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Planned departments",
+      "wraps": [
+        "mod_finance",
+        "mod_academics",
+        "mod_ops"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Authenticated API",
+      "wraps": [
+        "client",
+        "api"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "users-web",
+      "from": "users",
+      "to": "web",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "web-client",
+      "from": "web",
+      "to": "client",
+      "label": "calls"
+    },
+    {
+      "id": "client-api",
+      "from": "client",
+      "to": "api",
+      "label": "JWT",
+      "variant": "security"
+    },
+    {
+      "id": "api-db",
+      "from": "api",
+      "to": "db",
+      "label": "SQL"
+    },
+    {
+      "id": "api-uploads",
+      "from": "api",
+      "to": "uploads",
+      "label": "files",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-mod_auth",
+      "from": "api",
+      "to": "mod_auth"
+    },
+    {
+      "id": "api-mod_audit",
+      "from": "api",
+      "to": "mod_audit"
+    },
+    {
+      "id": "api-mod_masters",
+      "from": "api",
+      "to": "mod_masters"
+    },
+    {
+      "id": "api-mod_admissions",
+      "from": "api",
+      "to": "mod_admissions"
+    },
+    {
+      "id": "api-mod_hr",
+      "from": "api",
+      "to": "mod_hr"
+    },
+    {
+      "id": "api-mod_files",
+      "from": "api",
+      "to": "mod_files"
+    },
+    {
+      "id": "api-mod_finance",
+      "from": "api",
+      "to": "mod_finance",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-mod_academics",
+      "from": "api",
+      "to": "mod_academics",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-mod_ops",
+      "from": "api",
+      "to": "mod_ops",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Live now",
+      "items": [
+        "Auth \u2014 /api/v1/auth",
+        "Audit \u2014 /api/v1/audit-logs",
+        "Masters \u2014 classes / subjects",
+        "Admissions \u2014 enquiry + enroll",
+        "HR \u2014 full vertical",
+        "Files \u2014 upload stub",
+        "React role portals (Admin, HR, Teacher, PRM, \u2026)"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Auto-add a module",
+      "items": [
+        "Mount router in backend/app/main.py",
+        "Add src/services/<name>Api.js for the UI",
+        "Run python .archify/build_project_overview.py then finalize"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Clients found",
+      "items": [
+        "admissionsApi.js",
+        "authApi.js",
+        "filesApi.js",
+        "hrApi.js",
+        "apiClient.js"
+      ]
+    }
+  ]
+}
