@@ -101,8 +101,8 @@ const FeeCollectionTab = () => {
         })
     }
 
-    const handleCollectResult = (payload) => {
-        const result = confirmPayment(payload)
+    const handleCollectResult = async (payload) => {
+        const result = await confirmPayment(payload)
         if (result?.success) {
             setSelectedIds([])
             setPartials({})

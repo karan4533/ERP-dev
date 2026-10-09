@@ -68,11 +68,11 @@ def work_pdf(path):
     story = [
         Paragraph("DAILY WORK REPORT", s["kicker"]),
         Paragraph("9 October 2026", s["title"]),
-        Paragraph("Queen Mira International School ERP  ·  HR + Admissions  ·  Manager update", s["sub"]),
+        Paragraph("Queen Mira International School ERP  ·  HR + Admissions + Finance  ·  Manager update", s["sub"]),
         HRFlowable(width="100%", thickness=1, color=LINE, spaceAfter=8),
     ]
     badge = Table(
-        [[Paragraph("<b>Status.</b> HR closeout done; rich Admissions (enquiry → admission → enroll) ported onto the UUID stack. 32 API tests passed.", s["body"])]],
+        [[Paragraph("<b>Status.</b> Finance closeout: snapshot + server actions + FE wiring. 38 API tests passed.", s["body"])]],
         colWidths=[178 * mm],
     )
     badge.setStyle(TableStyle([
@@ -86,27 +86,27 @@ def work_pdf(path):
     story.append(badge)
     story.append(Paragraph("Done today", s["h"]))
     story.append(bullets([
-        "HR closeout: shared auth token, file upload stub, forced password change, announcement sync.",
-        "Admissions frontend analysed; gaps documented in backend/docs/ADMISSIONS_ANALYSIS.md.",
-        "Rich admissions API: enquiry CRUD, convert, admission CRUD, enroll with optional parent login.",
-        "Frontend UUID fixes for enquiry id and profile file id; VITE_USE_API_ADMISSIONS=true in .env.example.",
-        "Single project Archify at .archify/architecture-project-overview/qmis-erp-overview.html.",
+        "Finance server actions: collect-payment, settle-cheque, send-receipt, gateway-intent, apply-hr-concessions, post-payroll-voucher, decide-approval.",
+        "Transport fleet, wallets, approvals, Collections/Reports/Dashboard, SuperAdmin Finance read live snapshot.",
+        "Settings button applies approved HR staff-child concessions onto fee installments.",
+        "HR paid payroll-months posts Finance OUT vouchers; gateway/WhatsApp/email remain stubs until keys.",
+        "Seed login accounthead@qmis.edu / accounts123; VITE_USE_API_FINANCE=true.",
     ], s))
     story.append(Paragraph("Test result", s["h"]))
-    story.append(Paragraph("32 automated tests passed in about 13 seconds. The module-by-module detail is in the testing report.", s["body"]))
+    story.append(Paragraph("38 automated tests passed in about 20 seconds. The module-by-module detail is in the testing report.", s["body"]))
     story.append(Paragraph("Still open", s["h"]))
     story.append(Paragraph("These items depend on other systems or a browser pass.", s["body"]))
     story.append(bullets([
         "RFID device punches",
-        "A real email server. The temporary password is returned for local testing.",
-        "Finance paying payroll and applying the staff-child concession on the fee",
+        "Real SMTP / WhatsApp Business / payment gateway keys (stubs queue attempts today)",
+        "Production cutover: stop treating localStorage as source of truth",
         "Academics reassigning periods when a teacher takes emergency leave",
-        "Browser click-through of every admissions screen against the live API",
+        "Browser click-through of fees collection against the live API",
     ], s))
     story.append(Paragraph("How to see it", s["h"]))
     story.append(bullets([
-        "Admissions: Admin or Front Office → Admission Enquiry / Admission List with VITE_USE_API_ADMISSIONS=true.",
-        "API tests: from backend, run python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v",
+        "Account Head portal with VITE_USE_API_FINANCE=true.",
+        "API tests: from backend, run python -m pytest tests/test_finance.py tests/test_finance_actions.py tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v",
     ], s))
     doc.build(story, onFirstPage=lambda c, d: header_footer(c, d, "Daily work report"), onLaterPages=lambda c, d: header_footer(c, d, "Daily work report"))
 
@@ -135,13 +135,13 @@ def testing_pdf(path):
     story = [
         Paragraph("HR TESTING REPORT", s["kicker"]),
         Paragraph("Module results for 9 October 2026", s["title"]),
-        Paragraph("API tests for HR modules plus rich Admissions. The browser was not clicked through in this run.", s["sub"]),
+        Paragraph("API tests for Finance actions, Admissions, and HR. The browser was not clicked through in this run.", s["sub"]),
     ]
     summary = Table([[
-        Paragraph("<b>32 passed</b>", s["body"]),
+        Paragraph("<b>38 passed</b>", s["body"]),
         Paragraph("<b>0 failed</b>", s["body"]),
-        Paragraph("About 13 seconds", s["body"]),
-        Paragraph("Last run: 9 October 2026 admissions", s["body"]),
+        Paragraph("About 20 seconds", s["body"]),
+        Paragraph("Last run: 9 October 2026 finance closeout", s["body"]),
     ]], colWidths=[60 * mm, 50 * mm, 55 * mm, 90 * mm])
     summary.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, 0), GREEN_BG),
@@ -157,10 +157,16 @@ def testing_pdf(path):
     ]))
     story.append(summary)
     story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Command, from the backend folder:  python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v", s["small"]))
+    story.append(Paragraph("Command, from the backend folder:  python -m pytest tests/test_finance.py tests/test_finance_actions.py tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v", s["small"]))
     story.append(Paragraph("Module results", s["h"]))
 
     rows_data = [
+        ("Finance snapshot", "test_accounthead_can_save_finance_state", "Account Head PUT/GET finance state and receipts collection"),
+        ("Finance authz", "test_hr_cannot_write_finance", "HR cannot write finance"),
+        ("Finance reset", "test_finance_reset", "Admin reset clears seeded snapshot"),
+        ("Finance collect + receipt", "test_collect_payment_and_send_receipt", "Cash collect posts receipt; WhatsApp send is queued_stub"),
+        ("Finance gateway + approval", "test_gateway_intent_and_approval", "Stub gateway intent and approve a pending claim"),
+        ("Finance HR links", "test_hr_concession_and_payroll_voucher", "Apply staff-child concession; paid payroll posts OUT voucher"),
         ("Admissions enquiry → enroll", "test_rich_enquiry_admission_enroll_with_parent", "Create enquiry, convert, patch, enroll with parent user, reject double enroll"),
         ("Admissions create", "test_create_admission_direct", "Direct admission create and list"),
         ("Staff user creation", "test_module_staff_user_creation", "HR creates the person, the temporary password logs in, first login must change the password, and the assignment is stored"),
@@ -222,7 +228,7 @@ def testing_pdf(path):
         "Clicking through each HR screen in the browser",
         "RFID punch import",
         "Sending the temporary password by real email",
-        "Finance creating the payment voucher or applying the child concession on a fee",
+        "Real payment gateway / SMTP / WhatsApp keys (stubs only)",
         "Academics reassigning a teacher's periods for emergency leave",
     ], s))
     doc.build(story, onFirstPage=hf, onLaterPages=hf)

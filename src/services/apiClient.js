@@ -4,9 +4,10 @@ export const getApiBaseUrl = () =>
     (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '')
 
 export const isApiAuthEnabled = () => String(import.meta.env.VITE_USE_API_AUTH || 'true') === 'true'
-// Partner Phase-0 rewrite ships a stub admissions API; rich FE flow stays local until ported.
 export const isApiAdmissionsEnabled = () =>
     String(import.meta.env.VITE_USE_API_ADMISSIONS || 'false') === 'true'
+export const isApiFinanceEnabled = () =>
+    String(import.meta.env.VITE_USE_API_FINANCE || 'true') === 'true'
 
 export const getAccessToken = () => sessionStorage.getItem(TOKEN_KEY)
 export const setAccessToken = (token) => {

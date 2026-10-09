@@ -1,8 +1,7 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Plus, Search } from 'lucide-react'
 import {
     FLEET_SUMMARY,
-    FLEET_VEHICLES,
     fleetStatusBadgeColor,
 } from '../transportFinanceData'
 import {
@@ -13,10 +12,25 @@ import {
     tdClass,
     thClass,
 } from './TransportShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
 
-const FleetServiceTab = ({ onAddVehicle }) => (
+const FleetServiceTab = ({ onAddVehicle }) => {
+    const { transportFleet } = useFinance()
+    const vehicles = transportFleet?.length ? transportFleet : []
+    const summary = useMemo(() => {
+        const total = vehicles.length
+        const active = vehicles.filter((row) => row.status === 'Active').length
+        const service = vehicles.filter((row) => /service/i.test(row.status || '')).length
+        return FLEET_SUMMARY.map((card) => {
+            if (card.label === 'Total Vehicles') return { ...card, value: String(total), sub: 'Live fleet register' }
+            if (card.label === 'Active on Routes') return { ...card, value: String(active), sub: 'Active status' }
+            if (card.label === 'Under Service') return { ...card, value: String(service), sub: 'In service / maintenance' }
+            return card
+        })
+    }, [vehicles])
+    return (
     <div className='space-y-6'>
-        <SummaryCards cards={FLEET_SUMMARY} />
+        <SummaryCards cards={summary} />
 
         <TableCard
             title='Vehicle fleet register'
@@ -51,7 +65,7 @@ const FleetServiceTab = ({ onAddVehicle }) => (
                     </button>
                 </div>
             )}
-            footer={<TablePagination summary='18 vehicles total' />}
+            footer={<TablePagination summary={`${vehicles.length} vehicles total`} />}
         >
             <table className='w-full text-sm text-left mt-4'>
                 <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -68,7 +82,7 @@ const FleetServiceTab = ({ onAddVehicle }) => (
                     </tr>
                 </thead>
                 <tbody>
-                    {FLEET_VEHICLES.map((row) => (
+                    {vehicles.map((row) => (
                         <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                             <td className={`${tdClass} rounded-s-lg font-mono text-xs text-[#1E1E1E]`}>{row.regNo}</td>
                             <td className={tdClass}>{row.type}</td>
@@ -95,6 +109,7 @@ const FleetServiceTab = ({ onAddVehicle }) => (
             </table>
         </TableCard>
     </div>
-)
+    )
+}
 
 export default FleetServiceTab

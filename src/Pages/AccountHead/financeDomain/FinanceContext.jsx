@@ -57,12 +57,28 @@ import {
     pickPersistedSequence,
     saveFinanceState,
 } from './financeStorage'
+import { isApiFinanceEnabled } from '../../../services/apiClient'
+import {
+    applyHrConcessionsApi,
+    collectPaymentApi,
+    decideApprovalApi,
+    gatewayIntentApi,
+    pullFinanceState,
+    pushFinanceState,
+    resetFinanceStateApi,
+    sendReceiptApi,
+    settleChequeApi,
+} from '../../../services/financeApi'
+import { FLEET_VEHICLES } from '../TransportFinance/transportFinanceData'
+import { RECHARGE_RECORDS, USER_WALLETS } from '../WalletManagement/walletManagementData'
+import { PENDING_REQUESTS } from '../Approvals/approvalsData'
 
 const FinanceContext = createContext(null)
 
 const clone = (value) => cloneJson(value)
 
 const createSeedFinanceState = () => ({
+    students: clone(FINANCE_STUDENTS),
     feeCategories: clone(FEE_CATEGORIES),
     feeStructures: clone(FEE_STRUCTURES),
     fineRules: clone(FINE_RULES),
@@ -70,6 +86,7 @@ const createSeedFinanceState = () => ({
     posTerminals: clone(POS_TERMINALS),
     concessions: clone(FEE_CONCESSIONS),
     installments: clone(FEE_INSTALLMENTS),
+    annualBudget: clone(BUDGET_SEED),
     transactions: [],
     receipts: clone(SEED_RECEIPTS),
     cheques: clone(SEED_CHEQUES),
@@ -81,7 +98,13 @@ const createSeedFinanceState = () => ({
     bankBookEntries: [],
     onlineBookEntries: [],
     reconciliationItems: [],
+    activityFees: [],
+    wallets: clone(USER_WALLETS).map((row) => ({ ...row, status: row.status || 'Active' })),
+    walletRecharges: clone(RECHARGE_RECORDS),
+    transportFleet: clone(FLEET_VEHICLES),
+    approvals: clone(PENDING_REQUESTS).map((row) => ({ ...row, status: row.status || 'Pending' })),
     sequence: { ...DEFAULT_FINANCE_SEQUENCE },
+    meta: { seeded: true },
 })
 
 export const FinanceProvider = ({ children }) => {
@@ -94,8 +117,10 @@ export const FinanceProvider = ({ children }) => {
     const seq = useRef(pickPersistedSequence(saved))
     const submittingRef = useRef(false)
     const skipPersistRef = useRef(false)
+    const apiHydratedRef = useRef(false)
+    const pushTimerRef = useRef(null)
 
-    const [students] = useState(FINANCE_STUDENTS)
+    const [students, setStudents] = useState(() => initialPersistedList(saved, 'students', FINANCE_STUDENTS))
     const [feeCategories, setFeeCategories] = useState(() => initialPersistedList(saved, 'feeCategories', FEE_CATEGORIES))
     const [feeStructures, setFeeStructures] = useState(() => initialPersistedList(saved, 'feeStructures', FEE_STRUCTURES))
     const [fineRules, setFineRules] = useState(() => initialPersistedList(saved, 'fineRules', FINE_RULES))
@@ -115,6 +140,14 @@ export const FinanceProvider = ({ children }) => {
     const [bankBookEntries, setBankBookEntries] = useState(() => initialPersistedList(saved, 'bankBookEntries', []))
     const [onlineBookEntries, setOnlineBookEntries] = useState(() => initialPersistedList(saved, 'onlineBookEntries', []))
     const [reconciliationItems, setReconciliationItems] = useState(() => initialPersistedList(saved, 'reconciliationItems', []))
+    const [wallets, setWallets] = useState(() => initialPersistedList(saved, 'wallets', USER_WALLETS))
+    const [walletRecharges, setWalletRecharges] = useState(() => initialPersistedList(saved, 'walletRecharges', RECHARGE_RECORDS))
+    const [transportFleet, setTransportFleet] = useState(() => initialPersistedList(saved, 'transportFleet', FLEET_VEHICLES))
+    const [approvals, setApprovals] = useState(() => initialPersistedList(
+        saved,
+        'approvals',
+        PENDING_REQUESTS.map((row) => ({ ...row, status: 'Pending' })),
+    ))
     const [lastSavedAt, setLastSavedAt] = useState(() => savedEnvelopeRef.current?.savedAt ?? null)
 
     const appendAudit = useCallback((entry) => {
@@ -124,6 +157,40 @@ export const FinanceProvider = ({ children }) => {
             performedBy: entry.performedBy || ACTOR_FINANCE_HEAD,
             ...entry,
         }, ...prev])
+    }, [])
+
+    const applyFinanceData = useCallback((data) => {
+        if (!data || typeof data !== 'object') return
+        skipPersistRef.current = true
+        seq.current = pickPersistedSequence(data)
+        setStudents(initialPersistedList(data, 'students', FINANCE_STUDENTS))
+        setFeeCategories(initialPersistedList(data, 'feeCategories', FEE_CATEGORIES))
+        setFeeStructures(initialPersistedList(data, 'feeStructures', FEE_STRUCTURES))
+        setFineRules(initialPersistedList(data, 'fineRules', FINE_RULES))
+        setBankAccounts(initialPersistedList(data, 'bankAccounts', BANK_ACCOUNTS))
+        setPosTerminals(initialPersistedList(data, 'posTerminals', POS_TERMINALS))
+        setConcessions(initialPersistedList(data, 'concessions', FEE_CONCESSIONS))
+        setInstallments(initialPersistedList(data, 'installments', FEE_INSTALLMENTS))
+        setAnnualBudget(initialPersistedList(data, 'annualBudget', BUDGET_SEED))
+        setTransactions(initialPersistedList(data, 'transactions', []))
+        setReceipts(initialPersistedList(data, 'receipts', SEED_RECEIPTS))
+        setCheques(initialPersistedList(data, 'cheques', SEED_CHEQUES))
+        setPaymentLinks(initialPersistedList(data, 'paymentLinks', []))
+        setAuditLog(initialPersistedList(data, 'auditLog', []))
+        setGlEntries(initialPersistedList(data, 'glEntries', []))
+        setDayBookEntries(initialPersistedList(data, 'dayBookEntries', []))
+        setCashBookEntries(initialPersistedList(data, 'cashBookEntries', []))
+        setBankBookEntries(initialPersistedList(data, 'bankBookEntries', []))
+        setOnlineBookEntries(initialPersistedList(data, 'onlineBookEntries', []))
+        setReconciliationItems(initialPersistedList(data, 'reconciliationItems', []))
+        setWallets(initialPersistedList(data, 'wallets', USER_WALLETS))
+        setWalletRecharges(initialPersistedList(data, 'walletRecharges', RECHARGE_RECORDS))
+        setTransportFleet(initialPersistedList(data, 'transportFleet', FLEET_VEHICLES))
+        setApprovals(initialPersistedList(
+            data,
+            'approvals',
+            PENDING_REQUESTS.map((row) => ({ ...row, status: 'Pending' })),
+        ))
     }, [])
 
     const hydratedInstallments = useMemo(() => (
@@ -178,9 +245,26 @@ export const FinanceProvider = ({ children }) => {
         }
     }, [])
 
-    const collectFeePayment = useCallback((payload) => {
+    const collectFeePayment = useCallback(async (payload) => {
         if (submittingRef.current) {
             return { success: false, errors: ['A payment is already being processed.'] }
+        }
+
+        if (isApiFinanceEnabled() && apiHydratedRef.current) {
+            try {
+                submittingRef.current = true
+                const result = await collectPaymentApi(payload)
+                if (result?.state?.data) applyFinanceData(result.state.data)
+                return {
+                    success: true,
+                    receipt: result.receipt,
+                    transaction: result.transaction,
+                }
+            } catch (error) {
+                return { success: false, errors: [error.message || 'Payment failed on server.'] }
+            } finally {
+                submittingRef.current = false
+            }
         }
 
         const {
@@ -357,7 +441,16 @@ export const FinanceProvider = ({ children }) => {
         }
     }, [appendAudit, bankAccounts, getInstallmentsForStudent, getStudentById, postAccounting])
 
-    const settleCheque = useCallback((chequeId, nextStatus, reason = '') => {
+    const settleCheque = useCallback(async (chequeId, nextStatus, reason = '') => {
+        if (isApiFinanceEnabled() && apiHydratedRef.current) {
+            try {
+                const result = await settleChequeApi({ chequeId, status: nextStatus, reason })
+                if (result?.state?.data) applyFinanceData(result.state.data)
+                return { success: true }
+            } catch (error) {
+                return { success: false, message: error.message || 'Cheque update failed.' }
+            }
+        }
         const cheque = cheques.find((item) => item.id === chequeId)
         if (!cheque) return { success: false, message: 'Cheque not found.' }
 
@@ -406,7 +499,43 @@ export const FinanceProvider = ({ children }) => {
         })
 
         return { success: true }
-    }, [appendAudit, cheques, getStudentById, postAccounting, transactions])
+    }, [appendAudit, applyFinanceData, cheques, getStudentById, postAccounting, transactions])
+
+    const decideApproval = useCallback(async ({ approvalId, decision, remarks }) => {
+        if (isApiFinanceEnabled() && apiHydratedRef.current) {
+            try {
+                const result = await decideApprovalApi({ approvalId, decision, remarks })
+                if (result?.state?.data) applyFinanceData(result.state.data)
+                return { success: true, approval: result.approval }
+            } catch (error) {
+                return { success: false, message: error.message }
+            }
+        }
+        setApprovals((prev) => prev.map((row) => (
+            row.id === approvalId
+                ? {
+                    ...row,
+                    status: decision === 'approved' ? 'Approved' : 'Rejected',
+                    decidedAt: new Date().toISOString(),
+                    remarks: remarks || '',
+                }
+                : row
+        )))
+        return { success: true }
+    }, [applyFinanceData])
+
+    const applyHrConcessions = useCallback(async () => {
+        if (!isApiFinanceEnabled()) {
+            return { success: false, message: 'Finance API is off.' }
+        }
+        try {
+            const result = await applyHrConcessionsApi()
+            if (result?.state?.data) applyFinanceData(result.state.data)
+            return { success: true, applied: result.applied }
+        } catch (error) {
+            return { success: false, message: error.message }
+        }
+    }, [applyFinanceData])
 
     const waiveFine = useCallback(({ installmentId, reason, changedBy = ACTOR_FINANCE_HEAD }) => {
         if (!reason?.trim()) return { success: false, message: 'Reason is required to waive a fine.' }
@@ -439,7 +568,22 @@ export const FinanceProvider = ({ children }) => {
         return { success: true }
     }, [appendAudit, installments])
 
-    const generatePaymentLink = useCallback(({ studentId, amount, installmentIds }) => {
+    const generatePaymentLink = useCallback(async ({ studentId, amount, installmentIds }) => {
+        if (isApiFinanceEnabled() && apiHydratedRef.current) {
+            try {
+                const result = await gatewayIntentApi({ studentId, amount, installmentIds })
+                if (result?.state?.data) applyFinanceData(result.state.data)
+                const intent = result.intent || {}
+                return {
+                    ...intent,
+                    url: intent.url?.startsWith('http')
+                        ? intent.url
+                        : `${window.location.origin}${intent.url || ''}`,
+                }
+            } catch (error) {
+                console.error(error)
+            }
+        }
         seq.current.link += 1
         const reference = generatePaymentReference(seq.current.link)
         const student = getStudentById(studentId)
@@ -451,6 +595,7 @@ export const FinanceProvider = ({ children }) => {
             installmentIds,
             url: `${window.location.origin}/student/payment/fees-payment?ref=${reference}`,
             status: 'OPEN',
+            gateway: 'stub',
             createdAt: new Date().toISOString(),
         }
         setPaymentLinks((prev) => [link, ...prev])
@@ -462,7 +607,7 @@ export const FinanceProvider = ({ children }) => {
             reason: `Payment link for ${student?.name ?? studentId}`,
         })
         return link
-    }, [appendAudit, getStudentById])
+    }, [appendAudit, applyFinanceData, getStudentById])
 
     const reprintReceipt = useCallback(({ receiptId, reason, reprintedBy = ACTOR_FINANCE_HEAD }) => {
         const receipt = receipts.find((item) => item.id === receiptId)
@@ -490,7 +635,16 @@ export const FinanceProvider = ({ children }) => {
         return { success: true, receiptNo: receipt.receiptNo }
     }, [appendAudit, receipts])
 
-    const sendReceipt = useCallback(({ receiptId, channel }) => {
+    const sendReceipt = useCallback(async ({ receiptId, channel }) => {
+        if (isApiFinanceEnabled() && apiHydratedRef.current) {
+            try {
+                const result = await sendReceiptApi({ receiptId, channel })
+                if (result?.state?.data) applyFinanceData(result.state.data)
+                return { success: true, receiptNo: result.receipt?.receiptNo, delivery: result.delivery }
+            } catch (error) {
+                return { success: false, message: error.message || 'Send failed.' }
+            }
+        }
         const receipt = receipts.find((item) => item.id === receiptId)
         if (!receipt) return { success: false, message: 'Receipt not found.' }
         setReceipts((prev) => prev.map((item) => (
@@ -509,7 +663,7 @@ export const FinanceProvider = ({ children }) => {
             entity: 'Receipt',
             entityId: receiptId,
             newValue: receipt.receiptNo,
-            reason: `Mock ${channel} delivery`,
+            reason: `Stub ${channel} delivery`,
         })
         return { success: true, receiptNo: receipt.receiptNo }
     }, [appendAudit, receipts])
@@ -682,32 +836,85 @@ export const FinanceProvider = ({ children }) => {
         return transaction
     }, [bankAccounts, postAccounting])
 
+    const rechargeWallet = useCallback(({ email, amount }) => {
+        const walletIndex = wallets.findIndex(
+            (wallet) => String(wallet.email || '').toLowerCase() === String(email || '').toLowerCase(),
+        )
+        if (walletIndex === -1) {
+            return { success: false, message: 'No wallet found for this email ID.' }
+        }
+        const wallet = wallets[walletIndex]
+        const parseAmt = (value) => Number(String(value).replace(/[₹,\s]/g, '')) || 0
+        const formatAmt = (value) => `₹${Number(value).toLocaleString('en-IN')}`
+        const updatedBalance = parseAmt(wallet.balance) + Number(amount)
+        const updatedWallet = {
+            ...wallet,
+            balance: formatAmt(updatedBalance),
+            lastRecharge: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+            status: updatedBalance > 0 && wallet.status === 'Zero Balance' ? 'Active' : wallet.status,
+        }
+        const newRecord = {
+            id: `RCG-${Date.now().toString().slice(-5)}`,
+            user: wallet.name,
+            initials: wallet.initials,
+            role: wallet.role,
+            mode: 'Offline',
+            amount: formatAmt(amount),
+            dateTime: new Date().toLocaleString('en-IN'),
+            status: 'Success',
+        }
+        setWallets((prev) => prev.map((item, index) => (index === walletIndex ? updatedWallet : item)))
+        setWalletRecharges((prev) => [newRecord, ...prev])
+        postExternalInflow({
+            amount: Number(amount),
+            category: 'Wallet Recharge',
+            paymentMode: PAYMENT_MODES.CASH,
+            reference: newRecord.id,
+            narration: `Wallet recharge — ${wallet.name}`,
+            sourceModule: SOURCE_MODULES.WALLET,
+        })
+        return { success: true, wallet: updatedWallet, record: newRecord }
+    }, [postExternalInflow, wallets])
+
     const resetFinanceDemoData = useCallback(() => {
-        skipPersistRef.current = true
-        clearFinanceState()
         const seed = createSeedFinanceState()
-        seq.current = { ...seed.sequence }
-        setFeeCategories(seed.feeCategories)
-        setFeeStructures(seed.feeStructures)
-        setFineRules(seed.fineRules)
-        setBankAccounts(seed.bankAccounts)
-        setPosTerminals(seed.posTerminals)
-        setConcessions(seed.concessions)
-        setInstallments(seed.installments)
-        setTransactions(seed.transactions)
-        setReceipts(seed.receipts)
-        setCheques(seed.cheques)
-        setPaymentLinks(seed.paymentLinks)
-        setAuditLog(seed.auditLog)
-        setGlEntries(seed.glEntries)
-        setDayBookEntries(seed.dayBookEntries)
-        setCashBookEntries(seed.cashBookEntries)
-        setBankBookEntries(seed.bankBookEntries)
-        setOnlineBookEntries(seed.onlineBookEntries)
-        setReconciliationItems(seed.reconciliationItems)
+        applyFinanceData(seed)
+        clearFinanceState()
         setLastSavedAt(null)
         savedEnvelopeRef.current = null
-    }, [])
+        if (isApiFinanceEnabled()) {
+            resetFinanceStateApi()
+                .then(() => pushFinanceState(seed))
+                .then((result) => {
+                    if (result?.savedAt) setLastSavedAt(result.savedAt)
+                })
+                .catch((error) => console.error(error))
+        }
+    }, [applyFinanceData])
+
+    useEffect(() => {
+        if (!isApiFinanceEnabled() || apiHydratedRef.current) return undefined
+        let cancelled = false
+        pullFinanceState()
+            .then(async (remote) => {
+                if (cancelled) return
+                apiHydratedRef.current = true
+                if (remote?.seeded && remote?.data) {
+                    applyFinanceData(remote.data)
+                    if (remote.savedAt) setLastSavedAt(remote.savedAt)
+                    return
+                }
+                const seed = createSeedFinanceState()
+                applyFinanceData(seed)
+                const savedRemote = await pushFinanceState(seed)
+                if (!cancelled && savedRemote?.savedAt) setLastSavedAt(savedRemote.savedAt)
+            })
+            .catch((error) => {
+                console.error(error)
+                apiHydratedRef.current = true
+            })
+        return () => { cancelled = true }
+    }, [applyFinanceData])
 
     const moneyInTransactions = useMemo(
         () => transactions.filter((item) => item.direction === TRANSACTION_DIRECTIONS.IN),
@@ -757,7 +964,8 @@ export const FinanceProvider = ({ children }) => {
             return
         }
 
-        const payload = saveFinanceState({
+        const data = {
+            students,
             feeCategories,
             feeStructures,
             fineRules,
@@ -777,10 +985,32 @@ export const FinanceProvider = ({ children }) => {
             bankBookEntries,
             onlineBookEntries,
             reconciliationItems,
+            wallets,
+            walletRecharges,
+            transportFleet,
+            approvals,
             sequence: { ...seq.current },
-        })
+            meta: { seeded: true },
+        }
+        const payload = saveFinanceState(data)
         if (payload?.savedAt) setLastSavedAt(payload.savedAt)
+
+        if (isApiFinanceEnabled() && apiHydratedRef.current) {
+            if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
+            pushTimerRef.current = window.setTimeout(() => {
+                pushFinanceState(data)
+                    .then((result) => {
+                        if (result?.savedAt) setLastSavedAt(result.savedAt)
+                    })
+                    .catch((error) => console.error(error))
+            }, 600)
+        }
     }, [
+        students,
+        wallets,
+        walletRecharges,
+        transportFleet,
+        approvals,
         annualBudget,
         auditLog,
         bankAccounts,
@@ -902,6 +1132,16 @@ export const FinanceProvider = ({ children }) => {
         generatePaymentLink,
         reprintReceipt,
         sendReceipt,
+        decideApproval,
+        applyHrConcessions,
+        rechargeWallet,
+        wallets,
+        setWallets,
+        walletRecharges,
+        transportFleet,
+        setTransportFleet,
+        approvals,
+        setApprovals,
         addFeeStructure,
         addFeeCategory,
         setFeeStructures,
@@ -921,6 +1161,7 @@ export const FinanceProvider = ({ children }) => {
             enabled: true,
             storageKey: FINANCE_STORAGE_KEY,
             lastSavedAt,
+            apiEnabled: isApiFinanceEnabled(),
         },
         cloneSeed: () => clone(FEE_INSTALLMENTS),
     }), [
@@ -964,6 +1205,7 @@ export const FinanceProvider = ({ children }) => {
         sendReceipt,
         settleCheque,
         students,
+        setStudents,
         transactions,
         waiveFine,
         resetFinanceDemoData,

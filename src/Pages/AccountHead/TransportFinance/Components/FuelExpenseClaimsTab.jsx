@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Download, Search } from 'lucide-react'
 import {
     EXPENSE_CLAIMS,
@@ -14,8 +14,27 @@ import {
     tdClass,
     thClass,
 } from './TransportShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
 
-const FuelExpenseClaimsTab = () => (
+const FuelExpenseClaimsTab = () => {
+    const { approvals } = useFinance()
+    const rows = useMemo(() => {
+        const fromApprovals = (approvals || [])
+            .filter((row) => String(row.department || '').toLowerCase() === 'transport')
+            .map((row) => ({
+                id: row.id,
+                claimant: row.raisedBy || 'Staff',
+                initials: row.initials || 'TR',
+                vehicle: row.vehicle || '—',
+                type: row.type || 'Expense',
+                date: row.raisedOn || (row.decidedAt || '').slice(0, 10) || '—',
+                amount: row.amount,
+                status: row.status || 'Pending',
+            }))
+        return fromApprovals.length ? fromApprovals : EXPENSE_CLAIMS
+    }, [approvals])
+
+    return (
     <div className='space-y-6'>
         <SummaryCards cards={FUEL_SUMMARY} />
 
@@ -53,7 +72,7 @@ const FuelExpenseClaimsTab = () => (
                     </button>
                 </div>
             )}
-            footer={<TablePagination summary='9 pending of 248 total' />}
+            footer={<TablePagination summary={`${rows.length} claims`} />}
         >
             <table className='w-full text-sm text-left mt-4'>
                 <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -68,27 +87,27 @@ const FuelExpenseClaimsTab = () => (
                     </tr>
                 </thead>
                 <tbody>
-                    {EXPENSE_CLAIMS.map((row) => (
+                    {rows.map((row) => (
                         <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                             <td className={`${tdClass} rounded-s-lg`}>
                                 <StaffAvatar initials={row.initials} name={row.claimant} />
                             </td>
                             <td className={`${tdClass} font-mono text-xs`}>{row.vehicle}</td>
                             <td className={tdClass}>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${claimTypeBadgeColor[row.type]}`}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${claimTypeBadgeColor[row.type] || 'bg-[#EDEEF5] text-[#667085]'}`}>
                                     {row.type}
                                 </span>
                             </td>
                             <td className={tdClass}>{row.date}</td>
                             <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amount}</td>
                             <td className={tdClass}>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${claimStatusBadgeColor[row.status]}`}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${claimStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
                                     {row.status}
                                 </span>
                             </td>
                             <td className={`${tdClass} rounded-e-lg`}>
                                 <button type='button' className='text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'>
-                                    {row.status === 'Pending' ? 'Review' : row.status === 'Rejected' ? 'View reason' : 'View'}
+                                    View
                                 </button>
                             </td>
                         </tr>
@@ -97,6 +116,7 @@ const FuelExpenseClaimsTab = () => (
             </table>
         </TableCard>
     </div>
-)
+    )
+}
 
 export default FuelExpenseClaimsTab

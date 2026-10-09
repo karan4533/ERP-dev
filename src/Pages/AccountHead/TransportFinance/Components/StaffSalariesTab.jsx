@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { toast } from 'react-toastify'
 import { Banknote, Download, Mail, MessageCircle, Search } from 'lucide-react'
 import {
@@ -14,10 +14,43 @@ import {
     tdClass,
     thClass,
 } from './TransportShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency } from '../../financeDomain/financeHelpers'
 
-const StaffSalariesTab = () => (
+const StaffSalariesTab = () => {
+    const { transactions } = useFinance()
+    const payrollPosted = useMemo(
+        () => (transactions || []).filter((row) => row.sourceModule === 'PAYROLL'),
+        [transactions],
+    )
+
+    return (
     <div className='space-y-6'>
         <SummaryCards cards={SALARY_SUMMARY} />
+        {payrollPosted.length > 0 && (
+            <TableCard title='Posted payroll vouchers (Finance books)' footer={<TablePagination summary={`${payrollPosted.length} vouchers`} />}>
+                <table className='w-full text-sm text-left mt-4'>
+                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                        <tr>
+                            <th className={`${thClass} rounded-s-lg`}>Voucher</th>
+                            <th className={thClass}>Employee</th>
+                            <th className={thClass}>Narration</th>
+                            <th className={`${thClass} rounded-e-lg`}>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {payrollPosted.slice(0, 8).map((row) => (
+                            <tr key={row.id} className='border-b border-[#f2f4f7]'>
+                                <td className={`${tdClass} rounded-s-lg font-mono text-xs`}>{row.voucherNo || row.id}</td>
+                                <td className={tdClass}>{row.employeeId || '—'}</td>
+                                <td className={tdClass}>{row.narration || 'Payroll'}</td>
+                                <td className={`${tdClass} rounded-e-lg font-semibold`}>{formatCurrency(row.amount || 0)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </TableCard>
+        )}
 
         <TableCard
             title='Transport staff payroll — June 2026'
@@ -95,6 +128,7 @@ const StaffSalariesTab = () => (
             </table>
         </TableCard>
     </div>
-)
+    )
+}
 
 export default StaffSalariesTab

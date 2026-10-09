@@ -10,7 +10,7 @@
       "url": "https://github.com/karan4533/ERP-dev.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "9f4024043dac15d43280df417f0bab1edb18162b"
+      "revision": "a93c4c121adf62c1e3b1ed124d9c975208e7035b"
     },
     "output": ".archify/architecture-project-overview/qmis-erp-overview.html",
     "legend": {
@@ -45,6 +45,7 @@
           "mod_audit",
           "mod_masters",
           "mod_admissions",
+          "mod_finance",
           "mod_hr",
           "mod_files"
         ],
@@ -55,7 +56,6 @@
         "label": "Planned",
         "focus": [
           "api",
-          "mod_finance",
           "mod_academics",
           "mod_ops"
         ],
@@ -288,12 +288,33 @@
       ]
     },
     {
+      "id": "mod_finance",
+      "type": "backend",
+      "label": "Finance",
+      "sublabel": "fees + books",
+      "pos": [
+        1080,
+        280
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/main.py",
+          "line": 49,
+          "end_line": 49
+        }
+      ]
+    },
+    {
       "id": "mod_hr",
       "type": "backend",
       "label": "HR",
       "sublabel": "full vertical",
       "pos": [
-        1080,
+        1250,
         280
       ],
       "size": [
@@ -314,8 +335,8 @@
       "label": "Files",
       "sublabel": "upload stub",
       "pos": [
-        1250,
-        280
+        1080,
+        380
       ],
       "size": [
         150,
@@ -330,35 +351,13 @@
       ]
     },
     {
-      "id": "mod_finance",
-      "type": "cloud",
-      "label": "Finance",
-      "sublabel": "Phase 2",
-      "pos": [
-        1080,
-        400
-      ],
-      "size": [
-        150,
-        64
-      ],
-      "sources": [
-        {
-          "path": "backend/app/main.py",
-          "line": 43,
-          "end_line": 48
-        }
-      ],
-      "tag": "planned"
-    },
-    {
       "id": "mod_academics",
       "type": "cloud",
       "label": "Academics",
       "sublabel": "Phase 2",
       "pos": [
-        1250,
-        400
+        1080,
+        500
       ],
       "size": [
         150,
@@ -379,7 +378,7 @@
       "label": "Ops",
       "sublabel": "Phase 3+",
       "pos": [
-        1080,
+        1250,
         500
       ],
       "size": [
@@ -414,6 +413,7 @@
         "mod_audit",
         "mod_masters",
         "mod_admissions",
+        "mod_finance",
         "mod_hr",
         "mod_files"
       ]
@@ -422,7 +422,6 @@
       "kind": "region",
       "label": "Planned departments",
       "wraps": [
-        "mod_finance",
         "mod_academics",
         "mod_ops"
       ]
@@ -491,6 +490,11 @@
       "to": "mod_admissions"
     },
     {
+      "id": "api-mod_finance",
+      "from": "api",
+      "to": "mod_finance"
+    },
+    {
       "id": "api-mod_hr",
       "from": "api",
       "to": "mod_hr"
@@ -499,12 +503,6 @@
       "id": "api-mod_files",
       "from": "api",
       "to": "mod_files"
-    },
-    {
-      "id": "api-mod_finance",
-      "from": "api",
-      "to": "mod_finance",
-      "variant": "dashed"
     },
     {
       "id": "api-mod_academics",
@@ -528,6 +526,7 @@
         "Audit \u2014 /api/v1/audit-logs",
         "Masters \u2014 classes / subjects",
         "Admissions \u2014 enquiry \u2192 enroll",
+        "Finance \u2014 fees + books",
         "HR \u2014 full vertical",
         "Files \u2014 upload stub",
         "React role portals (Admin, HR, Teacher, PRM, \u2026)"
@@ -549,6 +548,7 @@
         "admissionsApi.js",
         "authApi.js",
         "filesApi.js",
+        "financeApi.js",
         "hrApi.js",
         "apiClient.js"
       ]

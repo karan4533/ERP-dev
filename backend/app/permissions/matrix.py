@@ -47,6 +47,8 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("hr.self", "View own staff profile, leave, attendance, and payslip"),
     ("admissions.write", "Create enquiries and enroll students"),
     ("students.read", "View students and guardians"),
+    ("finance.read", "View finance fees, receipts, and books"),
+    ("finance.write", "Collect fees and change finance masters"),
 ]
 
 ALL_PERMISSION_CODES = [code for code, _ in PERMISSIONS]
@@ -55,6 +57,7 @@ _CORE = ["auth.me", "masters.read", "hr.self"]
 _ADMIN = ALL_PERMISSION_CODES
 _HR = ["auth.me", "hr.employees.read", "hr.employees.write", "hr.read", "hr.write", "hr.self"]
 _ADMISSIONS = ["auth.me", "masters.read", "admissions.write", "students.read"]
+_FINANCE = ["auth.me", "masters.read", "finance.read", "finance.write", "students.read", "audit.read"]
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {code: list(_CORE) for code, _ in ALL_ROLES}
 ROLE_PERMISSIONS.update(
@@ -64,7 +67,7 @@ ROLE_PERMISSIONS.update(
         "managing_director": list(_ADMIN),
         "hr": list(_HR),
         "prm": list(_ADMISSIONS),
-        "accounthead": ["auth.me", "masters.read", "audit.read"],
-        "finance_assistant": ["auth.me", "masters.read"],
+        "accounthead": list(_FINANCE),
+        "finance_assistant": ["auth.me", "masters.read", "finance.read", "students.read"],
     }
 )

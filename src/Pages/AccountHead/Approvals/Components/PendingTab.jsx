@@ -1,7 +1,6 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Check, Search, X, XCircle } from 'lucide-react'
 import {
-    PENDING_REQUESTS,
     PENDING_SUMMARY,
     departmentBadgeColor,
 } from '../approvalsData'
@@ -14,8 +13,10 @@ import {
     tdClass,
     thClass,
 } from './ApprovalsShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
 
-export const ReviewRequestModal = ({ request, isOpen, onClose }) => {
+export const ReviewRequestModal = ({ request, isOpen, onClose, onDecide }) => {
+    const [remarks, setRemarks] = useState('')
     if (!isOpen || !request?.detail) return null
 
     const { detail } = request
@@ -59,6 +60,8 @@ export const ReviewRequestModal = ({ request, isOpen, onClose }) => {
                         <label className='text-sm font-medium text-[#808080]'>Remarks (optional)</label>
                         <textarea
                             rows={2}
+                            value={remarks}
+                            onChange={(event) => setRemarks(event.target.value)}
                             placeholder='Add a note for the record...'
                             className='w-full mt-2 text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF] resize-none'
                         />
@@ -68,7 +71,7 @@ export const ReviewRequestModal = ({ request, isOpen, onClose }) => {
                 <div className='flex justify-end gap-3 px-6 py-4 border-t border-[#F2F4F7]'>
                     <button
                         type='button'
-                        onClick={onClose}
+                        onClick={() => onDecide?.('rejected', remarks)}
                         className='inline-flex items-center gap-2 text-sm font-medium text-[#FF5722] border border-[#FF5722] px-4 py-2 rounded-md hover:bg-[#FF5722] hover:text-white transition-colors cursor-pointer'
                     >
                         <XCircle size={16} />
@@ -76,7 +79,7 @@ export const ReviewRequestModal = ({ request, isOpen, onClose }) => {
                     </button>
                     <button
                         type='button'
-                        onClick={onClose}
+                        onClick={() => onDecide?.('approved', remarks)}
                         className='inline-flex items-center gap-2 bg-[#4CAF50] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
                     >
                         <Check size={16} />
@@ -89,7 +92,12 @@ export const ReviewRequestModal = ({ request, isOpen, onClose }) => {
 }
 
 const PendingTab = () => {
+    const { approvals, decideApproval } = useFinance()
     const [reviewRequest, setReviewRequest] = useState(null)
+    const pending = useMemo(
+        () => (approvals || []).filter((row) => !row.status || row.status === 'Pending'),
+        [approvals],
+    )
 
     return (
         <div className='space-y-6'>
@@ -119,7 +127,7 @@ const PendingTab = () => {
                         </select>
                     </div>
                 )}
-                footer={<TablePagination summary='16 pending of 82 total' />}
+                footer={<TablePagination summary={`${pending.length} pending`} />}
             >
                 <table className='w-full text-sm text-left mt-4'>
                     <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -134,7 +142,7 @@ const PendingTab = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {PENDING_REQUESTS.map((row) => (
+                        {pending.map((row) => (
                             <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                 <td className={`${tdClass} rounded-s-lg font-mono text-xs text-[#1E1E1E]`}>{row.id}</td>
                                 <td className={tdClass}>
@@ -151,6 +159,8 @@ const PendingTab = () => {
                                 <td className={`${tdClass} rounded-e-lg`}>
                                     <ApproveRejectActions
                                         onReview={row.detail ? () => setReviewRequest(row) : undefined}
+                                        onApprove={() => decideApproval({ approvalId: row.id, decision: 'approved' })}
+                                        onReject={() => decideApproval({ approvalId: row.id, decision: 'rejected' })}
                                     />
                                 </td>
                             </tr>
@@ -163,6 +173,11 @@ const PendingTab = () => {
                 request={reviewRequest}
                 isOpen={Boolean(reviewRequest)}
                 onClose={() => setReviewRequest(null)}
+                onDecide={async (decision, remarks) => {
+                    if (!reviewRequest) return
+                    await decideApproval({ approvalId: reviewRequest.id, decision, remarks })
+                    setReviewRequest(null)
+                }}
             />
         </div>
     )

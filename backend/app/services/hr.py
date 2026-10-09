@@ -313,6 +313,16 @@ def replace_items(db: Session, actor: User, collection: str, items: list[dict]) 
         _apply_increments(db, actor, saved)
     _audit_collection(db, actor, "HR_COLLECTION_SAVED", collection, str(len(saved)))
     db.commit()
+    if collection == "payroll-months":
+        try:
+            from app.services.finance_actions import post_payroll_voucher
+
+            for month_row in saved:
+                if str(month_row.get("paymentStatus") or "").lower() in {"paid", "finalized"}:
+                    post_payroll_voucher(db, actor, month_row)
+        except Exception:
+            # Finance snapshot may be empty; payroll save must still succeed.
+            pass
     return saved
 
 

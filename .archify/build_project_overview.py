@@ -74,19 +74,18 @@ ROUTER_META = {
         "line": 13,
         "end_line": 39,
     },
+    "finance_router": {
+        "id": "mod_finance",
+        "label": "Finance",
+        "sublabel": "fees + books",
+        "path": "backend/app/main.py",
+        "line": 49,
+        "end_line": 49,
+    },
 }
 
 # Not mounted yet — shown dashed until include_router appears in main.py
 PLANNED = [
-    {
-        "id": "mod_finance",
-        "label": "Finance",
-        "sublabel": "Phase 2",
-        "tag": "planned",
-        "path": "backend/app/main.py",
-        "line": 43,
-        "end_line": 48,
-    },
     {
         "id": "mod_academics",
         "label": "Academics",

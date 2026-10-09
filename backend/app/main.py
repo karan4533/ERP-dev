@@ -7,6 +7,7 @@ from app.api.v1.endpoints.admissions import router as admissions_router
 from app.api.v1.endpoints.audit import router as audit_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.files import router as files_router
+from app.api.v1.endpoints.finance import router as finance_router
 from app.api.v1.endpoints.hr import router as hr_router
 from app.api.v1.endpoints.masters import router as masters_router
 from app.core.config import settings
@@ -46,6 +47,7 @@ app.include_router(auth_router)
 app.include_router(audit_router)
 app.include_router(masters_router)
 app.include_router(admissions_router)
+app.include_router(finance_router)
 app.include_router(hr_router)
 app.include_router(files_router)
 

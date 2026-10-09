@@ -49,9 +49,9 @@ const FeesPayemnt = () => {
     }).filter(Boolean)
     const totalAmount = allocations.reduce((sum, item) => sum + item.amount, 0)
 
-    const payNow = (payload) => {
+    const payNow = async (payload) => {
         if (!student || entryBlocked('Finance', activeStudent?.name || 'Student')) return { success: false }
-        const result = collectFeePayment({
+        const result = await collectFeePayment({
             studentId: student.id,
             allocations,
             ...payload,

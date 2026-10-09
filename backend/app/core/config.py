@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     admin_seed_password: str = "admin123"
     hr_seed_email: str = "hr@qmis.edu"
     hr_seed_password: str = "hr12345"
+    accounthead_seed_email: str = "accounthead@qmis.edu"
+    accounthead_seed_password: str = "accounts123"
     upload_dir: str = "uploads"
 
     @property

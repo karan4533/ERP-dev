@@ -64,6 +64,13 @@ def seed_reference_data(db: Session) -> None:
         email=settings.hr_seed_email,
         password=settings.hr_seed_password,
     )
+    _seed_user(
+        db,
+        campus=campus,
+        role=roles_by_code["accounthead"],
+        email=settings.accounthead_seed_email,
+        password=settings.accounthead_seed_password,
+    )
     if created_campus:
         write_audit(
             db,

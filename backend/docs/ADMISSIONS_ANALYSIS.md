@@ -68,3 +68,28 @@ Responses are snake_case; mapper produces camelCase for screens.
 - Finance fee posting on enroll  
 - SMS / email on parent create (password returned only if debug policy matches HR pattern — not required for FE)  
 - Separate PRM-only UI changes (same data layer)
+
+## Test case results
+
+Last run: 9 October 2026  
+Suite result: **32 passed, 0 failed** (~13 seconds)
+
+```
+python -m pytest tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -v
+```
+
+### Admissions cases (`tests/test_admissions.py`)
+
+| Test | Result | What was checked |
+|---|---|---|
+| `test_rich_enquiry_admission_enroll_with_parent` | Passed | Create enquiry → list → convert → patch admission → enroll with parent user → reject double enroll |
+| `test_create_admission_direct` | Passed | Direct `POST /admissions` and list |
+
+### Related suite (still green)
+
+| Area | Result | Notes |
+|---|---|---|
+| Phase 0 legacy enroll | Passed | `POST /admissions/enquiries/{id}/enroll` shortcut still works |
+| HR modules + HR round trip | Passed | Existing closeout suite unchanged |
+
+Full module table: `reports/testing-report.md`

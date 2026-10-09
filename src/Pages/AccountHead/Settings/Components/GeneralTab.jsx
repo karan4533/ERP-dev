@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'react-toastify'
-import { RotateCcw } from 'lucide-react'
+import { Percent, RotateCcw } from 'lucide-react'
 import {
     ACADEMIC_YEARS,
     BOOKS_CLOSURE_TOGGLES,
@@ -26,7 +26,8 @@ const RESET_CONFIRMATION = 'This will remove all locally saved Finance demo tran
 const GeneralTab = () => {
     const [general, setGeneral] = useState(GENERAL_SETTINGS)
     const [booksClosure, setBooksClosure] = useState(BOOKS_CLOSURE_TOGGLES)
-    const { resetFinanceDemoData, financePersistence } = useFinance()
+    const { resetFinanceDemoData, financePersistence, applyHrConcessions } = useFinance()
+    const [applyingConcessions, setApplyingConcessions] = useState(false)
 
     const updateGeneral = (key, value) => {
         setGeneral((prev) => ({ ...prev, [key]: value }))
@@ -42,6 +43,20 @@ const GeneralTab = () => {
         if (!window.confirm(RESET_CONFIRMATION)) return
         resetFinanceDemoData()
         toast.success('Finance demo data has been restored to the original seed.')
+    }
+
+    const handleApplyHrConcessions = async () => {
+        setApplyingConcessions(true)
+        try {
+            const result = await applyHrConcessions()
+            if (!result?.success) {
+                toast.error(result?.message || 'Could not apply HR concessions.')
+                return
+            }
+            toast.success(`Applied ${result.applied ?? 0} staff-child concession(s) to fee installments.`)
+        } finally {
+            setApplyingConcessions(false)
+        }
     }
 
     return (
@@ -148,6 +163,21 @@ const GeneralTab = () => {
                         onChange={() => toggleBooksClosure(item.id)}
                     />
                 ))}
+            </SettingsPanel>
+
+            <SettingsPanel
+                title='HR staff-child concessions'
+                sub='Pull approved HR concessions onto matching finance fee installments (API).'
+            >
+                <button
+                    type='button'
+                    disabled={applyingConcessions}
+                    onClick={handleApplyHrConcessions}
+                    className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer disabled:opacity-60'
+                >
+                    <Percent size={16} />
+                    {applyingConcessions ? 'Applying…' : 'Apply HR concessions to fees'}
+                </button>
             </SettingsPanel>
 
             <SettingsPanel

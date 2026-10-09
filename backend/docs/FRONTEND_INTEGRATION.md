@@ -4,13 +4,14 @@
 
 | Area | Status |
 |---|---|
-| Auth login | Wired — `VITE_USE_API_AUTH=true` → `POST /api/v1/auth/login` |
+| Auth login | Wired — `VITE_USE_API_AUTH=true` |
 | Forced password change | Wired — `POST /api/v1/auth/change-password` |
-| File upload stub | Wired — `POST /api/v1/files` and `GET /api/v1/files/{id}/download` |
-| HR module | Done — `src/services/hrApi.js` + shared `apiClient` |
-| Admissions | Done — rich enquiry / admission / enroll API; set `VITE_USE_API_ADMISSIONS=true` |
+| File upload stub | Wired — `POST /api/v1/files` |
+| HR module | Done — `hrApi.js` |
+| Admissions | Done — rich enquiry / admission / enroll; `VITE_USE_API_ADMISSIONS=true` |
+| Finance | Done — campus finance snapshot; `VITE_USE_API_FINANCE=true` |
 
-See `ADMISSIONS_ANALYSIS.md` for the frontend contract and gaps that were closed.
+See `ADMISSIONS_ANALYSIS.md` and `FINANCE_ANALYSIS.md`.
 
 ### Seed logins
 
@@ -18,6 +19,7 @@ See `ADMISSIONS_ANALYSIS.md` for the frontend contract and gaps that were closed
 |---|---|---|
 | admin@qmis.edu | admin123 | admin |
 | hr@qmis.edu | hr12345 | hr |
+| accounthead@qmis.edu | accounts123 | accounthead |
 
 ### Run
 
@@ -27,26 +29,35 @@ See `ADMISSIONS_ANALYSIS.md` for the frontend contract and gaps that were closed
    VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
    VITE_USE_API_AUTH=true
    VITE_USE_API_ADMISSIONS=true
+   VITE_USE_API_FINANCE=true
    ```
 3. `npm run dev`
 
-### Admissions API (rich)
+### Finance API
 
 | Method | Path |
 |---|---|
-| GET/POST | `/api/v1/admissions/enquiries` |
-| GET/PATCH | `/api/v1/admissions/enquiries/{id}` |
-| POST | `/api/v1/admissions/enquiries/{id}/convert` |
-| POST | `/api/v1/admissions/enquiries/{id}/enroll` (legacy Phase-0 shortcut) |
-| GET/POST | `/api/v1/admissions` |
-| GET/PATCH | `/api/v1/admissions/{id}` |
-| POST | `/api/v1/admissions/{id}/enroll` |
+| GET/PUT | `/api/v1/finance/state` |
+| POST | `/api/v1/finance/state/reset` |
+| GET/PUT | `/api/v1/finance/{collection}` |
 
-Frontend entry: `src/services/admissionsApi.js` via `admissionEnquiryData.js` / `admissionListData.js`.
+Frontend: `src/services/financeApi.js` via `FinanceContext` (fees, receipts, books, settings).  
+Transport / wallet / approvals screens still use static demo data; snapshot keys are reserved.
+
+### Test case results (latest)
+
+Run from `backend`:
+
+```
+python -m pytest tests/test_finance.py tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -q
+```
+
+Finance cases: Account Head save/load snapshot, HR denied write, admin reset.  
+Full table: `reports/testing-report.md`.
 
 ### Deferred (not blockers)
 
 - RFID / eSSL punch import
-- Production SMTP for temporary passwords
-- Finance payroll / fee concession apply
+- Production SMTP
+- Transport / wallet / approvals screens switched off static seeds
 - Academics emergency period reassignment

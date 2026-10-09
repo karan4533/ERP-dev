@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Download } from 'lucide-react'
 import {
     EXPENSE_REGISTER,
@@ -12,8 +12,27 @@ import {
     tdClass,
     thClass,
 } from './CollectionsShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency } from '../../financeDomain/financeHelpers'
 
-const MoneyOutTab = () => (
+const MoneyOutTab = () => {
+    const { transactions } = useFinance()
+    const rows = useMemo(() => {
+        const live = (transactions || [])
+            .filter((row) => row.direction === 'OUT')
+            .map((row) => ({
+                id: row.id,
+                category: row.category || row.sourceModule || 'Expense',
+                vendor: row.narration || row.employeeId || '—',
+                amount: formatCurrency(row.amount || 0),
+                date: row.transactionDate || '—',
+                status: row.status === 'POSTED' ? 'Paid' : (row.status || 'Pending'),
+                mode: row.paymentMode || '—',
+            }))
+        return live.length ? live : EXPENSE_REGISTER
+    }, [transactions])
+
+    return (
     <div className='space-y-6'>
         <SummaryCards cards={MONEY_OUT_SUMMARY} />
 
@@ -29,7 +48,6 @@ const MoneyOutTab = () => (
                         <option>Utilities</option>
                         <option>Procurement</option>
                     </select>
-                    <input type='date' className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[140px]' />
                     <button
                         type='button'
                         className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
@@ -39,29 +57,29 @@ const MoneyOutTab = () => (
                     </button>
                 </div>
             )}
-            footer={<TablePagination summary='312 expense entries this month' />}
+            footer={<TablePagination summary={`${rows.length} expenses`} />}
         >
             <table className='w-full text-sm text-left mt-4'>
                 <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
                     <tr>
-                        <th className={`${thClass} rounded-s-lg`}>Date</th>
-                        <th className={thClass}>Category</th>
-                        <th className={thClass}>Paid To</th>
-                        <th className={thClass}>Mode</th>
+                        <th className={`${thClass} rounded-s-lg`}>Category</th>
+                        <th className={thClass}>Vendor / Narration</th>
                         <th className={thClass}>Amount</th>
+                        <th className={thClass}>Date</th>
+                        <th className={thClass}>Mode</th>
                         <th className={`${thClass} rounded-e-lg`}>Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {EXPENSE_REGISTER.map((row) => (
+                    {rows.map((row) => (
                         <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                            <td className={`${tdClass} rounded-s-lg`}>{row.date}</td>
-                            <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.category}</td>
-                            <td className={tdClass}>{row.paidTo}</td>
+                            <td className={`${tdClass} rounded-s-lg`}>{row.category}</td>
+                            <td className={tdClass}>{row.vendor}</td>
+                            <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amount}</td>
+                            <td className={tdClass}>{row.date}</td>
                             <td className={tdClass}>{row.mode}</td>
-                            <td className={`${tdClass} font-semibold text-[#FF5722]`}>{row.amount}</td>
                             <td className={`${tdClass} rounded-e-lg`}>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${expenseStatusBadgeColor[row.status]}`}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${expenseStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
                                     {row.status}
                                 </span>
                             </td>
@@ -71,6 +89,7 @@ const MoneyOutTab = () => (
             </table>
         </TableCard>
     </div>
-)
+    )
+}
 
 export default MoneyOutTab

@@ -8,86 +8,25 @@ import SpendingHistoryTab from './Components/SpendingHistoryTab'
 import RechargeOptionsTab, { AddRechargeMethodModal } from './Components/RechargeOptionsTab'
 import RechargeWalletModal from './Components/RechargeWalletModal'
 import { useFinance } from '../financeDomain/FinanceContext'
-import { PAYMENT_MODES, SOURCE_MODULES } from '../financeDomain/financeConstants'
-import {
-    RECHARGE_RECORDS,
-    USER_WALLETS,
-    WALLET_ROLE_FILTERS,
-    WALLET_TABS,
-    formatRupeeAmount,
-    parseRupeeAmount,
-} from './walletManagementData'
-
-const formatRechargeDateTime = () => {
-    const now = new Date()
-    return now.toLocaleString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-    })
-}
+import { WALLET_ROLE_FILTERS, WALLET_TABS } from './walletManagementData'
 
 const WalletManagement = () => {
-    const { postExternalInflow } = useFinance()
+    const { rechargeWallet, wallets: userWallets, walletRecharges: rechargeRecords } = useFinance()
     const [activeTab, setActiveTab] = useState('wallet-overview')
     const [roleFilter, setRoleFilter] = useState(WALLET_ROLE_FILTERS[0])
     const [exportModal, setExportModal] = useState(false)
     const [addMethodModal, setAddMethodModal] = useState(false)
     const [rechargeModal, setRechargeModal] = useState(false)
-    const [userWallets, setUserWallets] = useState(USER_WALLETS)
-    const [rechargeRecords, setRechargeRecords] = useState(RECHARGE_RECORDS)
 
     const handleOfflineRecharge = ({ email, amount }) => {
-        const walletIndex = userWallets.findIndex(
-            (wallet) => wallet.email.toLowerCase() === email.toLowerCase(),
-        )
-
-        if (walletIndex === -1) {
+        const result = rechargeWallet({ email, amount })
+        if (!result.success) {
             return {
                 success: false,
-                message: 'No wallet found for this email ID. Please verify and try again.',
+                message: result.message || 'No wallet found for this email ID. Please verify and try again.',
             }
         }
-
-        const wallet = userWallets[walletIndex]
-        const updatedBalance = parseRupeeAmount(wallet.balance) + amount
-        const updatedWallet = {
-            ...wallet,
-            balance: formatRupeeAmount(updatedBalance),
-            lastRecharge: formatRechargeDateTime().split(',')[0],
-            status: updatedBalance > 0 && wallet.status === 'Zero Balance' ? 'Active' : wallet.status,
-        }
-
-        const newRecord = {
-            id: `RCG-${Date.now().toString().slice(-5)}`,
-            user: wallet.name,
-            initials: wallet.initials,
-            role: wallet.role,
-            mode: 'Offline',
-            amount: formatRupeeAmount(amount),
-            dateTime: formatRechargeDateTime(),
-            status: 'Success',
-        }
-
-        setUserWallets((prev) => prev.map((item, index) => (
-            index === walletIndex ? updatedWallet : item
-        )))
-        setRechargeRecords((prev) => [newRecord, ...prev])
-        postExternalInflow({
-            amount,
-            category: 'Wallet Recharge',
-            paymentMode: PAYMENT_MODES.CASH,
-            reference: newRecord.id,
-            narration: `Offline wallet recharge — ${wallet.name}`,
-            sourceModule: SOURCE_MODULES.WALLET,
-        })
-
-        return {
-            success: true,
-            message: `${formatRupeeAmount(amount)} added to ${wallet.name}'s wallet.`,
-        }
+        return { success: true, message: 'Wallet recharged.' }
     }
 
     return (

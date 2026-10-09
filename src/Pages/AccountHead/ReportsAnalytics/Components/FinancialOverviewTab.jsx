@@ -6,8 +6,32 @@ import {
     OVERVIEW_SUMMARY,
 } from '../reportsAnalyticsData'
 import { Panel, SummaryCards } from './ReportsShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency } from '../../financeDomain/financeHelpers'
 
 const FinancialOverviewTab = () => {
+    const { dashboardMetrics, transactions, receipts } = useFinance()
+    const summaryCards = useMemo(() => {
+        const income = (transactions || [])
+            .filter((row) => row.direction === 'IN' && row.status === 'POSTED')
+            .reduce((sum, row) => sum + Number(row.amount || 0), 0)
+        const expense = (transactions || [])
+            .filter((row) => row.direction === 'OUT' && row.status === 'POSTED')
+            .reduce((sum, row) => sum + Number(row.amount || 0), 0)
+        return OVERVIEW_SUMMARY.map((card, index) => {
+            if (index === 0 || /income|collection/i.test(card.label)) {
+                return { ...card, value: formatCurrency(income || dashboardMetrics?.todaysCollection || 0), sub: `${receipts?.length || 0} receipts` }
+            }
+            if (/expense|expenditure|outflow/i.test(card.label)) {
+                return { ...card, value: formatCurrency(expense), sub: 'Posted OUT vouchers' }
+            }
+            if (/due|pending|outstanding/i.test(card.label)) {
+                return { ...card, value: formatCurrency(dashboardMetrics?.currentDue || 0), sub: 'Fee balances' }
+            }
+            return card
+        })
+    }, [dashboardMetrics, receipts, transactions])
+
     const incomeExpenditureOption = useMemo(() => ({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
         legend: {
@@ -65,7 +89,7 @@ const FinancialOverviewTab = () => {
 
     return (
         <div className='space-y-6'>
-            <SummaryCards cards={OVERVIEW_SUMMARY} />
+            <SummaryCards cards={summaryCards} />
 
             <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
                 <Panel

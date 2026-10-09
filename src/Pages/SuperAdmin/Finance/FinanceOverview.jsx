@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import FinanceDataTable from './Components/FinanceDataTable'
 import {
@@ -9,9 +9,51 @@ import {
     RECENT_EXPENSES,
     transactionStatusBadgeColor,
 } from './financeOverviewData'
+import { formatCurrency } from '../../AccountHead/financeDomain/financeHelpers'
+import { pullFinanceState } from '../../../services/financeApi'
+import { isApiFinanceEnabled } from '../../../services/apiClient'
 
 const FinanceOverview = () => {
-    const summary = useMemo(() => getOverviewSummary(), [])
+    const [live, setLive] = useState(null)
+
+    useEffect(() => {
+        if (!isApiFinanceEnabled()) return undefined
+        let cancelled = false
+        pullFinanceState()
+            .then((state) => {
+                if (!cancelled) setLive(state?.data || null)
+            })
+            .catch(() => {
+                if (!cancelled) setLive(null)
+            })
+        return () => { cancelled = true }
+    }, [])
+
+    const summary = useMemo(() => {
+        const base = getOverviewSummary()
+        if (!live) return base
+        const postedIn = (live.transactions || []).filter(
+            (row) => row.direction === 'IN' && row.status === 'POSTED',
+        )
+        const today = new Date().toISOString().slice(0, 10)
+        const todays = postedIn
+            .filter((row) => row.transactionDate === today)
+            .reduce((sum, row) => sum + Number(row.amount || 0), 0)
+        const pendingFees = (live.installments || []).reduce(
+            (sum, row) => sum + Number(row.balanceAmount || 0),
+            0,
+        )
+        const pendingApprovals = (live.approvals || []).filter(
+            (row) => !row.status || row.status === 'Pending',
+        ).length
+        return [
+            { label: "Today's Collection", value: formatCurrency(todays), sub: 'Live finance snapshot' },
+            { label: 'Pending Fees', value: formatCurrency(pendingFees), sub: 'Outstanding dues' },
+            base[2],
+            base[3],
+            { label: 'Pending Finance Approvals', value: String(pendingApprovals), sub: 'Live queue' },
+        ]
+    }, [live])
 
     const incomeExpenseOption = useMemo(() => ({
         tooltip: { trigger: 'axis' },
@@ -59,71 +101,66 @@ const FinanceOverview = () => {
         }],
     }), [])
 
+    const recentCollections = useMemo(() => {
+        if (!live?.receipts?.length) return RECENT_COLLECTIONS
+        return live.receipts.slice(0, 8).map((row) => ({
+            id: row.receiptNo || row.id,
+            student: row.studentId,
+            amount: formatCurrency(row.amountPaid || 0),
+            mode: row.paymentMode || '—',
+            status: row.status || 'Issued',
+        }))
+    }, [live])
+
     return (
         <section className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-md p-4'>
-                <h1 className='text-2xl font-semibold text-black'>Finance Overview</h1>
-                <p className='text-sm text-[#667085] mt-2'>
-                    School-wide financial governance view — collections, fees, wallets, transport costs, accounting, and reports.
+                <h2 className='text-xl font-semibold text-black'>Finance Overview</h2>
+                <p className='text-sm text-[#667085] mt-1'>
+                    {live ? 'Live campus finance snapshot' : 'Seed overview (API offline or empty)'}
                 </p>
+                <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mt-6'>
+                    {summary.map((card) => (
+                        <div key={card.label} className='rounded-xl border border-[#F2F4F7] p-4'>
+                            <p className='text-xs text-[#667085]'>{card.label}</p>
+                            <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
+                            <p className='text-xs text-[#808080] mt-1'>{card.sub}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4'>
-                {summary.map((item) => (
-                    <div key={item.label} className='bg-white rounded-2xl shadow-md p-5'>
-                        <p className='text-sm font-medium text-[#808080]'>{item.label}</p>
-                        <p className='text-2xl font-bold text-[#0C1E5B] mt-2'>{item.value}</p>
-                        {item.sub && <p className='text-sm text-[#667085] mt-2'>{item.sub}</p>}
-                    </div>
-                ))}
-            </div>
-
-            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+            <div className='grid grid-cols-1 xl:grid-cols-2 gap-6'>
                 <div className='bg-white rounded-2xl shadow-md p-4'>
-                    <h2 className='text-lg font-semibold text-black mb-4'>Income vs Expenditure (₹ Lakhs)</h2>
+                    <h3 className='text-base font-semibold text-[#1E1E1E] mb-2'>Income vs Expenditure</h3>
                     <ReactECharts option={incomeExpenseOption} style={{ height: 280 }} />
                 </div>
                 <div className='bg-white rounded-2xl shadow-md p-4'>
-                    <h2 className='text-lg font-semibold text-black mb-4'>Collection Split — Today</h2>
-                    <ReactECharts option={collectionSplitOption} style={{ height: 220 }} />
-                    <div className='grid grid-cols-2 gap-4 mt-2'>
-                        <div className='rounded-xl border border-[#E4E7EC] p-3'>
-                            <p className='text-xs text-[#808080]'>Online ({COLLECTION_SPLIT.onlinePercent}%)</p>
-                            <p className='text-sm font-semibold text-[#515DEF] mt-1'>{COLLECTION_SPLIT.onlineAmount}</p>
-                        </div>
-                        <div className='rounded-xl border border-[#E4E7EC] p-3'>
-                            <p className='text-xs text-[#808080]'>Offline</p>
-                            <p className='text-sm font-semibold text-[#515DEF] mt-1'>{COLLECTION_SPLIT.offlineAmount}</p>
-                        </div>
-                    </div>
+                    <h3 className='text-base font-semibold text-[#1E1E1E] mb-2'>Collection Split</h3>
+                    <ReactECharts option={collectionSplitOption} style={{ height: 280 }} />
                 </div>
             </div>
 
-            <FinanceDataTable
-                title='Recent Collections'
-                columns={[
-                    { key: 'id', label: 'Receipt ID' },
-                    { key: 'student', label: 'Student' },
-                    { key: 'category', label: 'Category' },
-                    { key: 'amount', label: 'Amount' },
-                    { key: 'paymentMode', label: 'Mode' },
-                    { key: 'status', label: 'Status', badge: true, badgeMap: transactionStatusBadgeColor },
-                ]}
-                rows={RECENT_COLLECTIONS}
-            />
-
-            <FinanceDataTable
-                title='Recent Expenses'
-                columns={[
-                    { key: 'id', label: 'Expense ID' },
-                    { key: 'vendor', label: 'Vendor' },
-                    { key: 'department', label: 'Department' },
-                    { key: 'category', label: 'Category' },
-                    { key: 'amount', label: 'Amount' },
-                    { key: 'status', label: 'Status', badge: true, badgeMap: transactionStatusBadgeColor },
-                ]}
-                rows={RECENT_EXPENSES}
-            />
+            <div className='grid grid-cols-1 xl:grid-cols-2 gap-6'>
+                <FinanceDataTable
+                    title='Recent Collections'
+                    columns={['Receipt', 'Student', 'Amount', 'Mode', 'Status']}
+                    rows={recentCollections.map((row) => [
+                        row.id,
+                        row.student,
+                        row.amount,
+                        row.mode,
+                        <span key={row.id} className={`px-2 py-1 rounded-lg text-xs font-semibold ${transactionStatusBadgeColor[row.status] || ''}`}>
+                            {row.status}
+                        </span>,
+                    ])}
+                />
+                <FinanceDataTable
+                    title='Recent Expenses'
+                    columns={['Id', 'Category', 'Amount', 'Status']}
+                    rows={RECENT_EXPENSES.map((row) => [row.id, row.category, row.amount, row.status])}
+                />
+            </div>
         </section>
     )
 }
