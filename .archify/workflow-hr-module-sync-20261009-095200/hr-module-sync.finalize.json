@@ -1,0 +1,1319 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "workflow",
+  "quality": "showcase",
+  "startedAt": "2026-10-09T04:24:25.190Z",
+  "specification": {
+    "path": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\candidate.json",
+    "sha256": "5f4e4a9d6e734d4c01bc63c644d748129a4d0bcb93dbf77a77af90f08b251c67",
+    "bytes": 3489
+  },
+  "artifact": {
+    "path": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+    "sha256": "a16f048f34436d2510ad4c4a65065436ca2ab7c1c4c1e5b39412b10379477a69",
+    "bytes": 753764
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\vikas\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "workflow",
+        "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\candidate.json",
+        "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "c:\\karan\\ERP dev",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "5f4e4a9d6e734d4c01bc63c644d748129a4d0bcb93dbf77a77af90f08b251c67",
+          "bytes": 3489
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 1914,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\vikas\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "workflow",
+        "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\candidate.json",
+        "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "c:\\karan\\ERP dev",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "9c1a9beb-5c14-492a-9ef8-7a1f0da5bdeb",
+        "ok": true,
+        "command": "deliver",
+        "type": "workflow",
+        "input": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\candidate.json",
+        "output": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+        "specification": {
+          "sha256": "5f4e4a9d6e734d4c01bc63c644d748129a4d0bcb93dbf77a77af90f08b251c67",
+          "bytes": 3489
+        },
+        "artifact": {
+          "sha256": "a16f048f34436d2510ad4c4a65065436ca2ab7c1c4c1e5b39412b10379477a69",
+          "bytes": 753764
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "https://github.com/karan4533/ERP-dev",
+          "revision": "cfa4c4f79d5933a21c3114092818bf5500689cbe",
+          "references": 8
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 288,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\vikas\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "check",
+        "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+        "artifact": {
+          "sha256": "a16f048f34436d2510ad4c4a65065436ca2ab7c1c4c1e5b39412b10379477a69",
+          "bytes": 753764
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 0,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 27,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 7.3,
+            "maxBends": 2,
+            "routesOverSuggestedBends": 0,
+            "maxStretch": 1,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 21,
+            "minInteriorSegmentPx": 134,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [],
+            "detours": []
+          },
+          "leadingSpace": {
+            "measured": false,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": null,
+            "requestedTargetMet": null,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "node",
+              "id": "rows"
+            },
+            "minimumSourceTextPx": 7.3,
+            "minimumProjectedTextPx": 7.3,
+            "semanticTextCount": 17
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "9c1a9beb-5c14-492a-9ef8-7a1f0da5bdeb"
+      }
+    },
+    "browser-check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 2491,
+      "command": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\vikas\\.agents\\skills\\archify\\bin\\archify.mjs",
+        "browser-check",
+        "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "pass",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "9c1a9beb-5c14-492a-9ef8-7a1f0da5bdeb",
+        "artifact": {
+          "path": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+          "sha256": "a16f048f34436d2510ad4c4a65065436ca2ab7c1c4c1e5b39412b10379477a69",
+          "bytes": 753764
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        },
+        "diagnostics": [],
+        "containment": {
+          "status": "pass",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 900,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 52,
+                "diagramChromePx": 78,
+                "svgPx": 662,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 171,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 85,
+                  "spaceAboveNodesPx": 67,
+                  "spaceBelowNodesPx": 18
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 171,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 85,
+                  "spaceAboveNodesPx": 67,
+                  "spaceBelowNodesPx": 18
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1000,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 741,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 191,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 95,
+                  "spaceAboveNodesPx": 75,
+                  "spaceBelowNodesPx": 20
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 191,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 95,
+                  "spaceAboveNodesPx": 75,
+                  "spaceBelowNodesPx": 20
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1080,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1778,
+              "diagramWidth": 1748,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 860,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 221,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 111,
+                  "spaceAboveNodesPx": 87,
+                  "spaceBelowNodesPx": 23
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 221,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 111,
+                  "spaceAboveNodesPx": 87,
+                  "spaceBelowNodesPx": 23
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1920,
+              "diagramWidth": 1870,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 920,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 237,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 118,
+                  "spaceAboveNodesPx": 93,
+                  "spaceBelowNodesPx": 25
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 237,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 118,
+                  "spaceAboveNodesPx": 93,
+                  "spaceBelowNodesPx": 25
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "themeStates": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            }
+          ]
+        },
+        "readability": {
+          "status": "pass",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 900,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 52,
+                "diagramChromePx": 78,
+                "svgPx": 662,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 171,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 85,
+                  "spaceAboveNodesPx": 67,
+                  "spaceBelowNodesPx": 18
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 171,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 85,
+                  "spaceAboveNodesPx": 67,
+                  "spaceBelowNodesPx": 18
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1000,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 741,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 191,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 95,
+                  "spaceAboveNodesPx": 75,
+                  "spaceBelowNodesPx": 20
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 191,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 95,
+                  "spaceAboveNodesPx": 75,
+                  "spaceBelowNodesPx": 20
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1080,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1778,
+              "diagramWidth": 1748,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 860,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 221,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 111,
+                  "spaceAboveNodesPx": 87,
+                  "spaceBelowNodesPx": 23
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 221,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 111,
+                  "spaceAboveNodesPx": 87,
+                  "spaceBelowNodesPx": 23
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1920,
+              "diagramWidth": 1870,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 920,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 237,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 118,
+                  "spaceAboveNodesPx": 93,
+                  "spaceBelowNodesPx": 25
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 237,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 118,
+                  "spaceAboveNodesPx": 93,
+                  "spaceBelowNodesPx": 25
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "viewerChrome": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 900,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1376,
+              "diagramWidth": 1346,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 52,
+                "diagramChromePx": 78,
+                "svgPx": 662,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 171,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 85,
+                  "spaceAboveNodesPx": 67,
+                  "spaceBelowNodesPx": 18
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 171,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 85,
+                  "spaceAboveNodesPx": 67,
+                  "spaceBelowNodesPx": 18
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1000,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1536,
+              "diagramWidth": 1506,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 741,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 191,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 95,
+                  "spaceAboveNodesPx": 75,
+                  "spaceBelowNodesPx": 20
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 191,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 95,
+                  "spaceAboveNodesPx": 75,
+                  "spaceBelowNodesPx": 20
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1080,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1778,
+              "diagramWidth": 1748,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 860,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 221,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 111,
+                  "spaceAboveNodesPx": 87,
+                  "spaceBelowNodesPx": 23
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 221,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 111,
+                  "spaceAboveNodesPx": 87,
+                  "spaceBelowNodesPx": 23
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": null,
+              "ok": true,
+              "readerWidth": 1920,
+              "diagramWidth": 1870,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 920,
+                "cardsPx": 0,
+                "viewBoxHeight": 404
+              },
+              "viewBoxWidth": 821,
+              "workflowLanes": [
+                {
+                  "frameId": "lane-0",
+                  "heightPx": 237,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "screen",
+                    "store",
+                    "local"
+                  ],
+                  "nodeSpanPx": 118,
+                  "spaceAboveNodesPx": 93,
+                  "spaceBelowNodesPx": 25
+                },
+                {
+                  "frameId": "lane-1",
+                  "heightPx": 237,
+                  "nodeCount": 3,
+                  "nodeIds": [
+                    "push",
+                    "route",
+                    "rows"
+                  ],
+                  "nodeSpanPx": 118,
+                  "spaceAboveNodesPx": 93,
+                  "spaceBelowNodesPx": 25
+                }
+              ],
+              "minimumProjectedNodeTextPx": 7.3,
+              "minimumProjectedNonEdgeTextPx": 7.3,
+              "minimumProjectedEdgeTextPx": 8,
+              "minimumProjectedNodeText": "Replace that module",
+              "minimumProjectedNodeTextDetail": "context",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "node",
+                "id": "rows"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "hr-module-sync.browser-check.json",
+          "files": []
+        }
+      }
+    }
+  },
+  "diagnostics": [],
+  "evidence": {
+    "receipt": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.finalize.json",
+    "summaryReceipt": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.finalize-summary.json",
+    "browserCheckReceipt": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "finishedAt": "2026-10-09T04:24:31.278Z",
+  "durationMs": 6088,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-09T04:15:50.301Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

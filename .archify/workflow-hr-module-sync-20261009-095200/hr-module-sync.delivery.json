@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "9c1a9beb-5c14-492a-9ef8-7a1f0da5bdeb",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\candidate.json",
+  "output": "C:\\karan\\ERP dev\\.archify\\workflow-hr-module-sync-20261009-095200\\hr-module-sync.html",
+  "specification": {
+    "sha256": "5f4e4a9d6e734d4c01bc63c644d748129a4d0bcb93dbf77a77af90f08b251c67",
+    "bytes": 3489
+  },
+  "artifact": {
+    "sha256": "a16f048f34436d2510ad4c4a65065436ca2ab7c1c4c1e5b39412b10379477a69",
+    "bytes": 753764
+  }
+}

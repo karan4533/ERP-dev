@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "15ac887a-173e-4ef9-a948-760d48dab2a0",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "C:\\karan\\ERP dev\\.archify\\workflow-annual-leave-20261009-094500\\candidate.json",
+  "output": "C:\\karan\\ERP dev\\.archify\\workflow-annual-leave-20261009-094500\\annual-leave.html",
+  "specification": {
+    "sha256": "f2be0537c44d9bd8b63ef7fd3971965b8c2f9632bfd3310b03ab82b28b5bb5f5",
+    "bytes": 3147
+  },
+  "artifact": {
+    "sha256": "a77afe4f29edc59565ca1e8aff01acd7d689b7bdd23cd8a963710b949217ee57",
+    "bytes": 751820
+  }
+}
