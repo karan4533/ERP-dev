@@ -24,6 +24,9 @@ def _login(client: TestClient, email: str, password: str) -> dict:
 
 def test_accounthead_can_save_finance_state(client):
     headers = _login(client, "accounthead@qmis.edu", "accounts123")
+    # Suite shares one in-memory DB — clear any prior E2E/finance seed first.
+    reset = client.post("/api/v1/finance/state/reset", headers=headers)
+    assert reset.status_code == 200, reset.text
     empty = client.get("/api/v1/finance/state", headers=headers)
     assert empty.status_code == 200, empty.text
     assert empty.json()["seeded"] is False

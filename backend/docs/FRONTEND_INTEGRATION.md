@@ -49,15 +49,16 @@ Transport / wallet / approvals screens still use static demo data; snapshot keys
 Run from `backend`:
 
 ```
-python -m pytest tests/test_finance.py tests/test_admissions.py tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -q
+python -m pytest tests/ -q
+python scripts/smoke_campus_flow.py http://127.0.0.1:8001
 ```
 
-Finance cases: Account Head save/load snapshot, HR denied write, admin reset.  
-Full table: `reports/testing-report.md`.
+Latest: **39 pytest passed** (includes `test_e2e_campus_flow.py`) and **21/21 live smoke** steps  
+(Phase 0 → Admissions → Partner HR → Finance). Detail: `reports/testing-report.md`.
 
 ### Deferred (not blockers)
 
 - RFID / eSSL punch import
-- Production SMTP
-- Transport / wallet / approvals screens switched off static seeds
+- Production SMTP / WhatsApp / payment gateway keys
+- Browser click-through against Postgres-backed API
 - Academics emergency period reassignment
