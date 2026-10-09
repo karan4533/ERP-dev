@@ -52,8 +52,24 @@ def test_otp_challenge_and_verify(client):
 def test_class_and_subject_masters(client):
     token = _login(client, "admin@qmis.edu", "admin123")
     headers = {"Authorization": f"Bearer {token}"}
+    years = client.get("/api/v1/masters/academic-years", headers=headers)
+    assert years.status_code == 200
+    assert any(row["name"] == "2026-27" and row["is_current"] for row in years.json())
     created = client.post("/api/v1/masters/classes", json={"name": "Grade 2", "section": "A"}, headers=headers)
     assert created.status_code == 201
+    assert created.json()["section"] == "A"
+    assert created.json()["academic_year_id"] is not None
+    class_id = created.json()["id"]
+    sections = client.get(f"/api/v1/masters/sections?class_id={class_id}", headers=headers)
+    assert sections.status_code == 200
+    assert any(row["name"] == "A" for row in sections.json())
+    extra = client.post(
+        "/api/v1/masters/sections",
+        json={"class_id": class_id, "name": "b"},
+        headers=headers,
+    )
+    assert extra.status_code == 201
+    assert extra.json()["name"] == "B"
     subject = client.post("/api/v1/masters/subjects", json={"code": "eng", "name": "English"}, headers=headers)
     assert subject.status_code == 201
     assert subject.json()["code"] == "ENG"
@@ -63,6 +79,26 @@ def test_class_and_subject_masters(client):
         headers={"Authorization": f"Bearer {_login(client, 'hr@qmis.edu', 'hr12345')}"},
     )
     assert denied.status_code == 403
+
+
+def test_academic_year_set_current(client):
+    token = _login(client, "admin@qmis.edu", "admin123")
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        "/api/v1/masters/academic-years",
+        json={"name": "2027-28", "is_current": True},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    assert created.json()["is_current"] is True
+    years = client.get("/api/v1/masters/academic-years", headers=headers).json()
+    currents = [row for row in years if row["is_current"]]
+    assert len(currents) == 1
+    assert currents[0]["name"] == "2027-28"
+    older = next(row for row in years if row["name"] == "2026-27")
+    restored = client.post(f"/api/v1/masters/academic-years/{older['id']}/set-current", headers=headers)
+    assert restored.status_code == 200
+    assert restored.json()["is_current"] is True
 
 
 def test_hr_employee_is_hr_only(client):

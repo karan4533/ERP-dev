@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -49,15 +50,47 @@ class MeResponse(BaseModel):
     is_active: bool
 
 
+class AcademicYearCreate(BaseModel):
+    name: str = Field(min_length=4, max_length=50)
+    start_date: date | None = None
+    end_date: date | None = None
+    is_current: bool = False
+
+
+class AcademicYearOut(BaseModel):
+    id: UUID
+    name: str
+    start_date: date | None
+    end_date: date | None
+    is_current: bool
+
+    model_config = {"from_attributes": True}
+
+
 class ClassCreate(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     section: str | None = None
+    academic_year_id: UUID | None = None
 
 
 class ClassOut(BaseModel):
     id: UUID
     name: str
     section: str | None
+    academic_year_id: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class SectionCreate(BaseModel):
+    class_id: UUID
+    name: str = Field(min_length=1, max_length=20)
+
+
+class SectionOut(BaseModel):
+    id: UUID
+    class_id: UUID
+    name: str
 
     model_config = {"from_attributes": True}
 

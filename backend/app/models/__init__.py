@@ -1,4 +1,4 @@
-from app.models.academics import SchoolClass, Subject
+from app.models.academics import AcademicYear, SchoolClass, Section, Subject
 from app.models.admission import Admission, AdmissionEnquiry, Guardian, Student
 from app.models.audit import AuditLog
 from app.models.base import Base
@@ -12,6 +12,7 @@ from app.models.role import Permission, Role, RolePermission
 from app.models.user import User
 
 __all__ = [
+    "AcademicYear",
     "Admission",
     "AdmissionEnquiry",
     "AuditLog",
@@ -27,6 +28,7 @@ __all__ = [
     "Role",
     "RolePermission",
     "SchoolClass",
+    "Section",
     "Student",
     "Subject",
     "User",

@@ -3,9 +3,10 @@
 **You:** Backend lead (foundation, auth, masters, admissions, academics, finance core, integrations)  
 **Partner:** Frontend integration + **HR backend vertical** (and wiring HR UI to APIs)
 
-> **Status snapshot — 9 October 2026:** Phase 0 foundation, Phase 1 rich Admissions, Partner HR vertical, and Finance snapshot + actions are on the UUID `main` stack.  
-> Verified: **39 pytest** + **21/21 smoke** (`reports/testing-report.md`). Next focus: Academics / ops, parent children API, production keys, Postgres-backed browser pass.  
-> Historical week plan below is kept for context; prefer `API_BACKLOG.md` + Archify for current topology.
+> **Status snapshot — 9 October 2026:** Phase 0 foundation (P0-9 masters complete: years/classes/sections/subjects), Phase 1 Admissions, Partner HR, Finance snapshot + actions, API SoT for HR+Finance.  
+> Verified: see `reports/testing-report.md`. Next: HR↔Finance browser click-through, production keys (gateway/SMTP/WhatsApp), Ops verticals, RFID if school wants, parent `/me/children`.  
+> Historical week plan below is kept for context; prefer `API_BACKLOG.md` + Archify for current topology.  
+> Manager reports: only `reports/daily-work-report.md` + `reports/testing-report.md` (no PDFs).
 
 ---
 

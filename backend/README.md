@@ -21,7 +21,7 @@ HR starter APIs (partner): `/api/v1/hr/employees` — see Swagger tag **hr**.
 |---|---|
 | Auth | `POST /auth/login`, `POST /auth/otp/challenge`, `POST /auth/otp/verify`, `GET /auth/me`, `POST /auth/logout` |
 | RBAC | `GET /rbac/roles`, `GET/PATCH /rbac/roles/{id}/permissions` |
-| Masters | `/masters/academic-years`, `/classes`, `/sections`, `/subjects` |
+| Masters | `/masters/academic-years` (+ `/{id}/set-current`), `/classes`, `/sections`, `/subjects` |
 | Audit | `GET /audit/logs` |
 | HR | `/hr/employees` |
 
