@@ -1,0 +1,23 @@
+---
+description: Update the manager work report and testing report every day work is done
+alwaysApply: true
+---
+
+# Daily manager reports
+
+At the end of a working session, update the manager reports for that calendar day. Do this once per day of real work. Do not invent work that did not happen.
+
+Files:
+
+- `reports/daily-work-report.md` — add that day's section at the top. Keep older days below.
+- `reports/testing-report.md` — replace the result with the latest pytest run.
+- `reports/Daily-Work-Report-YYYY-MM-DD.pdf`
+- `reports/HR-Testing-Report-YYYY-MM-DD.pdf`
+
+Steps:
+
+1. Write the day's work in plain language: what changed, the test result, and what is still open.
+2. From `backend`, run `python -m pytest tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py -q` and record passed and failed counts.
+3. Rebuild both PDFs for that date with `python reports/_build_pdfs.py` after the script content matches the markdown. Keep the testing PDF in landscape with one row per module.
+
+A day with no project work gets no new report.

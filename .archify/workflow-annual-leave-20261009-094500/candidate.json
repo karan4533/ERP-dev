@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Annual leave plan",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": { "label": "Leave to book" },
+        "security": { "label": "Use-or-lose days" },
+        "external": { "label": "Time check" }
+      }
+    },
+    "output": ".archify/workflow-annual-leave-20261009-094500/annual-leave.html"
+  },
+  "lanes": [
+    { "id": "timeline", "label": "When you book" },
+    { "id": "balance", "label": "Days to use" }
+  ],
+  "mainPath": ["start", "cutoff", "annual_only", "booked"],
+  "nodes": [
+    {
+      "id": "start",
+      "lane": "timeline",
+      "col": 0,
+      "type": "external",
+      "label": "Balance now",
+      "sublabel": "10 annual + 2 comp",
+      "icon": "person"
+    },
+    {
+      "id": "cutoff",
+      "lane": "timeline",
+      "col": 1,
+      "type": "external",
+      "label": "30 June",
+      "sublabel": "Comp days expire",
+      "tag": "hard stop",
+      "icon": "clock"
+    },
+    {
+      "id": "comp",
+      "lane": "balance",
+      "col": 1,
+      "type": "security",
+      "label": "2 comp days",
+      "sublabel": "Use before 30 June",
+      "tag": "use or lose",
+      "icon": "briefcase"
+    },
+    {
+      "id": "with_comp",
+      "lane": "balance",
+      "col": 2,
+      "type": "backend",
+      "label": "Then 10 annual",
+      "sublabel": "12 days in total",
+      "icon": "calendar"
+    },
+    {
+      "id": "annual_only",
+      "lane": "timeline",
+      "col": 2,
+      "type": "backend",
+      "label": "10 annual only",
+      "sublabel": "Comp days gone",
+      "icon": "calendar"
+    },
+    {
+      "id": "booked",
+      "lane": "timeline",
+      "col": 3,
+      "type": "external",
+      "label": "Dates open",
+      "sublabel": "No week picked",
+      "icon": "flag"
+    }
+  ],
+  "edges": [
+    { "id": "to_cutoff", "from": "start", "to": "cutoff", "label": "by June" },
+    { "id": "spend_comp", "from": "start", "to": "comp", "label": "use first", "role": "branch", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "then_annual", "from": "comp", "to": "with_comp", "label": "then 10" },
+    { "id": "late_path", "from": "cutoff", "to": "annual_only", "label": "if late" },
+    { "id": "late_booked", "from": "annual_only", "to": "booked", "label": "10 left" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "What you gave",
+      "items": [
+        "10 annual leave days",
+        "2 comp days that expire at the end of June"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Before 30 June",
+      "items": [
+        "Book the 2 comp days first. They cannot be used after June.",
+        "Then book the 10 annual days. That is 12 days in total."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "After 30 June",
+      "items": [
+        "The 2 comp days are gone.",
+        "10 annual days remain. No start week was given, so those dates are not placed on a calendar."
+      ]
+    }
+  ]
+}

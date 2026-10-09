@@ -10,7 +10,7 @@ import {
 } from '../../../../services/admissionsApi'
 
 const STORAGE_KEY = 'schoolerp-admin-admission-enquiries'
-const useApi = () => isApiAdmissionsEnabled()
+const apiAdmissionsEnabled = () => isApiAdmissionsEnabled()
 export const ROUTE_BASE = '/admin/front-office/admission-enquiry'
 export const FRONT_OFFICE_ROUTE_BASE = '/front-office/admission-enquiry'
 
@@ -124,7 +124,7 @@ const saveEnquiries = (records) => {
 }
 
 export const getAllAdmissionEnquiries = async () => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             return await listEnquiriesApi()
         } catch (error) {
@@ -136,7 +136,7 @@ export const getAllAdmissionEnquiries = async () => {
 }
 
 export const getAdmissionEnquiryById = async (id) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             return await getEnquiryApi(id)
         } catch {
@@ -163,7 +163,7 @@ export const createAdmissionEnquiry = async (payload) => {
     if (!mobileNumber) return { success: false, message: 'Mobile number is required.' }
     if (!payload.className) return { success: false, message: 'Class is required.' }
 
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const record = await createEnquiryApi(payload)
             return { success: true, record }
@@ -208,7 +208,7 @@ export const updateAdmissionEnquiry = async (id, payload) => {
     if (!mobileNumber) return { success: false, message: 'Mobile number is required.' }
     if (!payload.className) return { success: false, message: 'Class is required.' }
 
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const record = await updateEnquiryApi(id, payload)
             return { success: true, record }
@@ -252,7 +252,7 @@ export const updateAdmissionEnquiryStatus = async (id, status) => {
     if (!STATUS_OPTIONS.includes(status)) {
         return { success: false, message: 'Invalid status.' }
     }
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const current = await getEnquiryApi(id)
             const record = await updateEnquiryApi(id, { ...current, status })
@@ -271,7 +271,7 @@ export const updateAdmissionEnquiryStatus = async (id, status) => {
 }
 
 export const convertEnquiryToAdmission = async (id) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const admission = await convertEnquiryApi(id)
             return { success: true, admission }
@@ -285,7 +285,7 @@ export const convertEnquiryToAdmission = async (id) => {
 }
 
 export const deleteAdmissionEnquiry = async (id) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         // Backend has no hard-delete yet — soft-close as In Active
         try {
             const current = await getEnquiryApi(id)

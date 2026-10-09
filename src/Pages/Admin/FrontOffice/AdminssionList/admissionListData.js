@@ -19,7 +19,7 @@ import {
 } from '../../../../services/admissionsApi'
 
 const STORAGE_KEY = 'schoolerp-admin-admissions'
-const useApi = () => isApiAdmissionsEnabled()
+const apiAdmissionsEnabled = () => isApiAdmissionsEnabled()
 
 export const FEES_GROUP_OPTIONS = [
     'Annual Fees',
@@ -132,7 +132,7 @@ const saveAdmissions = (records) => {
 }
 
 export const getAllAdmissions = async () => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             return await listAdmissionsApi()
         } catch (error) {
@@ -143,13 +143,9 @@ export const getAllAdmissions = async () => {
     return loadAdmissions()
 }
 
-export const getAdmissionById = async (id) => {
-    if (useApi()) {
-        try {
-            return await getAdmissionApi(id)
-        } catch {
-            return null
-        }
+export const getAdmissionById = (id) => {
+    if (apiAdmissionsEnabled()) {
+        return getAdmissionApi(id).catch(() => null)
     }
     return loadAdmissions().find((item) => String(item.id) === String(id)) ?? null
 }
@@ -274,7 +270,7 @@ const buildAdmissionRecord = (payload, existing = null) => {
 }
 
 export const createAdmission = async (payload) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const record = await createAdmissionApi(payload)
             return { success: true, record }
@@ -292,7 +288,7 @@ export const createAdmission = async (payload) => {
 }
 
 export const updateAdmission = async (id, payload) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const record = await updateAdmissionApi(id, payload)
             return { success: true, record }
@@ -314,7 +310,7 @@ export const updateAdmission = async (id, payload) => {
 }
 
 export const deleteAdmission = async (id) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         return { success: false, message: 'Delete is disabled for API admissions. Leave as Active or Enrolled.' }
     }
     saveAdmissions(loadAdmissions().filter((item) => String(item.id) !== String(id)))
@@ -322,7 +318,7 @@ export const deleteAdmission = async (id) => {
 }
 
 export const enrollAdmissionAsStudent = async (id, extra = {}) => {
-    if (useApi()) {
+    if (apiAdmissionsEnabled()) {
         try {
             const current = await getAdmissionApi(id)
             const parentEmail = extra.parentAccountEmail || current.parentAccountEmail
