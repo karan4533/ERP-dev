@@ -25,6 +25,7 @@ import DriverLayout from "./Layout/DriverLayout";
 import PRMLayout from "./Layout/PRMLayout";
 import StudentLayout from "./Layout/StudentLayout";
 import ParentLayout from "./Layout/ParentLayout";
+import ChangePassword from "./Pages/Authentication/ChangePassword";
 import { ROLE_HOME_PATHS, ROLES, useAuth } from "./context/AuthContext";
 import './App.css'
 
@@ -33,12 +34,19 @@ const AUTH_ROUTES = ["/signin", "/signup", "/select-profile"];
 const App = () => {
   const location = useLocation();
   const pathname = location.pathname;
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, mustChangePassword } = useAuth();
 
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
 
+  if (pathname === "/change-password") {
+    return <ChangePassword />;
+  }
+
   if (isAuthRoute) {
     if (isAuthenticated && role) {
+      if (mustChangePassword) {
+        return <Navigate to="/change-password" replace />;
+      }
       return <Navigate to={ROLE_HOME_PATHS[role] ?? "/dashboard"} replace />;
     }
     return <AuthLayout />;
@@ -46,6 +54,10 @@ const App = () => {
 
   if (!isAuthenticated) {
     return <Navigate to="/signin" replace />;
+  }
+
+  if (mustChangePassword) {
+    return <Navigate to="/change-password" replace />;
   }
 
   if (pathname.startsWith("/van-driver")) {

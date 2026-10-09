@@ -10,9 +10,11 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ## 9 October 2026
 
-**Afternoon.** Partner commits on `origin/main` were reviewed. The admission screens, API login with demo fallback, and integration notes were brought in. The last partner commit, a GitHub workflow that sends scanned secrets to an external server, was not brought in. `feature/phase1-admissions` was not merged because it uses integer ids and a different backend layout. Local admission lookup stays synchronous so student, allocation, and document screens keep working while the admissions API flag is off. 27 API tests passed and the frontend build succeeded.
+**Evening — HR closeout.** HR is finished for Phase 2 handoff on this stack. The HR API client now uses the shared auth token and `VITE_API_BASE_URL`. File upload stub (`POST /api/v1/files`) is live and wired into HR documents. New staff must change the temporary password through `POST /api/v1/auth/change-password` and the `/change-password` screen. HR announcements sync through `/api/v1/hr/announcements`. Backlog and frontend integration docs match reality. **30 API tests passed.** Deferred outside HR: RFID, production SMTP, Finance voucher, Academics substitution.
 
-**Status:** HR workflow is in the API and on the HR screens. Module tests passed. One screen compile error was fixed the same day.
+**Afternoon.** Partner commits on `origin/main` were reviewed. The admission screens, API login with demo fallback, and integration notes were brought in. The last partner commit, a GitHub workflow that sends scanned secrets to an external server, was not brought in. `feature/phase1-admissions` was not merged because it uses integer ids and a different backend layout. Local admission lookup stays synchronous so student, allocation, and document screens keep working while the admissions API flag is off.
+
+**Status:** HR vertical closed for handoff. Module tests passed.
 
 ### Done today
 

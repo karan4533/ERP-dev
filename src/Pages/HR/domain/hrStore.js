@@ -164,6 +164,9 @@ export const saveNotifications = (rows) => write(HR_KEYS.notifications, rows)
 export const getComms = () => read(HR_KEYS.comms, SEED.comms)
 export const saveComms = (rows) => write(HR_KEYS.comms, rows)
 
+export const getAnnouncements = () => read(HR_KEYS.announcements, SEED.announcements || [])
+export const saveAnnouncements = (rows) => write(HR_KEYS.announcements, rows)
+
 export const getClaims = () => read(HR_KEYS.claims, SEED.claims || [])
 export const saveClaims = (rows) => write(HR_KEYS.claims, rows)
 

@@ -3,6 +3,7 @@ from app.models.admission import AdmissionEnquiry, Guardian, Student
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.campus import Campus
+from app.models.file_asset import FileAsset
 from app.models.hr_employee import HrEmployee
 from app.models.hr_record import HrRecord
 from app.models.otp import OtpChallenge
@@ -14,6 +15,7 @@ __all__ = [
     "AuditLog",
     "Base",
     "Campus",
+    "FileAsset",
     "Guardian",
     "HrEmployee",
     "HrRecord",

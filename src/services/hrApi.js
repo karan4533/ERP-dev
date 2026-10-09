@@ -1,7 +1,6 @@
 import { HR_KEYS } from '../Pages/HR/domain/hrStorage'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-const TOKEN_KEY = 'qmis_hr_token'
+import { apiRequest, getAccessToken, getApiBaseUrl } from './apiClient'
+import { apiLogin } from './authApi'
 
 const LIST_BY_KEY = {
     [HR_KEYS.documents]: 'documents',
@@ -24,72 +23,45 @@ const LIST_BY_KEY = {
     [HR_KEYS.notifications]: 'notifications',
     [HR_KEYS.comms]: 'comms',
     [HR_KEYS.claims]: 'claims',
+    [HR_KEYS.announcements]: 'announcements',
+}
+
+export async function connectHrApi() {
+    if (getAccessToken()) return true
+    try {
+        await apiLogin('hr@qmis.edu', 'hr12345')
+        return true
+    } catch {
+        return false
+    }
 }
 
 export async function createStaff(employee) {
     const connected = await connectHrApi()
     if (!connected) throw new Error('HR API is not available')
-    return request('/api/v1/hr/staff', { method: 'POST', body: JSON.stringify(employee) })
+    return apiRequest('/hr/staff', { method: 'POST', body: employee })
 }
 
-let token = null
+export const getJson = (path) => apiRequest(path)
 
-const authHeaders = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-})
-
-export async function connectHrApi() {
-    if (token) return true
-    if (typeof sessionStorage !== 'undefined') {
-        token = sessionStorage.getItem(TOKEN_KEY)
-        if (token) return true
-    }
-    const response = await fetch(`${API_URL}/api/v1/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'hr@qmis.edu', password: 'hr12345' }),
-    })
-    if (!response.ok) return false
-    token = (await response.json()).access_token
-    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(TOKEN_KEY, token)
-    return true
-}
-
-async function request(path, options = {}) {
-    const response = await fetch(`${API_URL}${path}`, {
-        ...options,
-        headers: { ...authHeaders(), ...(options.headers || {}) },
-    })
-    if (response.status === 401) {
-        token = null
-        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(TOKEN_KEY)
-        throw new Error('HR API sign-in expired')
-    }
-    if (!response.ok) throw new Error(`HR API ${response.status}`)
-    return response.json()
-}
-
-export const getJson = (path) => request(path)
-
-export const putJson = (path, value) => request(path, { method: 'PUT', body: JSON.stringify(value) })
+export const putJson = (path, value) => apiRequest(path, { method: 'PUT', body: value })
 
 export function pushHrKey(key, value) {
-    if (key === HR_KEYS.employees) return putJson('/api/v1/hr/portal/employees', value)
-    if (key === HR_KEYS.leave) return putJson('/api/v1/hr/leave', value)
-    if (key === HR_KEYS.payroll) return putJson('/api/v1/hr/payroll', value)
+    if (key === HR_KEYS.employees) return putJson('/hr/portal/employees', value)
+    if (key === HR_KEYS.leave) return putJson('/hr/leave', value)
+    if (key === HR_KEYS.payroll) return putJson('/hr/payroll', value)
     const collection = LIST_BY_KEY[key]
     if (!collection) return Promise.resolve(null)
-    return putJson(`/api/v1/hr/${collection}`, value)
+    return putJson(`/hr/${collection}`, value)
 }
 
 export async function pullHrSnapshot() {
     const [employees, leave, payroll, meta, ...lists] = await Promise.all([
-        getJson('/api/v1/hr/portal/employees'),
-        getJson('/api/v1/hr/leave'),
-        getJson('/api/v1/hr/payroll'),
-        getJson('/api/v1/hr/meta'),
-        ...Object.values(LIST_BY_KEY).map((collection) => getJson(`/api/v1/hr/${collection}`)),
+        getJson('/hr/portal/employees'),
+        getJson('/hr/leave'),
+        getJson('/hr/payroll'),
+        getJson('/hr/meta'),
+        ...Object.values(LIST_BY_KEY).map((collection) => getJson(`/hr/${collection}`)),
     ])
     const collections = {
         [HR_KEYS.employees]: employees,
@@ -106,5 +78,26 @@ export async function pullHrSnapshot() {
 }
 
 export function markHrSeeded() {
-    return putJson('/api/v1/hr/meta', [{ id: 'seed', seeded: true }])
+    return putJson('/hr/meta', [{ id: 'seed', seeded: true }])
+}
+
+/** Upload a browser File; returns { id, download_url, original_name, size_bytes }. */
+export async function uploadHrFile(file, resourceType = 'hr_document', resourceId = null) {
+    const connected = await connectHrApi()
+    if (!connected) throw new Error('HR API is not available')
+    const body = new FormData()
+    body.append('file', file)
+    body.append('resource_type', resourceType)
+    if (resourceId != null) body.append('resource_id', String(resourceId))
+    return apiRequest('/files', { method: 'POST', body, formData: true })
+}
+
+export function hrFileDownloadUrl(downloadPath) {
+    if (!downloadPath) return ''
+    if (String(downloadPath).startsWith('http') || String(downloadPath).startsWith('data:')) return downloadPath
+    const origin = getApiBaseUrl().replace(/\/api\/v1\/?$/, '')
+    const absolute = `${origin}${downloadPath.startsWith('/') ? '' : '/'}${downloadPath}`
+    const token = getAccessToken()
+    if (!token) return absolute
+    return `${absolute}${absolute.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
 }

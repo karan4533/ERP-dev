@@ -52,7 +52,11 @@ const SignIn = () => {
                 localStorage.removeItem('schoolerp_remember_email')
             }
 
-            navigate(ROLE_HOME_PATHS[result.role] ?? '/dashboard', { replace: true })
+            if (result.mustChangePassword) {
+                navigate('/change-password', { replace: true })
+            } else {
+                navigate(ROLE_HOME_PATHS[result.role] ?? '/dashboard', { replace: true })
+            }
         } catch (err) {
             setError(err?.message || 'Unable to sign in.')
         } finally {

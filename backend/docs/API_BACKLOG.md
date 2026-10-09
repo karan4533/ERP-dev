@@ -41,7 +41,9 @@ Register every new router in `app/api/v1/router.py`.
 | P0-6 | Permission matrix CRUD | Admin RBAC screens | DONE | You |
 | P0-7 | Immutable system audit log middleware | Architecture Rule 5 | DONE | You |
 | P0-8 | File upload stub `POST /api/v1/files` | Documents / attachments | DONE | You |
-| P0-9 | Masters: classes, sections, subjects, academic year | Admin / Teacher forms | DONE | You |
+| P0-9 | Masters: classes, sections, subjects, academic year | Admin / Teacher forms | PARTIAL | You |
+
+> P0-9 on this stack: classes and subjects are live. Sections and academic year are still open.
 
 ---
 
@@ -49,11 +51,13 @@ Register every new router in `app/api/v1/router.py`.
 
 | ID | API | Frontend screens | Status | Owner |
 |---|---|---|---|---|
-| P1-1 | Enquiry CRUD | PRM / Admin admission enquiry | DONE | You |
-| P1-2 | Admission CRUD + convert | Add admission | DONE | You |
-| P1-3 | Enroll → student + guardian link | Enroll action | DONE | You |
-| P1-4 | `GET /api/v1/parents/me/children` | Parent select-child | DONE | You |
-| P1-5 | Student list & detail | Shared student database | DONE | You |
+| P1-1 | Enquiry CRUD | PRM / Admin admission enquiry | PARTIAL | You |
+| P1-2 | Admission CRUD + convert | Add admission | PLANNED | You |
+| P1-3 | Enroll → student + guardian link | Enroll action | PARTIAL | You |
+| P1-4 | `GET /api/v1/parents/me/children` | Parent select-child | PLANNED | You |
+| P1-5 | Student list & detail | Shared student database | PLANNED | You |
+
+> Running stack today: `POST /admissions/enquiries` and `POST /admissions/enquiries/{id}/enroll`. Rich list/edit/convert/parent APIs are not on this UUID app yet. Keep `VITE_USE_API_ADMISSIONS=false` until that port is done.
 
 > Product note: Architecture wants student create only after fee confirm, and parent via student profile. Confirm with school before locking P1-3/P1-4.
 
@@ -72,18 +76,19 @@ Register every new router in `app/api/v1/router.py`.
 | Y-5 | Tasks / escalations | shared workflows |
 | Y-6 | Fee structures + collection skeleton | Account Head |
 
-### Partner (HR — full vertical)
+### Partner (HR — full vertical) — DONE on this stack
 
-
-| ID | Area | Key APIs |
+| ID | Area | Status |
 |---|---|---|
-| H-1 | Employees CRUD | `/api/v1/hr/employees` |
-| H-2 | Documents vault | `/api/v1/hr/documents` |
-| H-3 | Recruitment | jobs, candidates, interviews |
-| H-4 | Onboarding / offers | offers, checklist |
-| H-5 | Attendance / leave policies | HR attendance views |
-| H-6 | Payroll run + payslip | calculate / finalize / PDF data |
-| H-7 | Performance / training / exit | remaining HR screens |
+| H-1 | Employees + staff user create | DONE |
+| H-2 | Documents metadata + file upload stub | DONE |
+| H-3 | Recruitment (jobs, candidates, interviews) | DONE |
+| H-4 | Onboarding / offers / observation / shadow | DONE |
+| H-5 | Attendance / leave / balances / permission | DONE |
+| H-6 | Payroll / advances / claims / incentives | DONE |
+| H-7 | Performance / training / disciplinary / exit / announcements | DONE |
+
+Deferred outside HR: RFID punches, production SMTP, Finance voucher, Academics substitution.
 
 ---
 

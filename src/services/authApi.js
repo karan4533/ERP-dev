@@ -8,13 +8,22 @@ const normalizeLogin = (data) => {
     return {
         ...data,
         access_token: data.access_token,
+        must_change_password: Boolean(data?.must_change_password ?? data?.user?.must_change_password),
         user: {
             ...(data.user || {}),
             role,
             email,
             full_name: fullName,
+            must_change_password: Boolean(data?.must_change_password ?? data?.user?.must_change_password),
         },
     }
+}
+
+export async function apiChangePassword(currentPassword, newPassword) {
+    return apiRequest('/auth/change-password', {
+        method: 'POST',
+        body: { current_password: currentPassword, new_password: newPassword },
+    })
 }
 
 export async function apiLogin(email, password) {

@@ -1,9 +1,8 @@
 # HR testing report
 
 Project: Queen Mira International School ERP  
-Last run: 9 October 2026, after the partner admission and login integration  
-Result: **27 passed, 0 failed** (about 15 seconds)  
-Frontend production build: succeeded. Admissions API flag remains off, so those screens still use local storage.  
+Last run: 9 October 2026, after HR closeout  
+Result: **30 passed, 0 failed** (about 13 seconds)  
 Kind of test: API tests. Each HR module is called the way the screen calls it, using the HR login. The browser was not clicked through in this run.
 
 Command, from the `backend` folder:
@@ -14,7 +13,7 @@ python -m pytest tests/test_hr_modules.py tests/test_hr.py tests/test_phase0.py 
 
 Test code lives in:
 
-- `backend/tests/test_hr_modules.py` — one test per HR module
+- `backend/tests/test_hr_modules.py` — one test per HR module, plus closeout checks
 - `backend/tests/test_hr.py` — employee round trip, and routes that reject a missing login
 - `backend/tests/test_phase0.py` — health, login, OTP, class and subject masters, HR-only employee create, admission journey
 
@@ -23,6 +22,9 @@ Test code lives in:
 | Module | Test | Result | What was checked |
 |---|---|---|---|
 | Staff user creation | `test_module_staff_user_creation` | Passed | HR creates the person, the temporary password logs in, first login must change the password, and the assignment is stored |
+| Password change | `test_staff_must_change_password_then_clears` | Passed | Temporary password forces change; after change, login no longer requires it |
+| File upload | `test_file_upload_stub` | Passed | File bytes are stored and downloaded through `/api/v1/files` |
+| Announcements | `test_module_announcements_collection` | Passed | HR announcements save on the announcements collection |
 | Documents | `test_module_documents` | Passed | An ID proof is stored as Verified |
 | Recruitment and interview | `test_module_recruitment_and_interview` | Passed | Job, candidate, scheduled interview, then a Selected decision |
 | Offer and onboarding | `test_module_offer_and_onboarding` | Passed | Accepted offer and an onboarding checklist item |
@@ -40,7 +42,7 @@ Test code lives in:
 | Exit | `test_module_exit_deactivates_login` | Passed | A completed exit makes the old password fail |
 | Incentives | `test_module_claims_and_incentives` | Passed | An extra-work claim and an incentive row are stored |
 | Who can see a profile | `test_employee_sees_only_own_profile` | Passed | A teacher login sees only their own profile |
-| Locked profile | `test_saved_staff_profile_cannot_be_rewritten` | Passed | Name and salary stay fixed. Department and role can transfer, and the old department stays in history |
+| Locked profile | `test_saved_staff_profile_cannot_be_rewritten` | Passed | Name and salary stay fixed. Department and role can transfer |
 | HR data round trip | `test_hr_vertical_round_trip` | Passed | Employees and HR collections save and load again |
 | Login required | `test_hr_routes_require_a_token` | Passed | HR routes reject a request with no token |
 | Health, login, OTP, masters, admission | Phase 0 tests | Passed | The shared login, class and subject masters, and the admission path still work |

@@ -345,3 +345,58 @@ def test_module_claims_and_incentives(client):
     )
     assert incentive.status_code == 201, incentive.text
     assert client.get("/api/v1/hr/incentives", headers=headers).json()[0]["approver"] == "MD"
+
+
+def test_module_announcements_collection(client):
+    headers = _headers(client)
+    saved = client.put(
+        "/api/v1/hr/announcements",
+        headers=headers,
+        json=[{"id": "ANN-MOD-1", "title": "HR circular", "category": "HR Circular", "message": "Update leave policy", "senderRole": "hr"}],
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()[0]["title"] == "HR circular"
+
+
+def test_staff_must_change_password_then_clears(client):
+    headers = _headers(client)
+    created = client.post(
+        "/api/v1/hr/staff",
+        headers=headers,
+        json={"id": "EMP-PWD-1", "name": "New Staff", "email": "new.staff@school.com", "role": "teacher", "department": "Academic"},
+    )
+    assert created.status_code == 201, created.text
+    temporary = created.json()["temporaryPassword"]
+    login = client.post("/api/v1/auth/login", json={"email": "new.staff@school.com", "password": temporary})
+    assert login.status_code == 200
+    assert login.json()["must_change_password"] is True
+    token = login.json()["access_token"]
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": temporary, "new_password": "Secure99"},
+    )
+    assert changed.status_code == 200, changed.text
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["must_change_password"] is False
+    again = client.post("/api/v1/auth/login", json={"email": "new.staff@school.com", "password": "Secure99"})
+    assert again.status_code == 200
+    assert again.json()["must_change_password"] is False
+
+
+def test_file_upload_stub(client):
+    headers = _headers(client)
+    uploaded = client.post(
+        "/api/v1/files",
+        headers=headers,
+        files={"file": ("id-proof.txt", b"sample identity proof", "text/plain")},
+        data={"resource_type": "hr_document", "resource_id": "EMP-2026-001"},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    body = uploaded.json()
+    assert body["original_name"] == "id-proof.txt"
+    assert body["download_url"].endswith("/download")
+    download = client.get(body["download_url"], headers=headers)
+    assert download.status_code == 200
+    assert download.content == b"sample identity proof"

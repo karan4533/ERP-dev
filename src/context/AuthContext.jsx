@@ -16,7 +16,7 @@ import { findActiveParentByEmail } from '../Common/ParentAccounts/parentAccounts
 import { ROLES } from '../constants/roles'
 import { deviceLabel, logActivity } from '../Common/demoDomain/activityLog'
 import { clearAccessToken, isApiAuthEnabled } from '../services/apiClient'
-import { apiLogin, apiLogout } from '../services/authApi'
+import { apiChangePassword, apiLogin, apiLogout } from '../services/authApi'
 
 export { ROLES }
 
@@ -88,7 +88,7 @@ const CREATABLE_LOGIN_ROLES = new Set(CREATABLE_ROLES)
 const readStoredAuth = () => {
     try {
         const raw = sessionStorage.getItem(STORAGE_KEY)
-        if (!raw) return { isAuthenticated: false, role: null, email: null, name: null }
+        if (!raw) return { isAuthenticated: false, role: null, email: null, name: null, mustChangePassword: false }
         const parsed = JSON.parse(raw)
         if (parsed?.isAuthenticated && parsed?.role) {
             const role = parsed.role === 'vandriver' ? ROLES.DRIVER : parsed.role
@@ -97,12 +97,13 @@ const readStoredAuth = () => {
                 role,
                 email: parsed.email || null,
                 name: parsed.name || null,
+                mustChangePassword: Boolean(parsed.mustChangePassword),
             }
         }
     } catch {
         // ignore invalid storage
     }
-    return { isAuthenticated: false, role: null, email: null, name: null }
+    return { isAuthenticated: false, role: null, email: null, name: null, mustChangePassword: false }
 }
 
 const AuthContext = createContext(null)
@@ -113,6 +114,7 @@ export const AuthProvider = ({ children }) => {
     const [role, setRole] = useState(stored.role)
     const [email, setEmail] = useState(stored.email)
     const [name, setName] = useState(stored.name)
+    const [mustChangePassword, setMustChangePassword] = useState(Boolean(stored.mustChangePassword))
     const [pendingRole, setPendingRole] = useState(null)
 
     useEffect(() => {
@@ -124,7 +126,7 @@ export const AuthProvider = ({ children }) => {
         }
     }, [])
 
-    const persistAuth = useCallback((nextRole, nextEmail = null, nextName = null) => {
+    const persistAuth = useCallback((nextRole, nextEmail = null, nextName = null, nextMustChange = false) => {
         sessionStorage.setItem(
             STORAGE_KEY,
             JSON.stringify({
@@ -132,17 +134,19 @@ export const AuthProvider = ({ children }) => {
                 role: nextRole,
                 email: nextEmail,
                 name: nextName,
+                mustChangePassword: Boolean(nextMustChange),
             })
         )
     }, [])
 
-    const establishSession = useCallback((expectedRole, normalizedEmail, sessionName, createdUser, createdAdmin) => {
+    const establishSession = useCallback((expectedRole, normalizedEmail, sessionName, createdUser, createdAdmin, nextMustChange = false) => {
         setIsAuthenticated(true)
         setRole(expectedRole)
         setEmail(normalizedEmail)
         setName(sessionName)
+        setMustChangePassword(Boolean(nextMustChange))
         setPendingRole(null)
-        persistAuth(expectedRole, normalizedEmail, sessionName)
+        persistAuth(expectedRole, normalizedEmail, sessionName, nextMustChange)
         logActivity({
             actor: sessionName || normalizedEmail,
             role: expectedRole,
@@ -168,7 +172,7 @@ export const AuthProvider = ({ children }) => {
             }
         }
 
-        return { success: true, role: expectedRole }
+        return { success: true, role: expectedRole, mustChangePassword: Boolean(nextMustChange) }
     }, [persistAuth])
 
     const passwordMatches = (storedPassword, enteredPassword) => {
@@ -238,7 +242,14 @@ export const AuthProvider = ({ children }) => {
                     clearAccessToken()
                     return { success: false, message: 'Login succeeded but role was missing.' }
                 }
-                return establishSession(apiRole, normalizedEmail, apiName, null, null)
+                return establishSession(
+                    apiRole,
+                    normalizedEmail,
+                    apiName,
+                    null,
+                    null,
+                    Boolean(data?.must_change_password),
+                )
             } catch (error) {
                 // Fall through to local demo accounts if API is down / wrong password for API-only users
                 const account = resolveAccount(normalizedEmail)
@@ -388,8 +399,16 @@ export const AuthProvider = ({ children }) => {
         setRole(null)
         setEmail(null)
         setName(null)
+        setMustChangePassword(false)
         setPendingRole(null)
     }, [email, role])
+
+    const completePasswordChange = useCallback(async (currentPassword, newPassword) => {
+        await apiChangePassword(currentPassword, newPassword)
+        setMustChangePassword(false)
+        persistAuth(role, email, name, false)
+        return { success: true }
+    }, [email, name, persistAuth, role])
 
     const value = useMemo(
         () => ({
@@ -397,13 +416,15 @@ export const AuthProvider = ({ children }) => {
             role,
             email,
             name,
+            mustChangePassword,
             pendingRole,
             setPendingRole,
             login,
             loginWithCredentials,
+            completePasswordChange,
             logout,
         }),
-        [isAuthenticated, role, email, name, pendingRole, login, loginWithCredentials, logout]
+        [isAuthenticated, role, email, name, mustChangePassword, pendingRole, login, loginWithCredentials, completePasswordChange, logout]
     )
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

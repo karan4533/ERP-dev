@@ -98,6 +98,27 @@ def verify_otp(db: Session, email: str, code: str) -> dict:
     return _token_payload(db, user)
 
 
+def change_password(db: Session, user: User, current_password: str, new_password: str) -> dict:
+    if not verify_password(current_password, user.password_hash):
+        fail(401, "invalid_credentials", "Current password is incorrect.")
+    if len(new_password) < 6:
+        fail(422, "weak_password", "New password must be at least 6 characters.")
+    if current_password == new_password:
+        fail(422, "same_password", "Pick a new password that is different from the current one.")
+    user.password_hash = hash_password(new_password)
+    user.must_change_password = False
+    write_audit(
+        db,
+        action="PASSWORD_CHANGED",
+        entity_type="user",
+        entity_id=str(user.id),
+        actor_id=user.id,
+        campus_id=user.campus_id,
+    )
+    db.commit()
+    return {"ok": True, "must_change_password": False}
+
+
 def me_payload(db: Session, user: User) -> dict:
     role = db.get(Role, user.role_id)
     campus = db.get(Campus, user.campus_id)

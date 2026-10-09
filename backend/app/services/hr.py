@@ -41,6 +41,7 @@ LIST_COLLECTIONS: dict[str, str] = {
     "claims": "CLM",
     "incentives": "INC",
     "assignments": "ASG",
+    "announcements": "ANN",
 }
 _KNOWN_ROLES = {code for code, _ in ALL_ROLES}
 _ROLE_ALIASES = {

@@ -1,6 +1,8 @@
 import { ROLES } from '../../constants/roles'
+import { getAnnouncements as getHrAnnouncements, saveAnnouncements as saveHrAnnouncements } from '../../Pages/HR/domain/hrStore'
 
 export const STORAGE_KEY = 'school-erp-announcements'
+const HR_ROLE = ROLES.HR
 
 export const CATEGORY_OPTIONS = [
     'Administrative Notice',
@@ -59,6 +61,19 @@ const saveToStorage = (items) => {
     }
 }
 
+const loadAnnouncements = (roleKey) => {
+    if (roleKey === HR_ROLE) return getHrAnnouncements()
+    return loadFromStorage()
+}
+
+const saveAnnouncementsForRole = (roleKey, items) => {
+    if (roleKey === HR_ROLE) {
+        saveHrAnnouncements(items)
+        return
+    }
+    saveToStorage(items)
+}
+
 export const formatAnnouncementDate = (date) => {
     const value = date instanceof Date ? date : new Date(date)
     if (Number.isNaN(value.getTime())) return ''
@@ -79,8 +94,8 @@ export const parseAnnouncementDate = (dateStr) => {
     return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-const generateId = () => {
-    const items = loadFromStorage()
+const generateId = (roleKey) => {
+    const items = loadAnnouncements(roleKey)
     const next = items.length + 1
     return `AN-${String(next).padStart(4, '0')}`
 }
@@ -91,7 +106,7 @@ const isVisibleToRole = (announcement, roleKey) => {
 }
 
 export const getAnnouncementsForRole = (roleKey) => {
-    return loadFromStorage()
+    return loadAnnouncements(roleKey)
         .filter((item) => isVisibleToRole(item, roleKey))
         .sort((a, b) => {
             const dateA = parseAnnouncementDate(a.announcementDate)?.getTime() || 0
@@ -101,16 +116,16 @@ export const getAnnouncementsForRole = (roleKey) => {
 }
 
 export const getAnnouncementById = (id, roleKey) => {
-    const announcement = loadFromStorage().find((item) => item.id === id) ?? null
+    const announcement = loadAnnouncements(roleKey).find((item) => item.id === id) ?? null
     if (!announcement) return null
     if (roleKey && !isVisibleToRole(announcement, roleKey)) return null
     return announcement
 }
 
 export const addAnnouncement = (payload, senderRole) => {
-    const items = loadFromStorage()
+    const items = loadAnnouncements(senderRole)
     const announcement = {
-        id: generateId(),
+        id: generateId(senderRole),
         title: payload.title?.trim() || '',
         category: payload.category || '',
         message: payload.message?.trim() || '',
@@ -122,6 +137,6 @@ export const addAnnouncement = (payload, senderRole) => {
         createdAt: new Date().toISOString(),
     }
     items.unshift(announcement)
-    saveToStorage(items)
+    saveAnnouncementsForRole(senderRole, items)
     return announcement
 }

@@ -72,7 +72,7 @@ def work_pdf(path):
         HRFlowable(width="100%", thickness=1, color=LINE, spaceAfter=8),
     ]
     badge = Table(
-        [[Paragraph("<b>Status.</b> HR workflow is in the API and on the HR screens. Module tests passed. One screen compile error was fixed the same day.", s["body"])]],
+        [[Paragraph("<b>Status.</b> HR closeout for Phase 2 is done on this stack. Shared auth token, file upload stub, forced password change, and announcement sync are live. 30 API tests passed.", s["body"])]],
         colWidths=[178 * mm],
     )
     badge.setStyle(TableStyle([
@@ -86,18 +86,17 @@ def work_pdf(path):
     story.append(badge)
     story.append(Paragraph("Done today", s["h"]))
     story.append(bullets([
-        "Staff are created only by HR. Saving the profile creates the login, issues a temporary password, and forces a password change on first login. The role comes from the fixed role list.",
-        "After a profile is saved, name and salary cannot be rewritten. A later change is a department or role transfer, and the previous assignment stays in history. Salary and designation change only when an increment is marked Applied.",
-        "Visibility follows the document: HR and MD see all staff, a department head sees their department, and any other staff login sees only their own profile.",
-        "Approved leave writes attendance as Leave. A permission request writes attendance as Permission. Leave balance is the yearly entitlement minus approved days.",
-        "A paid payroll month, an applied increment, and an approved disciplinary record stay locked. A completed exit deactivates the login and keeps the history.",
-        "Claims and incentives are stored: extra work time, admission referral, and staff joining referral.",
-        "The Employees list screen was broken by a missing closing brace on the employment-type field. That is fixed, and the page compiles again. Adding a person shows the full form. An existing person opens Transfer, which changes only department, role, and reporting head.",
+        "HR API client uses the shared schoolerp_api_token and VITE_API_BASE_URL, with the HR seed login as fallback.",
+        "File upload stub stores bytes under backend/uploads and is wired into the HR documents screen.",
+        "New staff must change the temporary password through POST /api/v1/auth/change-password and the /change-password screen.",
+        "HR announcements save through /api/v1/hr/announcements via hrStore.",
+        "Staff create, locked profiles, leave and payroll locks, exit deactivation, and incentives remain enforced.",
+        "Backlog and frontend integration docs now match the running UUID stack.",
     ], s))
     story.append(Paragraph("Test result", s["h"]))
-    story.append(Paragraph("27 automated tests passed in about 10 seconds. The module-by-module detail is in the HR testing report.", s["body"]))
+    story.append(Paragraph("30 automated tests passed in about 13 seconds. The module-by-module detail is in the HR testing report.", s["body"]))
     story.append(Paragraph("Still open", s["h"]))
-    story.append(Paragraph("These items in the HR document depend on other systems and are not part of this HR build.", s["body"]))
+    story.append(Paragraph("These items depend on other systems and are deferred outside the HR closeout.", s["body"]))
     story.append(bullets([
         "RFID device punches",
         "A real email server. The temporary password is returned for local testing.",
@@ -140,10 +139,10 @@ def testing_pdf(path):
         Paragraph("API tests. Each HR module is called the way the screen calls it, using the HR login. The browser was not clicked through in this run.", s["sub"]),
     ]
     summary = Table([[
-        Paragraph("<b>27 passed</b>", s["body"]),
+        Paragraph("<b>30 passed</b>", s["body"]),
         Paragraph("<b>0 failed</b>", s["body"]),
-        Paragraph("About 10 seconds", s["body"]),
-        Paragraph("Last run: 9 October 2026", s["body"]),
+        Paragraph("About 13 seconds", s["body"]),
+        Paragraph("Last run: 9 October 2026 closeout", s["body"]),
     ]], colWidths=[60 * mm, 50 * mm, 55 * mm, 90 * mm])
     summary.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, 0), GREEN_BG),
@@ -164,6 +163,9 @@ def testing_pdf(path):
 
     rows_data = [
         ("Staff user creation", "test_module_staff_user_creation", "HR creates the person, the temporary password logs in, first login must change the password, and the assignment is stored"),
+        ("Password change", "test_staff_must_change_password_then_clears", "Temporary password forces change; after change, login no longer requires it"),
+        ("File upload", "test_file_upload_stub", "File bytes are stored and downloaded through /api/v1/files"),
+        ("Announcements", "test_module_announcements_collection", "HR announcements save on the announcements collection"),
         ("Documents", "test_module_documents", "An ID proof is stored as Verified"),
         ("Recruitment and interview", "test_module_recruitment_and_interview", "Job, candidate, scheduled interview, then a Selected decision"),
         ("Offer and onboarding", "test_module_offer_and_onboarding", "Accepted offer and an onboarding checklist item"),

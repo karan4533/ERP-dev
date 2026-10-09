@@ -25,6 +25,7 @@ export const HR_KEYS = {
     notifications: 'school-erp-hr-notifications-v1',
     comms: 'school-erp-hr-comms-v1',
     claims: 'school-erp-hr-claims-v1',
+    announcements: 'school-erp-hr-announcements-v1',
 }
 
 const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
