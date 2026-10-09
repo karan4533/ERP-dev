@@ -73,10 +73,25 @@ const ReceiptDetailsDrawer = ({
                     <button type='button' onClick={reprint} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
                         <RotateCcw size={14} /> Reprint
                     </button>
-                    <button type='button' onClick={() => { onSend({ receiptId: receipt.id, channel: 'email' }); toast.success('Mock email sent.') }} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
+                    <button type='button' onClick={async () => {
+                        const result = await onSend({ receiptId: receipt.id, channel: 'email' })
+                        if (result?.queuedStub || result?.delivery?.status === 'queued_stub') {
+                            toast.info('Email queued_stub — not delivered until SMTP keys are configured.')
+                        } else if (result?.success === false) {
+                            toast.error(result.message || 'Email queue failed.')
+                        }
+                    }} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
                         <Mail size={14} /> Email
                     </button>
-                    <button type='button' onClick={() => { onSend({ receiptId: receipt.id, channel: 'whatsapp' }); logWhatsAppDelivery(receipt.id); toast.success('Demo WhatsApp delivery recorded.') }} className='col-span-2 inline-flex items-center justify-center gap-2 text-sm bg-[#515DEF] text-white px-3 py-2 rounded-md cursor-pointer'>
+                    <button type='button' onClick={async () => {
+                        const result = await onSend({ receiptId: receipt.id, channel: 'whatsapp' })
+                        logWhatsAppDelivery(receipt.id)
+                        if (result?.queuedStub || result?.delivery?.status === 'queued_stub') {
+                            toast.info('WhatsApp queued_stub — not delivered until provider keys are configured.')
+                        } else if (result?.success === false) {
+                            toast.error(result.message || 'WhatsApp queue failed.')
+                        }
+                    }} className='col-span-2 inline-flex items-center justify-center gap-2 text-sm bg-[#515DEF] text-white px-3 py-2 rounded-md cursor-pointer'>
                         <MessageCircle size={14} /> Send to WhatsApp
                     </button>
                 </div>

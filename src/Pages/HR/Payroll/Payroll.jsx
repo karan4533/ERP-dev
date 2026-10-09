@@ -25,12 +25,16 @@ const SalaryStatement = () => {
     const summary = useMemo(() => payrollSummary(month, year), [tick, month, year])
 
     const markPaid = (row) => {
+        if (!canMutate({ paymentStatus: row.paymentStatus })) {
+            toast.error('Paid / finalized payroll rows are locked and cannot be edited.')
+            return
+        }
         const bundle = getPayrollBundle()
         const months = bundle.months.some((item) => item.employeeId === row.employeeId && item.month === month && Number(item.year) === Number(year))
-            ? bundle.months.map((item) => item.employeeId === row.employeeId && item.month === month ? { ...item, paymentStatus: 'Paid', bankRef: `NEFT-DEMO-${row.employeeId}`, paymentDate: '30-06-2026', paymentMode: 'Bank Transfer' } : item)
-            : [...bundle.months, { employeeId: row.employeeId, month, year, workingDays: row.workingDays, lates: row.lates, permission: row.permission, casualLeave: row.casualLeave, otherLeave: row.otherLeave, absent: row.absent, notPunched: row.notPunched, paymentStatus: 'Paid', bankRef: `NEFT-DEMO-${row.employeeId}`, paymentDate: '30-06-2026', paymentMode: 'Bank Transfer' }]
+            ? bundle.months.map((item) => item.employeeId === row.employeeId && item.month === month && Number(item.year) === Number(year) ? { ...item, paymentStatus: 'Paid', bankRef: `NEFT-${row.employeeId}`, paymentDate: new Date().toISOString().slice(0, 10), paymentMode: 'Bank Transfer' } : item)
+            : [...bundle.months, { employeeId: row.employeeId, month, year, workingDays: row.workingDays, lates: row.lates, permission: row.permission, casualLeave: row.casualLeave, otherLeave: row.otherLeave, absent: row.absent, notPunched: row.notPunched, paymentStatus: 'Paid', bankRef: `NEFT-${row.employeeId}`, paymentDate: new Date().toISOString().slice(0, 10), paymentMode: 'Bank Transfer' }]
         savePayrollBundle({ ...bundle, months })
-        toast.success('Marked paid with a demo bank reference. No bank API was called.')
+        toast.success('Marked paid on HR API. Finance OUT voucher posts when payroll-months sync as Paid.')
     }
 
     return (

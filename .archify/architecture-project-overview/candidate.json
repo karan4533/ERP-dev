@@ -10,7 +10,7 @@
       "url": "https://github.com/karan4533/ERP-dev.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "a93c4c121adf62c1e3b1ed124d9c975208e7035b"
+      "revision": "0d1e5c87eb7185d3d9d6d21a6c2ff2ffb08e6510"
     },
     "output": ".archify/architecture-project-overview/qmis-erp-overview.html",
     "legend": {
@@ -156,8 +156,8 @@
       "sources": [
         {
           "path": "backend/app/main.py",
-          "line": 35,
-          "end_line": 53
+          "line": 38,
+          "end_line": 57
         }
       ]
     },
@@ -178,7 +178,7 @@
         {
           "path": "backend/app/core/config.py",
           "line": 4,
-          "end_line": 18
+          "end_line": 20
         }
       ]
     },
@@ -249,7 +249,7 @@
       "id": "mod_masters",
       "type": "backend",
       "label": "Masters",
-      "sublabel": "classes / subjects",
+      "sublabel": "years \u00b7 sections",
       "pos": [
         1080,
         180
@@ -261,8 +261,8 @@
       "sources": [
         {
           "path": "backend/app/api/v1/endpoints/masters.py",
-          "line": 12,
-          "end_line": 40
+          "line": 23,
+          "end_line": 80
         }
       ]
     },
@@ -281,9 +281,9 @@
       ],
       "sources": [
         {
-          "path": "backend/app/main.py",
-          "line": 46,
-          "end_line": 46
+          "path": "backend/app/api/v1/endpoints/admissions.py",
+          "line": 20,
+          "end_line": 126
         }
       ]
     },
@@ -291,7 +291,7 @@
       "id": "mod_finance",
       "type": "backend",
       "label": "Finance",
-      "sublabel": "fees + books",
+      "sublabel": "snapshot + actions",
       "pos": [
         1080,
         280
@@ -302,9 +302,9 @@
       ],
       "sources": [
         {
-          "path": "backend/app/main.py",
-          "line": 49,
-          "end_line": 49
+          "path": "backend/app/api/v1/endpoints/finance.py",
+          "line": 10,
+          "end_line": 116
         }
       ]
     },
@@ -312,7 +312,7 @@
       "id": "mod_hr",
       "type": "backend",
       "label": "HR",
-      "sublabel": "full vertical",
+      "sublabel": "partner vertical",
       "pos": [
         1250,
         280
@@ -524,12 +524,14 @@
       "items": [
         "Auth \u2014 /api/v1/auth",
         "Audit \u2014 /api/v1/audit-logs",
-        "Masters \u2014 classes / subjects",
+        "Masters \u2014 years \u00b7 sections",
         "Admissions \u2014 enquiry \u2192 enroll",
-        "Finance \u2014 fees + books",
-        "HR \u2014 full vertical",
+        "Finance \u2014 snapshot + actions",
+        "HR \u2014 partner vertical",
         "Files \u2014 upload stub",
-        "React role portals (Admin, HR, Teacher, PRM, \u2026)"
+        "Flags: AUTH + ADMISSIONS + FINANCE",
+        "HR + Finance: API is SoT (no silent localStorage)",
+        "Verified: 39 pytest"
       ]
     },
     {
@@ -538,7 +540,7 @@
       "items": [
         "Mount router in backend/app/main.py",
         "Add src/services/<name>Api.js for the UI",
-        "Run python .archify/build_project_overview.py then finalize"
+        "Run python .archify/build_project_overview.py then finalize (same folder only)"
       ]
     },
     {
@@ -551,6 +553,17 @@
         "financeApi.js",
         "hrApi.js",
         "apiClient.js"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Still open",
+      "items": [
+        "HR\u2194Finance browser click-through (concessions + payroll voucher)",
+        "RFID / eSSL punch import (if school wants)",
+        "Real Razorpay/Paytm \u00b7 SMTP \u00b7 WhatsApp (replace stubs)",
+        "Ops: Transport, Gate, Stores, IT, Canteen",
+        "Parent /me/children \u00b7 Academics router"
       ]
     }
   ]

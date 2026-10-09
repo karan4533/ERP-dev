@@ -37,30 +37,43 @@ export const subscribeHrStore = (listener) => {
 
 export const getHrStoreVersion = () => version
 
-const emit = () => {
+/** Notify React subscribers that in-memory HR data changed. */
+export const emitHrStoreChange = () => {
     version += 1
     listeners.forEach((listener) => listener())
 }
 
-export function loadHrCollection(key, fallback) {
-    if (!canUseStorage()) return structuredClone(fallback)
-    try {
-        const raw = window.localStorage.getItem(key)
-        if (!raw) return structuredClone(fallback)
-        const parsed = JSON.parse(raw)
-        if (parsed == null || typeof parsed !== 'object') return structuredClone(fallback)
-        return parsed
-    } catch {
-        return structuredClone(fallback)
-    }
-}
-
-export function saveHrCollection(key, value) {
+/**
+ * Optional offline cache only. Never used as source of truth after API hydrate.
+ * Cleared on hard failure so wiping site data does not matter for business SoT.
+ */
+export function cacheHrCollection(key, value) {
     if (!canUseStorage()) return
     try {
         window.localStorage.setItem(key, JSON.stringify(value))
-        emit()
     } catch (error) {
-        console.error(`Unable to persist ${key}`, error)
+        console.error(`Unable to cache ${key}`, error)
     }
+}
+
+/** @deprecated localStorage is not SoT — kept for one-release migration cleanup only */
+export function loadHrCollection(key, fallback) {
+    return structuredClone(fallback)
+}
+
+/** @deprecated use cacheHrCollection + emitHrStoreChange */
+export function saveHrCollection(key, value) {
+    cacheHrCollection(key, value)
+    emitHrStoreChange()
+}
+
+export function clearHrLocalCache() {
+    if (!canUseStorage()) return
+    Object.values(HR_KEYS).forEach((key) => {
+        try {
+            window.localStorage.removeItem(key)
+        } catch {
+            /* ignore */
+        }
+    })
 }

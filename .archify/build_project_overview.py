@@ -1,5 +1,9 @@
 """
-Build / refresh the single project-wide Archify architecture candidate.
+Build / refresh the ONE project-wide Archify overview.
+
+Always overwrite the same folder — never create timestamped or extra Archify folders:
+  .archify/architecture-project-overview/candidate.json
+  .archify/architecture-project-overview/qmis-erp-overview.html
 
 Scans:
   - backend/app/main.py include_router(...) lines  → API modules (auto-added)
@@ -45,23 +49,23 @@ ROUTER_META = {
     "masters_router": {
         "id": "mod_masters",
         "label": "Masters",
-        "sublabel": "classes / subjects",
+        "sublabel": "years · sections",
         "path": "backend/app/api/v1/endpoints/masters.py",
-        "line": 12,
-        "end_line": 40,
+        "line": 23,
+        "end_line": 80,
     },
     "admissions_router": {
         "id": "mod_admissions",
         "label": "Admissions",
         "sublabel": "enquiry → enroll",
-        "path": "backend/app/main.py",
-        "line": 46,
-        "end_line": 46,
+        "path": "backend/app/api/v1/endpoints/admissions.py",
+        "line": 20,
+        "end_line": 126,
     },
     "hr_router": {
         "id": "mod_hr",
         "label": "HR",
-        "sublabel": "full vertical",
+        "sublabel": "partner vertical",
         "path": "backend/app/api/v1/endpoints/hr.py",
         "line": 27,
         "end_line": 50,
@@ -77,10 +81,10 @@ ROUTER_META = {
     "finance_router": {
         "id": "mod_finance",
         "label": "Finance",
-        "sublabel": "fees + books",
-        "path": "backend/app/main.py",
-        "line": 49,
-        "end_line": 49,
+        "sublabel": "snapshot + actions",
+        "path": "backend/app/api/v1/endpoints/finance.py",
+        "line": 10,
+        "end_line": 116,
     },
 }
 
@@ -223,7 +227,7 @@ def build_candidate(modules: list[dict], clients: list[str], out_rel: str) -> di
             "pos": [600, 160],
             "size": [160, 200],
             "tag": "UUID stack",
-            "sources": [{"path": "backend/app/main.py", "line": 35, "end_line": 53}],
+            "sources": [{"path": "backend/app/main.py", "line": 38, "end_line": 57}],
         },
         {
             "id": "db",
@@ -232,7 +236,7 @@ def build_candidate(modules: list[dict], clients: list[str], out_rel: str) -> di
             "sublabel": "qmis_erp",
             "pos": [610, 420],
             "size": [140, 64],
-            "sources": [{"path": "backend/app/core/config.py", "line": 4, "end_line": 18}],
+            "sources": [{"path": "backend/app/core/config.py", "line": 4, "end_line": 20}],
         },
         {
             "id": "uploads",
@@ -306,7 +310,11 @@ def build_candidate(modules: list[dict], clients: list[str], out_rel: str) -> di
                 "dot": "emerald",
                 "title": "Live now",
                 "items": [f"{m['label']} — {m['sublabel']}" for m in live]
-                + ["React role portals (Admin, HR, Teacher, PRM, …)"],
+                + [
+                    "Flags: AUTH + ADMISSIONS + FINANCE",
+                    "HR + Finance: API is SoT (no silent localStorage)",
+                    "Verified: 39 pytest",
+                ],
             },
             {
                 "dot": "amber",
@@ -314,13 +322,24 @@ def build_candidate(modules: list[dict], clients: list[str], out_rel: str) -> di
                 "items": [
                     "Mount router in backend/app/main.py",
                     "Add src/services/<name>Api.js for the UI",
-                    "Run python .archify/build_project_overview.py then finalize",
+                    "Run python .archify/build_project_overview.py then finalize (same folder only)",
                 ],
             },
             {
                 "dot": "slate",
                 "title": "Clients found",
                 "items": clients or ["(none yet)"],
+            },
+            {
+                "dot": "rose",
+                "title": "Still open",
+                "items": [
+                    "HR↔Finance browser click-through (concessions + payroll voucher)",
+                    "RFID / eSSL punch import (if school wants)",
+                    "Real Razorpay/Paytm · SMTP · WhatsApp (replace stubs)",
+                    "Ops: Transport, Gate, Stores, IT, Canteen",
+                    "Parent /me/children · Academics router",
+                ],
             },
         ],
     }

@@ -1,3 +1,4 @@
+/** Optional browser cache only — Finance API snapshot is the source of truth. */
 export const FINANCE_STORAGE_KEY = 'school_erp_finance_state_v1'
 export const FINANCE_STORAGE_VERSION = 1
 
