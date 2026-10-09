@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1/finance", tags=["finance"])
 @router.get("/state")
 def get_finance_state(
     db: Session = Depends(get_db),
-    user: User = Depends(require_any("finance.read", "finance.write")),
+    user: User = Depends(require_any("finance.read", "finance.write", "finance.collect")),
 ) -> dict:
     return svc.get_state(db, user)
 
@@ -39,7 +39,7 @@ def reset_finance_state(
 def collect_payment_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.collect", "finance.write")),
 ) -> dict:
     return actions.collect_payment(db, user, body)
 
@@ -48,7 +48,7 @@ def collect_payment_route(
 def settle_cheque_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.collect", "finance.write")),
 ) -> dict:
     return actions.settle_cheque(db, user, body)
 
@@ -57,7 +57,7 @@ def settle_cheque_route(
 def send_receipt_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.collect", "finance.write")),
 ) -> dict:
     return actions.send_receipt(db, user, body)
 
@@ -66,7 +66,7 @@ def send_receipt_route(
 def gateway_intent_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.collect", "finance.write")),
 ) -> dict:
     return actions.create_gateway_intent(db, user, body)
 
@@ -75,7 +75,7 @@ def gateway_intent_route(
 def gateway_confirm_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.approve", "finance.write")),
 ) -> dict:
     return actions.confirm_gateway_payment(db, user, body)
 
@@ -83,7 +83,7 @@ def gateway_confirm_route(
 @router.post("/actions/apply-hr-concessions")
 def apply_hr_concessions_route(
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.approve", "finance.write")),
 ) -> dict:
     return actions.apply_hr_concessions(db, user)
 
@@ -92,7 +92,7 @@ def apply_hr_concessions_route(
 def post_payroll_voucher_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_any("finance.write", "hr.write")),
+    user: User = Depends(require_any("finance.write", "finance.approve", "hr.write")),
 ) -> dict:
     return actions.post_payroll_voucher(db, user, body)
 
@@ -101,7 +101,7 @@ def post_payroll_voucher_route(
 def decide_approval_route(
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission("finance.write")),
+    user: User = Depends(require_any("finance.approve", "finance.write")),
 ) -> dict:
     return actions.decide_approval(db, user, body)
 
@@ -110,7 +110,7 @@ def decide_approval_route(
 def list_finance_collection(
     collection: str,
     db: Session = Depends(get_db),
-    user: User = Depends(require_any("finance.read", "finance.write")),
+    user: User = Depends(require_any("finance.read", "finance.write", "finance.collect")),
 ) -> list:
     return svc.list_collection(db, user, collection)
 

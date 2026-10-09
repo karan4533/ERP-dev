@@ -48,7 +48,9 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("admissions.write", "Create enquiries and enroll students"),
     ("students.read", "View students and guardians"),
     ("finance.read", "View finance fees, receipts, and books"),
-    ("finance.write", "Collect fees and change finance masters"),
+    ("finance.collect", "Collect fees and send receipts (operational)"),
+    ("finance.write", "Change finance masters, fee structures, and snapshot config"),
+    ("finance.approve", "Approve finance requests and apply Head-only actions"),
 ]
 
 ALL_PERMISSION_CODES = [code for code, _ in PERMISSIONS]
@@ -57,7 +59,25 @@ _CORE = ["auth.me", "masters.read", "hr.self"]
 _ADMIN = ALL_PERMISSION_CODES
 _HR = ["auth.me", "hr.employees.read", "hr.employees.write", "hr.read", "hr.write", "hr.self", "students.read"]
 _ADMISSIONS = ["auth.me", "masters.read", "admissions.write", "students.read"]
-_FINANCE = ["auth.me", "masters.read", "finance.read", "finance.write", "students.read", "audit.read"]
+# accounthead = Finance Head (role code preserved for frontend Account Head portal)
+_FINANCE_HEAD = [
+    "auth.me",
+    "masters.read",
+    "finance.read",
+    "finance.collect",
+    "finance.write",
+    "finance.approve",
+    "students.read",
+    "audit.read",
+]
+# Operational collector — cannot change masters or approve
+_FINANCE_ASSISTANT = [
+    "auth.me",
+    "masters.read",
+    "finance.read",
+    "finance.collect",
+    "students.read",
+]
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {code: list(_CORE) for code, _ in ALL_ROLES}
 ROLE_PERMISSIONS.update(
@@ -67,7 +87,7 @@ ROLE_PERMISSIONS.update(
         "managing_director": list(_ADMIN),
         "hr": list(_HR),
         "prm": list(_ADMISSIONS),
-        "accounthead": list(_FINANCE),
-        "finance_assistant": ["auth.me", "masters.read", "finance.read", "students.read"],
+        "accounthead": list(_FINANCE_HEAD),
+        "finance_assistant": list(_FINANCE_ASSISTANT),
     }
 )

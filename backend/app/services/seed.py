@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.models import AcademicYear, Campus, Permission, Role, RolePermission, User
+from app.models import AcademicYear, Campus, FinancialYear, Permission, Role, RolePermission, User
 from app.permissions.matrix import ALL_ROLES, PERMISSIONS, ROLE_PERMISSIONS
 from app.services.audit import write_audit
 
@@ -23,6 +23,7 @@ def seed_reference_data(db: Session) -> None:
         db.flush()
 
     _seed_current_academic_year(db, campus)
+    _seed_current_financial_year(db, campus)
 
     roles_by_code: dict[str, Role] = {role.code: role for role in db.scalars(select(Role)).all()}
     for code, name in ALL_ROLES:
@@ -75,6 +76,13 @@ def seed_reference_data(db: Session) -> None:
         email=settings.accounthead_seed_email,
         password=settings.accounthead_seed_password,
     )
+    _seed_user(
+        db,
+        campus=campus,
+        role=roles_by_code["finance_assistant"],
+        email=settings.finance_assistant_seed_email,
+        password=settings.finance_assistant_seed_password,
+    )
     if created_campus:
         write_audit(
             db,
@@ -100,6 +108,30 @@ def _seed_current_academic_year(db: Session, campus: Campus) -> None:
         AcademicYear(
             campus_id=campus.id,
             name="2026-27",
+            start_date=date(2026, 4, 1),
+            end_date=date(2027, 3, 31),
+            is_current=has_current is None,
+            is_active=True,
+        )
+    )
+
+
+def _seed_current_financial_year(db: Session, campus: Campus) -> None:
+    """April–March financial year — intentionally separate from academic year rows."""
+    existing = db.scalar(
+        select(FinancialYear).where(FinancialYear.campus_id == campus.id, FinancialYear.name == "FY 2026-27")
+    )
+    if existing is not None:
+        return
+    has_current = db.scalar(
+        select(FinancialYear).where(
+            FinancialYear.campus_id == campus.id, FinancialYear.is_current.is_(True)
+        )
+    )
+    db.add(
+        FinancialYear(
+            campus_id=campus.id,
+            name="FY 2026-27",
             start_date=date(2026, 4, 1),
             end_date=date(2027, 3, 31),
             is_current=has_current is None,

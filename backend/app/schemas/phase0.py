@@ -76,6 +76,32 @@ class AcademicYearOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FinancialYearCreate(BaseModel):
+    name: str = Field(min_length=4, max_length=50)
+    start_date: date
+    end_date: date
+    is_current: bool = False
+
+
+class FinancialYearUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=4, max_length=50)
+    start_date: date | None = None
+    end_date: date | None = None
+    is_current: bool | None = None
+    is_active: bool | None = None
+
+
+class FinancialYearOut(BaseModel):
+    id: UUID
+    name: str
+    start_date: date
+    end_date: date
+    is_current: bool
+    is_active: bool = True
+
+    model_config = {"from_attributes": True}
+
+
 class ClassCreate(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     section: str | None = None

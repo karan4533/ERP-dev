@@ -21,6 +21,22 @@ class AcademicYear(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class FinancialYear(Base):
+    """April–March financial year — separate from AcademicYear."""
+
+    __tablename__ = "financial_years"
+    __table_args__ = (UniqueConstraint("campus_id", "name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    campus_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campuses.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class SchoolClass(Base):
     __tablename__ = "school_classes"
     __table_args__ = (UniqueConstraint("campus_id", "name"),)

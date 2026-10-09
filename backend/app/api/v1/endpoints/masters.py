@@ -6,13 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.deps import require_permission
-from app.models import AcademicYear, SchoolClass, Section, Subject, User
+from app.models import AcademicYear, FinancialYear, SchoolClass, Section, Subject, User
 from app.schemas.phase0 import (
     AcademicYearCreate,
     AcademicYearOut,
     AcademicYearUpdate,
     ClassCreate,
     ClassOut,
+    FinancialYearCreate,
+    FinancialYearOut,
+    FinancialYearUpdate,
     SectionCreate,
     SectionOut,
     SectionUpdate,
@@ -30,6 +33,24 @@ def _clear_current_years(db: Session, campus_id: UUID) -> None:
         select(AcademicYear).where(AcademicYear.campus_id == campus_id, AcademicYear.is_current.is_(True))
     ).all():
         row.is_current = False
+
+
+def _clear_current_financial_years(db: Session, campus_id: UUID) -> None:
+    for row in db.scalars(
+        select(FinancialYear).where(FinancialYear.campus_id == campus_id, FinancialYear.is_current.is_(True))
+    ).all():
+        row.is_current = False
+
+
+def _assert_april_march(start, end) -> None:
+    if start.month != 4 or start.day != 1:
+        fail(400, "validation_error", "Financial year must start on 1 April.")
+    if end.month != 3 or end.day != 31:
+        fail(400, "validation_error", "Financial year must end on 31 March.")
+    if end.year != start.year + 1:
+        fail(400, "validation_error", "Financial year must run April–March across consecutive years.")
+    if end <= start:
+        fail(400, "validation_error", "end_date must be after start_date.")
 
 
 @router.get("/academic-years", response_model=list[AcademicYearOut])
@@ -203,6 +224,150 @@ def deactivate_academic_year(
     user: User = Depends(require_permission("masters.write")),
 ) -> AcademicYear:
     return update_academic_year(year_id, AcademicYearUpdate(is_active=False, is_current=False), db, user)
+
+
+@router.get("/financial-years", response_model=list[FinancialYearOut])
+def list_financial_years(
+    include_inactive: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.read")),
+) -> list[FinancialYear]:
+    q = select(FinancialYear).where(FinancialYear.campus_id == user.campus_id)
+    if not include_inactive:
+        q = q.where(FinancialYear.is_active.is_(True))
+    return list(db.scalars(q.order_by(FinancialYear.is_current.desc(), FinancialYear.name.desc())).all())
+
+
+@router.post("/financial-years", response_model=FinancialYearOut, status_code=201)
+def create_financial_year(
+    body: FinancialYearCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> FinancialYear:
+    _assert_april_march(body.start_date, body.end_date)
+    name = body.name.strip()
+    existing = db.scalar(
+        select(FinancialYear).where(FinancialYear.campus_id == user.campus_id, FinancialYear.name == name)
+    )
+    if existing is not None:
+        fail(409, "financial_year_exists", "That financial year already exists on this campus.")
+    if body.is_current:
+        _clear_current_financial_years(db, user.campus_id)
+    row = FinancialYear(
+        campus_id=user.campus_id,
+        name=name,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        is_current=body.is_current,
+        is_active=True,
+    )
+    db.add(row)
+    db.flush()
+    write_audit(
+        db,
+        action="FINANCIAL_YEAR_CREATED",
+        entity_type="financial_year",
+        entity_id=str(row.id),
+        actor_id=user.id,
+        campus_id=user.campus_id,
+        details=name,
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.get("/financial-years/current", response_model=FinancialYearOut)
+def get_current_financial_year(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.read")),
+) -> FinancialYear:
+    row = db.scalar(
+        select(FinancialYear).where(
+            FinancialYear.campus_id == user.campus_id,
+            FinancialYear.is_current.is_(True),
+            FinancialYear.is_active.is_(True),
+        )
+    )
+    if row is None:
+        fail(404, "financial_year_not_found", "No current financial year is set.")
+    return row
+
+
+@router.get("/financial-years/{year_id}", response_model=FinancialYearOut)
+def get_financial_year(
+    year_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.read")),
+) -> FinancialYear:
+    row = db.scalar(
+        select(FinancialYear).where(FinancialYear.id == year_id, FinancialYear.campus_id == user.campus_id)
+    )
+    if row is None:
+        fail(404, "financial_year_not_found", "Financial year not found.")
+    return row
+
+
+@router.patch("/financial-years/{year_id}", response_model=FinancialYearOut)
+def update_financial_year(
+    year_id: UUID,
+    body: FinancialYearUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> FinancialYear:
+    row = db.scalar(
+        select(FinancialYear).where(FinancialYear.id == year_id, FinancialYear.campus_id == user.campus_id)
+    )
+    if row is None:
+        fail(404, "financial_year_not_found", "Financial year not found.")
+    if body.name is not None:
+        name = body.name.strip()
+        clash = db.scalar(
+            select(FinancialYear).where(
+                FinancialYear.campus_id == user.campus_id,
+                FinancialYear.name == name,
+                FinancialYear.id != year_id,
+            )
+        )
+        if clash is not None:
+            fail(409, "financial_year_exists", "That financial year already exists on this campus.")
+        row.name = name
+    start = body.start_date if body.start_date is not None else row.start_date
+    end = body.end_date if body.end_date is not None else row.end_date
+    _assert_april_march(start, end)
+    row.start_date = start
+    row.end_date = end
+    if body.is_active is not None:
+        row.is_active = body.is_active
+        if not body.is_active:
+            row.is_current = False
+    if body.is_current is True:
+        _clear_current_financial_years(db, user.campus_id)
+        row.is_current = True
+        row.is_active = True
+    elif body.is_current is False:
+        row.is_current = False
+    write_audit(
+        db,
+        action="FINANCIAL_YEAR_UPDATED",
+        entity_type="financial_year",
+        entity_id=str(row.id),
+        actor_id=user.id,
+        campus_id=user.campus_id,
+        details=row.name,
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.post("/financial-years/{year_id}/set-current", response_model=FinancialYearOut)
+def set_current_financial_year(
+    year_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("masters.write")),
+) -> FinancialYear:
+    return update_financial_year(year_id, FinancialYearUpdate(is_current=True), db, user)
 
 
 @router.get("/classes", response_model=list[ClassOut])
