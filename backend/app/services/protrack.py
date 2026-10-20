@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 import httpx
+from fastapi import HTTPException
 
 from app.core.config import settings
 from app.services.errors import fail
@@ -100,14 +101,45 @@ def _get(panel: str, path: str, params: dict[str, Any] | None = None) -> dict:
     return payload
 
 
+def _admin_configured() -> bool:
+    return bool(
+        (settings.protrack_admin_account or "").strip()
+        and (settings.protrack_admin_password or "").strip()
+    )
+
+
+def _with_parent_fallback(panel: str, action):
+    """Parent-panel accounts sometimes reject Open API; fall back to fleet admin login."""
+    try:
+        return action(panel)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        code = str(detail.get("code") or "")
+        message = str(detail.get("message") or "").lower()
+        can_fallback = (
+            (panel or "").strip().lower() == "parent"
+            and _admin_configured()
+            and (
+                code in {"protrack_auth_failed", "protrack_error", "protrack_unreachable"}
+                or "permission denied" in message
+            )
+        )
+        if can_fallback:
+            return action("admin")
+        raise
+
+
 def list_devices(panel: str = "admin") -> list[dict]:
-    payload = _get(panel, "/api/device/list")
-    record = payload.get("record")
-    if isinstance(record, list):
-        return record
-    if isinstance(record, dict):
-        return [record]
-    return []
+    def _run(active_panel: str) -> list[dict]:
+        payload = _get(active_panel, "/api/device/list")
+        record = payload.get("record")
+        if isinstance(record, list):
+            return record
+        if isinstance(record, dict):
+            return [record]
+        return []
+
+    return _with_parent_fallback(panel, _run)
 
 
 def track_imeis(imeis: list[str], panel: str = "admin") -> list[dict]:
@@ -116,13 +148,17 @@ def track_imeis(imeis: list[str], panel: str = "admin") -> list[dict]:
         fail(422, "invalid_body", "Provide at least one IMEI.")
     if len(clean) > 100:
         fail(422, "invalid_body", "Maximum 100 IMEIs per request.")
-    payload = _get(panel, "/api/track", {"imeis": ",".join(clean)})
-    record = payload.get("record")
-    if isinstance(record, list):
-        return record
-    if isinstance(record, dict):
-        return [record]
-    return []
+
+    def _run(active_panel: str) -> list[dict]:
+        payload = _get(active_panel, "/api/track", {"imeis": ",".join(clean)})
+        record = payload.get("record")
+        if isinstance(record, list):
+            return record
+        if isinstance(record, dict):
+            return [record]
+        return []
+
+    return _with_parent_fallback(panel, _run)
 
 
 def status_summary() -> dict:

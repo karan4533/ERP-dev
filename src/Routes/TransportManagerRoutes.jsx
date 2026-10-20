@@ -22,6 +22,8 @@ import ViewAssignDuty from '../Pages/TransportManager/AssignDuty/ViewAssignDuty'
 import VehicleMaintenance from '../Pages/TransportManager/VehicleMaintenance/VehicleMaintenance'
 import AddVehicleMaintenance from '../Pages/TransportManager/VehicleMaintenance/AddVehicleMaintenance'
 import ViewVehicleMaintenance from '../Pages/TransportManager/VehicleMaintenance/ViewVehicleMaintenance'
+import ServiceCenters from '../Pages/TransportManager/ServiceCenters/ServiceCenters'
+import AddServiceCenter from '../Pages/TransportManager/ServiceCenters/AddServiceCenter'
 import RequestApprovals from '../Pages/TransportManager/RequestApprovals/RequestApprovals'
 import TransportExpenses from '../Pages/TransportManager/TransportExpenses/TransportExpenses'
 import AddTransportExpense from '../Pages/TransportManager/TransportExpenses/AddTransportExpense'
@@ -48,16 +50,23 @@ const TransportManagerRoutes = () => {
             <Route path="/transport-manager/route-data/track/:id" element={<TrackBus />} />
             <Route path="/transport-manager/student-transport" element={<StudentTransport />} />
             <Route path="/transport-manager/student-transport/add" element={<AddStudentTransport />} />
+            <Route path="/transport-manager/student-transport/edit/:id" element={<AddStudentTransport />} />
             <Route path="/transport-manager/student-transport/view/:id" element={<ViewStudentTransport />} />
             <Route path="/transport-manager/assign-duty" element={<AssignDuty />} />
             <Route path="/transport-manager/assign-duty/add" element={<AddAssignDuty />} />
+            <Route path="/transport-manager/assign-duty/edit/:id" element={<AddAssignDuty />} />
             <Route path="/transport-manager/assign-duty/view/:id" element={<ViewAssignDuty />} />
             <Route path="/transport-manager/vehicle-maintenance" element={<VehicleMaintenance />} />
             <Route path="/transport-manager/vehicle-maintenance/add" element={<AddVehicleMaintenance />} />
+            <Route path="/transport-manager/vehicle-maintenance/edit/:id" element={<AddVehicleMaintenance />} />
             <Route path="/transport-manager/vehicle-maintenance/view/:id" element={<ViewVehicleMaintenance />} />
+            <Route path="/transport-manager/service-centers" element={<ServiceCenters />} />
+            <Route path="/transport-manager/service-centers/add" element={<AddServiceCenter />} />
+            <Route path="/transport-manager/service-centers/edit/:id" element={<AddServiceCenter />} />
             <Route path="/transport-manager/request-approvals" element={<RequestApprovals />} />
             <Route path="/transport-manager/transport-expenses" element={<TransportExpenses />} />
             <Route path="/transport-manager/transport-expenses/add/:type" element={<AddTransportExpense />} />
+            <Route path="/transport-manager/transport-expenses/edit/:type/:id" element={<AddTransportExpense />} />
             <Route path="/transport-manager/transport-expenses/view/:type/:id" element={<ViewTransportExpense />} />
             <Route path="/transport-manager/leave-request" element={<LeaveRequest />} />
             <Route path="/transport-manager/leave-request/view/:id" element={<ViewLeaveRequest />} />

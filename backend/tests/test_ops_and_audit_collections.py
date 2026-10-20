@@ -101,3 +101,26 @@ def test_teacher_denied_campus_audit(client):
         headers=headers,
     )
     assert put.status_code == 403
+
+
+def test_accounthead_can_read_transport_masters(client):
+    admin = _admin_headers(client)
+    put = client.put(
+        "/api/v1/ops/transport-routes",
+        json=[{"id": "RT-AH-1", "routeName": "Route North — Live"}],
+        headers=admin,
+    )
+    assert put.status_code == 200, put.text
+
+    ah = _login(client, settings.accounthead_seed_email, settings.accounthead_seed_password)
+    get = client.get("/api/v1/ops/transport-routes", headers=ah)
+    assert get.status_code == 200, get.text
+    assert get.json()[0]["routeName"] == "Route North — Live"
+
+    # Read-only: Account Head must not overwrite transport ops masters.
+    denied = client.put(
+        "/api/v1/ops/transport-routes",
+        json=[{"id": "RT-AH-X", "routeName": "Nope"}],
+        headers=ah,
+    )
+    assert denied.status_code == 403

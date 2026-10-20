@@ -60,6 +60,14 @@ const FREQUENCY_PLAN = {
         labels: ['Q1', 'Q2', 'Q3', 'Q4'],
         monthOffsets: [0, 3, 6, 9],
     },
+    HALF_YEARLY: {
+        id: 'HALF_YEARLY',
+        label: 'Half Yearly',
+        help: 'Total is split into 2 equal half-year dues.',
+        count: 2,
+        labels: ['Half 1', 'Half 2'],
+        monthOffsets: [0, 6],
+    },
     TERM_WISE: {
         id: 'TERM_WISE',
         label: 'Term Wise',

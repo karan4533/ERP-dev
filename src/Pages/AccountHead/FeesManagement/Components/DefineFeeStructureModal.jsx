@@ -3,11 +3,18 @@ import { Calculator, CalendarClock, Plus, X } from 'lucide-react'
 import { FEE_FREQUENCIES, DEFAULT_ACADEMIC_YEAR } from '../../financeDomain/financeConstants'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import {
+    ALL_CLASSES_LABEL,
     buildAcademicYearOptions,
     buildCampusClassOptions,
     loadAdminAcademicYears,
 } from '../feeCampusOptions'
 import { buildPaymentSchedule, getFrequencyPlan } from '../feePaymentSchedule'
+import {
+    loadTransportRouteOptions,
+    routeAmountForFrequency,
+    syncTransportFeeAmountToRoute,
+} from '../transportRouteFeeSync'
+import { parseFeeAmount } from '../../../TransportManager/RouteManagement/feeHelpers'
 import { toast } from 'react-toastify'
 
 const parseAmount = (value) => {
@@ -95,8 +102,12 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
         status: 'ACTIVE',
         amount: '',
         newCategory: '',
+        routeId: '',
+        routeName: '',
     })
     const [categoryDrafts, setCategoryDrafts] = useState([])
+    const [routeOptions, setRouteOptions] = useState([])
+    const [loadingRoutes, setLoadingRoutes] = useState(false)
 
     useEffect(() => {
         if (!isOpen) return undefined
@@ -116,14 +127,21 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
         const existing = (feeCategories || [])
             .filter((item) => item.active !== false)
             .map((item) => ({ id: item.id, label: item.name, selected: true, existing: true }))
-        setCategoryDrafts(existing.length
-            ? existing
-            : DEFAULT_CATEGORY_SEEDS.map((label) => ({
-                id: label.toLowerCase().replace(/\s+/g, '-'),
-                label,
-                selected: ['Tuition Fee', 'Exam Fee', 'Activity Fee'].includes(label),
-                existing: false,
-            })))
+        const byLabel = new Map(existing.map((row) => [row.label.toLowerCase(), row]))
+        DEFAULT_CATEGORY_SEEDS.forEach((label) => {
+            const key = label.toLowerCase()
+            if (!byLabel.has(key)) {
+                byLabel.set(key, {
+                    id: label.toLowerCase().replace(/\s+/g, '-'),
+                    label,
+                    selected: ['Tuition Fee', 'Exam Fee', 'Activity Fee', 'Transport Fee'].includes(label),
+                    existing: false,
+                })
+            } else if (label === 'Transport Fee') {
+                byLabel.set(key, { ...byLabel.get(key), selected: true })
+            }
+        })
+        setCategoryDrafts([...byLabel.values()])
         const firstCategory = (feeCategories || []).find((item) => item.active !== false)
         if (editingStructure?.id) {
             setForm({
@@ -139,6 +157,8 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                 status: editingStructure.status || 'ACTIVE',
                 amount: editingStructure.amount != null ? String(Math.round(Number(editingStructure.amount) || 0)) : '',
                 newCategory: '',
+                routeId: editingStructure.routeId || '',
+                routeName: editingStructure.routeName || '',
             })
             return
         }
@@ -156,6 +176,8 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
             status: 'ACTIVE',
             amount: '',
             newCategory: '',
+            routeId: '',
+            routeName: '',
         }))
     }, [isOpen, feeCategories, currentYear, yearOptions, editingStructure])
 
@@ -164,6 +186,38 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
         () => (feeCategories || []).filter((item) => item.active !== false),
         [feeCategories],
     )
+    const transportSelected = useMemo(() => {
+        const fromActive = activeCategories.find((item) => item.id === form.feeCategoryId)
+        const fromDraft = categoryDrafts.find((item) => (
+            item.id === form.feeCategoryId
+            || `CAT-${item.label.toUpperCase().replace(/\s+/g, '-')}` === form.feeCategoryId
+        ))
+        const label = String(fromActive?.name || fromDraft?.label || form.feeHead || '').toLowerCase()
+        return label.includes('transport') || String(form.feeCategoryId || '').toUpperCase().includes('TRANSPORT')
+    }, [activeCategories, categoryDrafts, form.feeCategoryId, form.feeHead])
+
+    useEffect(() => {
+        if (!isOpen || !transportSelected) return
+        setForm((prev) => (prev.grade === ALL_CLASSES_LABEL ? prev : { ...prev, grade: ALL_CLASSES_LABEL }))
+    }, [isOpen, transportSelected])
+
+    useEffect(() => {
+        if (!isOpen || !transportSelected) return undefined
+        let cancelled = false
+        setLoadingRoutes(true)
+        loadTransportRouteOptions()
+            .then((rows) => {
+                if (!cancelled) setRouteOptions(rows)
+            })
+            .catch(() => {
+                if (!cancelled) setRouteOptions([])
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingRoutes(false)
+            })
+        return () => { cancelled = true }
+    }, [isOpen, transportSelected])
+
     const yearStartDate = useMemo(() => {
         const meta = adminYears.find((item) => item.name === form.academicYear)
         return meta?.startDate || meta?.start_date || ''
@@ -235,9 +289,31 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
         }
     }
 
+    const handleRouteChange = (routeId) => {
+        const selected = routeOptions.find((row) => row.id === routeId)
+        const amountFromRoute = selected
+            ? parseFeeAmount(routeAmountForFrequency(selected, form.frequency))
+            : null
+        setForm((prev) => ({
+            ...prev,
+            routeId,
+            routeName: selected?.label || '',
+            feeHead: selected
+                ? `Transport Fee — ${selected.label}`
+                : (prev.feeHead.startsWith('Transport Fee') ? 'Transport Fee' : prev.feeHead),
+            amount: amountFromRoute != null
+                ? String(Math.round(amountFromRoute))
+                : prev.amount,
+        }))
+    }
+
     const handleSaveStructure = async () => {
         if (!form.grade || !form.feeHead || !totalAmount) {
             toast.error('Class, fee head and amount are required.')
+            return
+        }
+        if (transportSelected && !form.routeId) {
+            toast.error('Select a transport route for this fee amount.')
             return
         }
         setSaving(true)
@@ -259,8 +335,14 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                 categoryId = `CAT-${form.feeHead.toUpperCase().replace(/\s+/g, '-')}`
             }
 
+            const structureId = editingStructure?.id || (
+                transportSelected && form.routeId
+                    ? `FS-TRANSPORT-ROUTE-${form.routeId}`
+                    : undefined
+            )
+
             const result = await defineFeeStructure({
-                id: editingStructure?.id,
+                id: structureId,
                 academicYear: form.academicYear,
                 className: form.grade,
                 feeCategoryId: categoryId,
@@ -272,22 +354,40 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                 concessionApplicable: form.concessionApplicable,
                 mandatory: form.mandatory,
                 status: form.status,
+                routeId: transportSelected ? form.routeId : undefined,
+                routeName: transportSelected ? form.routeName : undefined,
+                source: transportSelected ? 'transport-route-fee' : undefined,
             }, { startDate: yearStartDate, feeCategories: latestCategories })
 
+            if (transportSelected && form.routeId) {
+                const synced = await syncTransportFeeAmountToRoute({
+                    routeId: form.routeId,
+                    amount: totalAmount,
+                    frequency: form.frequency,
+                })
+                if (!synced?.success) {
+                    toast.warning(synced?.message || 'Fee saved, but route tariff in Transport Manager was not updated.')
+                }
+            }
+
             const verb = isEdit ? 'Updated' : 'Saved'
+            const routePart = transportSelected && form.routeName ? ` · ${form.routeName}` : ''
             if (!result?.persist?.success) {
                 toast.error(result?.persist?.message || 'Fee structure saved locally but API push failed.')
             } else if (result.persist.api) {
                 toast.success(
-                    `${verb} ${form.grade} · ${schedule.planLabel} · ${result.installmentsCreated} installment row(s) for ${result.studentsMatched} student(s). Synced to API.`,
+                    `${verb} ${form.grade}${routePart} · ${schedule.planLabel} · ${result.installmentsCreated} installment row(s) for ${result.studentsMatched} student(s). Synced to API.`,
                 )
             } else {
                 toast.success(
-                    `${verb} ${form.grade} · ${schedule.planLabel}. ${result.persist.message || 'Will sync when API is ready.'}`,
+                    `${verb} ${form.grade}${routePart} · ${schedule.planLabel}. ${result.persist.message || 'Will sync when API is ready.'}`,
                 )
             }
-            if (!result.studentsMatched) {
+            if (!result.studentsMatched && !transportSelected) {
                 toast.info('No finance students in this class yet. Import enrolled students (Settings) so parents see dues.')
+            }
+            if (transportSelected) {
+                toast.info('Route amount synced. Enroll students on this route to bill Fee Collection.')
             }
             onClose()
         } catch (error) {
@@ -386,13 +486,19 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                             <select
                                 value={form.grade}
                                 onChange={(event) => updateField('grade')(event.target.value)}
-                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                                disabled={transportSelected}
+                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF] disabled:bg-[#F2F4F7]'
                             >
                                 <option value=''>Select class</option>
                                 {classOptions.map((grade) => (
                                     <option key={grade} value={grade}>{grade}</option>
                                 ))}
                             </select>
+                            {transportSelected && (
+                                <p className='text-xs text-[#515DEF]'>
+                                    Transport is school-wide — Class is set to {ALL_CLASSES_LABEL}. Pick a route below to set its amount.
+                                </p>
+                            )}
                         </div>
 
                         <div className='flex flex-col gap-y-2'>
@@ -420,12 +526,22 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                             <select
                                 value={form.feeCategoryId}
                                 onChange={(event) => {
-                                    const fromActive = activeCategories.find((item) => item.id === event.target.value)
-                                    const fromDraft = categoryDrafts.find((item) => item.id === event.target.value)
+                                    const value = event.target.value
+                                    const fromActive = activeCategories.find((item) => item.id === value)
+                                    const fromDraft = categoryDrafts.find((item) => (
+                                        item.id === value
+                                        || `CAT-${item.label.toUpperCase().replace(/\s+/g, '-')}` === value
+                                    ))
+                                    const label = fromActive?.name || fromDraft?.label || ''
+                                    const transport = String(label).toLowerCase().includes('transport')
+                                        || String(value).toUpperCase().includes('TRANSPORT')
                                     setForm((prev) => ({
                                         ...prev,
-                                        feeCategoryId: event.target.value,
-                                        feeHead: fromActive?.name || fromDraft?.label || prev.feeHead,
+                                        feeCategoryId: value,
+                                        feeHead: transport ? (prev.routeName ? `Transport Fee — ${prev.routeName}` : 'Transport Fee') : (label || prev.feeHead),
+                                        grade: transport ? ALL_CLASSES_LABEL : (prev.grade === ALL_CLASSES_LABEL ? '' : prev.grade),
+                                        routeId: transport ? prev.routeId : '',
+                                        routeName: transport ? prev.routeName : '',
                                     }))
                                 }}
                                 className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
@@ -439,6 +555,32 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                             </select>
                         </div>
                     </div>
+
+                    {transportSelected && (
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                            <div className='flex flex-col gap-y-2'>
+                                <label className='text-sm font-medium text-[#808080]'>
+                                    Route <span className='text-[#FF5722]'>*</span>
+                                </label>
+                                <select
+                                    value={form.routeId}
+                                    onChange={(event) => handleRouteChange(event.target.value)}
+                                    className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                                >
+                                    <option value=''>{loadingRoutes ? 'Loading routes…' : 'Select route'}</option>
+                                    {form.routeId && !routeOptions.some((row) => row.id === form.routeId) && (
+                                        <option value={form.routeId}>{form.routeName || form.routeId}</option>
+                                    )}
+                                    {routeOptions.map((route) => (
+                                        <option key={route.id} value={route.id}>{route.label}</option>
+                                    ))}
+                                </select>
+                                <p className='text-xs text-[#667085]'>
+                                    Amount you save applies to this route (and its stops) in Transport Manager.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
                         <div className='flex flex-col gap-y-2'>
@@ -538,7 +680,9 @@ const DefineFeeStructureModal = ({ isOpen, onClose, editingStructure = null }) =
                             <Calculator size={18} />
                         </div>
                         <p className='text-xs text-[#667085]'>
-                            Saving creates installment rows for finance students in this class so Parent → Academic Payment shows the same schedule.
+                            {transportSelected
+                                ? 'Transport Fee uses All Classes. Route amounts live in Transport Manager; student enrollment posts the payable bill to Fee Collection.'
+                                : 'Saving creates installment rows for finance students in this class so Parent → Academic Payment shows the same schedule.'}
                         </p>
                     </div>
                 </div>

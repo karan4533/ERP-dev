@@ -6,7 +6,7 @@ export const TRANSPORT_TABS = [
     { id: 'staff-salaries', label: 'Staff Salaries' },
 ]
 
-export const TRANSPORT_ACADEMIC_YEARS = ['2025–26', '2024–25', '2023–24']
+export const TRANSPORT_ACADEMIC_YEARS = ['2026–27', '2025–26', '2024–25', '2023–24']
 
 export const FLEET_SUMMARY = [
     { label: 'Total Vehicles', value: '18', sub: '14 buses · 4 vans', iconTone: 'info' },

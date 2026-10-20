@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     canUseProtrackApi,
     datastatusLabel,
@@ -9,12 +9,26 @@ import {
 
 const POLL_MS = 15000
 
+const isAuthFailure = (err) => {
+    const message = String(err?.message || err || '').toLowerCase()
+    return message.includes('login failed')
+        || message.includes('permission denied')
+        || message.includes('auth')
+        || message.includes('unauthorized')
+}
+
 /**
  * Poll ProTrack365 devices + live coordinates for Transport / Parent / Student maps.
- * @param {{ panel?: 'admin'|'parent', preferredImei?: string, preferredPlate?: string }} opts
+ * @param {{ panel?: 'admin'|'parent', preferredImei?: string, preferredPlate?: string, fallbackPanel?: 'admin'|'parent' }} opts
  */
 export default function useProtrackLive(opts = {}) {
-    const { panel, preferredImei = '', preferredPlate = '' } = opts
+    const {
+        panel,
+        preferredImei = '',
+        preferredPlate = '',
+        fallbackPanel = '',
+    } = opts
+    const panelRef = useRef(panel || '')
     const [status, setStatus] = useState(null)
     const [devices, setDevices] = useState([])
     const [imei, setImei] = useState(preferredImei || '')
@@ -22,17 +36,35 @@ export default function useProtrackLive(opts = {}) {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
-    const refreshTrack = useCallback(async (targetImei) => {
+    useEffect(() => {
+        panelRef.current = panel || ''
+    }, [panel])
+
+    const refreshTrack = useCallback(async (targetImei, panelOverride) => {
         if (!canUseProtrackApi() || !targetImei) return
+        const panelToUse = panelOverride || panelRef.current || panel
         try {
-            const rows = await trackProtrackImeisApi([targetImei], panel)
+            const rows = await trackProtrackImeisApi([targetImei], panelToUse || undefined)
             const row = Array.isArray(rows) ? rows[0] : null
             setTrack(row || null)
-            setError('')
+            setError((prev) => (prev.includes('Parent GPS') ? prev : ''))
         } catch (err) {
+            if (fallbackPanel && panelToUse !== fallbackPanel && isAuthFailure(err)) {
+                try {
+                    const rows = await trackProtrackImeisApi([targetImei], fallbackPanel)
+                    const row = Array.isArray(rows) ? rows[0] : null
+                    panelRef.current = fallbackPanel
+                    setTrack(row || null)
+                    setError('Parent GPS login failed — using school fleet tracking instead.')
+                    return
+                } catch (fallbackErr) {
+                    setError(fallbackErr?.message || 'Live track failed.')
+                    return
+                }
+            }
             setError(err?.message || 'Live track failed.')
         }
-    }, [panel])
+    }, [fallbackPanel, panel])
 
     useEffect(() => {
         if (!canUseProtrackApi()) {
@@ -41,33 +73,51 @@ export default function useProtrackLive(opts = {}) {
         }
         let active = true
         setLoading(true)
+        panelRef.current = panel || ''
         ;(async () => {
             try {
-                const [st, list] = await Promise.all([
-                    getProtrackStatusApi(),
-                    listProtrackDevicesApi(panel),
-                ])
+                const st = await getProtrackStatusApi()
                 if (!active) return
                 setStatus(st)
-                const devicesList = Array.isArray(list) ? list : []
-                setDevices(devicesList)
                 if (!st?.configured) {
                     setError('ProTrack365 credentials are not configured on the API (.env).')
                     return
                 }
-                const plateNorm = String(preferredPlate || '').replace(/\s+/g, '').toUpperCase()
+
+                let devicesList = []
+                let panelUsed = panel || ''
+                try {
+                    devicesList = await listProtrackDevicesApi(panel || undefined)
+                } catch (err) {
+                    if (fallbackPanel && isAuthFailure(err)) {
+                        devicesList = await listProtrackDevicesApi(fallbackPanel)
+                        panelUsed = fallbackPanel
+                        panelRef.current = fallbackPanel
+                        if (active) {
+                            setError('Parent GPS login failed — using school fleet tracking instead.')
+                        }
+                    } else {
+                        throw err
+                    }
+                }
+                if (!active) return
+                panelRef.current = panelUsed
+                devicesList = Array.isArray(devicesList) ? devicesList : []
+                setDevices(devicesList)
+
+                const plateNorm = String(preferredPlate || '').replace(/[\s-]/g, '').toUpperCase()
                 const byImei = preferredImei
                     ? devicesList.find((d) => String(d.imei) === String(preferredImei))
                     : null
                 const byPlate = plateNorm
                     ? devicesList.find(
-                        (d) => String(d.platenumber || '').replace(/\s+/g, '').toUpperCase() === plateNorm,
+                        (d) => String(d.platenumber || '').replace(/[\s-]/g, '').toUpperCase() === plateNorm,
                     )
                     : null
                 const chosen = byImei || byPlate || devicesList[0]
                 const nextImei = chosen?.imei || preferredImei || ''
                 setImei(nextImei)
-                if (nextImei) await refreshTrack(nextImei)
+                if (nextImei) await refreshTrack(nextImei, panelUsed)
             } catch (err) {
                 if (active) setError(err?.message || 'Could not load ProTrack devices.')
             } finally {
@@ -77,7 +127,7 @@ export default function useProtrackLive(opts = {}) {
         return () => {
             active = false
         }
-    }, [panel, preferredImei, preferredPlate, refreshTrack])
+    }, [panel, preferredImei, preferredPlate, fallbackPanel, refreshTrack])
 
     useEffect(() => {
         if (!imei || !canUseProtrackApi()) return undefined

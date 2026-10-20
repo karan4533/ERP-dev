@@ -1,25 +1,51 @@
 import React, { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react'
+import { toast } from 'react-toastify'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
-import { getVehicles, hydrateVehiclesFromApi, VEHICLE_TYPES } from './vehicleManagementData'
+import { deleteVehicle, getVehicles, hydrateVehiclesFromApi, VEHICLE_TYPES } from './vehicleManagementData'
 
 const VehicleManagement = () => {
+    const navigate = useNavigate()
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [editRequestModal, setEditRequestModal] = useState(false)
-    const [deleteRequestModal, setDeleteRequestModal] = useState(false)
+    const [deleteModal, setDeleteModal] = useState(false)
+    const [pendingDeleteId, setPendingDeleteId] = useState(null)
+    const [deleting, setDeleting] = useState(false)
     const [VEHICLES, setVehicles] = useState(() => getVehicles())
 
     useEffect(() => {
         hydrateVehiclesFromApi().finally(() => setVehicles(getVehicles()))
     }, [])
+
+    const openEdit = (vehicleId) => {
+        navigate(`/transport-manager/vehicle-management/edit/${vehicleId}`)
+    }
+
+    const openDelete = (vehicleId) => {
+        setPendingDeleteId(vehicleId)
+        setDeleteModal(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!pendingDeleteId || deleting) return
+        setDeleting(true)
+        const result = await deleteVehicle(pendingDeleteId)
+        setDeleting(false)
+        setDeleteModal(false)
+        setPendingDeleteId(null)
+        if (result?.success === false) {
+            toast.error(result.message || 'Could not delete vehicle.')
+            return
+        }
+        setVehicles(getVehicles())
+        toast.success(result?.api ? 'Vehicle deleted from campus API.' : 'Vehicle deleted.')
+    }
 
     return (
         <section>
@@ -138,16 +164,16 @@ const VehicleManagement = () => {
                                             >
                                                 View
                                             </NavLink>
-                                            <NavLink
-                                                // to={`/transport-manager/vehicle-management/edit/${vehicle.id}`}
-                                                onClick={() => setEditRequestModal(true)}
-                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                            >
-                                                Edit
-                                            </NavLink>
                                             <button
                                                 type='button'
-                                                onClick={() => setDeleteRequestModal(true)}
+                                                onClick={() => openEdit(vehicle.id)}
+                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                type='button'
+                                                onClick={() => openDelete(vehicle.id)}
                                                 className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Delete
@@ -177,10 +203,14 @@ const VehicleManagement = () => {
             </div>
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            <DeleteRequestModal
+                deleteRequestModal={deleteModal}
+                setDeleteRequestModal={setDeleteModal}
+                onConfirm={handleConfirmDelete}
+                title='Delete Vehicle?'
+                message='This will permanently remove the vehicle. This action cannot be undone.'
+                confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+            />
         </section>
     )
 }

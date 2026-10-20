@@ -5,10 +5,11 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, EllipsisIcon, Download, Plus } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { toast } from 'react-toastify'
 import ReactECharts from 'echarts-for-react'
 import {
+    deleteTransportExpense,
     getFuelExpenses,
     getServiceExpenses,
     getOtherExpenses,
@@ -17,7 +18,7 @@ import {
     SERVICE_TYPES,
     OTHER_EXPENSE_TYPES,
 } from './transportExpensesData'
-import { transportBudgetOverview } from './transportBudget'
+import { hydrateBudgetRequestsFromApi, transportBudgetOverview } from './transportBudget'
 
 const TABS = [
     { id: 1, label: 'Fuel Management', key: 'fuel' },
@@ -35,34 +36,87 @@ const TransportExpenses = () => {
     const [fuelExpenses, setFuelExpenses] = useState(() => getFuelExpenses())
     const [serviceExpenses, setServiceExpenses] = useState(() => getServiceExpenses())
     const [otherExpenses, setOtherExpenses] = useState(() => getOtherExpenses())
+    const [budget, setBudget] = useState(() => transportBudgetOverview())
+    const [loadingLive, setLoadingLive] = useState(true)
+
+    const refreshExpenses = () => {
+        setFuelExpenses(getFuelExpenses())
+        setServiceExpenses(getServiceExpenses())
+        setOtherExpenses(getOtherExpenses())
+        setBudget(transportBudgetOverview())
+    }
 
     useEffect(() => {
-        hydrateTransportExpensesFromApi().finally(() => {
-            setFuelExpenses(getFuelExpenses())
-            setServiceExpenses(getServiceExpenses())
-            setOtherExpenses(getOtherExpenses())
+        let cancelled = false
+        setLoadingLive(true)
+        Promise.all([
+            hydrateTransportExpensesFromApi(),
+            hydrateBudgetRequestsFromApi(),
+        ]).finally(() => {
+            if (!cancelled) {
+                refreshExpenses()
+                setLoadingLive(false)
+            }
         })
+        return () => { cancelled = true }
     }, [])
 
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [activeTab, setActiveTab] = useState(1)
     const [exportModal, setExportModal] = useState(false)
-    const [editRequestModal, setEditRequestModal] = useState(false)
-    const [deleteRequestModal, setDeleteRequestModal] = useState(false)
+    const [deleteModal, setDeleteModal] = useState(false)
+    const [pendingDeleteId, setPendingDeleteId] = useState(null)
+    const [deleting, setDeleting] = useState(false)
 
-    const budget = transportBudgetOverview()
+    const openDelete = (expenseId) => {
+        setPendingDeleteId(expenseId)
+        setDeleteModal(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!pendingDeleteId || deleting) return
+        setDeleting(true)
+        const result = await deleteTransportExpense(pendingDeleteId)
+        setDeleting(false)
+        setDeleteModal(false)
+        setPendingDeleteId(null)
+        if (result?.success === false) {
+            toast.error(result.message || 'Could not delete expense.')
+            return
+        }
+        refreshExpenses()
+        toast.success(result?.api ? 'Expense deleted from campus API.' : 'Expense deleted.')
+    }
+
     const budgetOption = {
         tooltip: { trigger: 'axis' },
-        xAxis: { type: 'category', data: ['Previous Budget', 'Current Budget', 'Actual Expenses'] },
+        xAxis: {
+            type: 'category',
+            data: [
+                `Previous (${budget.previousYear || '—'})`,
+                `Current (${budget.currentYear || '—'})`,
+                'Actual Expenses',
+            ],
+        },
         yAxis: { type: 'value' },
-        series: [{ type: 'bar', data: [budget.previous, budget.current, budget.actual], itemStyle: { color: '#515DEF' } }],
+        series: [{
+            type: 'bar',
+            data: [budget.previous, budget.current, budget.actual],
+            itemStyle: { color: '#515DEF' },
+        }],
     }
-    const activeCount = activeTab === 1
-        ? fuelExpenses.length
+    const activeRows = activeTab === 1
+        ? fuelExpenses
         : activeTab === 2
-            ? serviceExpenses.length
-            : otherExpenses.length
+            ? serviceExpenses
+            : otherExpenses
+    const activeCount = activeRows.length
+    const emptyLabel = activeTab === 1
+        ? 'No fuel expenses yet. Add one or wait for Principal-approved fuel claims.'
+        : activeTab === 2
+            ? 'No service expenses yet. Add one or wait for Principal-approved maintenance.'
+            : 'No other expenses yet.'
 
     return (
         <section>
@@ -146,14 +200,24 @@ const TransportExpenses = () => {
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <h2 className='text-xl font-medium text-black mb-4'>Transport Budget Overview</h2>
-                {budget.hasPrevious ? (
-                    <div className='grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 text-sm'>
-                        <p>Previous Budget: ₹{budget.previous.toLocaleString('en-IN')}</p>
-                        <p>Current Budget: ₹{budget.current.toLocaleString('en-IN')}</p>
-                        <p>Actual Expenses: ₹{budget.actual.toLocaleString('en-IN')}</p>
-                        <p>Balance: ₹{budget.balance.toLocaleString('en-IN')}</p>
-                    </div>
-                ) : <p className='text-sm text-[#667085] mb-4'>No previous budget request available</p>}
+                <p className='text-xs text-[#667085] mb-3'>
+                    {loadingLive
+                        ? 'Loading campus budget & expenses…'
+                        : budget.apiLive
+                            ? 'Live from campus budget requests + fuel / service / other expense rows (no demo seed).'
+                            : 'Offline mode — figures stay empty until ops API is connected.'}
+                </p>
+                {!loadingLive && !budget.hasCurrent && !budget.hasPrevious && (
+                    <p className='text-sm text-[#B45309] bg-[#FFF7ED] border border-[#FDBA74] rounded-md px-3 py-2 mb-3'>
+                        No approved transport budget requests on campus yet. Actual expenses still update from the tables below.
+                    </p>
+                )}
+                <div className='grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 text-sm'>
+                    <p>Previous Budget: ₹{budget.previous.toLocaleString('en-IN')}</p>
+                    <p>Current Budget: ₹{budget.current.toLocaleString('en-IN')}</p>
+                    <p>Actual Expenses: ₹{budget.actual.toLocaleString('en-IN')}</p>
+                    <p>Balance: ₹{budget.balance.toLocaleString('en-IN')}</p>
+                </div>
                 <ReactECharts option={budgetOption} style={{ height: 260 }} />
             </div>
 
@@ -222,9 +286,14 @@ const TransportExpenses = () => {
                                 </tr>
                             </thead>
                             <tbody>
+                                {fuelExpenses.length === 0 && (
+                                    <tr>
+                                        <td colSpan={9} className='px-2 py-8 text-center text-[#667085]'>{emptyLabel}</td>
+                                    </tr>
+                                )}
                                 {fuelExpenses.map((expense) => (
                                     <tr key={expense.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{expense.expenseId}</td>
+                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{expense.expenseId || expense.id}</td>
                                         <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{expense.vehicleNumber}</td>
                                         <td className='px-2 py-4'>{expense.driverName}</td>
                                         <td className='px-2 py-4'>{expense.fuelDate}</td>
@@ -240,10 +309,13 @@ const TransportExpenses = () => {
                                                 >
                                                     View
                                                 </NavLink>
-                                                <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                <NavLink
+                                                    to={`/transport-manager/transport-expenses/edit/fuel/${expense.id}`}
+                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                >
                                                     Edit
-                                                </button>
-                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                </NavLink>
+                                                <button type='button' onClick={() => openDelete(expense.id)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                     Delete
                                                 </button>
                                             </Dropdown>
@@ -271,9 +343,14 @@ const TransportExpenses = () => {
                                 </tr>
                             </thead>
                             <tbody>
+                                {serviceExpenses.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>{emptyLabel}</td>
+                                    </tr>
+                                )}
                                 {serviceExpenses.map((expense) => (
                                     <tr key={expense.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{expense.expenseId}</td>
+                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{expense.expenseId || expense.id}</td>
                                         <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{expense.vehicleNumber}</td>
                                         <td className='px-2 py-4'>{expense.serviceType}</td>
                                         <td className='px-2 py-4'>{expense.serviceDate}</td>
@@ -288,10 +365,13 @@ const TransportExpenses = () => {
                                                 >
                                                     View
                                                 </NavLink>
-                                                <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                <NavLink
+                                                    to={`/transport-manager/transport-expenses/edit/service/${expense.id}`}
+                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                >
                                                     Edit
-                                                </button>
-                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                </NavLink>
+                                                <button type='button' onClick={() => openDelete(expense.id)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                     Delete
                                                 </button>
                                             </Dropdown>
@@ -320,9 +400,14 @@ const TransportExpenses = () => {
                                 </tr>
                             </thead>
                             <tbody>
+                                {otherExpenses.length === 0 && (
+                                    <tr>
+                                        <td colSpan={9} className='px-2 py-8 text-center text-[#667085]'>{emptyLabel}</td>
+                                    </tr>
+                                )}
                                 {otherExpenses.map((expense) => (
                                     <tr key={expense.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{expense.expenseId}</td>
+                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{expense.expenseId || expense.id}</td>
                                         <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{expense.vehicleNumber}</td>
                                         <td className='px-2 py-4'>{expense.expenseType}</td>
                                         <td className='px-2 py-4'>{expense.expenseDate}</td>
@@ -338,10 +423,13 @@ const TransportExpenses = () => {
                                                 >
                                                     View
                                                 </NavLink>
-                                                <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                <NavLink
+                                                    to={`/transport-manager/transport-expenses/edit/other/${expense.id}`}
+                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                >
                                                     Edit
-                                                </button>
-                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                </NavLink>
+                                                <button type='button' onClick={() => openDelete(expense.id)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                     Delete
                                                 </button>
                                             </Dropdown>
@@ -372,8 +460,14 @@ const TransportExpenses = () => {
             </div>
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            <DeleteRequestModal
+                deleteRequestModal={deleteModal}
+                setDeleteRequestModal={setDeleteModal}
+                onConfirm={handleConfirmDelete}
+                title='Delete Expense?'
+                message='This will permanently remove this expense. This action cannot be undone.'
+                confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+            />
         </section>
     )
 }

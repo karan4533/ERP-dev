@@ -59,6 +59,31 @@ def parse_grade(class_name: str | None) -> int | None:
     return roman.get(token)
 
 
+def canonical_class_name(class_name: str | None) -> str:
+    """Normalize admission labels like 'V' / '5' / 'Class 5' to masters form 'Grade 5'."""
+    text = str(class_name or "").strip()
+    if not text:
+        return ""
+    grade = parse_grade(text)
+    if grade is not None:
+        return f"Grade {grade}"
+    return text
+
+
+def repair_student_class_labels(db: Session, campus_id: UUID) -> int:
+    """Rewrite non-canonical class_name values (e.g. Roman 'V') to Grade N. Returns count changed."""
+    rows = db.scalars(select(Student).where(Student.campus_id == campus_id)).all()
+    changed = 0
+    for row in rows:
+        canon = canonical_class_name(row.class_name)
+        if canon and canon != (row.class_name or "").strip():
+            row.class_name = canon
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
 def current_academic_year(db: Session, campus_id: UUID) -> AcademicYear | None:
     return db.scalar(
         select(AcademicYear).where(

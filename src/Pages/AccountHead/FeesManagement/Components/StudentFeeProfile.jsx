@@ -9,8 +9,19 @@ const Field = ({ label, value }) => (
     </div>
 )
 
+const formatClassSection = (student) => {
+    const className = String(student?.className || '').trim()
+    const section = String(student?.section || '').trim()
+    if (!className) return 'Class not set'
+    if (!section || section === '—' || section === '-') {
+        return `${className} · Section unassigned`
+    }
+    return `${className}-${section}`
+}
+
 const StudentFeeProfile = ({ student, siblings = [], onViewSiblings }) => {
     if (!student) return null
+    const classSection = formatClassSection(student)
 
     return (
         <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -18,8 +29,13 @@ const StudentFeeProfile = ({ student, siblings = [], onViewSiblings }) => {
                 <div>
                     <h3 className='text-lg font-semibold text-[#1E1E1E]'>{student.name}</h3>
                     <p className='text-sm text-[#667085] mt-0.5'>
-                        {student.className}-{student.section} · {student.academicYear}
+                        {classSection} · {student.academicYear}
                     </p>
+                    {!String(student.section || '').trim() ? (
+                        <p className='text-xs text-[#B54708] mt-1'>
+                            Place this student under Principal/Coordinator → Section Assignment, then re-import students in Settings (or refresh Fee Collection).
+                        </p>
+                    ) : null}
                 </div>
                 {siblings.length > 0 && (
                     <button
@@ -36,7 +52,7 @@ const StudentFeeProfile = ({ student, siblings = [], onViewSiblings }) => {
             <div className='grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4'>
                 <Field label='Admission No.' value={student.admissionNo} />
                 <Field label='Roll No.' value={student.rollNo} />
-                <Field label='Class / Section' value={`${student.className}-${student.section}`} />
+                <Field label='Class / Section' value={classSection} />
                 <Field label='Academic Year' value={student.academicYear} />
                 <Field label='Date of Birth' value={formatDisplayDate(student.dateOfBirth)} />
                 <Field label='Blood Group' value={student.bloodGroup} />

@@ -21,6 +21,9 @@ export const listCreatableRolesApi = () => apiRequest('/admin/users/creatable-ro
  */
 export const createAdminUserApi = (body) => apiRequest('/admin/users', { method: 'POST', body })
 
+export const getAdminUserApi = (id) =>
+    apiRequest(`/admin/users/${encodeURIComponent(id)}`)
+
 export const updateAdminUserApi = (id, changes) =>
     apiRequest(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: changes })
 

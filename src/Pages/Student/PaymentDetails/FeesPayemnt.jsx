@@ -3,7 +3,7 @@ import { CalendarClock, History, Smartphone } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useFinance } from '../../AccountHead/financeDomain/FinanceContext'
 import { DEFAULT_ACADEMIC_YEAR, FEE_INSTALLMENT_STATUSES } from '../../AccountHead/financeDomain/financeConstants'
-import { formatCurrency, groupInstallmentsByMonth } from '../../AccountHead/financeDomain/financeHelpers'
+import { formatCurrency, groupInstallmentsByMonth, summarizeStudentFees } from '../../AccountHead/financeDomain/financeHelpers'
 import FeeInstallmentCard from '../../AccountHead/FeesManagement/Components/FeeInstallmentCard'
 import CheckoutMockModal from '../../AccountHead/FeesManagement/Components/CheckoutMockModal'
 import PaymentHistoryDrawer from '../../AccountHead/FeesManagement/Components/PaymentHistoryDrawer'
@@ -12,6 +12,7 @@ import StudentFeeSummary from '../../AccountHead/FeesManagement/Components/Stude
 import { useActiveStudent } from '../../../context/ActiveStudentContext'
 import EntryClosureGate from '../../../Common/demoDomain/EntryClosureGate'
 import { entryBlocked } from '../../../Common/demoDomain/governance'
+import { filterInstallmentsByScope, filterReceiptsByScope } from './feePaymentScope'
 
 const formatDueDate = (iso) => {
     if (!iso) return '—'
@@ -26,11 +27,15 @@ const formatDueDate = (iso) => {
     }
 }
 
-const FeesPayemnt = () => {
+/**
+ * @param {{ feeScope?: 'academic' | 'transport' | 'all' }} props
+ * academic = school fees (default Academic Payment)
+ * transport = Transport Fee only (Transport Payment page)
+ */
+const FeesPayemnt = ({ feeScope = 'academic' }) => {
     const {
         students,
         getInstallmentsForStudent,
-        getStudentSummary,
         collectFeePayment,
         receipts,
         reprintReceipt,
@@ -66,10 +71,25 @@ const FeesPayemnt = () => {
     const [historyOpen, setHistoryOpen] = useState(false)
     const [receipt, setReceipt] = useState(null)
 
-    const installments = student ? getInstallmentsForStudent(student.id, academicYear) : []
-    const summary = student ? getStudentSummary(student.id, academicYear) : null
+    const installments = useMemo(() => {
+        if (!student) return []
+        return filterInstallmentsByScope(
+            getInstallmentsForStudent(student.id, academicYear),
+            feeScope,
+        )
+    }, [academicYear, feeScope, getInstallmentsForStudent, student])
+    const summary = useMemo(() => summarizeStudentFees(installments), [installments])
     const grouped = groupInstallmentsByMonth(installments)
-    const studentReceipts = receipts.filter((item) => item.studentId === student?.id)
+    const studentReceipts = useMemo(() => {
+        const own = receipts.filter((item) => item.studentId === student?.id)
+        return filterReceiptsByScope(own, feeScope)
+    }, [feeScope, receipts, student?.id])
+    const emptyCopy = feeScope === 'transport'
+        ? 'No transport fee installments yet. After Transport Manager enrolls this student on a route, dues appear here.'
+        : 'No academic fee installments yet for this student. Account Head must Define Fee Structure for this class (and import the student into finance) before dues appear here.'
+    const pageHint = feeScope === 'transport'
+        ? 'Transport Fee only — school/tuition fees are under Academic Payment.'
+        : 'Academic fees only — transport dues are under Transport Payment.'
 
     const scheduleHint = useMemo(() => {
         const open = installments.filter((row) => (
@@ -168,9 +188,12 @@ const FeesPayemnt = () => {
                             </div>
                         </div>
                     )}
+                    {Boolean(installments.length) && (
+                        <p className='text-xs text-[#667085] px-1'>{pageHint}</p>
+                    )}
                     {!installments.length && (
                         <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                            No fee installments yet for this student. Account Head must Define Fee Structure for this class (and import the student into finance) before dues appear here.
+                            {emptyCopy}
                         </div>
                     )}
                     {grouped.map((group) => (

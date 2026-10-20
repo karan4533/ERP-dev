@@ -1,19 +1,29 @@
-import { DRIVERS, getDriverDisplayName } from '../DriverManagement/driverManagementData'
-import { VEHICLES } from '../VehicleManagement/vehicleManagementData'
+import { getDriverOptions } from '../DriverManagement/driverManagementData'
+import { getVehicleOptions } from '../VehicleManagement/vehicleManagementData'
+import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
 
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-export const DRIVER_OPTIONS = DRIVERS.map((driver) => ({
-    id: driver.id,
-    label: getDriverDisplayName(driver),
-    contact: driver.mobileNumber,
-}))
+/** @deprecated Use getRouteDriverOptions() — kept for any static imports */
+export const DRIVER_OPTIONS = []
 
-export const VEHICLE_OPTIONS = VEHICLES.map((vehicle) => ({
-    id: vehicle.id,
-    vehicleNumber: vehicle.vehicleNumber,
-    driverName: vehicle.driverName,
-    driverContact: vehicle.driverContact,
-}))
+/** @deprecated Use getRouteVehicleOptions() */
+export const VEHICLE_OPTIONS = []
+
+export function getRouteDriverOptions() {
+    return getDriverOptions().map((driver) => ({
+        id: driver.id,
+        label: driver.label,
+        contact: driver.contact,
+    }))
+}
+
+export function getRouteVehicleOptions() {
+    return getVehicleOptions().map((vehicle) => ({
+        id: vehicle.id,
+        vehicleNumber: vehicle.vehicleNumber,
+        driverName: vehicle.driverName,
+        driverContact: vehicle.driverContact,
+    }))
+}
 
 const DEFAULT_ROUTES = [
     {
@@ -169,15 +179,37 @@ const DEFAULT_ROUTES = [
 export const getRouteById = (id) => getRoutes().find((route) => route.id === id) ?? null
 
 export const ROUTES_STORAGE_KEY = 'schoolerp-transport-routes-v1'
+
 export function getRoutes() {
-    return ensureCampusSeed('schoolerp-transport-routes-v1', DEFAULT_ROUTES)
+    return getTransportRows(ROUTES_STORAGE_KEY, DEFAULT_ROUTES)
 }
+
 export function saveRoutes(rows) {
-    return saveCampusJson('schoolerp-transport-routes-v1', rows)
+    return saveTransportRows(ROUTES_STORAGE_KEY, rows)
 }
+
 export function hydrateRoutesFromApi() {
-    if (!usesCampusApiForKey('schoolerp-transport-routes-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-transport-routes-v1', DEFAULT_ROUTES)
+    return hydrateTransportRows(ROUTES_STORAGE_KEY)
 }
+
+export async function upsertRoute(route) {
+    const rows = getRoutes()
+    const nextId = route.id || nextPrefixedId(rows, 'RT-')
+    const record = { stops: [], ...route, id: nextId }
+    const idx = rows.findIndex((row) => row.id === nextId)
+    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? { ...row, ...record } : row)) : [...rows, record]
+    const result = await saveRoutes(next)
+    return { ...result, record }
+}
+
+export async function deleteRoute(id) {
+    const rows = getRoutes()
+    const next = rows.filter((row) => row.id !== id)
+    if (next.length === rows.length) {
+        return { success: false, message: 'Route not found.' }
+    }
+    return saveRoutes(next)
+}
+
 export const ROUTES = DEFAULT_ROUTES
 

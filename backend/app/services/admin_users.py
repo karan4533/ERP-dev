@@ -5,7 +5,8 @@ Rules enforced here, not in the browser:
 * Only roles an actor may *create* can be created, and only users holding such a role can be
   changed afterwards. An Administrator can therefore never create, edit, deactivate or reset an
   Administrator, Super Admin, HR, Finance, student or parent account.
-* A login's role is fixed at creation. Changing a role is a privilege change and is not exposed.
+* Profile fields, email, status and creatable roles may be edited. Role changes are limited to
+  roles the actor is allowed to create. Staff codes stay unchanged when the role changes.
 * Every new or reset login gets a temporary password and ``must_change_password``. Passwords are
   never written to the audit log or to the profile table.
 * Accounts are deactivated, never deleted: history (audit, tasks, leave) keeps pointing at them.
@@ -26,6 +27,8 @@ from app.services.audit import write_audit
 from app.services.errors import fail
 
 # (role code, label, staff-code prefix). Mirrors the frontend's CREATABLE_ROLE_OPTIONS.
+# Campus Admin may create these operational / academic logins. Privileged roles
+# (admin, superadmin, hr, accounthead, student, parent, auditors, JD) stay out.
 STAFF_ROLES: list[tuple[str, str, str]] = [
     ("principal", "Principal", "PRC"),
     ("prm", "PRM", "PRM"),
@@ -34,6 +37,12 @@ STAFF_ROLES: list[tuple[str, str, str]] = [
     ("librarian", "Librarian", "LIB"),
     ("gatekeepermanager", "Gate Keeper Manager", "GKM"),
     ("gatekeeper", "Gate Keeper", "GKP"),
+    ("transportmanager", "Transport Manager", "TRM"),
+    ("driver", "Driver", "DRV"),
+    ("canteenmanager", "Canteen Manager", "CTN"),
+    ("itsupportmanager", "IT Support Manager", "ITM"),
+    ("stationerystoremanager", "Stationery Store Manager", "SSM"),
+    ("housekeepingmanager", "Housekeeping Manager", "HKM"),
 ]
 _ADMIN_ROLE: tuple[str, str, str] = ("admin", "Administrator", "ADM")
 
@@ -329,6 +338,45 @@ def update_user(db: Session, actor: User, user_id: str, changes: dict) -> dict:
     audit_bits: list[str] = []
     if user.id == actor.id:
         fail(403, "forbidden", "You cannot change your own account here.")
+
+    actor_role = _actor_role(db, actor)
+    allowed_roles = set(creatable_roles_for(actor_role))
+
+    if "email" in changes and changes["email"] is not None:
+        normalized_email = str(changes["email"]).strip().lower()
+        if not normalized_email:
+            fail(400, "email_required", "Email cannot be empty.")
+        if normalized_email != user.email:
+            conflict = db.scalar(
+                select(User.id).where(User.email == normalized_email, User.id != user.id)
+            )
+            if conflict is not None:
+                fail(409, "email_exists", "A user with this email already exists.")
+            # Keep a linked HR employee row in step when the login email changes.
+            hr_row = db.scalar(
+                select(HrEmployee).where(
+                    HrEmployee.campus_id == actor.campus_id,
+                    HrEmployee.email == user.email,
+                )
+            )
+            old_email = user.email
+            user.email = normalized_email
+            if hr_row is not None:
+                hr_row.email = normalized_email
+                audit_bits.append("hr_email_synced")
+            audit_bits.append(f"email={old_email}->{normalized_email}")
+
+    if "role" in changes and changes["role"]:
+        role_code = str(changes["role"]).strip()
+        if role_code not in allowed_roles:
+            fail(403, "role_not_allowed", "You cannot assign users this role.")
+        if role_code != role.code:
+            next_role = db.scalar(select(Role).where(Role.code == role_code))
+            if next_role is None:
+                fail(400, "role_unavailable", "That role is not configured.")
+            user.role_id = next_role.id
+            role = next_role
+            audit_bits.append(f"role={role_code}")
 
     for field, attr in (("firstName", "first_name"), ("lastName", "last_name")):
         if field in changes:

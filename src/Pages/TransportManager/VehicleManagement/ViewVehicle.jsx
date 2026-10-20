@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { getVehicleById } from './vehicleManagementData'
+import { ArrowLeft, Pencil } from 'lucide-react'
+import { getVehicleById, hydrateVehiclesFromApi } from './vehicleManagementData'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -22,7 +22,17 @@ const Field = ({ label, value }) => (
 const ViewVehicle = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const vehicle = getVehicleById(id)
+    const [vehicle, setVehicle] = useState(() => getVehicleById(id))
+
+    useEffect(() => {
+        let cancelled = false
+        hydrateVehiclesFromApi().finally(() => {
+            if (!cancelled) setVehicle(getVehicleById(id))
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [id])
 
     return (
         <section className='space-y-6'>
@@ -35,6 +45,16 @@ const ViewVehicle = () => {
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
+                {vehicle && (
+                    <button
+                        type='button'
+                        onClick={() => navigate(`/transport-manager/vehicle-management/edit/${vehicle.id}`)}
+                        className='inline-flex items-center gap-2 text-sm text-white bg-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:opacity-90 transition-colors cursor-pointer'
+                    >
+                        <Pencil size={16} />
+                        Edit Vehicle
+                    </button>
+                )}
             </div>
 
             {!vehicle ? (

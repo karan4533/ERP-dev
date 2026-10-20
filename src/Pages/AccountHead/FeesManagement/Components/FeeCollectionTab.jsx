@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { History, Link2, Smartphone, Wallet } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { DEFAULT_ACADEMIC_YEAR, FEE_INSTALLMENT_STATUSES } from '../../financeDomain/financeConstants'
@@ -32,10 +32,35 @@ const FeeCollectionTab = () => {
         bankAccounts,
         posTerminals,
         waiveFine,
+        refreshFinanceStudentRoster,
     } = useFinance()
 
     const [academicYear, setAcademicYear] = useState(DEFAULT_ACADEMIC_YEAR)
     const [student, setStudent] = useState(null)
+
+    // Keep class/section/roll in sync after Principal/Coordinator Section Assignment.
+    useEffect(() => {
+        if (typeof refreshFinanceStudentRoster !== 'function') return undefined
+        let cancelled = false
+        refreshFinanceStudentRoster().then(() => {
+            if (cancelled) return
+        }).catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [refreshFinanceStudentRoster])
+
+    useEffect(() => {
+        if (!student?.id) return
+        const latest = getStudentById(student.id)
+        if (latest && (
+            latest.className !== student.className
+            || latest.section !== student.section
+            || latest.rollNo !== student.rollNo
+        )) {
+            setStudent(latest)
+        }
+    }, [students, student, getStudentById])
     const [selectedIds, setSelectedIds] = useState([])
     const [partials, setPartials] = useState({})
     const [paymentOpen, setPaymentOpen] = useState(false)

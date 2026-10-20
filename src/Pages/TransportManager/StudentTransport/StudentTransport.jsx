@@ -5,9 +5,14 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
-import { getStudentTransports, hydrateStudentTransportsFromApi, CLASS_SECTIONS } from './studentTransportData'
+import { toast } from 'react-toastify'
+import {
+    CLASS_SECTIONS,
+    deleteStudentTransport,
+    getStudentTransports,
+    hydrateStudentTransportsFromApi,
+} from './studentTransportData'
 
 const StudentTransport = () => {
     const [studentTransports, setStudentTransports] = useState(() => getStudentTransports())
@@ -18,8 +23,29 @@ const StudentTransport = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [editRequestModal, setEditRequestModal] = useState(false)
-    const [deleteRequestModal, setDeleteRequestModal] = useState(false)
+    const [deleteModal, setDeleteModal] = useState(false)
+    const [pendingDeleteId, setPendingDeleteId] = useState(null)
+    const [deleting, setDeleting] = useState(false)
+
+    const openDelete = (recordId) => {
+        setPendingDeleteId(recordId)
+        setDeleteModal(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!pendingDeleteId || deleting) return
+        setDeleting(true)
+        const result = await deleteStudentTransport(pendingDeleteId)
+        setDeleting(false)
+        setDeleteModal(false)
+        setPendingDeleteId(null)
+        if (result?.success === false) {
+            toast.error(result.message || 'Could not delete record.')
+            return
+        }
+        setStudentTransports(getStudentTransports())
+        toast.success(result?.api ? 'Record deleted from campus API.' : 'Record deleted.')
+    }
 
     return (
         <section>
@@ -150,16 +176,15 @@ const StudentTransport = () => {
                                             >
                                                 View
                                             </NavLink>
-                                            <button
-                                                type='button'
-                                                onClick={() => setEditRequestModal(true)}
-                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                            <NavLink
+                                                to={`/transport-manager/student-transport/edit/${record.id}`}
+                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Edit
-                                            </button>
+                                            </NavLink>
                                             <button
                                                 type='button'
-                                                onClick={() => setDeleteRequestModal(true)}
+                                                onClick={() => openDelete(record.id)}
                                                 className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Delete
@@ -191,8 +216,14 @@ const StudentTransport = () => {
             </div>
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            <DeleteRequestModal
+                deleteRequestModal={deleteModal}
+                setDeleteRequestModal={setDeleteModal}
+                onConfirm={handleConfirmDelete}
+                title='Delete Student Transport?'
+                message='This will permanently remove this student transport record. This action cannot be undone.'
+                confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+            />
         </section>
     )
 }

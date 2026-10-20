@@ -85,6 +85,7 @@ import AdminEmployeeDatabaseList from '../Pages/Admin/UserManagement/EmployeeDat
 import AdminViewEmployeeDatabase from '../Pages/Admin/UserManagement/EmployeeDatabase/ViewEmployee'
 import UserCreationPage from '../Pages/Admin/RBAC/UserCreationPage'
 import CreateUserPage from '../Pages/Admin/RBAC/CreateUserPage'
+import EditUserPage from '../Pages/Admin/RBAC/EditUserPage'
 import RolesPage from '../Pages/Admin/RBAC/RolesPage'
 
 import Dashboard from '../Pages/Admin/Dashboard/Dashboard'
@@ -248,6 +249,7 @@ const AdminRoutes = () => {
             {/* RBAC */}
             <Route path='/admin/rbac/user-creation' element={<UserCreationPage />} />
             <Route path='/admin/rbac/user-creation/add' element={<CreateUserPage />} />
+            <Route path='/admin/rbac/user-creation/edit/:id' element={<EditUserPage />} />
             <Route path='/admin/rbac/roles' element={<RolesPage />} />
 
             {/* Must be last — otherwise it can hide new admin pages like Academic Years */}

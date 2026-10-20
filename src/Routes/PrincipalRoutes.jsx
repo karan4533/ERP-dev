@@ -47,6 +47,7 @@ import {
     PrincipalPromoteStudents,
 } from '../Pages/Principal/StudentAllocation/PrincipalStudentPlacement'
 import CoordinatorGradeBands from '../Pages/Principal/CoordinatorGradeBands/CoordinatorGradeBands'
+import TransportApprovals from '../Pages/Principal/TransportApprovals/TransportApprovals'
 
 const PrincipalRoutes = () => {
     return (
@@ -105,6 +106,7 @@ const PrincipalRoutes = () => {
             <Route path="/principal/student-allocation-approval/promote" element={<PrincipalPromoteStudents />} />
             <Route path="/principal/student-allocation-approval/allocate/:id" element={<Navigate to="/principal/student-allocation-approval" replace />} />
             <Route path="/principal/student-allocation-approval/review/:id" element={<Navigate to="/principal/student-allocation-approval" replace />} />
+            <Route path="/principal/transport-approvals" element={<TransportApprovals />} />
             <Route path="/principal/coordinator-grade-bands" element={<CoordinatorGradeBands />} />
             <Route path="/principal/communication" element={<Navigate to="/principal/communication/inbox" replace />} />
             <Route path="/principal/communication/inbox" element={<CommunicationInbox />} />

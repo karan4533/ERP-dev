@@ -1,8 +1,100 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Check, Image, X } from 'lucide-react'
+import { toast } from 'react-toastify'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency } from '../../financeDomain/financeHelpers'
+import { PAYMENT_MODES, SOURCE_MODULES, TRANSACTION_DIRECTIONS, TRANSACTION_STATUSES } from '../../financeDomain/financeConstants'
+import { getCampusMemory, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
+
+const VEHICLES_KEY = 'schoolerp-transport-vehicles-v1'
 
 const LogDamageModal = ({ isOpen, onClose }) => {
+    const {
+        transportFleet,
+        transportMaintenance,
+        setTransportMaintenance,
+        addManualEntry,
+    } = useFinance()
+    const [opsRegNos, setOpsRegNos] = useState([])
+    const [vehicle, setVehicle] = useState('')
+    const [recordType, setRecordType] = useState('Routine Service')
+    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+    const [description, setDescription] = useState('')
+    const [vendor, setVendor] = useState('')
+    const [cost, setCost] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        if (!isOpen) return undefined
+        let cancelled = false
+        ;(async () => {
+            if (usesCampusApiForKey(VEHICLES_KEY)) {
+                await hydrateCampusKey(VEHICLES_KEY, [])
+            }
+            if (cancelled) return
+            const rows = getCampusMemory(VEHICLES_KEY) || []
+            setOpsRegNos(
+                rows
+                    .map((row) => row.vehicleNumber || row.regNo || '')
+                    .map((value) => String(value).trim())
+                    .filter(Boolean),
+            )
+        })()
+        return () => { cancelled = true }
+    }, [isOpen])
+
+    const fleetOptions = useMemo(() => {
+        const fromFinance = (transportFleet || []).map((row) => row.regNo).filter(Boolean)
+        const merged = [...new Set([...fromFinance, ...opsRegNos])]
+        return merged.length ? merged : ['Unassigned']
+    }, [opsRegNos, transportFleet])
+
     if (!isOpen) return null
+
+    const selectedVehicle = vehicle || fleetOptions[0]
+
+    const handleSave = () => {
+        const amount = Number(cost) || 0
+        if (!description.trim()) {
+            toast.error('Description is required.')
+            return
+        }
+        if (amount <= 0) {
+            toast.error('Enter a cost greater than zero.')
+            return
+        }
+        setSaving(true)
+        const row = {
+            id: `TM-${Date.now().toString().slice(-8)}`,
+            vehicle: selectedVehicle,
+            type: recordType,
+            date,
+            description: description.trim(),
+            vendor: vendor.trim() || '—',
+            cost: formatCurrency(amount),
+            amount,
+            status: 'Logged',
+        }
+        setTransportMaintenance([row, ...(transportMaintenance || [])])
+        addManualEntry({
+            date,
+            amount,
+            paymentMode: PAYMENT_MODES.CASH,
+            narration: `${recordType} — ${selectedVehicle}${vendor.trim() ? ` · ${vendor.trim()}` : ''}: ${description.trim()}`,
+            category: 'Transport Maintenance',
+            entryType: 'Expense',
+            direction: TRANSACTION_DIRECTIONS.OUT,
+            status: TRANSACTION_STATUSES.POSTED,
+            sourceModule: SOURCE_MODULES.TRANSPORT,
+            createdBy: 'Transport Finance',
+        })
+        setSaving(false)
+        toast.success('Maintenance logged — Day Book / GL will sync via finance API.')
+        setDescription('')
+        setCost('')
+        setVendor('')
+        onClose()
+    }
 
     return (
         <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
@@ -25,15 +117,23 @@ const LogDamageModal = ({ isOpen, onClose }) => {
                     <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
                         <div className='flex flex-col gap-y-2'>
                             <label className='text-sm font-medium text-[#808080]'>Vehicle</label>
-                            <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'>
-                                <option>TN58-AB-1023</option>
-                                <option>TN58-AB-1018</option>
-                                <option>TN58-AC-0976</option>
+                            <select
+                                value={selectedVehicle}
+                                onChange={(event) => setVehicle(event.target.value)}
+                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                            >
+                                {fleetOptions.map((reg) => (
+                                    <option key={reg} value={reg}>{reg}</option>
+                                ))}
                             </select>
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label className='text-sm font-medium text-[#808080]'>Record Type</label>
-                            <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'>
+                            <select
+                                value={recordType}
+                                onChange={(event) => setRecordType(event.target.value)}
+                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                            >
                                 <option>Routine Service</option>
                                 <option>Repair</option>
                                 <option>Damage</option>
@@ -41,7 +141,12 @@ const LogDamageModal = ({ isOpen, onClose }) => {
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label className='text-sm font-medium text-[#808080]'>Date</label>
-                            <input type='date' className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]' />
+                            <input
+                                type='date'
+                                value={date}
+                                onChange={(event) => setDate(event.target.value)}
+                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                            />
                         </div>
                     </div>
 
@@ -49,6 +154,8 @@ const LogDamageModal = ({ isOpen, onClose }) => {
                         <label className='text-sm font-medium text-[#808080]'>Description</label>
                         <textarea
                             rows={3}
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
                             placeholder='Describe the issue / service performed...'
                             className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF] resize-none'
                         />
@@ -57,20 +164,30 @@ const LogDamageModal = ({ isOpen, onClose }) => {
                     <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                         <div className='flex flex-col gap-y-2'>
                             <label className='text-sm font-medium text-[#808080]'>Vendor / Garage</label>
-                            <input type='text' placeholder='Garage name' className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]' />
+                            <input
+                                type='text'
+                                value={vendor}
+                                onChange={(event) => setVendor(event.target.value)}
+                                placeholder='Garage name'
+                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                            />
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label className='text-sm font-medium text-[#808080]'>Cost (₹)</label>
-                            <input type='number' placeholder='0' className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]' />
+                            <input
+                                type='number'
+                                value={cost}
+                                onChange={(event) => setCost(event.target.value)}
+                                placeholder='0'
+                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF]'
+                            />
                         </div>
                     </div>
 
-                    <div className='border-2 border-dashed border-[#515DEF]/30 rounded-2xl bg-[#515DEF]/5 px-6 py-8 text-center cursor-pointer'>
+                    <div className='border-2 border-dashed border-[#515DEF]/30 rounded-2xl bg-[#515DEF]/5 px-6 py-8 text-center'>
                         <Image size={28} className='mx-auto text-[#667085]' />
                         <p className='text-sm text-[#667085] mt-2'>
-                            Attach photos / invoice
-                            {' '}
-                            <span className='text-[#515DEF] font-medium'>browse</span>
+                            Attachments stay local for now — cost still posts to Day Book / GL via finance API.
                         </p>
                     </div>
                 </div>
@@ -85,10 +202,12 @@ const LogDamageModal = ({ isOpen, onClose }) => {
                     </button>
                     <button
                         type='button'
-                        className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
+                        disabled={saving}
+                        onClick={handleSave}
+                        className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer disabled:opacity-60'
                     >
                         <Check size={16} />
-                        Save Record
+                        {saving ? 'Saving…' : 'Save Record'}
                     </button>
                 </div>
             </div>

@@ -1,24 +1,32 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-import { DRIVERS, getDriverDisplayName } from '../DriverManagement/driverManagementData'
-import { ROUTES } from '../RouteManagement/routeManagementData'
+import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
+import { getDriverOptions } from '../DriverManagement/driverManagementData'
+import { getRoutes } from '../RouteManagement/routeManagementData'
 
 export const SHIFTS = ['Morning', 'Afternoon', 'Evening']
 
-export const DRIVER_OPTIONS = DRIVERS.map((driver) => {
-    const route = ROUTES.find((item) => item.vehicleNumber === driver.vehicleNumber)
-    return {
-        id: driver.id,
-        label: getDriverDisplayName(driver),
-        vehicleNumber: driver.vehicleNumber,
-        routeName: route?.routeName ?? driver.routeAssigned,
-    }
-})
+/** @deprecated Use getAssignDutyDriverOptions / getAssignDutyRouteOptions */
+export const DRIVER_OPTIONS = []
+export const ROUTE_OPTIONS = []
 
-export const ROUTE_OPTIONS = ROUTES.map((route) => ({
-    id: route.id,
-    label: route.routeName,
-    vehicleNumber: route.vehicleNumber,
-}))
+export function getAssignDutyDriverOptions() {
+    return getDriverOptions().map((driver) => {
+        const route = getRoutes().find((item) => item.vehicleNumber === driver.vehicleNumber)
+        return {
+            id: driver.id,
+            label: driver.label,
+            vehicleNumber: driver.vehicleNumber,
+            routeName: route?.routeName ?? driver.routeName,
+        }
+    })
+}
+
+export function getAssignDutyRouteOptions() {
+    return getRoutes().map((route) => ({
+        id: route.id,
+        label: route.routeName,
+        vehicleNumber: route.vehicleNumber,
+    }))
+}
 
 const DEFAULT_DUTIES = [
     {
@@ -85,14 +93,36 @@ const DEFAULT_DUTIES = [
 
 export const getDutyById = (id) => getDuties().find((duty) => duty.id === id) ?? null
 export const DUTIES_STORAGE_KEY = 'schoolerp-transport-duties-v1'
+
 export function getDuties() {
-    return ensureCampusSeed('schoolerp-transport-duties-v1', DEFAULT_DUTIES)
+    return getTransportRows(DUTIES_STORAGE_KEY, DEFAULT_DUTIES)
 }
+
 export function saveDuties(rows) {
-    return saveCampusJson('schoolerp-transport-duties-v1', rows)
+    return saveTransportRows(DUTIES_STORAGE_KEY, rows)
 }
+
 export function hydrateDutiesFromApi() {
-    if (!usesCampusApiForKey('schoolerp-transport-duties-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-transport-duties-v1', DEFAULT_DUTIES)
+    return hydrateTransportRows(DUTIES_STORAGE_KEY)
 }
+
+export async function upsertDuty(duty) {
+    const rows = getDuties()
+    const nextId = duty.id || nextPrefixedId(rows, 'DUTY-')
+    const record = { ...duty, id: nextId, dutyId: duty.dutyId || nextId }
+    const idx = rows.findIndex((row) => row.id === nextId)
+    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? record : row)) : [...rows, record]
+    const result = await saveDuties(next)
+    return { ...result, record }
+}
+
+export async function deleteDuty(id) {
+    const rows = getDuties()
+    const next = rows.filter((row) => row.id !== id)
+    if (next.length === rows.length) {
+        return { success: false, message: 'Duty not found.' }
+    }
+    return saveDuties(next)
+}
+
 export const DUTIES = DEFAULT_DUTIES

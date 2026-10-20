@@ -59,6 +59,27 @@ def list_attendance(
     return [_mark_out(r, students.get(r.student_id)) for r in rows]
 
 
+def _class_matches(student_class: str | None, filter_class: str | None) -> bool:
+    """Exact match, or same grade number (Grade 5 ↔ V ↔ 5)."""
+    left = str(student_class or "").strip()
+    right = str(filter_class or "").strip()
+    if not left or not right:
+        return False
+    if left.lower() == right.lower():
+        return True
+    from app.services.placement import parse_grade
+
+    left_g = parse_grade(left)
+    right_g = parse_grade(right)
+    return left_g is not None and left_g == right_g
+
+
+def _section_matches(student_section: str | None, filter_section: str | None) -> bool:
+    if not filter_section:
+        return True
+    return str(student_section or "").strip().upper() == str(filter_section).strip().upper()
+
+
 def roster_with_marks(
     db: Session,
     actor: User,
@@ -68,22 +89,29 @@ def roster_with_marks(
     section: str | None = None,
 ) -> list[dict]:
     """Enrolled students for a class, merged with any marks for the date."""
+    from app.services.placement import repair_student_class_labels
+
+    repair_student_class_labels(db, actor.campus_id)
+
     stmt = select(Student).where(
         Student.campus_id == actor.campus_id,
-        Student.class_name == class_name,
         Student.placement_status == "placed",
     )
-    if section:
-        stmt = stmt.where(Student.section == section)
-    students = db.scalars(stmt.order_by(Student.roll_number.nulls_last(), Student.full_name)).all()
+    students = [
+        row
+        for row in db.scalars(stmt.order_by(Student.roll_number.nulls_last(), Student.full_name)).all()
+        if _class_matches(row.class_name, class_name) and _section_matches(row.section, section)
+    ]
     marks_stmt = select(StudentAttendance).where(
         StudentAttendance.campus_id == actor.campus_id,
         StudentAttendance.attendance_date == attendance_date,
-        StudentAttendance.class_name == class_name,
     )
-    if section:
-        marks_stmt = marks_stmt.where(StudentAttendance.section == section)
-    marks = {r.student_id: r for r in db.scalars(marks_stmt).all()}
+    marks_all = db.scalars(marks_stmt).all()
+    marks = {
+        r.student_id: r
+        for r in marks_all
+        if _class_matches(r.class_name, class_name) and _section_matches(r.section, section)
+    }
     out: list[dict] = []
     for student in students:
         mark = marks.get(student.id)
@@ -121,7 +149,7 @@ def upsert_attendance(db: Session, actor: User, payload: AttendanceUpsertIn) -> 
         student = db.get(Student, item.student_id)
         if student is None or student.campus_id != actor.campus_id:
             fail(404, "not_found", f"Student {item.student_id} not found.")
-        if student.class_name != class_name:
+        if not _class_matches(student.class_name, class_name):
             fail(400, "validation_error", f"Student {student.full_name} is not in class {class_name}.")
 
         row = db.scalar(

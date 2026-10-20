@@ -8,8 +8,14 @@ import {
     buildPaymentSchedule,
     scheduleToInstallments,
 } from '../FeesManagement/feePaymentSchedule'
+import { isAllClassesFee } from '../FeesManagement/feeCampusOptions'
 
 const classKey = (value) => String(value || '').trim().toLowerCase()
+
+const classMatchesStructure = (studentClassName, structureClassName) => {
+    if (isAllClassesFee(structureClassName)) return true
+    return classKey(studentClassName) === classKey(structureClassName)
+}
 
 const isProtectedInstallment = (row) => {
     const paid = Number(row?.paidAmount) || 0
@@ -44,7 +50,7 @@ export const applyFeeStructuresToStudents = ({
         if (!studentClass) return
 
         activeStructures.forEach((structure) => {
-            if (classKey(structure.className) !== studentClass) return
+            if (!classMatchesStructure(student.className, structure.className)) return
             const targetYear = String(structure.academicYear || '').trim()
             const studentYear = String(student.academicYear || '').trim()
             if (targetYear && studentYear && !sameAcademicYear(targetYear, studentYear)) return

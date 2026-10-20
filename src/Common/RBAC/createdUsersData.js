@@ -4,6 +4,7 @@ import { updateAssignmentStudentCounts } from './academicsCatalogData'
 import {
     canUseAdminUsersApi,
     createAdminUserApi,
+    getAdminUserApi,
     listAdminUsersApi,
     resetAdminUserPasswordApi,
     updateAdminUserApi,
@@ -12,7 +13,11 @@ import {
 const STORAGE_KEY = 'schoolerp-created-users'
 const ACTIVE_USER_KEY = 'schoolerp_active_created_user'
 
-/** Extend this list to expose more roles in Admin → User Creation. */
+/**
+ * Roles Campus Admin may create / edit under RBAC → User Creation.
+ * Keep in sync with backend ``admin_users.STAFF_ROLES``.
+ * Privileged roles (Admin, Super Admin, HR, Account Head, Student, Parent, auditors, JD) are excluded.
+ */
 export const CREATABLE_ROLE_OPTIONS = [
     { role: ROLES.PRINCIPAL, label: 'Principal', idPrefix: 'PRC' },
     { role: ROLES.PRM, label: 'PRM', idPrefix: 'PRM' },
@@ -21,6 +26,12 @@ export const CREATABLE_ROLE_OPTIONS = [
     { role: ROLES.LIBRARIAN, label: 'Librarian', idPrefix: 'LIB' },
     { role: ROLES.GATEKEEPER_MANAGER, label: 'Gate Keeper Manager', idPrefix: 'GKM' },
     { role: ROLES.GATEKEEPER, label: 'Gate Keeper', idPrefix: 'GKP' },
+    { role: ROLES.TRANSPORT_MANAGER, label: 'Transport Manager', idPrefix: 'TRM' },
+    { role: ROLES.DRIVER, label: 'Driver', idPrefix: 'DRV' },
+    { role: ROLES.CANTEEN_MANAGER, label: 'Canteen Manager', idPrefix: 'CTN' },
+    { role: ROLES.IT_SUPPORT_MANAGER, label: 'IT Support Manager', idPrefix: 'ITM' },
+    { role: ROLES.STATIONERY_STORE_MANAGER, label: 'Stationery Store Manager', idPrefix: 'SSM' },
+    { role: ROLES.HOUSEKEEPING_MANAGER, label: 'Housekeeping Manager', idPrefix: 'HKM' },
 ]
 
 export const CREATABLE_ROLES = CREATABLE_ROLE_OPTIONS.map((option) => option.role)
@@ -93,6 +104,40 @@ export const formatUserDateOfBirth = (date) => {
     const year = value.getFullYear()
     return `${day}-${month}-${year}`
 }
+
+/** Parse DD-MM-YYYY / ISO / Date into a Date for form date pickers. */
+export const parseUserFormDate = (value) => {
+    if (!value) return null
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value
+    const text = String(value).trim()
+    const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+    if (dmy) {
+        const parsed = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]))
+        return Number.isNaN(parsed.getTime()) ? null : parsed
+    }
+    const parsed = new Date(text)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+export const getCreatedUserByStaffCode = (staffCode) =>
+    getAllCreatedUsers().find((user) => user.id === staffCode || user.userId === staffCode) || null
+
+/** Map a stored / API user into the create/edit form shape. */
+export const userToForm = (user) => ({
+    ...DEFAULT_USER_FORM,
+    ...user,
+    role: user.role || DEFAULT_USER_FORM.role,
+    status: user.status === 'Inactive' ? 'Inactive' : 'Active',
+    firstName: user.firstName || '',
+    middleName: user.middleName || '',
+    lastName: user.lastName || '',
+    email: user.email || '',
+    gender: user.gender || '',
+    mobileNumber: user.mobileNumber || '',
+    password: '',
+    dateOfBirth: parseUserFormDate(user.dateOfBirth),
+    joiningDate: parseUserFormDate(user.joiningDate),
+})
 
 export const validateUserCreationForm = (payload) => {
     const firstName = payload.firstName?.trim()
@@ -277,6 +322,48 @@ export const updateUserStatus = (id, status) => {
     return { success: true, user: records[index] }
 }
 
+/** Offline / local-store edit of a created staff user (full profile). */
+export const updateCreatedUser = (staffCode, payload) => {
+    const validation = validateUserCreationForm(payload)
+    if (!validation.success) return validation
+    if (!CREATABLE_ROLES.includes(payload.role)) {
+        return { success: false, message: 'Selected role cannot be assigned here.' }
+    }
+
+    const records = loadUsers()
+    const index = records.findIndex((user) => user.id === staffCode)
+    if (index < 0) return { success: false, message: 'User not found.' }
+
+    const email = payload.email.trim().toLowerCase()
+    if (records.some((user, idx) => idx !== index && user.email.toLowerCase() === email)) {
+        return { success: false, message: 'A user with this email already exists.' }
+    }
+
+    const previous = records[index]
+    const next = {
+        ...previous,
+        ...payload,
+        id: previous.id,
+        userId: previous.userId,
+        email,
+        role: payload.role,
+        roleLabel: CREATABLE_ROLE_LABELS[payload.role],
+        name: buildUserDisplayName(payload),
+        firstName: payload.firstName.trim(),
+        middleName: payload.middleName?.trim() || '',
+        lastName: payload.lastName.trim(),
+        status: payload.status === 'Inactive' ? 'Inactive' : 'Active',
+        dateOfBirth: formatUserDateOfBirth(payload.dateOfBirth),
+        joiningDate: formatUserDateOfBirth(payload.joiningDate),
+        password: previous.password || '',
+        source: previous.source || 'local',
+    }
+    records[index] = next
+    saveUsers(records)
+    updateAssignmentStudentCounts(getStudentCountForClassSection)
+    return { success: true, user: next }
+}
+
 export const deleteCreatedUser = (id) => {
     const records = loadUsers().filter((user) => user.id !== id)
     saveUsers(records)
@@ -419,6 +506,62 @@ export const updateUserStatusViaApi = async (user, status) => {
         await updateAdminUserApi(user.userId, { status })
         await syncCreatedUsersFromApi().catch(() => null)
         return { success: true }
+    } catch (error) {
+        return apiErrorResult(error)
+    }
+}
+
+export const fetchCreatedUserViaApi = async (userIdOrStaffCode) => {
+    if (!canUseAdminUsersApi()) {
+        return getCreatedUserByStaffCode(userIdOrStaffCode)
+    }
+    // Prefer UUID when we already have the mirror row; otherwise list-sync then match staff code.
+    const mirrored = getCreatedUserByStaffCode(userIdOrStaffCode)
+    if (mirrored?.userId) {
+        const apiUser = await getAdminUserApi(mirrored.userId)
+        const mapped = fromApiUser(apiUser)
+        const keep = loadUsers().filter((user) => user.id !== mapped.id && user.role === ROLES.STUDENT)
+        const others = loadUsers().filter((user) => user.id !== mapped.id && user.role !== ROLES.STUDENT)
+        saveUsers([...keep, ...others, mapped])
+        return mapped
+    }
+    await syncCreatedUsersFromApi()
+    return getCreatedUserByStaffCode(userIdOrStaffCode)
+}
+
+export const updateUserViaApi = async (user, payload) => {
+    const validation = validateUserCreationForm(payload)
+    if (!validation.success) return validation
+    if (!CREATABLE_ROLES.includes(payload.role)) {
+        return { success: false, message: 'Selected role cannot be assigned here.' }
+    }
+    if (!user?.userId) {
+        return { success: false, message: 'User is missing a server id. Refresh the list and try again.' }
+    }
+
+    const details = Object.fromEntries(
+        API_DETAIL_FIELDS.map((key) => {
+            const raw = payload[key]
+            const value = key === 'dateOfBirth' || key === 'joiningDate'
+                ? formatUserDateOfBirth(raw)
+                : String(raw ?? '').trim()
+            return [key, value]
+        }),
+    )
+    try {
+        const updated = await updateAdminUserApi(user.userId, {
+            role: payload.role,
+            firstName: payload.firstName.trim(),
+            middleName: payload.middleName?.trim() || '',
+            lastName: payload.lastName.trim(),
+            email: payload.email.trim(),
+            gender: payload.gender,
+            mobileNumber: payload.mobileNumber?.trim() || '',
+            status: payload.status === 'Inactive' ? 'Inactive' : 'Active',
+            ...details,
+        })
+        await syncCreatedUsersFromApi().catch(() => null)
+        return { success: true, user: fromApiUser(updated) }
     } catch (error) {
         return apiErrorResult(error)
     }

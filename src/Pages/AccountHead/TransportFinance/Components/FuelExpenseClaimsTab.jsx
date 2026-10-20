@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import {
     EXPENSE_CLAIMS,
@@ -15,10 +15,26 @@ import {
     thClass,
 } from './TransportShared'
 import { useFinance } from '../../financeDomain/FinanceContext'
+import {
+    getFuelRequests,
+    getMaintenanceRequests,
+    hydrateTransportApprovalRequestsFromApi,
+} from '../../../TransportManager/RequestApprovals/requestApprovalsData'
+import { mapApprovalsToFinanceClaims } from '../../../TransportManager/RequestApprovals/transportApprovalFinanceBridge'
 
 const FuelExpenseClaimsTab = () => {
     const { approvals, financePersistence } = useFinance()
     const apiLive = Boolean(financePersistence?.apiEnabled)
+    const [opsClaims, setOpsClaims] = useState(() =>
+        mapApprovalsToFinanceClaims([...getMaintenanceRequests(), ...getFuelRequests()])
+    )
+
+    useEffect(() => {
+        hydrateTransportApprovalRequestsFromApi().finally(() => {
+            setOpsClaims(mapApprovalsToFinanceClaims([...getMaintenanceRequests(), ...getFuelRequests()]))
+        })
+    }, [])
+
     const rows = useMemo(() => {
         const fromApprovals = (approvals || [])
             .filter((row) => String(row.department || '').toLowerCase() === 'transport')
@@ -32,9 +48,14 @@ const FuelExpenseClaimsTab = () => {
                 amount: row.amount,
                 status: row.status || 'Pending',
             }))
-        if (apiLive) return fromApprovals
-        return fromApprovals.length ? fromApprovals : EXPENSE_CLAIMS
-    }, [apiLive, approvals])
+        const byId = new Map()
+        ;[...opsClaims, ...fromApprovals].forEach((row) => {
+            if (!byId.has(row.id)) byId.set(row.id, row)
+        })
+        const merged = [...byId.values()]
+        if (apiLive) return merged
+        return merged.length ? merged : EXPENSE_CLAIMS
+    }, [apiLive, approvals, opsClaims])
 
     return (
     <div className='space-y-6'>

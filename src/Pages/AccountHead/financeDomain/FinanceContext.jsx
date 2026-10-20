@@ -125,6 +125,9 @@ const createEmptyFinanceState = () => ({
     wallets: [],
     walletRecharges: [],
     transportFleet: [],
+    transportMaintenance: [],
+    transportCompliance: [],
+    transportSalaries: [],
     approvals: [],
     sequence: { pay: 1, rec: 1, txn: 1, voucher: 1, link: 1 },
     meta: { seeded: true },
@@ -200,12 +203,16 @@ export const FinanceProvider = ({ children }) => {
     const [wallets, setWallets] = useState(() => initialPersistedList(boot, 'wallets', offlineAllowed ? USER_WALLETS : emptyBoot))
     const [walletRecharges, setWalletRecharges] = useState(() => initialPersistedList(boot, 'walletRecharges', offlineAllowed ? RECHARGE_RECORDS : emptyBoot))
     const [transportFleet, setTransportFleet] = useState(() => initialPersistedList(boot, 'transportFleet', offlineAllowed ? FLEET_VEHICLES : emptyBoot))
+    const [transportMaintenance, setTransportMaintenance] = useState(() => initialPersistedList(boot, 'transportMaintenance', emptyBoot))
+    const [transportCompliance, setTransportCompliance] = useState(() => initialPersistedList(boot, 'transportCompliance', emptyBoot))
+    const [transportSalaries, setTransportSalaries] = useState(() => initialPersistedList(boot, 'transportSalaries', emptyBoot))
     const [approvals, setApprovals] = useState(() => initialPersistedList(
         boot,
         'approvals',
         offlineAllowed ? PENDING_REQUESTS.map((row) => ({ ...row, status: 'Pending' })) : emptyBoot,
     ))
     const [lastSavedAt, setLastSavedAt] = useState(() => savedEnvelopeRef.current?.savedAt ?? null)
+    const booksBackfilledRef = useRef(false)
 
     const appendAudit = useCallback((entry) => {
         setAuditLog((prev) => [{
@@ -247,7 +254,11 @@ export const FinanceProvider = ({ children }) => {
         setWallets(initialPersistedList(data, 'wallets', fb))
         setWalletRecharges(initialPersistedList(data, 'walletRecharges', fb))
         setTransportFleet(initialPersistedList(data, 'transportFleet', fb))
+        setTransportMaintenance(initialPersistedList(data, 'transportMaintenance', fb))
+        setTransportCompliance(initialPersistedList(data, 'transportCompliance', fb))
+        setTransportSalaries(initialPersistedList(data, 'transportSalaries', fb))
         setApprovals(initialPersistedList(data, 'approvals', fb))
+        booksBackfilledRef.current = false
     }, [])
 
     const hydratedInstallments = useMemo(() => (
@@ -744,6 +755,9 @@ export const FinanceProvider = ({ children }) => {
         wallets,
         walletRecharges,
         transportFleet,
+        transportMaintenance,
+        transportCompliance,
+        transportSalaries,
         approvals,
         sequence: { ...seq.current },
         meta: { seeded: true },
@@ -773,7 +787,10 @@ export const FinanceProvider = ({ children }) => {
         reconciliationItems,
         students,
         transactions,
+        transportCompliance,
         transportFleet,
+        transportMaintenance,
+        transportSalaries,
         walletRecharges,
         wallets,
     ])
@@ -875,10 +892,11 @@ export const FinanceProvider = ({ children }) => {
         const baseCategories = options.feeCategories || feeCategories
         const nextStructures = [nextStructure, ...baseStructures.filter((row) => row.id !== id)]
 
-        const targetClass = classKey(structure.className)
         const targetYear = String(structure.academicYear || '').trim()
+        const structureClass = String(structure.className || '').trim()
+        const allClasses = /^(all classes|all|\*)$/i.test(structureClass)
         const matchingStudents = students.filter((student) => {
-            if (classKey(student.className) !== targetClass) return false
+            if (!allClasses && classKey(student.className) !== classKey(structureClass)) return false
             if (!targetYear) return true
             const studentYear = String(student.academicYear || '').trim()
             return !studentYear || sameAcademicYear(studentYear, targetYear)
@@ -1061,6 +1079,46 @@ export const FinanceProvider = ({ children }) => {
      * Pull campus enrolled students into the finance snapshot so Bootstrap / Fee Collection have people to bill.
      * Merges by id; does not invent fee rows.
      */
+    /** Refresh class/section/roll on existing finance students from campus /students (no fee invent). */
+    const refreshFinanceStudentRoster = useCallback(async () => {
+        await hydrateEnrolledStudentsFromApi().catch(() => [])
+        const enrolled = getAllEnrolledStudents()
+        if (!enrolled.length) return { updated: 0 }
+        const mapped = enrolled.map((row) => mapEnrolledToFinanceStudent(row, DEFAULT_ACADEMIC_YEAR))
+        let updated = 0
+        setStudents((prev) => {
+            const byId = new Map(prev.map((row) => [String(row.id), row]))
+            mapped.forEach((row) => {
+                const existing = byId.get(String(row.id))
+                if (!existing) {
+                    byId.set(String(row.id), row)
+                    updated += 1
+                    return
+                }
+                const next = {
+                    ...existing,
+                    className: row.className || existing.className,
+                    section: row.section ?? existing.section,
+                    rollNo: row.rollNo || existing.rollNo,
+                    admissionNo: row.admissionNo || existing.admissionNo,
+                    name: row.name || existing.name,
+                    phone: row.phone || existing.phone,
+                    status: row.status || existing.status,
+                }
+                if (
+                    next.className !== existing.className
+                    || next.section !== existing.section
+                    || next.rollNo !== existing.rollNo
+                ) {
+                    updated += 1
+                }
+                byId.set(String(row.id), next)
+            })
+            return [...byId.values()]
+        })
+        return { updated }
+    }, [])
+
     const importEnrolledStudentsToFinance = useCallback(async () => {
         let syncResult = null
         try {
@@ -1129,25 +1187,35 @@ export const FinanceProvider = ({ children }) => {
     const addManualEntry = useCallback((entry) => {
         seq.current.txn += 1
         seq.current.voucher += 1
+        const amount = Number(String(entry.amount ?? '').replace(/[₹,\s]/g, '')) || Number(entry.amount) || 0
+        const voucherNo = entry.reference || generateVoucherNo(seq.current.voucher)
         const transaction = createFinanceTransaction({
             id: `MAN-${Date.now()}`,
             transactionNo: generateTransactionNo(seq.current.txn),
             transactionDate: entry.date,
             paymentMode: entry.paymentMode || PAYMENT_MODES.CASH,
-            amount: Number(entry.amount),
+            amount,
             student: null,
             category: entry.category || 'Manual',
-            reference: entry.reference || generateVoucherNo(seq.current.voucher),
+            reference: voucherNo,
             narration: entry.narration,
             status: entry.status || TRANSACTION_STATUSES.DRAFT,
             createdBy: entry.createdBy || ACTOR_FINANCE_HEAD,
-            voucherNo: generateVoucherNo(seq.current.voucher),
+            voucherNo,
             bankAccount: bankAccounts.find((item) => item.id === entry.bankAccountId),
-            sourceModule: SOURCE_MODULES.MANUAL,
+            sourceModule: entry.sourceModule || SOURCE_MODULES.MANUAL,
         })
         transaction.direction = entry.direction || TRANSACTION_DIRECTIONS.IN
         transaction.entryType = entry.entryType
         setTransactions((prev) => [transaction, ...prev])
+        if (transaction.status === TRANSACTION_STATUSES.POSTED && amount > 0) {
+            postAccounting(createAccountingPosting({
+                transaction,
+                student: null,
+                amount,
+                narration: transaction.narration,
+            }))
+        }
         appendAudit({
             action: 'MANUAL_ENTRY_CREATED',
             entity: 'FinanceTransaction',
@@ -1156,7 +1224,7 @@ export const FinanceProvider = ({ children }) => {
             reason: entry.narration,
         })
         return transaction
-    }, [appendAudit, bankAccounts])
+    }, [appendAudit, bankAccounts, postAccounting])
 
     const postManualEntry = useCallback((transactionId) => {
         const transaction = transactions.find((item) => item.id === transactionId)
@@ -1488,6 +1556,9 @@ export const FinanceProvider = ({ children }) => {
             wallets,
             walletRecharges,
             transportFleet,
+            transportMaintenance,
+            transportCompliance,
+            transportSalaries,
             approvals,
             sequence: { ...seq.current },
             meta: { seeded: true },
@@ -1525,6 +1596,9 @@ export const FinanceProvider = ({ children }) => {
         wallets,
         walletRecharges,
         transportFleet,
+        transportMaintenance,
+        transportCompliance,
+        transportSalaries,
         approvals,
         annualBudget,
         chartOfAccounts,
@@ -1547,6 +1621,51 @@ export const FinanceProvider = ({ children }) => {
         posTerminals,
         receipts,
         reconciliationItems,
+        transactions,
+    ])
+
+    // One-shot: fill empty books from already-POSTED transactions (pre-wiring campus data).
+    useEffect(() => {
+        if (financeStatus !== 'ready' || !apiHydratedRef.current || booksBackfilledRef.current) return
+        if (!isApiFinanceEnabled()) {
+            booksBackfilledRef.current = true
+            return
+        }
+        const posted = (transactions || []).filter((row) => {
+            const status = String(row.status || TRANSACTION_STATUSES.POSTED).toUpperCase()
+            return status === TRANSACTION_STATUSES.POSTED && Number(row.amount) > 0
+        })
+        if (!posted.length) {
+            booksBackfilledRef.current = true
+            return
+        }
+        const known = new Set([
+            ...(dayBookEntries || []).map((row) => row.sourceTransactionId),
+            ...(glEntries || []).map((row) => row.sourceTransactionId),
+            ...(cashBookEntries || []).map((row) => row.sourceTransactionId),
+            ...(bankBookEntries || []).map((row) => row.sourceTransactionId),
+            ...(onlineBookEntries || []).map((row) => row.sourceTransactionId),
+        ].filter(Boolean))
+        const missing = posted.filter((row) => !known.has(row.id))
+        booksBackfilledRef.current = true
+        if (!missing.length) return
+        missing.forEach((txn) => {
+            postAccounting(createAccountingPosting({
+                transaction: txn,
+                student: getStudentById(txn.studentId),
+                amount: txn.amount,
+                narration: txn.narration,
+            }))
+        })
+    }, [
+        bankBookEntries,
+        cashBookEntries,
+        dayBookEntries,
+        financeStatus,
+        getStudentById,
+        glEntries,
+        onlineBookEntries,
+        postAccounting,
         transactions,
     ])
 
@@ -1676,6 +1795,12 @@ export const FinanceProvider = ({ children }) => {
         walletRecharges,
         transportFleet,
         setTransportFleet,
+        transportMaintenance,
+        setTransportMaintenance,
+        transportCompliance,
+        setTransportCompliance,
+        transportSalaries,
+        setTransportSalaries,
         approvals,
         setApprovals,
         addFeeStructure,
@@ -1686,6 +1811,7 @@ export const FinanceProvider = ({ children }) => {
         flushFinanceToApi,
         bootstrapDemoFeeLedger,
         importEnrolledStudentsToFinance,
+        refreshFinanceStudentRoster,
         setFeeStructures,
         setFineRules,
         setBankAccounts,
@@ -1720,6 +1846,7 @@ export const FinanceProvider = ({ children }) => {
         flushFinanceToApi,
         bootstrapDemoFeeLedger,
         importEnrolledStudentsToFinance,
+        refreshFinanceStudentRoster,
         addManualEntry,
         auditLog,
         bankAccounts,
@@ -1762,6 +1889,13 @@ export const FinanceProvider = ({ children }) => {
         students,
         setStudents,
         transactions,
+        transportCompliance,
+        transportFleet,
+        transportMaintenance,
+        transportSalaries,
+        wallets,
+        walletRecharges,
+        approvals,
         waiveFine,
         reloadFinanceFromApi,
         financeStatus,

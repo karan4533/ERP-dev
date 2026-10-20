@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Copy, KeyRound, Plus, Trash2, UserPlus, X } from 'lucide-react'
+import { Copy, KeyRound, Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import { toast } from 'react-toastify'
 import {
     CREATABLE_ROLE_LABELS,
@@ -171,7 +171,8 @@ const UserCreationPage = () => {
                     <div>
                         <h1 className='text-xl font-semibold text-black'>User Creation</h1>
                         <p className='text-sm text-[#667085] mt-1'>
-                            Create staff users for Principal, PRM, Teacher, Coordinator, Librarian, and Gate Keeper roles. Student accounts are created through Admission enrollment.
+                            Create staff logins for academics, gate, transport, canteen, IT, stationery, and housekeeping.
+                            Student accounts are created through Admission enrollment. HR / Account Head / Admin are seeded separately.
                         </p>
                     </div>
                 </div>
@@ -243,7 +244,13 @@ const UserCreationPage = () => {
                                             </span>
                                         </td>
                                         <td className='px-3 py-3'>
-                                            <div className='flex items-center gap-3'>
+                                            <div className='flex items-center gap-3 flex-wrap'>
+                                                <NavLink
+                                                    to={`${ROUTE_BASE}/edit/${encodeURIComponent(user.id)}`}
+                                                    className='inline-flex items-center gap-1 text-xs text-[#515DEF] hover:underline'
+                                                >
+                                                    <Pencil size={14} /> Edit
+                                                </NavLink>
                                                 <button
                                                     type='button'
                                                     onClick={() => handleToggleStatus(user)}

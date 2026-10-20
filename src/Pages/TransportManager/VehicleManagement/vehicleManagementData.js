@@ -1,4 +1,5 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
+import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
+
 export const VEHICLE_CATEGORIES = ['Bus', 'Car']
 
 export const BUS_TYPES = [
@@ -110,16 +111,50 @@ const DEFAULT_VEHICLES = [
 export const getVehicleById = (id) => getVehicles().find((vehicle) => vehicle.id === id) ?? null
 
 export const VEHICLES_STORAGE_KEY = 'schoolerp-transport-vehicles-v1'
+
 export function getVehicles() {
-    return ensureCampusSeed('schoolerp-transport-vehicles-v1', DEFAULT_VEHICLES)
+    return getTransportRows(VEHICLES_STORAGE_KEY, DEFAULT_VEHICLES)
 }
+
 export function saveVehicles(rows) {
-    return saveCampusJson('schoolerp-transport-vehicles-v1', rows)
+    return saveTransportRows(VEHICLES_STORAGE_KEY, rows)
 }
+
 export function hydrateVehiclesFromApi() {
-    if (!usesCampusApiForKey('schoolerp-transport-vehicles-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-transport-vehicles-v1', DEFAULT_VEHICLES)
+    return hydrateTransportRows(VEHICLES_STORAGE_KEY)
 }
+
+export function getVehicleOptions() {
+    return getVehicles().map((vehicle) => ({
+        id: vehicle.id,
+        vehicleNumber: vehicle.vehicleNumber,
+        label: vehicle.vehicleNumber,
+        vehicleType: vehicle.vehicleType,
+        driverName: vehicle.driverName,
+        driverContact: vehicle.driverContact,
+        category: vehicle.category,
+    }))
+}
+
+export async function upsertVehicle(vehicle) {
+    const rows = getVehicles()
+    const nextId = vehicle.id || nextPrefixedId(rows, 'VEH-')
+    const record = { ...vehicle, id: nextId }
+    const idx = rows.findIndex((row) => row.id === nextId)
+    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? record : row)) : [...rows, record]
+    const result = await saveVehicles(next)
+    return { ...result, record }
+}
+
+export async function deleteVehicle(id) {
+    const rows = getVehicles()
+    const next = rows.filter((row) => row.id !== id)
+    if (next.length === rows.length) {
+        return { success: false, message: 'Vehicle not found.' }
+    }
+    return saveVehicles(next)
+}
+
 /** Static seed / fallback — list pages should call getVehicles() after hydrate */
 export const VEHICLES = DEFAULT_VEHICLES
 

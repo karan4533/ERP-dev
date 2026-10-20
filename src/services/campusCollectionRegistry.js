@@ -37,6 +37,7 @@ export const CAMPUS_COLLECTION_BY_STORAGE_KEY = {
     'schoolerp-transport-expenses-v1': { kind: 'ops', collection: 'transport-expenses' },
     'schoolerp-transport-budget-requests-v1': { kind: 'ops', collection: 'transport-budget-requests' },
     'schoolerp-transport-approvals-v1': { kind: 'ops', collection: 'transport-approval-requests' },
+    'schoolerp-transport-service-centers-v1': { kind: 'ops', collection: 'transport-service-centers' },
     // Canteen
     'schoolerp-canteen-menu-v1': { kind: 'ops', collection: 'canteen-menu' },
     'schoolerp-canteen-inventory-v1': { kind: 'ops', collection: 'canteen-inventory' },

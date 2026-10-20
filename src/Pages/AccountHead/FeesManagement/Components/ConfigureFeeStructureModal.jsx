@@ -71,16 +71,21 @@ const ConfigureFeeStructureModal = ({ isOpen, onClose, onOpenDefine }) => {
         const existing = (feeCategories || [])
             .filter((item) => item.active !== false)
             .map((item) => ({ id: item.id, label: item.name, selected: true, existing: true }))
-        if (existing.length) {
-            setCategories(existing)
-        } else {
-            setCategories(DEFAULT_CATEGORY_SEEDS.map((label) => ({
-                id: label.toLowerCase().replace(/\s+/g, '-'),
-                label,
-                selected: ['Tuition Fee', 'Exam Fee', 'Activity Fee'].includes(label),
-                existing: false,
-            })))
-        }
+        const byLabel = new Map(existing.map((row) => [row.label.toLowerCase(), row]))
+        DEFAULT_CATEGORY_SEEDS.forEach((label) => {
+            const key = label.toLowerCase()
+            if (!byLabel.has(key)) {
+                byLabel.set(key, {
+                    id: label.toLowerCase().replace(/\s+/g, '-'),
+                    label,
+                    selected: ['Tuition Fee', 'Exam Fee', 'Activity Fee', 'Transport Fee'].includes(label),
+                    existing: false,
+                })
+            } else if (label === 'Transport Fee') {
+                byLabel.set(key, { ...byLabel.get(key), selected: true })
+            }
+        })
+        setCategories([...byLabel.values()])
         setNumberOfTerms('3')
         setNewCategory('')
         setCreateDrafts(false)

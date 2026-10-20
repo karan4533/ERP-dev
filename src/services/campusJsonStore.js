@@ -119,6 +119,29 @@ export const saveCampusJson = (storageKey, value) => {
     }
 }
 
+/** Awaitable save — waits for ops/audit replace when API mode is on. */
+export const persistCampusJson = async (storageKey, value) => {
+    const list = Array.isArray(value) ? value : []
+    if (usesCampusApiForKey(storageKey)) {
+        memoryByKey.set(storageKey, list)
+        try {
+            localStorage.removeItem(storageKey)
+        } catch {
+            /* ignore */
+        }
+        const meta = resolveCampusCollection(storageKey)
+        if (!meta || !canUse(meta.kind)) return { success: true, api: false }
+        try {
+            await replaceApi(meta.kind, meta.collection, clean(meta.kind, list))
+            return { success: true, api: true }
+        } catch (err) {
+            return { success: false, api: true, message: err?.message || 'API save failed' }
+        }
+    }
+    const ok = saveCampusJson(storageKey, list)
+    return { success: Boolean(ok), api: false }
+}
+
 export const ensureCampusSeed = (storageKey, seed) => {
     if (usesCampusApiForKey(storageKey)) {
         const mem = getCampusMemory(storageKey)

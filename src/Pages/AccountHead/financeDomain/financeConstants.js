@@ -1,6 +1,7 @@
 export const FEE_FREQUENCIES = [
     { id: 'ONE_TIME', label: 'One Time (one-shot)' },
     { id: 'MONTHLY', label: 'Monthly' },
+    { id: 'HALF_YEARLY', label: 'Half Yearly' },
     { id: 'TERM_WISE', label: 'Term Wise' },
     { id: 'QUARTERLY', label: 'Quarterly' },
     { id: 'CUSTOM_INSTALLMENT', label: 'Custom Installment' },

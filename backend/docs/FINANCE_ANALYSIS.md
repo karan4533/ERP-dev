@@ -8,13 +8,13 @@ Stack: UUID FastAPI (`main`) + Account Head React screens
 | Surface | Path | Data |
 |---|---|---|
 | Fees, receipts, books, settings | `/account-head/*` | `FinanceContext` ↔ `/api/v1/finance/state` |
-| Transport / Wallet / Approvals | Account Head modules | Snapshot keys `transportFleet`, `wallets`, `walletRecharges`, `approvals` |
+| Transport / Wallet / Approvals | Account Head modules | Snapshot keys `transportFleet`, `transportMaintenance`, `transportCompliance`, `transportSalaries`, `wallets`, `walletRecharges`, `approvals` |
 | SuperAdmin finance | `/super-admin/finance/*` | Live pull via `pullFinanceState()` when API on |
 | Flag | `VITE_USE_API_FINANCE` (default **true**) | localStorage dual-written as cache until production cutover |
 
 ### Collections persisted in the snapshot
 
-`students`, `feeCategories`, `feeStructures`, `fineRules`, `bankAccounts`, `posTerminals`, `concessions`, `installments`, `annualBudget`, `transactions`, `receipts`, `cheques`, `paymentLinks`, `auditLog`, `glEntries`, `dayBookEntries`, `cashBookEntries`, `bankBookEntries`, `onlineBookEntries`, `reconciliationItems`, `activityFees`, `wallets`, `walletRecharges`, `transportFleet`, `approvals`, `sequence`, `meta`
+`students`, `feeCategories`, `feeStructures`, `fineRules`, `bankAccounts`, `posTerminals`, `concessions`, `installments`, `annualBudget`, `transactions`, `receipts`, `cheques`, `paymentLinks`, `auditLog`, `glEntries`, `dayBookEntries`, `cashBookEntries`, `bankBookEntries`, `onlineBookEntries`, `reconciliationItems`, `activityFees`, `wallets`, `walletRecharges`, `transportFleet`, `transportMaintenance`, `transportCompliance`, `transportSalaries`, `approvals`, `sequence`, `meta`
 
 ## Server actions (authoritative when API on)
 
@@ -35,6 +35,9 @@ Gateway / WhatsApp / SMTP persist as `queued_stub` until real keys are configure
 | Area | Status |
 |---|---|
 | Fleet register + add vehicle | Live `transportFleet` |
+| Maintenance / damage log | Live `transportMaintenance` (+ Day Book expense posting) |
+| Compliance documents | Live `transportCompliance` |
+| Fee collect → accounting books | Server appends day/cash/bank/GL on POSTED collect |
 | Wallet recharge / balances | Live `wallets` + `walletRecharges` |
 | Approvals pending / approved | Live `approvals` + decide API |
 | Collections / Reports / Dashboard KPIs | Live transactions / dues |

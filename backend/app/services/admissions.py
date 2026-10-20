@@ -587,16 +587,18 @@ def enroll_admission(db: Session, actor: User, admission_id: UUID, payload: Enro
         admission_number = _next_code(db, Admission, "ADM", actor.campus_id)
         row.admission_code = admission_number
 
-    from app.services.placement import current_academic_year
+    from app.services.placement import canonical_class_name, current_academic_year
 
     year = current_academic_year(db, actor.campus_id)
+    # Admission forms often use Roman/numeric labels (V, 5); masters use Grade 5.
+    student_class = canonical_class_name(row.class_name) or (row.class_name or "").strip()
     student = Student(
         campus_id=actor.campus_id,
         enquiry_id=row.enquiry_id,
         admission_id=row.id,
         admission_number=admission_number,
         full_name=_full_name(row),
-        class_name=row.class_name,
+        class_name=student_class,
         academic_year_id=year.id if year else None,
         placement_status="pending",
         parent_user_id=parent_user.id if parent_user else None,

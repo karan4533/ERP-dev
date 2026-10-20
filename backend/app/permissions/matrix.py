@@ -123,6 +123,8 @@ _FINANCE_HEAD = [
     "finance.approve",
     "students.read",
     "audit.read",
+    # Read transport routes/drivers/vehicles for Transport Finance dropdowns (write still denied).
+    "ops.read",
 ]
 # Operational collector — cannot change masters or approve
 _FINANCE_ASSISTANT = [
@@ -369,6 +371,11 @@ for _code, _perms in ROLE_PERMISSIONS.items():
         for _p in ("ops.read", "ops.write"):
             if _p not in _perms:
                 _perms.append(_p)
+
+# Transport Manager assigns students to bus routes — needs campus student roster (read-only).
+for _code, _perms in ROLE_PERMISSIONS.items():
+    if _code == "transportmanager" and "students.read" not in _perms:
+        _perms.append("students.read")
 
 # Campus audit collections (JD Audit + Process/Quality auditors).
 _CAMPUS_AUDIT_WRITERS = {

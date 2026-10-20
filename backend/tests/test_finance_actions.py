@@ -67,6 +67,12 @@ def test_collect_payment_and_send_receipt(client):
     )
     assert paid.status_code == 200, paid.text
     assert paid.json()["receipt"]["amountPaid"] == 1000
+    state = client.get("/api/v1/finance/state", headers=headers)
+    assert state.status_code == 200, state.text
+    books = state.json()["data"]
+    assert len(books.get("dayBookEntries") or []) >= 1
+    assert len(books.get("glEntries") or []) >= 2
+    assert len(books.get("cashBookEntries") or []) >= 1
 
 
 def test_collect_payment_includes_late_fee_in_balance(client):

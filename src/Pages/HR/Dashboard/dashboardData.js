@@ -75,13 +75,56 @@ const groupName = (employee) => {
 
 const priorityFor = (count) => (count >= 5 ? 'High Priority' : count >= 2 ? 'Attention' : 'Normal')
 
+const emptyPayrollSummary = () => summarizePayroll([])
+
 const payrollFor = (employees, month, year) => {
-    const ids = new Set(employees.map((item) => item.id))
-    return summarizePayroll(salaryRows(month, year).filter((row) => row && ids.has(row.employeeId)))
+    try {
+        const ids = new Set(list(employees).map((item) => item.id))
+        const rows = list(salaryRows(month, year)).filter((row) => row && ids.has(row.employeeId))
+        return summarizePayroll(rows)
+    } catch {
+        return emptyPayrollSummary()
+    }
+}
+
+const EMPTY_DASHBOARD = {
+    latestDate: '',
+    kpis: [],
+    workforce: [],
+    attendance: { Present: 0, Leave: 0, Absent: 0, 'On Duty': 0, Late: 0, rate: 0, total: 0 },
+    funnel: [],
+    actions: [],
+    departmentRows: [],
+    events: [],
+    payroll: { gross: '₹0', net: '₹0', employer: '₹0', deductions: '₹0', status: 'Unavailable', trend: [] },
+    performance: { ratings: [], completed: 0, pending: 0, bsc: 0, audit: 0 },
+    movement: { joiners: 0, exiting: 0, net: 0, people: [] },
+    training: { scheduled: 0, completed: 0, trained: 0, feedback: 0, completion: 0 },
+    activity: [],
+    error: null,
 }
 
 export const buildHrDashboard = ({ academicYear = '2026–2027', department = 'All Departments', month = currentDashboardMonth(), revision = 0 } = {}) => {
     void revision
+    try {
+        return buildHrDashboardUnsafe({ academicYear, department, month })
+    } catch (error) {
+        console.error('HR dashboard build failed', error)
+        return {
+            ...EMPTY_DASHBOARD,
+            error: error?.message || 'HR dashboard data is unavailable.',
+            kpis: [{
+                label: 'Dashboard unavailable',
+                value: '—',
+                hint: 'Refresh after HR API is ready',
+                lines: [error?.message || 'Could not load HR snapshot'],
+                to: '/hr/dashboard',
+            }],
+        }
+    }
+}
+
+const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
     const monthNumber = MONTH_INDEX[month] || monthOf(new Date())
     const allEmployees = list(getEmployees())
     const employees = allEmployees.filter((item) => matchesDepartment(item, department))
@@ -120,7 +163,8 @@ export const buildHrDashboard = ({ academicYear = '2026–2027', department = 'A
     const attendanceTotal = Object.values(attendanceCounts).reduce((sum, value) => sum + value, 0)
     const attendanceRate = attendanceTotal ? Math.round(((attendanceCounts.Present + attendanceCounts.Late) / attendanceTotal) * 1000) / 10 : 0
 
-    const leaveRequests = list(getLeaveBundle().requests).filter(inScope)
+    const leaveBundle = getLeaveBundle() || { requests: [], policies: [] }
+    const leaveRequests = list(leaveBundle.requests).filter(inScope)
     const pendingLeave = leaveRequests.filter((item) => item.status === 'Pending')
     const onLeaveNow = employees.filter((item) => item.status === 'On Leave')
     const leaveGroups = ['Academics', 'Administration', 'Support'].map((label) => ({
@@ -213,7 +257,9 @@ export const buildHrDashboard = ({ academicYear = '2026–2027', department = 'A
     const ratings = ratingOrder.map((rating) => ({ rating, count: reviews.filter((item) => item.rating === rating).length }))
     const average = (key) => reviews.length ? Math.round(reviews.reduce((sum, item) => sum + (Number(item[key]) || 0), 0) / reviews.length) : 0
     const completedTraining = training.filter((item) => item.status === 'Completed')
-    const trained = new Set(completedTraining.flatMap((item) => item.participantIds || [])).size
+    const trained = new Set(completedTraining.flatMap((item) => (
+        Array.isArray(item.participantIds) ? item.participantIds : []
+    ))).size
     const feedbackScores = training.flatMap((item) => list(item.feedback).map((row) => Number(row.overall) || 0))
     const movement = [
         ...joiners.map((item) => ({ name: item.name, detail: `Joined — ${item.designation}`, to: `/hr/employee-management/employee-profile/${item.id}` })),
@@ -221,15 +267,71 @@ export const buildHrDashboard = ({ academicYear = '2026–2027', department = 'A
     ].slice(0, 4)
 
     const activity = [
-        ...list(getNotifications()).slice(0, 4).map((item) => ({ title: item.title, detail: item.message, when: item.notificationDate, module: item.type, to: '/hr/notifications' })),
-        ...list(getOffers()).filter((item) => item.status === 'Issued' || item.status === 'Accepted').slice(0, 2).map((item) => ({ title: 'Offer issued', detail: item.position, when: item.offerDate, module: 'Recruitment', to: '/hr/onboarding/offers' })),
-        ...leaveRequests.filter((item) => item.status === 'Approved').slice(0, 2).map((item) => ({ title: 'Leave approved', detail: employeeName(item.employeeId), when: item.fromDate, module: 'Leave', to: '/hr/leave-management' })),
-        ...list(getAdvances()).filter((item) => item.status === 'APPROVED').slice(0, 1).map((item) => ({ title: 'Salary advance approved', detail: employeeName(item.employeeId), when: item.requestedDate, module: 'Payroll', to: '/hr/payroll/salary-advance' })),
-        ...completedTraining.slice(0, 1).map((item) => ({ title: 'Training completed', detail: item.title, when: item.startDate, module: 'Training', to: '/hr/training-records' })),
-        ...reviews.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({ title: 'Performance review submitted', detail: item.employeeId, when: item.period, module: 'Performance', to: '/hr/performance-review' })),
-        ...list(getDisciplinary()).filter((item) => item.acknowledgement === 'Acknowledged').slice(0, 1).map((item) => ({ title: 'Disciplinary memo acknowledged', detail: employeeName(item.employeeId), when: item.date, module: 'Disciplinary', to: '/hr/disciplinary' })),
-        ...exits.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({ title: 'Exit clearance completed', detail: employeeName(item.employeeId), when: item.lastWorkingDate, module: 'Exit', to: '/hr/exit' })),
-    ].slice(0, 8)
+        ...list(getNotifications()).slice(0, 4).map((item) => ({
+            id: item.id || `ntf-${item.notificationDate}-${item.title}`,
+            title: item.title,
+            detail: item.message,
+            when: item.notificationDate,
+            module: item.type,
+            to: '/hr/notifications',
+        })),
+        ...list(getOffers()).filter((item) => item.status === 'Issued' || item.status === 'Accepted').slice(0, 2).map((item) => ({
+            id: item.id || `offer-${item.offerDate}-${item.position}-${item.candidateId || ''}`,
+            title: 'Offer issued',
+            detail: item.position,
+            when: item.offerDate,
+            module: 'Recruitment',
+            to: '/hr/onboarding/offers',
+        })),
+        ...leaveRequests.filter((item) => item.status === 'Approved').slice(0, 2).map((item) => ({
+            id: item.id || `leave-${item.fromDate}-${item.employeeId}`,
+            title: 'Leave approved',
+            detail: employeeName(item.employeeId),
+            when: item.fromDate,
+            module: 'Leave',
+            to: '/hr/leave-management',
+        })),
+        ...list(getAdvances()).filter((item) => item.status === 'APPROVED').slice(0, 1).map((item) => ({
+            id: item.id || `adv-${item.requestedDate}-${item.employeeId}`,
+            title: 'Salary advance approved',
+            detail: employeeName(item.employeeId),
+            when: item.requestedDate,
+            module: 'Payroll',
+            to: '/hr/payroll/salary-advance',
+        })),
+        ...completedTraining.slice(0, 1).map((item) => ({
+            id: item.id || `trn-${item.startDate}-${item.title}`,
+            title: 'Training completed',
+            detail: item.title,
+            when: item.startDate,
+            module: 'Training',
+            to: '/hr/training-records',
+        })),
+        ...reviews.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({
+            id: item.id || `rev-${item.period}-${item.employeeId}`,
+            title: 'Performance review submitted',
+            detail: item.employeeId,
+            when: item.period,
+            module: 'Performance',
+            to: '/hr/performance-review',
+        })),
+        ...list(getDisciplinary()).filter((item) => item.acknowledgement === 'Acknowledged').slice(0, 1).map((item) => ({
+            id: item.id || `disc-${item.date}-${item.employeeId}`,
+            title: 'Disciplinary memo acknowledged',
+            detail: employeeName(item.employeeId),
+            when: item.date,
+            module: 'Disciplinary',
+            to: '/hr/disciplinary',
+        })),
+        ...exits.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({
+            id: item.id || `exit-${item.lastWorkingDate}-${item.employeeId}`,
+            title: 'Exit clearance completed',
+            detail: employeeName(item.employeeId),
+            when: item.lastWorkingDate,
+            module: 'Exit',
+            to: '/hr/exit',
+        })),
+    ].map((item, index) => ({ ...item, id: item.id || `activity-${index}` })).slice(0, 8)
 
     const pendingTotal = actions.reduce((sum, item) => sum + item.count, 0)
     return {

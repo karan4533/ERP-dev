@@ -3,10 +3,11 @@ import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react'
+import { toast } from 'react-toastify'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
-import { getRoutes, hydrateRoutesFromApi } from './routeManagementData'
+import { deleteRoute, getRoutes, hydrateRoutesFromApi } from './routeManagementData'
 
 const RouteManagement = () => {
     const [routes, setRoutes] = useState(() => getRoutes())
@@ -17,7 +18,29 @@ const RouteManagement = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [deleteRequestModal, setDeleteRequestModal] = useState(false)
+    const [deleteModal, setDeleteModal] = useState(false)
+    const [pendingDeleteId, setPendingDeleteId] = useState(null)
+    const [deleting, setDeleting] = useState(false)
+
+    const openDelete = (routeId) => {
+        setPendingDeleteId(routeId)
+        setDeleteModal(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!pendingDeleteId || deleting) return
+        setDeleting(true)
+        const result = await deleteRoute(pendingDeleteId)
+        setDeleting(false)
+        setDeleteModal(false)
+        setPendingDeleteId(null)
+        if (result?.success === false) {
+            toast.error(result.message || 'Could not delete route.')
+            return
+        }
+        setRoutes(getRoutes())
+        toast.success(result?.api ? 'Route deleted from campus API.' : 'Route deleted.')
+    }
 
     return (
         <section>
@@ -154,7 +177,7 @@ const RouteManagement = () => {
                                             </NavLink>
                                             <button
                                                 type='button'
-                                                onClick={() => setDeleteRequestModal(true)}
+                                                onClick={() => openDelete(route.id)}
                                                 className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Delete
@@ -184,7 +207,14 @@ const RouteManagement = () => {
             </div>
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            <DeleteRequestModal
+                deleteRequestModal={deleteModal}
+                setDeleteRequestModal={setDeleteModal}
+                onConfirm={handleConfirmDelete}
+                title='Delete Route?'
+                message='This will permanently remove the route. This action cannot be undone.'
+                confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+            />
         </section>
     )
 }

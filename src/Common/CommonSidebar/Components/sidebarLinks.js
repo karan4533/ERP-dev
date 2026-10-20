@@ -1449,6 +1449,12 @@ export const transportManagerSidebarLinks = [
         icon: Monitor,
     },
     {
+        id: 14,
+        title: "Service Centers",
+        to: "/transport-manager/service-centers",
+        icon: Landmark,
+    },
+    {
         id: 9,
         title: "Request Approvals",
         to: "/transport-manager/request-approvals",
@@ -2227,6 +2233,12 @@ export const principalSidebarLinks = [
         title: "Student Allocation",
         to: "/principal/student-allocation-approval",
         icon: UserPlus,
+    },
+    {
+        id: 18,
+        title: "Transport Approvals",
+        to: "/principal/transport-approvals",
+        icon: Bus,
     },
     {
         id: 17,

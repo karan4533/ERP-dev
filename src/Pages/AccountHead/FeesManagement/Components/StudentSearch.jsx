@@ -30,12 +30,17 @@ const formatOptionLabel = (option) => (
 )
 
 const StudentSearch = ({ students, academicYear, onAcademicYearChange, selectedStudent, onSelectStudent }) => {
-    const options = useMemo(() => students.map((student) => ({
-        value: student.id,
-        label: `${student.name} · ${student.className}-${student.section}`,
-        subLabel: `${student.admissionNo} · Roll ${student.rollNo} · ${student.phone}`,
-        student,
-    })), [students])
+    const options = useMemo(() => students.map((student) => {
+        const className = String(student.className || '').trim() || '—'
+        const section = String(student.section || '').trim()
+        const classLabel = section ? `${className}-${section}` : `${className} (section unassigned)`
+        return {
+            value: student.id,
+            label: `${student.name} · ${classLabel}`,
+            subLabel: `${student.admissionNo} · Roll ${student.rollNo || '—'} · ${student.phone || '—'}`,
+            student,
+        }
+    }), [students])
 
     const filterOption = (option, input) => {
         if (!input) return true

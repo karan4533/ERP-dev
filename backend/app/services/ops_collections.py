@@ -38,6 +38,7 @@ COLLECTIONS: dict[str, str] = {
     "transport-expenses": "TEX",
     "transport-budget-requests": "TBR",
     "transport-approval-requests": "TAR",
+    "transport-service-centers": "TSC",
     "transport-building-maintenance": "TBM",
     "transport-driver-fuel": "TDF",
     "transport-driver-maintenance": "TDM",
@@ -95,6 +96,16 @@ _ADMINS = {"admin", "superadmin", "managing_director"}
 _LIBRARY = {"librarian"} | _ADMINS
 _GATE = {"gatekeeper", "gatekeepermanager"} | _ADMINS
 _TRANSPORT = {"transportmanager", "driver"} | _ADMINS
+# Principal final-approves maintenance/fuel requests and posts the linked expense.
+_TRANSPORT_PRINCIPAL_WRITE = {
+    "transport-approval-requests",
+    "transport-expenses",
+    "transport-maintenance",
+}
+# Account Head sets per-route Transport Fee amounts from Fee Management.
+_TRANSPORT_FINANCE_WRITE = {
+    "transport-routes",
+}
 _CANTEEN = {"canteenmanager"} | _ADMINS
 _IT = {"itsupportmanager"} | _ADMINS
 _STATIONERY = {"stationerystoremanager"} | _ADMINS
@@ -110,7 +121,12 @@ def _writers_for(collection: str) -> set[str]:
     if collection.startswith("gate-"):
         return _GATE
     if collection.startswith("transport-"):
-        return _TRANSPORT
+        writers = set(_TRANSPORT)
+        if collection in _TRANSPORT_PRINCIPAL_WRITE:
+            writers |= {"principal", "director"}
+        if collection in _TRANSPORT_FINANCE_WRITE:
+            writers |= {"accounthead", "finance_assistant"}
+        return writers
     if collection.startswith("canteen-"):
         return _CANTEEN
     if collection.startswith("it-"):
@@ -133,7 +149,8 @@ def _readers_for(collection: str) -> set[str]:
     if collection.startswith("gate-"):
         return writers | {"prm", "principal", "director"}
     if collection.startswith("transport-"):
-        return writers | {"principal", "director", "jointdirector"}
+        # Account Head needs routes/drivers/vehicles for Transport Finance dropdowns.
+        return writers | {"principal", "director", "jointdirector", "accounthead"}
     if collection.startswith("jd-"):
         return writers | {"jointdirectoraudit", "principal", "director"}
     if collection == "biometric-attendance":

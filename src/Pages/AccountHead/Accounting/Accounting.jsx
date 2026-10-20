@@ -53,6 +53,8 @@ import {
     BALANCE_SHEET_STATEMENT,
     CASH_FLOW_STATEMENT,
 } from './accountingData'
+import { PAYMENT_MODES, TRANSACTION_DIRECTIONS, TRANSACTION_STATUSES } from '../financeDomain/financeConstants'
+import { parseRupeeAmount } from '../financeDomain/financeHelpers'
 
 const SECTION_SUBTITLES = {
     'day-book': 'Maintains the chronological record of all offline/manual transactions entered during the day.',
@@ -244,15 +246,28 @@ const Accounting = () => {
     )
 
     const handleAddOfflineEntry = (entry) => {
-        setDayBookEntries((prev) => appendDayBookEntry(prev, DAY_BOOK_OPENING_BALANCE, entry))
+        const amount = parseRupeeAmount(entry.debit !== '—' ? entry.debit : entry.credit)
+        const paymentMode = entry.paymentMethod === 'Cash'
+            ? PAYMENT_MODES.CASH
+            : entry.paymentMethod === 'Cheque'
+                ? PAYMENT_MODES.CHEQUE
+                : PAYMENT_MODES.BANK_TRANSFER
+        if (!apiLive) {
+            setDayBookEntries((prev) => appendDayBookEntry(prev, DAY_BOOK_OPENING_BALANCE, entry))
+        }
         finance.addManualEntry({
             date: entry.date,
-            amount: entry.debit !== '—' ? entry.debit : entry.credit,
-            paymentMode: entry.paymentMethod === 'Cash' ? 'CASH' : 'BANK_TRANSFER',
+            amount,
+            paymentMode,
             narration: entry.description,
             category: entry.ledgerHead,
             entryType: entry.transactionType,
-            status: 'DRAFT',
+            direction: entry.transactionType === 'Expense'
+                ? TRANSACTION_DIRECTIONS.OUT
+                : TRANSACTION_DIRECTIONS.IN,
+            status: TRANSACTION_STATUSES.POSTED,
+            reference: entry.voucherNo,
+            createdBy: entry.enteredBy,
         })
     }
 

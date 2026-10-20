@@ -64,6 +64,8 @@ class UserUpdateIn(_Details):
     firstName: str | None = Field(default=None, max_length=120)
     middleName: str | None = Field(default=None, max_length=120)
     lastName: str | None = Field(default=None, max_length=120)
+    email: EmailStr | None = None
+    role: str | None = Field(default=None, max_length=64)
     gender: str | None = Field(default=None, max_length=24)
     mobileNumber: str | None = Field(default=None, max_length=32)
     status: Literal["Active", "Inactive"] | None = None

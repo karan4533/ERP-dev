@@ -9,15 +9,314 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.deps import role_code_for
 from app.models import HrRecord, User
 from app.services import finance as fin
 from app.services.audit import write_audit
 from app.services.errors import fail
 from app.services.integrations import notify, payments
 
+_TRANSPORT_FEE_ROLES = {
+    "transportmanager",
+    "accounthead",
+    "finance_assistant",
+    "admin",
+    "superadmin",
+    "managing_director",
+}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _inr_label(amount: float) -> str:
+    return f"₹{int(round(float(amount or 0))):,}"
+
+
+def _display_date(iso_date: str | None) -> str:
+    parsed = _parse_iso_date(iso_date)
+    if parsed is None:
+        return str(iso_date or "")[:10] or "—"
+    return parsed.strftime("%d %b %Y")
+
+
+def _mode_label(mode: str | None) -> str:
+    key = str(mode or "CASH").upper()
+    return {
+        "CASH": "Cash",
+        "CHEQUE": "Cheque",
+        "BANK_TRANSFER": "NEFT (Manual)",
+        "UPI": "UPI",
+        "CARD_ONLINE": "Card",
+        "CARD_POS": "Card",
+        "PAYMENT_GATEWAY": "UPI",
+    }.get(key, "Cash")
+
+
+def _already_posted_books(data: dict, txn_id: str) -> bool:
+    for key in ("dayBookEntries", "glEntries", "cashBookEntries", "bankBookEntries", "onlineBookEntries"):
+        for row in data.get(key) or []:
+            if str((row or {}).get("sourceTransactionId") or "") == str(txn_id):
+                return True
+    return False
+
+
+def _append_accounting_posting(data: dict, transaction: dict, student: dict | None = None) -> None:
+    """Mirror FE createAccountingPosting into campus snapshot books."""
+    txn_id = str(transaction.get("id") or "")
+    if not txn_id or _already_posted_books(data, txn_id):
+        return
+    status = str(transaction.get("status") or "").upper()
+    if status not in {"POSTED", ""}:
+        return
+
+    amount = float(transaction.get("amount") or 0)
+    if amount <= 0:
+        return
+
+    mode = str(transaction.get("paymentMode") or "CASH").upper()
+    is_cash = mode == "CASH"
+    is_cheque = mode == "CHEQUE"
+    is_out = str(transaction.get("direction") or "IN").upper() == "OUT"
+    iso = str(transaction.get("transactionDate") or "")[:10]
+    display = _display_date(iso)
+    amount_label = _inr_label(amount)
+    party = (student or {}).get("name") or "Student"
+    category = str(transaction.get("category") or "Student Fees")
+    narration = transaction.get("narration") or (
+        f"{'Payout' if is_out else 'Fee receipt'} — {party}"
+    )
+    voucher_no = transaction.get("voucherNo") or transaction.get("transactionNo")
+    txn_no = transaction.get("transactionNo")
+    created_by = transaction.get("createdBy") or "Finance"
+    cash_ledger = "Cash in Hand"
+    bank_ledger = "Bank — SBI Current A/c"
+    income_ledger = (
+        "Fee Income — Transport"
+        if "transport" in category.lower()
+        else "Fee Income — Tuition"
+    )
+    expense_ledger = category if category else "Operating Expense"
+    money_ledger = cash_ledger if is_cash else bank_ledger
+
+    if is_out:
+        gl_lines = [
+            {
+                "id": f"GL-{txn_id}-DR",
+                "date": display,
+                "dateIso": iso,
+                "voucherNo": voucher_no,
+                "ledgerAccount": expense_ledger,
+                "description": narration,
+                "debit": amount_label,
+                "credit": "—",
+                "balance": amount_label,
+                "referenceModule": "Accounting",
+                "sourceModule": transaction.get("sourceModule") or "MANUAL",
+                "sourceTransactionId": txn_id,
+                "referenceNo": txn_no,
+                "voucherType": "Payment",
+                "department": "Transport" if "transport" in category.lower() else "General",
+                "financialYear": "2026–27",
+                "status": "Posted",
+            },
+            {
+                "id": f"GL-{txn_id}-CR",
+                "date": display,
+                "dateIso": iso,
+                "voucherNo": voucher_no,
+                "ledgerAccount": money_ledger,
+                "description": narration,
+                "debit": "—",
+                "credit": amount_label,
+                "balance": amount_label,
+                "referenceModule": "Accounting",
+                "sourceModule": transaction.get("sourceModule") or "MANUAL",
+                "sourceTransactionId": txn_id,
+                "referenceNo": txn_no,
+                "voucherType": "Payment",
+                "department": "Transport" if "transport" in category.lower() else "General",
+                "financialYear": "2026–27",
+                "status": "Posted",
+            },
+        ]
+        day_book = {
+            "id": f"DB-{txn_id}",
+            "date": display,
+            "voucherNo": voucher_no,
+            "transactionType": "Expense",
+            "ledgerHead": expense_ledger,
+            "description": narration,
+            "paymentMethod": _mode_label(mode),
+            "debit": "—",
+            "credit": amount_label,
+            "balance": amount_label,
+            "enteredBy": created_by,
+            "status": "Posted",
+            "department": "General",
+            "sourceTransactionId": txn_id,
+            "referenceNo": txn_no,
+            "category": category,
+            "cash": amount_label if is_cash else "—",
+            "bank": amount_label if not is_cash else "—",
+            "narration": narration,
+            "voucherType": "Payment",
+        } if (is_cash or is_cheque or mode == "BANK_TRANSFER") else None
+        cash_book = {
+            "id": f"CB-{txn_id}",
+            "date": display,
+            "dateIso": iso,
+            "voucher": voucher_no,
+            "description": narration,
+            "receipt": "—",
+            "payment": amount_label,
+            "balance": amount_label,
+            "cashAccount": cash_ledger,
+            "transactionType": "Payment",
+            "sourceTransactionId": txn_id,
+            "referenceNo": txn_no,
+        } if is_cash else None
+        bank_book = {
+            "id": f"BB-{txn_id}",
+            "date": display,
+            "dateIso": iso,
+            "bank": transaction.get("bankName") or "State Bank of India",
+            "accountNumber": transaction.get("bankAccountNumber") or "38472910482",
+            "account": transaction.get("bankAccountName") or bank_ledger.replace("Bank — ", ""),
+            "voucher": voucher_no,
+            "deposit": "—",
+            "withdrawal": amount_label,
+            "balance": amount_label,
+            "referenceNumber": transaction.get("paymentReference") or txn_no,
+            "voucherType": "Payment",
+            "chequeNo": (transaction.get("chequeDetails") or {}).get("chequeNo") or "—",
+            "description": narration,
+            "sourceTransactionId": txn_id,
+            "slNo": 1,
+        } if (not is_cash) else None
+        online_book = None
+    else:
+        gl_lines = [
+            {
+                "id": f"GL-{txn_id}-DR",
+                "date": display,
+                "dateIso": iso,
+                "voucherNo": voucher_no,
+                "ledgerAccount": money_ledger,
+                "description": narration,
+                "debit": amount_label,
+                "credit": "—",
+                "balance": amount_label,
+                "referenceModule": "Fees Management",
+                "sourceModule": transaction.get("sourceModule") or "FEES",
+                "sourceTransactionId": txn_id,
+                "referenceNo": txn_no,
+                "voucherType": "Receipt",
+                "department": "Fees",
+                "financialYear": "2026–27",
+                "status": "Posted",
+            },
+            {
+                "id": f"GL-{txn_id}-CR",
+                "date": display,
+                "dateIso": iso,
+                "voucherNo": voucher_no,
+                "ledgerAccount": income_ledger,
+                "description": narration,
+                "debit": "—",
+                "credit": amount_label,
+                "balance": amount_label,
+                "referenceModule": "Fees Management",
+                "sourceModule": transaction.get("sourceModule") or "FEES",
+                "sourceTransactionId": txn_id,
+                "referenceNo": txn_no,
+                "voucherType": "Receipt",
+                "department": "Fees",
+                "financialYear": "2026–27",
+                "status": "Posted",
+            },
+        ]
+        day_book = {
+            "id": f"DB-{txn_id}",
+            "date": display,
+            "voucherNo": voucher_no,
+            "transactionType": "Income",
+            "ledgerHead": income_ledger,
+            "description": narration,
+            "paymentMethod": _mode_label(mode),
+            "debit": amount_label,
+            "credit": "—",
+            "balance": amount_label,
+            "enteredBy": created_by,
+            "status": "Posted",
+            "department": "Fees",
+            "sourceTransactionId": txn_id,
+            "referenceNo": txn_no,
+            "category": category,
+            "cash": amount_label if is_cash else "—",
+            "bank": amount_label if is_cheque else "—",
+            "narration": narration,
+            "voucherType": "Receipt",
+        } if (is_cash or is_cheque) else None
+        cash_book = {
+            "id": f"CB-{txn_id}",
+            "date": display,
+            "dateIso": iso,
+            "voucher": voucher_no,
+            "description": narration,
+            "receipt": amount_label,
+            "payment": "—",
+            "balance": amount_label,
+            "cashAccount": cash_ledger,
+            "transactionType": "Receipt",
+            "sourceTransactionId": txn_id,
+            "referenceNo": txn_no,
+        } if is_cash else None
+        bank_book = {
+            "id": f"BB-{txn_id}",
+            "date": display,
+            "dateIso": iso,
+            "bank": transaction.get("bankName") or "State Bank of India",
+            "accountNumber": transaction.get("bankAccountNumber") or "38472910482",
+            "account": transaction.get("bankAccountName") or bank_ledger.replace("Bank — ", ""),
+            "voucher": voucher_no,
+            "deposit": amount_label,
+            "withdrawal": "—",
+            "balance": amount_label,
+            "referenceNumber": transaction.get("paymentReference") or txn_no,
+            "voucherType": "Receipt",
+            "chequeNo": (transaction.get("chequeDetails") or {}).get("chequeNo") or "—",
+            "description": narration,
+            "sourceTransactionId": txn_id,
+            "slNo": 1,
+        } if (not is_cash and not is_cheque) else None
+        online_modes = {"UPI", "CARD_ONLINE", "PAYMENT_GATEWAY"}
+        online_book = {
+            "id": f"OLT-{txn_id}",
+            "dateTime": display,
+            "dateIso": iso,
+            "transactionId": txn_no,
+            "party": party,
+            "transactionType": "Income",
+            "paymentGateway": "Razorpay",
+            "paymentMethod": _mode_label(mode),
+            "amount": amount_label,
+            "bankReference": transaction.get("paymentReference") or txn_no,
+            "status": "Successful",
+            "sourceTransactionId": txn_id,
+        } if mode in online_modes else None
+
+    if gl_lines:
+        data["glEntries"] = [*gl_lines, *(data.get("glEntries") or [])]
+    if day_book:
+        data["dayBookEntries"] = [day_book, *(data.get("dayBookEntries") or [])]
+    if cash_book:
+        data["cashBookEntries"] = [cash_book, *(data.get("cashBookEntries") or [])]
+    if bank_book:
+        data["bankBookEntries"] = [bank_book, *(data.get("bankBookEntries") or [])]
+    if online_book:
+        data["onlineBookEntries"] = [online_book, *(data.get("onlineBookEntries") or [])]
 
 
 def _seq(data: dict) -> dict:
@@ -330,6 +629,9 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
         },
     )
 
+    if not holds:
+        _append_accounting_posting(data, transaction, student)
+
     data["installments"] = installments
     data["transactions"] = transactions
     data["receipts"] = receipts
@@ -379,6 +681,16 @@ def settle_cheque(db: Session, actor: User, payload: dict) -> dict:
         for receipt in receipts:
             if receipt.get("transactionId") == cheque.get("transactionId"):
                 receipt["status"] = "Issued"
+        cleared_txn = next(
+            (t for t in transactions if t.get("id") == cheque.get("transactionId")),
+            None,
+        )
+        if cleared_txn is not None:
+            student = next(
+                (s for s in (data.get("students") or []) if str(s.get("id")) == str(cheque.get("studentId"))),
+                None,
+            )
+            _append_accounting_posting(data, cleared_txn, student)
 
     audit.insert(
         0,
@@ -709,3 +1021,95 @@ def decide_approval(db: Session, actor: User, payload: dict) -> dict:
     data["approvals"] = approvals
     saved = _save(db, actor, data)
     return {"success": True, "approval": row, "state": saved}
+
+
+def post_transport_enrollment_fee(db: Session, actor: User, payload: dict) -> dict:
+    """Transport Manager / Finance: attach route-based transport installments to the campus ledger."""
+    code = role_code_for(db, actor)
+    if code not in _TRANSPORT_FEE_ROLES:
+        fail(403, "forbidden", "Only Transport Manager or Finance can post transport enrollment fees.")
+
+    student = payload.get("student") or {}
+    fee_structure = payload.get("feeStructure") or {}
+    installments_in = payload.get("installments") or []
+    assignment_id = str(payload.get("transportAssignmentId") or fee_structure.get("transportAssignmentId") or "").strip()
+
+    if not isinstance(student, dict) or not student.get("id"):
+        fail(400, "validation_error", "student.id is required.")
+    if not isinstance(installments_in, list) or not installments_in:
+        fail(400, "validation_error", "installments are required.")
+
+    state = fin.get_state(db, actor)
+    data = dict(state["data"])
+
+    categories = list(data.get("feeCategories") or [])
+    if not any(str(c.get("id")) == "CAT-TRANSPORT" for c in categories):
+        categories.insert(
+            0,
+            {
+                "id": "CAT-TRANSPORT",
+                "name": "Transport Fee",
+                "code": "TRANSPORT",
+                "active": True,
+            },
+        )
+    data["feeCategories"] = categories
+
+    structures = list(data.get("feeStructures") or [])
+    structure_id = str(fee_structure.get("id") or f"FS-TRANSPORT-{assignment_id or student.get('id')}")
+    fee_structure = {**fee_structure, "id": structure_id, "feeCategoryId": fee_structure.get("feeCategoryId") or "CAT-TRANSPORT"}
+    structures = [row for row in structures if str(row.get("id")) != structure_id]
+    structures.insert(0, fee_structure)
+    data["feeStructures"] = structures
+
+    students = list(data.get("students") or [])
+    student_id = str(student.get("id"))
+    students = [row for row in students if str(row.get("id")) != student_id]
+    students.insert(0, student)
+    data["students"] = students
+
+    installments = list(data.get("installments") or [])
+    installments = [
+        row
+        for row in installments
+        if str(row.get("transportAssignmentId") or "") != assignment_id
+        and not (
+            str(row.get("source") or "") == "transport-enrollment"
+            and str(row.get("studentId") or "") == student_id
+            and str(row.get("feeStructureId") or "") == structure_id
+        )
+    ]
+    normalized = []
+    for row in installments_in:
+        if not isinstance(row, dict):
+            continue
+        normalized.append(
+            {
+                **row,
+                "studentId": student_id,
+                "feeStructureId": structure_id,
+                "feeCategoryId": row.get("feeCategoryId") or "CAT-TRANSPORT",
+                "feeHead": row.get("feeHead") or "Transport Fee",
+                "source": "transport-enrollment",
+                "transportAssignmentId": assignment_id or row.get("transportAssignmentId"),
+            }
+        )
+    data["installments"] = normalized + installments
+
+    saved = _save(db, actor, data)
+    write_audit(
+        db,
+        action="TRANSPORT_FEE_POSTED",
+        entity_type="TransportEnrollment",
+        entity_id=assignment_id or student_id,
+        actor_id=actor.id,
+        campus_id=actor.campus_id,
+        details=f"Posted {len(normalized)} transport installment(s) for {student.get('name') or student_id}",
+    )
+    return {
+        "success": True,
+        "installmentsCreated": len(normalized),
+        "studentId": student_id,
+        "feeStructureId": structure_id,
+        "state": saved,
+    }

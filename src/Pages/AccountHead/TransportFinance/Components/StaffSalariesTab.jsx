@@ -18,26 +18,28 @@ import { useFinance } from '../../financeDomain/FinanceContext'
 import { formatCurrency } from '../../financeDomain/financeHelpers'
 
 const StaffSalariesTab = () => {
-    const { transactions, financePersistence } = useFinance()
+    const { transactions, financePersistence, transportSalaries } = useFinance()
     const apiLive = Boolean(financePersistence?.apiEnabled)
     const payrollPosted = useMemo(
         () => (transactions || []).filter((row) => row.sourceModule === 'PAYROLL'),
         [transactions],
     )
+    const salaryRegister = transportSalaries || []
     const liveSummary = useMemo(() => {
         const total = payrollPosted.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+        const registerTotal = salaryRegister.reduce((sum, row) => sum + (Number(row.netAmount || row.amount) || 0), 0)
         return [
             { label: 'Posted payroll vouchers', value: String(payrollPosted.length), sub: 'sourceModule=PAYROLL', iconTone: 'success' },
-            { label: 'Posted amount', value: formatCurrency(total), sub: 'Snapshot only', iconTone: 'success' },
-            { label: 'Staff register', value: apiLive ? 'Hidden' : 'Demo', sub: apiLive ? 'Seed payroll table not shown in API mode' : 'Offline demo staff list', iconTone: 'warning' },
-            { label: 'Payslip send', value: 'Stub', sub: 'Email/WhatsApp remain mocked', iconTone: 'warning' },
+            { label: 'Posted amount', value: formatCurrency(total), sub: 'Snapshot transactions', iconTone: 'success' },
+            { label: 'Staff register rows', value: String(salaryRegister.length), sub: apiLive ? 'transportSalaries' : 'Offline seed', iconTone: 'info' },
+            { label: 'Register net', value: formatCurrency(registerTotal), sub: 'From transportSalaries', iconTone: 'warning' },
         ]
-    }, [apiLive, payrollPosted])
+    }, [apiLive, payrollPosted, salaryRegister])
 
     return (
     <div className='space-y-6'>
         <SummaryCards cards={apiLive ? liveSummary : SALARY_SUMMARY} />
-        {payrollPosted.length > 0 && (
+        {(payrollPosted.length > 0 || (apiLive && salaryRegister.length > 0)) && (
             <TableCard title='Posted payroll vouchers (Finance books)' footer={<TablePagination summary={`${payrollPosted.length} vouchers`} />}>
                 <table className='w-full text-sm text-left mt-4'>
                     <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -55,6 +57,40 @@ const StaffSalariesTab = () => {
                                 <td className={tdClass}>{row.employeeId || '—'}</td>
                                 <td className={tdClass}>{row.narration || 'Payroll'}</td>
                                 <td className={`${tdClass} rounded-e-lg font-semibold`}>{formatCurrency(row.amount || 0)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </TableCard>
+        )}
+
+        {apiLive && (
+            <TableCard
+                title='Transport staff register (snapshot)'
+                footer={<TablePagination summary={`${salaryRegister.length} staff on transportSalaries`} />}
+            >
+                <table className='w-full text-sm text-left mt-4'>
+                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                        <tr>
+                            <th className={`${thClass} rounded-s-lg`}>Staff</th>
+                            <th className={thClass}>Role</th>
+                            <th className={thClass}>Net pay</th>
+                            <th className={`${thClass} rounded-e-lg`}>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {salaryRegister.length === 0 ? (
+                            <tr>
+                                <td colSpan={4} className={`${tdClass} text-[#667085]`}>
+                                    No rows on `transportSalaries` yet. HR payroll vouchers still appear above when posted.
+                                </td>
+                            </tr>
+                        ) : salaryRegister.map((row) => (
+                            <tr key={row.id} className='border-b border-[#f2f4f7]'>
+                                <td className={`${tdClass} rounded-s-lg`}>{row.name || row.staffName || '—'}</td>
+                                <td className={tdClass}>{row.role || '—'}</td>
+                                <td className={`${tdClass} font-semibold`}>{formatCurrency(row.netAmount || row.amount || 0)}</td>
+                                <td className={`${tdClass} rounded-e-lg`}>{row.status || '—'}</td>
                             </tr>
                         ))}
                     </tbody>

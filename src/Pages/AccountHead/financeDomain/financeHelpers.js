@@ -354,76 +354,125 @@ export const createAccountingPosting = ({
     const displayDate = formatDisplayDate(iso)
     const isCash = transaction.paymentMode === PAYMENT_MODES.CASH
     const isCheque = transaction.paymentMode === PAYMENT_MODES.CHEQUE
-    const debitAccount = isCash ? LEDGER_ACCOUNTS.CASH : LEDGER_ACCOUNTS.BANK
-    const creditAccount = transaction.category?.toLowerCase().includes('transport')
+    const isOut = transaction.direction === TRANSACTION_DIRECTIONS.OUT
+        || String(transaction.entryType || '').toLowerCase() === 'expense'
+    const moneyAccount = isCash ? LEDGER_ACCOUNTS.CASH : LEDGER_ACCOUNTS.BANK
+    const incomeAccount = transaction.category?.toLowerCase().includes('transport')
         ? LEDGER_ACCOUNTS.TRANSPORT_INCOME
         : LEDGER_ACCOUNTS.FEE_INCOME
+    const expenseAccount = transaction.category || 'Operating Expense'
     const amountLabel = formatCurrency(amount)
     const party = student?.name ?? 'Student'
-    const description = narration || `Fee receipt — ${party}`
+    const description = narration || (isOut ? `Payout — ${party}` : `Fee receipt — ${party}`)
+    const sourceModule = transaction.sourceModule || (isOut ? SOURCE_MODULES.MANUAL : SOURCE_MODULES.FEES)
+    const department = isOut
+        ? (String(transaction.category || '').toLowerCase().includes('transport') ? 'Transport' : 'General')
+        : 'Fees'
+    const voucherType = isOut ? 'Payment' : 'Receipt'
 
-    const glLines = [
-        {
-            id: `GL-${transaction.id}-DR`,
-            date: displayDate,
-            dateIso: iso,
-            voucherNo: transaction.voucherNo,
-            ledgerAccount: debitAccount,
-            description,
-            debit: amountLabel,
-            credit: '—',
-            balance: amountLabel,
-            referenceModule: 'Fees Management',
-            sourceModule: SOURCE_MODULES.FEES,
-            sourceTransactionId: transaction.id,
-            referenceNo: transaction.transactionNo,
-            voucherType: 'Receipt',
-            department: 'Fees',
-            financialYear: '2026–27',
-            status: 'Posted',
-        },
-        {
-            id: `GL-${transaction.id}-CR`,
-            date: displayDate,
-            dateIso: iso,
-            voucherNo: transaction.voucherNo,
-            ledgerAccount: creditAccount,
-            description,
-            debit: '—',
-            credit: amountLabel,
-            balance: amountLabel,
-            referenceModule: 'Fees Management',
-            sourceModule: SOURCE_MODULES.FEES,
-            sourceTransactionId: transaction.id,
-            referenceNo: transaction.transactionNo,
-            voucherType: 'Receipt',
-            department: 'Fees',
-            financialYear: '2026–27',
-            status: 'Posted',
-        },
-    ]
+    const glLines = isOut
+        ? [
+            {
+                id: `GL-${transaction.id}-DR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: expenseAccount,
+                description,
+                debit: amountLabel,
+                credit: '—',
+                balance: amountLabel,
+                referenceModule: 'Accounting',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+            {
+                id: `GL-${transaction.id}-CR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: moneyAccount,
+                description,
+                debit: '—',
+                credit: amountLabel,
+                balance: amountLabel,
+                referenceModule: 'Accounting',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+        ]
+        : [
+            {
+                id: `GL-${transaction.id}-DR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: moneyAccount,
+                description,
+                debit: amountLabel,
+                credit: '—',
+                balance: amountLabel,
+                referenceModule: 'Fees Management',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+            {
+                id: `GL-${transaction.id}-CR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: incomeAccount,
+                description,
+                debit: '—',
+                credit: amountLabel,
+                balance: amountLabel,
+                referenceModule: 'Fees Management',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+        ]
 
-    const dayBookEntry = (isCash || isCheque) ? {
+    const dayBookEntry = (isCash || isCheque || (isOut && transaction.paymentMode === PAYMENT_MODES.BANK_TRANSFER)) ? {
         id: `DB-${transaction.id}`,
         date: displayDate,
         voucherNo: transaction.voucherNo,
-        transactionType: 'Income',
-        ledgerHead: creditAccount,
+        transactionType: isOut ? 'Expense' : 'Income',
+        ledgerHead: isOut ? expenseAccount : incomeAccount,
         description,
         paymentMethod: modeToPaymentMethodLabel(transaction.paymentMode),
-        debit: amountLabel,
-        credit: '—',
+        debit: isOut ? '—' : amountLabel,
+        credit: isOut ? amountLabel : '—',
         balance: amountLabel,
         enteredBy: transaction.createdBy,
-        status: isCheque ? 'Pending Clearance' : 'Posted',
-        department: 'Fees',
+        status: isCheque && !isOut ? 'Pending Clearance' : 'Posted',
+        department,
         sourceTransactionId: transaction.id,
         referenceNo: transaction.transactionNo,
         category: transaction.category,
         cash: isCash ? amountLabel : '—',
-        bank: isCheque ? amountLabel : '—',
+        bank: (!isCash) ? amountLabel : '—',
         narration: description,
-        voucherType: 'Receipt',
+        voucherType,
     } : null
 
     const cashBookEntry = isCash ? {
@@ -432,11 +481,11 @@ export const createAccountingPosting = ({
         dateIso: iso,
         voucher: transaction.voucherNo,
         description,
-        receipt: amountLabel,
-        payment: '—',
+        receipt: isOut ? '—' : amountLabel,
+        payment: isOut ? amountLabel : '—',
         balance: amountLabel,
         cashAccount: LEDGER_ACCOUNTS.CASH,
-        transactionType: 'Receipt',
+        transactionType: voucherType,
         sourceTransactionId: transaction.id,
         referenceNo: transaction.transactionNo,
     } : null
@@ -449,18 +498,18 @@ export const createAccountingPosting = ({
         accountNumber: transaction.bankAccountNumber || '38472910482',
         account: transaction.bankAccountName || LEDGER_ACCOUNTS.BANK.replace('Bank — ', ''),
         voucher: transaction.voucherNo,
-        deposit: amountLabel,
-        withdrawal: '—',
+        deposit: isOut ? '—' : amountLabel,
+        withdrawal: isOut ? amountLabel : '—',
         balance: amountLabel,
         referenceNumber: transaction.reference || transaction.transactionNo,
-        voucherType: 'Receipt',
+        voucherType,
         chequeNo: transaction.chequeDetails?.chequeNo || '—',
         description,
         sourceTransactionId: transaction.id,
         slNo: 1,
     } : null
 
-    const onlineBookEntry = isOnlinePaymentMode(transaction.paymentMode) ? {
+    const onlineBookEntry = (!isOut && isOnlinePaymentMode(transaction.paymentMode)) ? {
         id: `OLT-${transaction.id}`,
         dateTime: formatDisplayDateTime(transaction.transactionDate),
         dateIso: iso,

@@ -1,13 +1,18 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-import { VEHICLES } from '../VehicleManagement/vehicleManagementData'
+import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
+import { getVehicleOptions } from '../VehicleManagement/vehicleManagementData'
 
 export const PAYMENT_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque']
 
-export const VEHICLE_OPTIONS = VEHICLES.map((vehicle) => ({
-    id: vehicle.id,
-    label: vehicle.vehicleNumber,
-    driverName: vehicle.driverName,
-}))
+/** @deprecated Use getExpenseVehicleOptions() */
+export const VEHICLE_OPTIONS = []
+
+export function getExpenseVehicleOptions() {
+    return getVehicleOptions().map((vehicle) => ({
+        id: vehicle.id,
+        label: vehicle.vehicleNumber,
+        driverName: vehicle.driverName,
+    }))
+}
 
 export const FUEL_STATIONS = [
     'Indian Oil — Anna Nagar',
@@ -27,6 +32,9 @@ export const SERVICE_TYPES = [
     'Battery Replacement',
 ]
 
+export { getServiceCenters as getExpenseServiceCenters } from '../VehicleMaintenance/serviceCentersData'
+
+/** @deprecated Use getExpenseServiceCenters() */
 export const SERVICE_CENTERS = [
     'Chennai Automotive Service — Velachery',
     'TN Transport Works — Guindy',
@@ -230,25 +238,54 @@ const serviceRows = (rows) => rows.filter((item) => String(item.id ?? '').starts
 const otherRows = (rows) => rows.filter((item) => String(item.id ?? '').startsWith('OE-'))
 
 export const TRANSPORT_EXPENSES_STORAGE_KEY = 'schoolerp-transport-expenses-v1'
+
 export function getTransportExpenses() {
-    return ensureCampusSeed('schoolerp-transport-expenses-v1', DEFAULT_TRANSPORT_EXPENSES)
+    return getTransportRows(TRANSPORT_EXPENSES_STORAGE_KEY, DEFAULT_TRANSPORT_EXPENSES)
 }
+
 export function getFuelExpenses() {
     return fuelRows(getTransportExpenses())
 }
+
 export function getServiceExpenses() {
     return serviceRows(getTransportExpenses())
 }
+
 export function getOtherExpenses() {
     return otherRows(getTransportExpenses())
 }
+
 export function saveTransportExpenses(rows) {
-    return saveCampusJson('schoolerp-transport-expenses-v1', rows)
+    return saveTransportRows(TRANSPORT_EXPENSES_STORAGE_KEY, rows)
 }
+
 export function hydrateTransportExpensesFromApi() {
-    if (!usesCampusApiForKey('schoolerp-transport-expenses-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-transport-expenses-v1', DEFAULT_TRANSPORT_EXPENSES)
+    return hydrateTransportRows(TRANSPORT_EXPENSES_STORAGE_KEY)
 }
+
+export async function upsertTransportExpense(expense, prefix = 'FE-') {
+    const rows = getTransportExpenses()
+    const nextId = expense.id || nextPrefixedId(rows.filter((row) => String(row.id ?? '').startsWith(prefix)), prefix)
+    const record = {
+        ...expense,
+        id: nextId,
+        expenseId: expense.expenseId || nextId,
+    }
+    const idx = rows.findIndex((row) => row.id === nextId)
+    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? record : row)) : [...rows, record]
+    const result = await saveTransportExpenses(next)
+    return { ...result, record }
+}
+
+export async function deleteTransportExpense(id) {
+    const rows = getTransportExpenses()
+    const next = rows.filter((row) => row.id !== id)
+    if (next.length === rows.length) {
+        return { success: false, message: 'Expense not found.' }
+    }
+    return saveTransportExpenses(next)
+}
+
 export const getFuelExpenseById = (id) => getFuelExpenses().find((item) => item.id === id) ?? null
 export const getServiceExpenseById = (id) => getServiceExpenses().find((item) => item.id === id) ?? null
 export const getOtherExpenseById = (id) => getOtherExpenses().find((item) => item.id === id) ?? null

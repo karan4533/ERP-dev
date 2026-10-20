@@ -326,16 +326,17 @@ export const blankChecklist = () => ONBOARDING_ITEMS.map((label) => ({ label, st
 
 const monthRow = (employeeId, month, year) => {
     const bundle = getPayrollBundle()
-    return (bundle.months || []).find((item) => item?.employeeId === employeeId && item.month === month && Number(item.year) === Number(year))
+    const months = Array.isArray(bundle?.months) ? bundle.months : []
+    return months.find((item) => item?.employeeId === employeeId && item.month === month && Number(item.year) === Number(year))
         || { employeeId, month, year: Number(year), workingDays: 26, lates: 0, permission: 0, casualLeave: 0, otherLeave: 0, absent: 0, notPunched: 0, paymentStatus: 'Unpaid', bankRef: '', paymentDate: '', paymentMode: 'Bank Transfer' }
 }
 
 export const salaryRows = (month, year, filters = {}) => {
-    return getEmployees()
+    return asList(getEmployees(), [])
         .filter((employee) => !filters.category || employee.category === filters.category)
         .filter((employee) => !filters.department || employee.department === filters.department)
         .filter((employee) => !filters.status || employee.status === filters.status)
-        .filter((employee) => !filters.search || `${employee.name} ${employee.id}`.toLowerCase().includes(filters.search.toLowerCase()))
+        .filter((employee) => !filters.search || `${employee.name} ${employee.id}`.toLowerCase().includes(String(filters.search).toLowerCase()))
         .map((employee) => buildSalaryRow({
             employee,
             attendance: monthRow(employee.id, month, year),

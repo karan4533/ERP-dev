@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bus, MapPin, ChevronRight } from 'lucide-react'
-import { ROUTES } from '../RouteManagement/routeManagementData'
+import { getRoutes, hydrateRoutesFromApi } from '../RouteManagement/routeManagementData'
 
 const MapPlaceholder = () => (
     <div className='relative h-44 bg-linear-to-br from-[#E8EBFF] via-[#F4F6FF] to-[#EDEEF5] overflow-hidden'>
@@ -35,6 +35,22 @@ const MapPlaceholder = () => (
 
 const RouteData = () => {
     const navigate = useNavigate()
+    const [routes, setRoutes] = useState(() => getRoutes())
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        let cancelled = false
+        hydrateRoutesFromApi()
+            .finally(() => {
+                if (!cancelled) {
+                    setRoutes(getRoutes())
+                    setLoading(false)
+                }
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [])
 
     return (
         <section>
@@ -45,46 +61,56 @@ const RouteData = () => {
                 </p>
             </div>
 
-            <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'>
-                {ROUTES.map((route) => (
-                    <button
-                        key={route.id}
-                        type='button'
-                        onClick={() => navigate(`/transport-manager/route-data/track/${route.id}`)}
-                        className='bg-white rounded-2xl shadow-md overflow-hidden text-left hover:shadow-lg hover:ring-2 hover:ring-[#515DEF]/20 transition-all duration-200 cursor-pointer group'
-                    >
-                        <MapPlaceholder />
-                        <div className='p-4'>
-                            <div className='flex items-start justify-between gap-3'>
-                                <div className='min-w-0 flex-1'>
-                                    <h3 className='text-base font-semibold text-[#0C1E5B] truncate group-hover:text-[#515DEF] transition-colors'>
-                                        {route.routeName}
-                                    </h3>
-                                    <p className='text-xs text-[#667085] mt-1 truncate'>
-                                        {route.startLocation} → {route.endLocation}
-                                    </p>
+            {loading ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading routes…
+                </div>
+            ) : routes.length === 0 ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    No routes yet — add routes under Route Management.
+                </div>
+            ) : (
+                <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'>
+                    {routes.map((route) => (
+                        <button
+                            key={route.id}
+                            type='button'
+                            onClick={() => navigate(`/transport-manager/route-data/track/${route.id}`)}
+                            className='bg-white rounded-2xl shadow-md overflow-hidden text-left hover:shadow-lg hover:ring-2 hover:ring-[#515DEF]/20 transition-all duration-200 cursor-pointer group'
+                        >
+                            <MapPlaceholder />
+                            <div className='p-4'>
+                                <div className='flex items-start justify-between gap-3'>
+                                    <div className='min-w-0 flex-1'>
+                                        <h3 className='text-base font-semibold text-[#0C1E5B] truncate group-hover:text-[#515DEF] transition-colors'>
+                                            {route.routeName}
+                                        </h3>
+                                        <p className='text-xs text-[#667085] mt-1 truncate'>
+                                            {route.startLocation} → {route.endLocation}
+                                        </p>
+                                    </div>
+                                    <ChevronRight size={18} className='text-[#667085] shrink-0 mt-0.5 group-hover:text-[#515DEF] transition-colors' />
                                 </div>
-                                <ChevronRight size={18} className='text-[#667085] shrink-0 mt-0.5 group-hover:text-[#515DEF] transition-colors' />
-                            </div>
 
-                            <div className='mt-4 pt-4 border-t border-[#f2f4f7] space-y-2'>
-                                <div className='flex items-center gap-2 text-sm text-[#667085]'>
-                                    <Bus size={16} className='text-[#515DEF] shrink-0' />
-                                    <span className='truncate'>
-                                        <span className='font-medium text-[#1E1E1E]'>Bus:</span> {route.vehicleNumber}
-                                    </span>
-                                </div>
-                                <div className='flex items-center gap-2 text-sm text-[#667085]'>
-                                    <span className='text-[#515DEF] shrink-0'>👤</span>
-                                    <span className='truncate'>
-                                        <span className='font-medium text-[#1E1E1E]'>Driver:</span> {route.driverName}
-                                    </span>
+                                <div className='mt-4 pt-4 border-t border-[#f2f4f7] space-y-2'>
+                                    <div className='flex items-center gap-2 text-sm text-[#667085]'>
+                                        <Bus size={16} className='text-[#515DEF] shrink-0' />
+                                        <span className='truncate'>
+                                            <span className='font-medium text-[#1E1E1E]'>Bus:</span> {route.vehicleNumber}
+                                        </span>
+                                    </div>
+                                    <div className='flex items-center gap-2 text-sm text-[#667085]'>
+                                        <span className='text-[#515DEF] shrink-0'>👤</span>
+                                        <span className='truncate'>
+                                            <span className='font-medium text-[#1E1E1E]'>Driver:</span> {route.driverName}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </button>
-                ))}
-            </div>
+                        </button>
+                    ))}
+                </div>
+            )}
         </section>
     )
 }

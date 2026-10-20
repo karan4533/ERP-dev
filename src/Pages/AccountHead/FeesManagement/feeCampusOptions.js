@@ -12,18 +12,37 @@ import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
 
 export const CANONICAL_CLASS_COUNT = CLASS_LEVEL_OPTIONS.length // 15
 
+/** School-wide fee structures (e.g. Transport) apply to every class. */
+export const ALL_CLASSES_LABEL = 'All Classes'
+
+export const isAllClassesFee = (className) => {
+    const value = String(className || '').trim().toLowerCase()
+    return value === 'all classes' || value === 'all' || value === '*'
+}
+
 /** Full class list for Define / filters — never shrink to only classes that already have a fee row. */
 export const buildCampusClassOptions = ({ students = [], feeStructures = [] } = {}) => {
     const fromStudents = students.map((row) => String(row.className || '').trim()).filter(Boolean)
     const fromStructures = feeStructures.map((row) => String(row.className || '').trim()).filter(Boolean)
     const fromCatalog = getClasses().map((row) => String(row || '').trim()).filter(Boolean)
     const merged = [
+        ALL_CLASSES_LABEL,
         ...CLASS_LEVEL_OPTIONS,
         ...fromCatalog,
         ...fromStudents,
         ...fromStructures,
     ]
-    return [...new Set(merged)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    const unique = [...new Set(
+        merged
+            .map((name) => String(name || '').trim())
+            .filter(Boolean)
+            .filter((name) => name === ALL_CLASSES_LABEL || !isAllClassesFee(name)),
+    )]
+    return unique.sort((a, b) => {
+        if (a === ALL_CLASSES_LABEL) return -1
+        if (b === ALL_CLASSES_LABEL) return 1
+        return a.localeCompare(b, undefined, { numeric: true })
+    })
 }
 
 export const buildAcademicYearOptions = ({

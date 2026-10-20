@@ -125,6 +125,16 @@ def decide_approval_route(
     return actions.decide_approval(db, user, body)
 
 
+@router.post("/actions/post-transport-enrollment-fee")
+def post_transport_enrollment_fee_route(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_any("ops.write", "finance.write")),
+) -> dict:
+    """Transport Manager enrollment → Fee Collection / Parent Academic Payment installments."""
+    return actions.post_transport_enrollment_fee(db, user, body)
+
+
 @router.get("/{collection}")
 def list_finance_collection(
     collection: str,

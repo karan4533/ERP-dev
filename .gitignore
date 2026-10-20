@@ -37,6 +37,11 @@ dist-ssr
 !reports/testing-report.md
 !reports/QMIS-ERP-Full-Panel-Test-Guide.md
 !reports/QMIS-ERP-Module-Flow-Test-Guide.md
+!reports/QMIS-ERP-Linked-Module-Flow-Test-Guide.md
+!reports/QMIS-ERP-Journey-Flow-Testing-Report-20oct.md
+!reports/QMIS-ERP-Tester-Journey-Flow-20oct.md
+!reports/QMIS-ERP-Teammate-Leftover-Ops-Prompt-20oct.md
+!reports/CURSOR-CONTINUE-PROMPT-20oct.md
 
 # Local credential / seed dumps must never be committed
 cred.txt

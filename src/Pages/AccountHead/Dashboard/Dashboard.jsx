@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import ReactECharts from 'echarts-for-react'
@@ -19,6 +19,10 @@ import {
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import { useFinance } from '../financeDomain/FinanceContext'
+import {
+    TRANSACTION_DIRECTIONS,
+    TRANSACTION_STATUSES,
+} from '../financeDomain/financeConstants'
 import { formatCurrency, formatDisplayDate } from '../financeDomain/financeHelpers'
 import {
     CHART_COLORS,
@@ -31,6 +35,69 @@ import {
     expenseStatusBadgeColor,
 } from './dashboardData'
 import { buildApprovalStatus, buildCollectionSplit } from '../financeDomain/financeLiveViews'
+
+const expenseStatusFromTxn = (status) => {
+    const value = String(status || '').toUpperCase()
+    if (value === TRANSACTION_STATUSES.POSTED || value === 'APPROVED' || value === 'CLEARED') return 'APPROVED'
+    if (value === TRANSACTION_STATUSES.PENDING_APPROVAL || value === 'REVIEW' || value === 'DRAFT') return 'REVIEW'
+    return value || 'REVIEW'
+}
+
+const buildLiveExpenseRows = (transactions = [], transportMaintenance = [], transportOpsExpenses = []) => {
+    const fromTxn = (transactions || [])
+        .filter((item) => (
+            item.direction === TRANSACTION_DIRECTIONS.OUT
+            || String(item.entryType || '').toLowerCase() === 'expense'
+        ))
+        .map((item) => ({
+            id: item.transactionNo || item.voucherNo || item.id,
+            vendor: item.narration || item.reference || item.category || 'Expense',
+            department: item.sourceModule || item.createdBy || 'Finance',
+            category: item.category || item.entryType || 'Operational',
+            amount: formatCurrency(item.amount),
+            status: expenseStatusFromTxn(item.status),
+            paymentMode: item.paymentMode || '—',
+            approvedBy: item.createdBy || item.approvedBy || 'Finance',
+            expenseDate: formatDisplayDate(item.transactionDate || item.date),
+            sortKey: String(item.transactionDate || item.createdAt || ''),
+        }))
+
+    const fromMaintenance = (transportMaintenance || []).map((item) => ({
+        id: item.id,
+        vendor: item.vendor || item.description || 'Transport',
+        department: 'Transport',
+        category: item.type || 'Transport Maintenance',
+        amount: item.cost || formatCurrency(item.amount),
+        status: /pending/i.test(item.status || '') ? 'REVIEW' : 'APPROVED',
+        paymentMode: item.paymentMode || 'Cash',
+        approvedBy: item.createdBy || 'Transport Finance',
+        expenseDate: formatDisplayDate(item.date),
+        sortKey: String(item.date || ''),
+    }))
+
+    const fromOps = (transportOpsExpenses || []).map((item) => ({
+        id: item.id || item.expenseId,
+        vendor: item.serviceCenter || item.fuelStation || item.remarks || 'Transport',
+        department: 'Transport',
+        category: item.serviceType || (String(item.id || '').startsWith('FE-') ? 'Fuel' : 'Service'),
+        amount: item.amount || formatCurrency(0),
+        status: /reject|cancel/i.test(item.status || '') ? 'REVIEW' : 'APPROVED',
+        paymentMode: item.paymentMode || '—',
+        approvedBy: item.source === 'principal-approved-maintenance' ? 'Principal' : 'Transport',
+        expenseDate: formatDisplayDate(item.serviceDate || item.fuelDate),
+        sortKey: String(item.serviceDate || item.fuelDate || ''),
+    }))
+
+    const byId = new Map()
+    ;[...fromTxn, ...fromMaintenance, ...fromOps].forEach((row) => {
+        if (!row.id) return
+        if (!byId.has(row.id)) byId.set(row.id, row)
+    })
+
+    return [...byId.values()]
+        .sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)))
+        .slice(0, 8)
+}
 
 const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
@@ -121,6 +188,8 @@ const Dashboard = () => {
         students,
         annualBudget,
         approvals,
+        transactions,
+        transportMaintenance,
         financeStatus,
         financeError,
         financePersistence,
@@ -130,6 +199,33 @@ const Dashboard = () => {
     const apiLive = Boolean(financePersistence?.apiEnabled)
     const collectionSplit = useMemo(() => buildCollectionSplit(receipts || []), [receipts])
     const approvalStatus = useMemo(() => buildApprovalStatus(approvals || []), [approvals])
+    const [transportOpsExpenses, setTransportOpsExpenses] = useState([])
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            try {
+                const {
+                    getTransportExpenses,
+                    hydrateTransportExpensesFromApi,
+                } = await import('../../TransportManager/TransportExpenses/transportExpensesData')
+                await hydrateTransportExpensesFromApi()
+                if (!cancelled) setTransportOpsExpenses(getTransportExpenses())
+            } catch {
+                if (!cancelled) setTransportOpsExpenses([])
+            }
+        })()
+        return () => { cancelled = true }
+    }, [financeStatus, refreshing])
+
+    const liveExpenseRows = useMemo(
+        () => buildLiveExpenseRows(transactions, transportMaintenance, transportOpsExpenses),
+        [transactions, transportMaintenance, transportOpsExpenses],
+    )
+    // API mode: live expenses only. Offline demo may fall back to seed when nothing posted yet.
+    const recentExpenseRows = apiLive
+        ? liveExpenseRows
+        : (liveExpenseRows.length ? liveExpenseRows : RECENT_EXPENSES)
 
     /** KPI values come only from finance snapshot metrics — never add static seed amounts. */
     const liveKpis = KPI_CARDS.map((card) => {
@@ -560,6 +656,7 @@ const Dashboard = () => {
 
             <Panel
                 title='Recent Expenses'
+                subtitle={apiLive ? 'From posted finance outflows & transport maintenance' : undefined}
                 action={(
                     <button type='button' className='text-sm font-medium text-[#515DEF] hover:opacity-80 cursor-pointer'>
                         View All
@@ -582,7 +679,13 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {RECENT_EXPENSES.map((row) => (
+                            {recentExpenseRows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={9} className={`${tdClass} text-center py-8`}>
+                                        No expenses posted yet. Manual expenses, transport maintenance, and other outflows will appear here.
+                                    </td>
+                                </tr>
+                            ) : recentExpenseRows.map((row) => (
                                 <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className={`${tdClass} font-medium text-[#515DEF] rounded-s-lg`}>#{row.id}</td>
                                     <td className={tdClass}>
@@ -592,7 +695,7 @@ const Dashboard = () => {
                                     <td className={tdClass}>{row.category}</td>
                                     <td className={`${tdClass} font-semibold text-[#FF5722]`}>{row.amount}</td>
                                     <td className={tdClass}>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${expenseStatusBadgeColor[row.status]}`}>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${expenseStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
                                             {row.status}
                                         </span>
                                     </td>

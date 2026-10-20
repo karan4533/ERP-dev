@@ -30,11 +30,13 @@ const Dashboard = () => {
     const [refresh, setRefresh] = useState(0)
     const [showDepartments, setShowDepartments] = useState(false)
     const data = useMemo(() => buildHrDashboard({ academicYear, department, month, revision: `${tick}-${refresh}` }), [tick, refresh, academicYear, department, month])
-    const workforce = data.workforce.filter((item) => item.count > 0)
-    const attendanceRows = ['Present', 'Leave', 'Absent', 'On Duty', 'Late'].map((label) => ({ label, count: data.attendance[label] }))
-    const funnelMax = Math.max(...data.funnel.map((item) => item.count), 1)
-    const ratingMax = Math.max(...data.performance.ratings.map((item) => item.count), 1)
-    const departmentRows = showDepartments ? data.departmentRows : data.departmentRows.slice(0, 6)
+    const workforce = (data.workforce || []).filter((item) => item.count > 0)
+    const attendanceRows = ['Present', 'Leave', 'Absent', 'On Duty', 'Late'].map((label) => ({ label, count: data.attendance?.[label] || 0 }))
+    const funnelMax = Math.max(...(data.funnel || []).map((item) => item.count), 1)
+    const ratingMax = Math.max(...(data.performance?.ratings || []).map((item) => item.count), 1)
+    const departmentRows = showDepartments
+        ? (data.departmentRows || [])
+        : (data.departmentRows || []).slice(0, 6)
 
     const workforceOption = {
         tooltip: { trigger: 'axis' },
@@ -82,9 +84,16 @@ const Dashboard = () => {
                 </div>
             </div>
 
+            {data.error && (
+                <p className='text-sm text-[#B54708] bg-[#FFFAEB] border border-[#FEDF89] rounded-xl px-4 py-3'>
+                    {data.error}
+                </p>
+            )}
+
             <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4'>
-                {data.kpis.map((card, index) => {
+                {(data.kpis || []).map((card, index) => {
                     const Icon = KPI_ICONS[index] || Users
+                    const lines = Array.isArray(card.lines) ? card.lines.filter(Boolean) : []
                     return (
                         <button key={card.label} type='button' onClick={() => navigate(card.to)} className='bg-white rounded-2xl border border-[#EAECF0] shadow-sm p-4 text-left hover:border-[#515DEF]'>
                             <div className='flex justify-between gap-3'>
@@ -93,7 +102,7 @@ const Dashboard = () => {
                             </div>
                             <p className='text-2xl font-semibold text-[#101828] mt-2'>{card.value}</p>
                             <p className='text-xs text-[#515DEF] mt-1'>{card.hint}</p>
-                            <div className='mt-3 space-y-1'>{card.lines.filter(Boolean).map((line) => <p key={line} className='text-xs text-[#667085]'>{line}</p>)}</div>
+                            <div className='mt-3 space-y-1'>{lines.map((line, lineIndex) => <p key={`${card.label}-${lineIndex}`} className='text-xs text-[#667085]'>{line}</p>)}</div>
                         </button>
                     )
                 })}
@@ -196,12 +205,12 @@ const Dashboard = () => {
             <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
                 <Card title='People Movement'>
                     <div className='grid grid-cols-3 gap-3 mb-4 text-sm'>
-                        <p>New joiners<br /><span className='text-lg font-semibold'>{data.movement.joiners}</span></p>
-                        <p>Relieved / exiting<br /><span className='text-lg font-semibold'>{data.movement.exiting}</span></p>
-                        <p>Net change<br /><span className='text-lg font-semibold'>{data.movement.net >= 0 ? `+${data.movement.net}` : data.movement.net}</span></p>
+                        <p>New joiners<br /><span className='text-lg font-semibold'>{data.movement?.joiners || 0}</span></p>
+                        <p>Relieved / exiting<br /><span className='text-lg font-semibold'>{data.movement?.exiting || 0}</span></p>
+                        <p>Net change<br /><span className='text-lg font-semibold'>{(data.movement?.net || 0) >= 0 ? `+${data.movement?.net || 0}` : data.movement.net}</span></p>
                     </div>
-                    {data.movement.people.length ? data.movement.people.map((item) => (
-                        <button key={`${item.name}-${item.detail}`} type='button' onClick={() => navigate(item.to)} className='w-full text-left py-2 border-t border-[#F2F4F7]'>
+                    {(data.movement?.people || []).length ? data.movement.people.map((item, index) => (
+                        <button key={`${item.name}-${item.detail}-${index}`} type='button' onClick={() => navigate(item.to)} className='w-full text-left py-2 border-t border-[#F2F4F7]'>
                             <span className='block text-sm font-medium'>{item.name}</span>
                             <span className='block text-xs text-[#667085]'>{item.detail}</span>
                         </button>
@@ -221,8 +230,8 @@ const Dashboard = () => {
             </div>
 
             <Card title='Recent HR Activity'>
-                {data.activity.length ? data.activity.map((item) => (
-                    <button key={`${item.title}-${item.detail}-${item.when}`} type='button' onClick={() => navigate(item.to)} className='w-full text-left grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 py-2 border-b border-[#F2F4F7] last:border-0'>
+                {(data.activity || []).length ? data.activity.map((item, index) => (
+                    <button key={item.id || `activity-${index}`} type='button' onClick={() => navigate(item.to)} className='w-full text-left grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 py-2 border-b border-[#F2F4F7] last:border-0'>
                         <span><span className='block text-sm font-medium'>{item.title}</span><span className='block text-xs text-[#667085]'>{item.detail}</span></span>
                         <span className='text-xs text-[#98A2B3]'>{item.when}</span>
                         <span className='text-xs text-[#515DEF]'>{item.module}</span>

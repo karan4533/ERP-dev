@@ -13,6 +13,15 @@ from app.services.errors import fail
 
 
 def _norm_class_key(value: str | None) -> str:
+    # Prefer grade parsing so Roman 'V' / 'VI' match masters 'Grade 5' / 'Grade 6'.
+    try:
+        from app.services.placement import parse_grade
+
+        grade_n = parse_grade(value)
+        if grade_n is not None:
+            return f"grade {grade_n}"
+    except Exception:
+        pass
     text = re.sub(r"\s+", " ", str(value or "").strip().lower())
     text = re.sub(r"^class\s+", "", text)
     grade = re.match(r"^grade\s*(\d+[a-z]?)$", text)
@@ -282,10 +291,11 @@ def list_students(db: Session, actor: User, class_name: str | None = None) -> li
     )
 
     stmt = select(Student).where(Student.campus_id == actor.campus_id)
-    if class_name:
-        stmt = stmt.where(Student.class_name == class_name)
     stmt = stmt.order_by(Student.full_name)
-    rows = db.scalars(stmt).all()
+    rows = list(db.scalars(stmt).all())
+    if class_name:
+        want = _norm_class_key(class_name)
+        rows = [row for row in rows if _norm_class_key(row.class_name) == want]
     role = role_code_for(db, actor)
     # Coordinators also see students in classes they were allocated to teach (Teacher Allocation),
     # in addition to their Principal grade band (e.g. 1–4).
@@ -319,6 +329,10 @@ def sync_students_from_admissions(db: Session, actor: User) -> dict:
 
     from app.schemas.admissions import EnrollAdmissionIn
     from app.services.admissions import enroll_admission
+    from app.services.placement import repair_student_class_labels
+
+    # Fix legacy Roman/numeric class labels so Fee Collection / Attendance match Grade N.
+    repair_student_class_labels(db, actor.campus_id)
 
     already = (
         db.scalar(select(func.count()).select_from(Student).where(Student.campus_id == actor.campus_id))

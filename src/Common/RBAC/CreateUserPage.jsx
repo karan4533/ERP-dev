@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, UserPlus } from 'lucide-react'
 import { toast } from 'react-toastify'
 import UserCreationForm from './Components/UserCreationForm'
+import { canUseAdminUsersApi, listCreatableRolesApi } from '../../services/adminUsersApi'
 
 const CreateUserPage = ({
     routeBase,
@@ -19,11 +20,28 @@ const CreateUserPage = ({
     passwordLabel,
     passwordPlaceholder,
     passwordHelp,
+    hidePassword = false,
+    staffCode = '',
+    roleOptions = null,
 }) => {
     const navigate = useNavigate()
     const [form, setForm] = useState(defaultForm)
     const [error, setError] = useState('')
     const [submitting, setSubmitting] = useState(false)
+    const [apiRoleOptions, setApiRoleOptions] = useState(roleOptions)
+
+    useEffect(() => {
+        if (roleOptions || !canUseAdminUsersApi()) return undefined
+        let cancelled = false
+        listCreatableRolesApi()
+            .then((rows) => {
+                if (!cancelled && Array.isArray(rows) && rows.length) {
+                    setApiRoleOptions(rows.map((row) => ({ role: row.role, label: row.label || row.role })))
+                }
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [roleOptions])
 
     const updateField = (key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }))
@@ -87,6 +105,9 @@ const CreateUserPage = ({
                     passwordLabel={passwordLabel}
                     passwordPlaceholder={passwordPlaceholder}
                     passwordHelp={passwordHelp}
+                    hidePassword={hidePassword}
+                    staffCode={staffCode}
+                    roleOptions={apiRoleOptions}
                 />
 
                 {renderAfterForm?.({ form, updateField })}

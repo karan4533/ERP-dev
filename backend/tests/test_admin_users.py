@@ -282,12 +282,28 @@ def test_update_profile_and_deactivate_blocks_login_and_existing_token(client):
     _login(client, "lifecycle@qmis.edu", temp)
 
 
-def test_update_cannot_change_role_or_email(client):
+def test_update_can_change_email_and_creatable_role(client):
     headers = _admin(client)
-    created = _create(client, headers, email="fixed@qmis.edu").json()
-    client.patch(f"{USERS}/{created['id']}", json={"role": "admin", "email": "other@qmis.edu"}, headers=headers)
-    after = client.get(f"{USERS}/{created['id']}", headers=headers).json()
-    assert after["role"] == "teacher" and after["email"] == "fixed@qmis.edu"
+    created = _create(client, headers, email="editable@qmis.edu").json()
+
+    # Admin role is not creatable by campus Admin — must be refused.
+    forbidden = client.patch(
+        f"{USERS}/{created['id']}",
+        json={"role": "admin"},
+        headers=headers,
+    )
+    assert forbidden.status_code == 403, forbidden.text
+
+    patched = client.patch(
+        f"{USERS}/{created['id']}",
+        json={"role": "librarian", "email": "editable.renamed@qmis.edu", "firstName": "Asha"},
+        headers=headers,
+    )
+    assert patched.status_code == 200, patched.text
+    body = patched.json()
+    assert body["role"] == "librarian"
+    assert body["email"] == "editable.renamed@qmis.edu"
+    assert body["firstName"] == "Asha"
 
 
 def test_null_on_required_fields_means_no_change(client):
@@ -362,5 +378,17 @@ def test_roles_list_and_permissions_are_read_only(client):
 def test_creatable_roles_for_admin(client):
     options = client.get(f"{USERS}/creatable-roles", headers=_admin(client)).json()
     assert {o["role"] for o in options} == {
-        "principal", "prm", "teacher", "coordinator", "librarian", "gatekeepermanager", "gatekeeper",
+        "principal",
+        "prm",
+        "teacher",
+        "coordinator",
+        "librarian",
+        "gatekeepermanager",
+        "gatekeeper",
+        "transportmanager",
+        "driver",
+        "canteenmanager",
+        "itsupportmanager",
+        "stationerystoremanager",
+        "housekeepingmanager",
     }
