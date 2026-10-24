@@ -17,12 +17,32 @@ const AddVehicle = () => {
             return
         }
         await hydrateVehiclesFromApi()
+        const gpsImei = read('gps-imei').replace(/\s+/g, '')
+        const plateNorm = vehicleNumber.replace(/[\s-]/g, '').toUpperCase()
+        const current = getVehicles()
+        const plateClash = current.find((row) => (
+            String(row.vehicleNumber || '').replace(/[\s-]/g, '').toUpperCase() === plateNorm
+        ))
+        if (plateClash) {
+            toast.error(`Vehicle ${vehicleNumber} is already registered. Edit that record instead of adding a duplicate.`)
+            return
+        }
+        if (gpsImei) {
+            const imeiClash = current.find((row) => (
+                String(row.gpsImei || row.imei || '').replace(/\s+/g, '') === gpsImei
+            ))
+            if (imeiClash) {
+                toast.error(`GPS IMEI ${gpsImei} is already on vehicle ${imeiClash.vehicleNumber}. Edit that record instead of adding a duplicate.`)
+                return
+            }
+        }
         const id = `VEH-${Date.now()}`
-        const existing = getVehicles().filter((row) => row.vehicleNumber !== vehicleNumber)
         const saved = await saveVehicles([{
             id,
             vehicleNumber,
             vehicleType,
+            gpsImei,
+            imei: gpsImei,
             capacity: Number(read('capacity') || 0),
             driverName: read('driver-name'),
             driverContact: read('driver-contact'),
@@ -31,7 +51,7 @@ const AddVehicle = () => {
             studentStrength: Number(read('student-strength') || 0),
             staffStrength: Number(read('staff-strength') || 0),
             currentOdometer: Number(read('odometer') || 0),
-        }, ...existing])
+        }, ...current])
         if (!saved) {
             toast.error('The vehicle could not be saved.')
             return

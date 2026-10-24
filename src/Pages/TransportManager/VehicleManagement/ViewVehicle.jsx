@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { getVehicleById } from './vehicleManagementData'
+import { getVehicleById, hydrateVehiclesFromApi } from './vehicleManagementData'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -22,7 +22,20 @@ const Field = ({ label, value }) => (
 const ViewVehicle = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const vehicle = getVehicleById(id)
+    const [vehicle, setVehicle] = useState(() => getVehicleById(id))
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        let active = true
+        setLoading(true)
+        hydrateVehiclesFromApi()
+            .finally(() => {
+                if (!active) return
+                setVehicle(getVehicleById(id))
+                setLoading(false)
+            })
+        return () => { active = false }
+    }, [id])
 
     return (
         <section className='space-y-6'>
@@ -37,7 +50,11 @@ const ViewVehicle = () => {
                 </button>
             </div>
 
-            {!vehicle ? (
+            {loading && !vehicle ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading vehicle…
+                </div>
+            ) : !vehicle ? (
                 <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
                     Vehicle not found or could not be loaded.
                 </div>
@@ -57,6 +74,7 @@ const ViewVehicle = () => {
                     <Section title='Vehicle Details Information'>
                         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                             <Field label='Vehicle Number' value={vehicle.vehicleNumber} />
+                            <Field label='GPS IMEI' value={vehicle.gpsImei || vehicle.imei} />
                             <Field label='Vehicle Type' value={vehicle.vehicleType} />
                             <Field label='Capacity' value={vehicle.capacity} />
                             <Field label='Driver Name' value={vehicle.driverName} />
@@ -69,17 +87,6 @@ const ViewVehicle = () => {
                             <Field label='Insurance Expiry Date' value={vehicle.insuranceExpiryDate} />
                             <Field label='Last Service Date' value={vehicle.lastServiceDate} />
                             <Field label='Next Service Date' value={vehicle.nextServiceDate} />
-                        </div>
-                    </Section>
-                    <Section title='Compliance history'>
-                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-sm text-[#667085]'>
-                            <p><strong className='text-[#1E1E1E]'>FC:</strong> Valid with fitness renewal on the next service cycle.</p>
-                            <p><strong className='text-[#1E1E1E]'>RC:</strong> Registration current for {vehicle.vehicleNumber}.</p>
-                            <p><strong className='text-[#1E1E1E]'>Permit:</strong> School permit on file.</p>
-                            <p><strong className='text-[#1E1E1E]'>Service:</strong> Last {vehicle.lastServiceDate}, next {vehicle.nextServiceDate}.</p>
-                            <p><strong className='text-[#1E1E1E]'>FASTag:</strong> Active, linked to this vehicle.</p>
-                            <p><strong className='text-[#1E1E1E]'>PUCC:</strong> Current.</p>
-                            <p><strong className='text-[#1E1E1E]'>Insurance:</strong> Expires {vehicle.insuranceExpiryDate}.</p>
                         </div>
                     </Section>
                 </>

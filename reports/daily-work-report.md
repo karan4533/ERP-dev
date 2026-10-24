@@ -8,6 +8,46 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ---
 
+## 24 October 2026 — Route card GPS freshness
+
+**Status:** Card rules are correct. Live GPS stays off because the tracker fix is still about 3.6 hours old.
+
+### Done
+- Route cards read saved driver, contact, start, and end. No hardcoded Route 1 details.
+- Live badge only when provider status is OK and GPS age is 0–600 seconds. Future or invalid times are not live.
+- Routes with no IMEI show No IMEI and are left out of the track request. Browser West Route was not given Route 1’s IMEI.
+- Call Driver uses the saved number and stays disabled when the contact is missing or invalid.
+- Browser check after sign-out and a new Transport Manager sign-in still showed Route 1 details and a NOT LIVE badge.
+- Tests: node 15 passed, pytest 16 passed, production build succeeded.
+
+### Still open
+- Vendor must publish a new `gpstime` before live tracking can turn on (`BLOCKED_STALE_GPS`).
+
+---
+
+## 24 October 2026 — Route 1 track page configuration checks
+
+**Status:** Route 1 GPS mapping verified; empty driver/locations are missing client data, not a read bug. Live GPS still blocked by stale ProTrack `gpstime`.
+
+### Done
+- Confirmed Track Bus hydrates Route `RT-1792826320243` + vehicle `VEH-1792825477178` / IMEI `355710090439063` from campus ops
+- Explained empty driver/start/end: never saved on route or vehicle; TM Edit Route / Driver / Vehicle can fill without inventing values
+- Call Driver no longer dials a dummy number; shows disabled “No driver contact” when missing
+- Kept last-known vs live split (fresh only if OK + age ≤ 600s); OSM basemap; ProTrack token retry on code 10011
+- Updated `QMIS_ERP_PRODUCTION_READINESS_REPORT.md`
+
+### Still open
+- School must assign real driver + contact and start/end for Route 1
+- Vendor must publish a new GPS fix before live tracking unlocks
+
+### Re-check (same day)
+- Route still linked to `VEH-1792825477178` / `TN58BB3769` / IMEI `355710090439063` (ProTrack plate matches)
+- After TM save: driver Browser Driver, contact 7448907020, start erode, end coimbatore persist on the server and on Track Bus after reload; Call Driver uses `tel:+917448907020`
+- GPS `datastatus` OK, `gpstime` still about 3.3 hours old — not live
+- Readiness blocked only on stale GPS
+
+---
+
 ## 23 October 2026 — Leave and approval API wiring
 
 **Status:** Fixed broken leave/approval screens that showed demo data or “not found”. Not full go-live.

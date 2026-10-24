@@ -13,6 +13,88 @@ from app.core.config import settings
 from app.services.errors import fail
 
 BASE_URL = "https://api.protrack365.com"
+GPS_FRESH_MAX_AGE_SEC = 600
+
+
+def parse_gps_unix_seconds(gpstime: Any) -> int | None:
+    """Unix seconds. Millisecond values (> 1e12) are converted. Not a local-time clock."""
+    try:
+        number = float(gpstime)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number <= 0:
+        return None
+    if number > 1e12:
+        return int(number // 1000)
+    if number > 1e9:
+        return int(number)
+    return None
+
+
+def gps_age_seconds(gpstime: Any, now_sec: int) -> int | None:
+    timestamp = parse_gps_unix_seconds(gpstime)
+    if timestamp is None:
+        return None
+    return int(now_sec) - timestamp
+
+
+def _format_age_approx(age_sec: int) -> str:
+    if age_sec < 3600:
+        return f"approximately {round(age_sec / 60)} min ago"
+    return f"approximately {age_sec / 3600:.1f} h ago"
+
+
+def classify_track_freshness(track: dict | None, now_sec: int | None = None) -> dict:
+    """Live only when datastatus is OK (2) and fix age is within 0..600 seconds."""
+    now = int(time.time()) if now_sec is None else int(now_sec)
+    if not track:
+        return {"state": "unavailable", "label": "Unavailable", "ageSec": None, "datastatus": None, "live": False}
+
+    try:
+        code = int(track.get("datastatus"))
+    except (TypeError, ValueError):
+        code = None
+    age = gps_age_seconds(track.get("gpstime"), now)
+    try:
+        lat = float(track.get("latitude"))
+        lng = float(track.get("longitude"))
+        has_coords = lat == lat and lng == lng and not (lat == 0 and lng == 0)
+    except (TypeError, ValueError):
+        has_coords = False
+
+    labels = {1: "Never online", 2: "OK", 3: "Expired", 4: "Offline", 5: "Blocked"}
+    status_label = labels.get(code, "Unknown")
+
+    def unavailable(label: str) -> dict:
+        return {"state": "unavailable", "label": label, "ageSec": age, "datastatus": code, "live": False}
+
+    if code in {1, 3, 5}:
+        return unavailable(status_label)
+    if code == 4:
+        return {
+            "state": "offline",
+            "label": "Offline — last known" if has_coords else "Offline",
+            "ageSec": age,
+            "datastatus": code,
+            "live": False,
+        }
+    if age is not None and age < 0:
+        return unavailable("Invalid GPS time")
+    if age is None:
+        return unavailable("Invalid GPS time")
+    if not has_coords:
+        return unavailable(status_label or "Unavailable")
+    if code == 2 and 0 <= age <= GPS_FRESH_MAX_AGE_SEC:
+        return {"state": "fresh", "label": "Live GPS", "ageSec": age, "datastatus": code, "live": True}
+
+    prefix = "OK" if code == 2 else status_label
+    return {
+        "state": "stale",
+        "label": f"{prefix} — last known ({_format_age_approx(age)})",
+        "ageSec": age,
+        "datastatus": code,
+        "live": False,
+    }
 
 # account role → cached token
 _token_cache: dict[str, dict[str, Any]] = {}
@@ -72,6 +154,22 @@ def _authorize(panel: str) -> str:
     return str(token)
 
 
+# ProTrack Open API token failures (docs + observed live: 10011 "access_token error").
+_TOKEN_INVALID_CODES = {1002, 1003, 1008, 10011}
+
+
+def _is_token_invalid(payload: dict[str, Any]) -> bool:
+    code = int(payload.get("code", 0) or 0)
+    if code in _TOKEN_INVALID_CODES:
+        return True
+    if code == 0:
+        return False
+    message = str(payload.get("message") or "").lower()
+    return "access_token" in message and (
+        "invalid" in message or "error" in message or "expired" in message
+    )
+
+
 def _get(panel: str, path: str, params: dict[str, Any] | None = None) -> dict:
     token = _authorize(panel)
     query = {"access_token": token, **(params or {})}
@@ -83,8 +181,8 @@ def _get(panel: str, path: str, params: dict[str, Any] | None = None) -> dict:
         fail(502, "protrack_unreachable", f"Could not reach ProTrack365: {exc}")
 
     payload = response.json() if response.content else {}
-    # Token invalidated — clear cache once and retry
-    if int(payload.get("code", 0)) in {1002, 1003, 1008}:
+    # Token invalidated / expired — clear cache once and retry with a fresh login.
+    if _is_token_invalid(payload):
         _token_cache.pop(panel, None)
         token = _authorize(panel)
         query["access_token"] = token
@@ -158,7 +256,18 @@ def track_imeis(imeis: list[str], panel: str = "admin") -> list[dict]:
             return [record]
         return []
 
-    return _with_parent_fallback(panel, _run)
+    rows = _with_parent_fallback(panel, _run)
+    now = int(time.time())
+    annotated: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        freshness = classify_track_freshness(item, now)
+        item["gpsFreshness"] = freshness["state"]
+        item["gpsLive"] = freshness["live"]
+        item["gpsAgeSec"] = freshness["ageSec"]
+        item["gpsStatusLabel"] = freshness["label"]
+        annotated.append(item)
+    return annotated
 
 
 def status_summary() -> dict:

@@ -29,6 +29,19 @@ const VehicleDetailsForm = ({ vehicle }) => {
                 <input type='text' id='vehicle-number' defaultValue={vehicle?.vehicleNumber ?? ''} className={inputClass} />
             </div>
             <div className='flex flex-col gap-y-2'>
+                <label htmlFor='gps-imei' className='text-base font-medium text-[#1E1E1E]'>GPS IMEI (ProTrack):</label>
+                <input
+                    type='text'
+                    id='gps-imei'
+                    inputMode='numeric'
+                    autoComplete='off'
+                    placeholder='Verified device IMEI only'
+                    defaultValue={vehicle?.gpsImei || vehicle?.imei || ''}
+                    className={inputClass}
+                />
+                <span className='text-xs text-[#667085]'>Do not use the registration number as an IMEI. Live tracking stays off until IMEI and a fresh GPS fix are verified.</span>
+            </div>
+            <div className='flex flex-col gap-y-2'>
                 <label htmlFor='vehicle-type' className='text-base font-medium text-[#1E1E1E]'>Vehicle Type:</label>
                 <select id='vehicle-type' defaultValue={vehicle?.vehicleType ?? ''} className={selectClass}>
                     <option value=''>--Select--</option>

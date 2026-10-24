@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     otp_expire_minutes: int = 10
     # Returns the OTP in the API response. Only honoured when ENVIRONMENT is development.
     otp_debug: bool = False
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:5174,http://127.0.0.1:5174"
+    )
     admin_seed_email: str = "admin@qmis.edu"
     admin_seed_password: str = "admin123"
     superadmin_seed_email: str = "superadmin@qmis.edu"

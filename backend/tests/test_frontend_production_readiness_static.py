@@ -34,6 +34,40 @@ def test_track_bus_map_labels_demo_as_not_live():
     map_source = _read("Pages/TransportManager/RouteData/Components/BusTrackingMap.jsx")
     assert "DEMO ROUTE — NOT LIVE GPS" in map_source
     assert "trackingMode" in map_source
+    assert "LAST KNOWN — NOT LIVE" in map_source
+    assert "+919999999999" not in map_source
+    assert "No driver contact" in map_source
+    assert "normalizeDialNumber" in map_source
     student = _read("Pages/Student/Transport/TrackBus.jsx")
     assert "live.devices[0]" not in student
-    assert "trackingMode={hasLiveGps ? 'live' : 'demo'}" in student
+    assert "last-known" in student
+    assert "trackingMode={trackingMode}" in student
+    tm_track = _read("Pages/TransportManager/RouteData/TrackBus.jsx")
+    assert "last-known" in tm_track
+    assert "|| 'Pickup'" not in tm_track
+    assert "|| 'School'" not in tm_track
+
+
+def test_route_data_cards_check_gps_freshness():
+    source = _read("Pages/TransportManager/RouteData/RouteData.jsx")
+    card = _read("Pages/TransportManager/RouteData/routeCardGps.js")
+    assert "presentRouteCard" in source
+    assert "imeisForTrackRequest" in source
+    assert "No driver contact" in source
+    assert "IMEI LINKED" not in source
+    assert "7448907020" not in source
+    assert "Browser Driver" not in source
+    assert "erode" not in source
+    assert "classifyTrackFreshness" in card
+    assert "reason: 'none'" in card
+
+
+def test_protrack_freshness_requires_600s():
+    source = _read("services/protrackFreshness.js")
+    assert "GPS_FRESH_MAX_AGE_SEC = 600" in source
+    assert "state: 'fresh'" in source
+    assert "state: 'stale'" in source
+    assert "ageSec < 0" in source
+    hook = _read("Common/Transport/useProtrackLive.js")
+    assert "freshness.live === true && freshness.state === 'fresh'" in hook
+    assert "lastKnownPosition" in hook

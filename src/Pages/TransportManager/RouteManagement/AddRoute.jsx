@@ -4,6 +4,8 @@ import { toast } from 'react-toastify'
 import RouteDetailsForm from './Components/RouteDetailsForm'
 import StopDetailsForm from './Components/StopDetailsForm'
 import { getRoutes, hydrateRoutesFromApi, saveRoutes } from './routeManagementData'
+import { getVehicles, hydrateVehiclesFromApi } from '../VehicleManagement/vehicleManagementData'
+import { normalizePlate, routeStoredImei, vehicleStoredImei } from '../RouteData/routeCardGps'
 
 const read = (id) => String(document.getElementById(id)?.value ?? '').trim()
 
@@ -16,13 +18,49 @@ const AddRoute = () => {
             toast.error('Route name is required.')
             return
         }
-        await hydrateRoutesFromApi()
+        await Promise.all([hydrateRoutesFromApi(), hydrateVehiclesFromApi()])
+        const current = getRoutes()
+        const nameNorm = routeName.trim().toLowerCase()
+        const nameClash = current.find((row) => String(row.routeName || '').trim().toLowerCase() === nameNorm)
+        if (nameClash) {
+            toast.error(`Route "${routeName}" already exists. Edit that record instead of adding a duplicate.`)
+            return
+        }
+        const gpsImei = read('gps-imei').replace(/\s+/g, '')
+        const vehicleId = read('vehicle-id')
+        const vehicleNumber = read('vehicle-number')
+        const plate = normalizePlate(vehicleNumber)
+        const vehicleClash = current.find((row) => (
+            (vehicleId && String(row.vehicleId) === vehicleId)
+            || (plate && normalizePlate(row.vehicleNumber) === plate)
+        ))
+        if (vehicleClash) {
+            toast.error(`Vehicle ${vehicleNumber || vehicleId} is already assigned to ${vehicleClash.routeName}. Edit that route instead of adding a duplicate.`)
+            return
+        }
+        if (gpsImei) {
+            const imeiClash = current.find((row) => routeStoredImei(row) === gpsImei)
+            if (imeiClash) {
+                toast.error(`GPS IMEI ${gpsImei} is already on ${imeiClash.routeName}. Edit that route instead of adding a duplicate.`)
+                return
+            }
+            const vehicleImeiClash = getVehicles().find((row) => (
+                vehicleStoredImei(row) === gpsImei
+                && String(row.id) !== vehicleId
+                && normalizePlate(row.vehicleNumber) !== plate
+            ))
+            if (vehicleImeiClash) {
+                toast.error(`GPS IMEI ${gpsImei} is already on vehicle ${vehicleImeiClash.vehicleNumber}.`)
+                return
+            }
+        }
         const id = `RT-${Date.now()}`
-        const existing = getRoutes().filter((row) => row.routeName !== routeName)
         const saved = await saveRoutes([{
             id,
             routeName,
             vehicleNumber: read('vehicle-number'),
+            gpsImei,
+            imei: gpsImei,
             driverName: read('select-driver'),
             driverContact: read('driver-contact'),
             vehicleId: read('vehicle-id'),
@@ -39,7 +77,7 @@ const AddRoute = () => {
             distance: read('distance'),
             estimatedTime: read('estimated-time'),
             stops: [],
-        }, ...existing])
+        }, ...current])
         if (!saved) {
             toast.error('The route could not be saved.')
             return

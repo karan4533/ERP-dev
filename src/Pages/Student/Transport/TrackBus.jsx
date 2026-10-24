@@ -59,6 +59,10 @@ const TrackBus = ({ showRouteDetails = false }) => {
         ? live.devices.find((row) => String(row.imei) === String(live.imei))
         : null
     const hasLiveGps = Boolean(live.livePosition)
+    const hasLastKnown = Boolean(live.lastKnownPosition)
+    const freshnessState = live.freshness?.state || 'unavailable'
+    const trackingMode = hasLiveGps ? 'live' : hasLastKnown ? 'last-known' : 'demo'
+    const mapPosition = live.livePosition || live.lastKnownPosition || null
 
     return (
         <section>
@@ -71,7 +75,9 @@ const TrackBus = ({ showRouteDetails = false }) => {
                         <p className='text-sm text-[#667085] mt-1'>
                             {hasLiveGps
                                 ? 'Live GPS from ProTrack365 (polls every 15s).'
-                                : 'Live GPS is off until a verified vehicle–IMEI mapping and a current fix are available. Demo route geometry is not a live position.'}
+                                : hasLastKnown
+                                    ? `${live.liveStatusLabel || 'Last known position'} — map shows last known pin, not live movement.`
+                                    : 'Live GPS is off until a verified vehicle–IMEI mapping and a current fix are available. Demo route geometry is not a live position.'}
                         </p>
                     </div>
                     <button
@@ -98,26 +104,28 @@ const TrackBus = ({ showRouteDetails = false }) => {
 
             <div className='bg-white rounded-2xl shadow-md mt-8 overflow-hidden'>
                 <BusTrackingMap
-                    routeName={device?.devicename || 'School Bus'}
-                    vehicleNumber={device?.platenumber || preferredPlate || '—'}
-                    driverName='Assigned driver'
+                    routeName={device?.devicename || preferredPlate || 'Assigned bus'}
+                    vehicleNumber={device?.platenumber || preferredPlate || ''}
+                    driverName=''
                     driverContact=''
-                    startLocation='Pickup'
-                    endLocation='Queen Mira School'
-                    busLabel={device?.platenumber || 'BUS'}
+                    startLocation=''
+                    endLocation=''
+                    busLabel={device?.platenumber || preferredPlate || 'BUS'}
                     stats={
                         hasLiveGps
                             ? live.stats
                             : {
-                                progress: '—',
-                                distanceLeft: 'Demo route only — not live GPS',
+                                progress: live.freshness?.label || '—',
+                                distanceLeft: hasLastKnown
+                                    ? 'Last known position — not live movement'
+                                    : 'Demo route only — not live GPS',
                                 eta: '—',
                                 speed: '—',
                             }
                     }
-                    livePosition={live.livePosition}
+                    livePosition={mapPosition}
                     liveStatusLabel={live.liveStatusLabel}
-                    trackingMode={hasLiveGps ? 'live' : 'demo'}
+                    trackingMode={trackingMode}
                 />
             </div>
         </section>

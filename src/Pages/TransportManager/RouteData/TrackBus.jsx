@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import BusTrackingMap from './Components/BusTrackingMap'
-import { getRouteById, hydrateRoutesFromApi } from '../RouteManagement/routeManagementData'
+import { getRouteById, getRoutes, hydrateRoutesFromApi } from '../RouteManagement/routeManagementData'
+import { getVehicles, hydrateVehiclesFromApi } from '../VehicleManagement/vehicleManagementData'
 import useProtrackLive from '../../../Common/Transport/useProtrackLive'
+import { displayDriver, resolveRouteTracking } from './routeCardGps'
 
 const Field = ({ label, value }) => (
     <div className='flex flex-col gap-y-1'>
@@ -23,23 +25,42 @@ const TrackBus = () => {
     const [route, setRoute] = useState(() => getRouteById(id))
 
     useEffect(() => {
-        hydrateRoutesFromApi().finally(() => setRoute(getRouteById(id)))
+        Promise.all([hydrateRoutesFromApi(), hydrateVehiclesFromApi()]).finally(() => {
+            setRoute(getRouteById(id))
+        })
     }, [id])
+
+    const vehicles = getVehicles() || []
+    const tracking = resolveRouteTracking(route, vehicles, getRoutes())
+    const linkedVehicle = tracking.vehicle || null
+    const preferredImei = tracking.trackImei
+    const driver = displayDriver(route, linkedVehicle)
+    const driverName = driver.name
+    const driverContact = driver.contact
+    const startLocation = String(route?.startLocation || '').trim()
+    const endLocation = String(route?.endLocation || '').trim()
 
     const live = useProtrackLive({
         panel: 'admin',
-        preferredImei: route?.imei || route?.gpsImei || '',
-        preferredPlate: route?.vehicleNumber || '',
+        preferredImei,
+        preferredPlate: preferredImei ? (route?.vehicleNumber || '') : '',
     })
 
     const trackingPreset = TRACKING_PRESETS[(parseInt(route?.id?.split('-')[1] ?? '1', 10) - 1) % TRACKING_PRESETS.length]
     const hasLiveGps = Boolean(live.livePosition)
-    // Demo geometry/stats must never be presented as a live GPS fix.
+    const hasLastKnown = Boolean(live.lastKnownPosition)
+    const freshnessState = live.freshness?.state || 'unavailable'
+    const trackingMode = hasLiveGps ? 'live' : hasLastKnown ? 'last-known' : 'demo'
+    const mapPosition = live.livePosition || live.lastKnownPosition || null
+    // Demo geometry/stats must never be presented as a live GPS fix. Stale/offline ≠ live.
     const stats = hasLiveGps
         ? live.stats
         : {
-            progress: '—',
-            distanceLeft: 'Demo route only — not live GPS',
+            progress: live.freshness?.label || '—',
+            distanceLeft:
+                hasLastKnown
+                    ? 'Last known position — not live movement'
+                    : 'Demo route only — not live GPS',
             eta: '—',
             speed: '—',
         }
@@ -79,7 +100,10 @@ const TrackBus = () => {
                         </p>
                         {live.error && (
                             <p className='text-sm text-[#B45309] mt-3 bg-[#FFF7ED] border border-[#FDBA74] rounded-md px-3 py-2'>
-                                {live.error} Demo route geometry may still draw for layout only — it is not a live GPS position.
+                                {live.error}
+                                {live.lastKnownPosition || live.livePosition
+                                    ? ' Showing the last known pin when coordinates are still available.'
+                                    : ' Demo route geometry may still draw for layout only — it is not a live GPS position.'}
                             </p>
                         )}
                         {live.imei ? (
@@ -99,40 +123,47 @@ const TrackBus = () => {
                         <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'>
                             <Field label='Vehicle Number' value={route.vehicleNumber} />
                             <Field label='Vehicle ID' value={route.vehicleId} />
-                            <Field label='Driver Name' value={route.driverName} />
-                            <Field label='Driver Contact' value={route.driverContact} />
-                            <Field label='Start Location' value={route.startLocation} />
-                            <Field label='End Location' value={route.endLocation} />
-                            <Field label='IMEI' value={live.imei || route.imei || route.gpsImei || '—'} />
+                            <Field label='Driver Name' value={driverName} />
+                            <Field label='Driver Contact' value={driverContact} />
+                            <Field label='Start Location' value={startLocation} />
+                            <Field label='End Location' value={endLocation} />
+                            <Field label='IMEI' value={live.imei || preferredImei || '—'} />
                             <Field
                                 label='GPS Status'
                                 value={
-                                    hasLiveGps
-                                        ? live.liveStatusLabel || 'Live fix'
-                                        : live.loading
-                                            ? 'Loading…'
-                                            : 'Demo route only (not live GPS)'
+                                    live.loading
+                                        ? 'Loading…'
+                                        : hasLiveGps
+                                            ? live.liveStatusLabel || 'Live GPS'
+                                            : live.freshness?.label || 'Demo route only (not live GPS)'
                                 }
                             />
                         </div>
+                        {(freshnessState === 'stale' || freshnessState === 'offline') && (
+                            <p className='text-sm text-[#B45309] mt-4 bg-[#FFF7ED] border border-[#FDBA74] rounded-md px-3 py-2'>
+                                Coordinates are available but are not treated as live vehicle movement
+                                ({live.liveStatusLabel}). The map shows the last known pin (not demo geometry).
+                                Live movement unlocks only after a fresh OK fix (≤ 10 minutes).
+                            </p>
+                        )}
                     </div>
 
                     <div className='bg-white rounded-2xl shadow-md overflow-hidden'>
                         <BusTrackingMap
                             routeName={route.routeName}
                             vehicleNumber={route.vehicleNumber}
-                            driverName={route.driverName}
-                            driverContact={route.driverContact}
-                            startLocation={route.startLocation}
-                            startSubtitle='Pickup Point'
-                            endLocation={route.endLocation}
-                            endSubtitle='School Campus'
-                            busLabel={route.vehicleId}
+                            driverName={driverName}
+                            driverContact={driverContact}
+                            startLocation={startLocation}
+                            startSubtitle={startLocation ? 'Start' : ''}
+                            endLocation={endLocation}
+                            endSubtitle={endLocation ? 'End' : ''}
+                            busLabel={route.vehicleNumber || route.vehicleId || 'BUS'}
                             stats={stats}
                             busIndex={trackingPreset.busIndex}
-                            livePosition={live.livePosition}
+                            livePosition={mapPosition}
                             liveStatusLabel={live.liveStatusLabel}
-                            trackingMode={hasLiveGps ? 'live' : 'demo'}
+                            trackingMode={trackingMode}
                         />
                     </div>
                 </>

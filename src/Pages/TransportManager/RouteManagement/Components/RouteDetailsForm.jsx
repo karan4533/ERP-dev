@@ -10,6 +10,10 @@ const selectClass =
 const RouteDetailsForm = ({ route }) => {
     const [vehicles, setVehicles] = useState([])
     const [drivers, setDrivers] = useState([])
+    const [selectedDriver, setSelectedDriver] = useState(route?.driverName ?? '')
+    const [driverContact, setDriverContact] = useState(route?.driverContact ?? '')
+    const [vehicleNumber, setVehicleNumber] = useState(route?.vehicleNumber ?? '')
+    const [vehicleId, setVehicleId] = useState(route?.vehicleId ?? '')
 
     useEffect(() => {
         let active = true
@@ -25,6 +29,24 @@ const RouteDetailsForm = ({ route }) => {
         return () => { active = false }
     }, [])
 
+    const onDriverChange = (label) => {
+        setSelectedDriver(label)
+        const match = drivers.find((driver) => driver.label === label)
+        // Only copy a contact that already exists on the saved driver record.
+        if (match?.contact) setDriverContact(match.contact)
+        else if (!label) setDriverContact('')
+    }
+
+    const onVehicleNumberChange = (nextNumber) => {
+        setVehicleNumber(nextNumber)
+        const match = vehicles.find((vehicle) => vehicle.vehicleNumber === nextNumber)
+        if (match?.id) setVehicleId(match.id)
+        if (match?.driverName && !selectedDriver) {
+            setSelectedDriver(match.driverName)
+            if (match.driverContact) setDriverContact(match.driverContact)
+        }
+    }
+
     return (
     <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 lg:mt-8 mt-2'>
         <div className='flex flex-col gap-y-2'>
@@ -33,7 +55,12 @@ const RouteDetailsForm = ({ route }) => {
         </div>
         <div className='flex flex-col gap-y-2'>
             <label htmlFor='vehicle-number' className='text-base font-medium text-[#1E1E1E]'>Vehicle Number:</label>
-            <select id='vehicle-number' defaultValue={route?.vehicleNumber ?? ''} className={selectClass}>
+            <select
+                id='vehicle-number'
+                value={vehicleNumber}
+                onChange={(e) => onVehicleNumberChange(e.target.value)}
+                className={selectClass}
+            >
                 <option value=''>--Select--</option>
                 {vehicles.length === 0 && <option value='' disabled>No saved vehicles</option>}
                 {vehicles.map((vehicle) => (
@@ -42,8 +69,26 @@ const RouteDetailsForm = ({ route }) => {
             </select>
         </div>
         <div className='flex flex-col gap-y-2'>
+            <label htmlFor='gps-imei' className='text-base font-medium text-[#1E1E1E]'>GPS IMEI (optional override):</label>
+            <input
+                type='text'
+                id='gps-imei'
+                inputMode='numeric'
+                autoComplete='off'
+                placeholder='Usually taken from the vehicle record'
+                defaultValue={route?.gpsImei || route?.imei || ''}
+                className={inputClass}
+            />
+            <span className='text-xs text-[#667085]'>Prefer storing IMEI on the vehicle. Set here only if this route needs a temporary override.</span>
+        </div>
+        <div className='flex flex-col gap-y-2'>
             <label htmlFor='select-driver' className='text-base font-medium text-[#1E1E1E]'>Select Driver:</label>
-            <select id='select-driver' defaultValue={route?.driverName ?? ''} className={selectClass}>
+            <select
+                id='select-driver'
+                value={selectedDriver}
+                onChange={(e) => onDriverChange(e.target.value)}
+                className={selectClass}
+            >
                 <option value=''>--Select--</option>
                 {drivers.length === 0 && <option value='' disabled>No saved drivers</option>}
                 {drivers.map((driver) => (
@@ -53,11 +98,23 @@ const RouteDetailsForm = ({ route }) => {
         </div>
         <div className='flex flex-col gap-y-2'>
             <label htmlFor='driver-contact' className='text-base font-medium text-[#1E1E1E]'>Driver Contact:</label>
-            <input type='text' id='driver-contact' defaultValue={route?.driverContact ?? ''} className={inputClass} />
+            <input
+                type='text'
+                id='driver-contact'
+                value={driverContact}
+                onChange={(e) => setDriverContact(e.target.value)}
+                placeholder='Saved driver mobile only'
+                className={inputClass}
+            />
         </div>
         <div className='flex flex-col gap-y-2'>
             <label htmlFor='vehicle-id' className='text-base font-medium text-[#1E1E1E]'>Vehicle ID:</label>
-            <select id='vehicle-id' defaultValue={route?.vehicleId ?? ''} className={selectClass}>
+            <select
+                id='vehicle-id'
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                className={selectClass}
+            >
                 <option value=''>--Select--</option>
                 {vehicles.map((vehicle) => (
                     <option key={`${vehicle.id}-id`} value={vehicle.id}>{vehicle.id}</option>

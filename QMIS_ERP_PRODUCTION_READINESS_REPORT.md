@@ -1,112 +1,77 @@
-# QMIS ERP — Production Readiness Report
+# QMIS ERP — Production Readiness Report (GPS / Route 1)
 
-**Date:** 23 October 2026  
-**Branch:** `ERP1` @ `513fada` (+ local uncommitted readiness fixes)  
-**Scope:** Confirmed blockers only. Payment gateway, live tracking enablement, and unapproved roles were not changed.
+**Updated:** 24 October 2026  
+**Focus:** Route card GPS freshness and saved driver details
 
-## 1. Root causes addressed
+---
 
-### 1.1 Canteen orders (P0)
+## Tracking readiness
 
-**Root cause:** `AddOrder.jsx` opened the “Order Saved” modal on Save click without calling `saveOrders` / `/api/v1/ops/canteen-orders`.
+**`BLOCKED_STALE_GPS`**
 
-**Change:**
-- Lifted order draft state into `AddOrder`.
-- Save hydrates campus orders + menu, builds a record, `await saveOrders(...)`, and only then opens the success modal.
-- API errors and validation show toasts; button shows “Saving…”.
-- Regression: `test_canteen_orders_persist_after_new_login` + static FE guard.
+The route card, freshness rule, and device mapping behave correctly. Live tracking is not operational because the tracker is still returning an old fix.
 
-### 1.2 ProTrack365 device selection (P0)
+| Layer | Result |
+|-------|--------|
+| Implementation (fresh only when OK and age 0–600s) | **Correct** |
+| Real device `355710090439063` | **Not fresh** — `datastatus` 2 (OK), `gpstime` `1792817627`, age **12860s (~3.6 h)**, `gpsLive` false |
 
-**Root cause:** `useProtrackLive.js` used `devicesList[0]` when IMEI/plate did not match. Student Track Bus also used `live.devices[0]`. Map UI showed a green **LIVE** badge over demo coordinates.
+Do not treat provider status OK as a live bus.
 
-**Change:**
-- Removed silent first-device fallback; require explicit IMEI or plate match.
-- Student/parent Track Bus loads preferred IMEI/plate from `/ops/my-transport` assignment (no first-row device pick).
-- Transport Manager Track Bus no longer presents demo stats as live ETA/speed.
-- `BusTrackingMap` uses `trackingMode`: demo shows **DEMO ROUTE — NOT LIVE GPS**; live badge only with a real fix.
-- Live tracking remains off until credentials + mapping + current fix exist.
+---
 
-### 1.3 Environment configuration
+## Saved records (not invented)
 
-**Documented in** `backend/.env.example` (placeholders only):
+| Field | Route `RT-1792826320243` | Vehicle `VEH-1792825477178` |
+|-------|--------------------------|-----------------------------|
+| Plate | `TN58BB3769` | `TN58BB3769` |
+| IMEI | `355710090439063` | `355710090439063` |
+| Driver | Browser Driver | empty on the vehicle |
+| Contact | 7448907020 | empty on the vehicle |
+| Start / end | erode → coimbatore | n/a |
 
-| Variable group | Purpose | Live when empty |
-|---|---|---|
-| `SMTP_*` | Email delivery | `NOT_CONFIGURED` — no real send |
-| `WHATSAPP_*` | WhatsApp HTTP API | `NOT_CONFIGURED` — no real send |
-| `PROTRACK_*` | ProTrack365 Open API | Proxy returns not configured / tracking off |
+ProTrack device for that IMEI: `Route No.1_TN58BB3769`, plate `TN58BB3769`.
 
-No credentials were read, printed, committed, or used for provider calls in this pass.
+Browser West Route has no IMEI. It is not given Route 1’s IMEI.
 
-## 2. Remaining browser workflows (from system audit)
+---
 
-Not re-walked in the browser in this fix pass. Status unchanged unless noted:
+## Browser evidence (signed-in Transport Manager, port 5174)
 
-| Area | Status |
-|---|---|
-| Parent/student fees | Prior PARTIAL browser evidence |
-| Librarian issue/return re-walk | NOT TESTED this pass |
-| TM expenses / student-transport click | NOT TESTED |
-| Stores issue/return click | NOT TESTED |
-| IT tickets | NOT TESTED |
-| HK / audit re-login | NOT TESTED |
-| Canteen **order** save UI | **Browser verified 23 Oct 2026** (see §6) |
-| Super Admin / Admin / Director / Principal full panels | NOT TESTED |
-| Live GPS end-to-end | BLOCKED (no credentials / no verified IMEI) |
+After a full reload, and again after **Sign out** and a new Transport Manager sign-in:
 
-## 3. Test evidence
+| Card | Shown |
+|------|--------|
+| Route 1 | erode → coimbatore, Browser Driver, 7448907020, badge **NOT LIVE**, GPS `OK — last known (approximately 3.6 h ago)`, Call Driver `tel:+917448907020` |
+| Browser West Route | — → —, Driver —, Contact —, badge **No IMEI**, **No driver contact** (disabled) |
 
-Executed 23 October 2026 after the fixes:
+Network after the new sign-in:
+
+- `GET /api/v1/protrack/devices?panel=admin`
+- `GET /api/v1/protrack/track?imeis=355710090439063&panel=admin`
+
+No track request was sent for Browser West Route.
+
+---
+
+## Automated tests (not a substitute for the live device)
 
 | Check | Result |
-|---|---|
-| Targeted pytest (`test_remaining_workflows`, static readiness, `test_protrack_proxy`) | **8 passed** |
-| Full `python -m pytest tests/ -q` | **464 passed**, 0 failed (~4m 41s) |
-| `npm run build` | **passed** (~1m 7s) |
+|-------|--------|
+| `node --test` freshness + route-card cases | **15 passed, 0 failed** |
+| `pytest tests/test_protrack_freshness.py tests/test_protrack_proxy.py tests/test_frontend_production_readiness_static.py -q` | **16 passed, 0 failed** |
+| `npm run build` | **Succeeded** (vite, ~46s) |
 
-No tests were weakened or deleted.
+Covered in tests: live at 0s and 600s; not live at 601s; future and invalid timestamps not live; OK + stale timestamp not live; offline, missing, and no coordinates not live; no-IMEI route excluded from the track list; duplicate IMEI and vehicle IMEI clash not tracked; Call Driver rejected for empty, short, and non-numeric contacts.
 
-## 4. Remaining deployment blockers
+---
 
-1. **SMTP / WhatsApp** not configured — notifications not LIVE_VERIFIED.  
-2. **ProTrack** accounts empty; no confirmed IMEI for production plates (e.g. TN58BB3769).  
-3. ~~Browser verification of canteen order save~~ — completed for the happy path + controlled fail-save (see §6). Full product production readiness still blocked by items 1–2 and other PARTIAL modules.  
-4. Other PARTIAL modules from the system audit remain.  
-5. Payment gateway still mocked (intentionally unchanged).  
-6. Do **not** claim full production readiness until SMTP/WhatsApp/ProTrack and remaining PARTIAL modules are verified.
+## Rule that stayed in place
 
-## 5. Explicit non-changes
+Live GPS only when `datastatus` is OK (2) **and** Unix age is from 0 through 600 seconds. Age is `now - gpstime` in UTC seconds (millisecond values converted). A future timestamp is invalid, not age 0. The 600-second limit was not raised.
 
-- Payment processing / Razorpay behaviour unchanged.  
-- Live bus tracking not enabled.  
-- No new roles.  
-- No commit / push / deploy in this browser-verification pass.
+---
 
-## 6. Browser verification — canteen order persist (23 Oct 2026)
+## Remaining blocker
 
-**Environment:** `http://localhost:5173` + local backend; branch `ERP1` @ `513fada` with uncommitted readiness fixes preserved (no commit/push/deploy).  
-**Account:** `canteen.browser.oct23b@example.com` (authorized Canteen).  
-**Menu item used:** `Browser lemon rice` (₹50).  
-**Unique order marker:** special instructions `BrowserOrder-Oct23-2210-unique` → order id `ORD-73604359`.
-
-| Step | Result | Evidence |
-|---|---|---|
-| Sign in as Canteen; create uniquely named order | **PASS** | Form saved; UI showed “Saving…” then **Order Saved** modal only after save |
-| Backend persisted order | **PASS** | `GET /api/v1/ops/canteen-orders` returned `ORD-73604359` / `BrowserOrder-Oct23-2210-unique` |
-| Success UI only after save | **PASS** | Success modal gated on `await saveOrders(...)` (observed Saving… → Order Saved) |
-| Refresh list — order remains, no duplicate | **PASS** | Orders list `Showing 1 to 1 of 1 entries`; `ORD-73604359` count = 1 |
-| Sign out → sign in → order remains | **PASS** | After re-login to `/canteen-manager/orders`, same single row `ORD-73604359` |
-| Controlled failed save (browser `fetch` write-block on `canteen-orders` non-GET) | **PASS** | Toast: “The order could not be saved. Check your connection and try again.”; **no** Order Saved modal; API still only `ORD-73604359` (failed attempt `FailSave-Oct23-2213-unique` not persisted) |
-| Duplicate from refresh / re-render | **PASS** | Still one entry after refresh and re-login |
-
-### Untested / out of scope this pass
-
-- Payment gateway / Razorpay  
-- Live ProTrack GPS  
-- Other canteen submodules (inventory, requests, announcements) beyond order create/list  
-- Other roles/modules from the system audit  
-
-### Failures
-
-None observed for the canteen order persist workflow above. No additional code fix was required after the browser walk.
+GPS vendor: device `355710090439063` must publish a new `gpstime` no older than 600 seconds while status stays OK. Until then the Route 1 card stays **NOT LIVE**.

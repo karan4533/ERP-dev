@@ -1,35 +1,38 @@
 # Testing report
 
-**Date:** 23 October 2026  
-**Branch:** `ERP1`  
-**Context:** Final pending-requirements audit (code re-check + targeted pytest)
+**Date:** 24 October 2026  
+**Context:** Route card GPS freshness and driver details
 
-## Backend (this audit)
+## Backend
 
 | Metric | Count |
 |---|---|
-| Passed | **19** |
+| Passed | **16** |
 | Failed | **0** |
-| Skipped | 0 |
 | Warnings | 1 (Starlette TestClient / httpx deprecation) |
-| Duration | ~27 seconds |
+| Duration | ~10 seconds |
 
-Command: `python -m pytest tests/test_remaining_workflows.py tests/test_frontend_production_readiness_static.py tests/test_protrack_proxy.py tests/test_integrations_ready.py -q` from `backend/`.
+Command: `python -m pytest tests/test_protrack_freshness.py tests/test_protrack_proxy.py tests/test_frontend_production_readiness_static.py -q` from `backend/`.
 
-## Backend (earlier same day — full suite)
-
-| Metric | Count |
-|---|---|
-| Passed | **464** |
-| Failed | **0** |
-| Duration | 4 minutes 41 seconds |
-
-Command: `python -m pytest tests/ -q` from `backend/`.
+Coverage notes:
+- Fresh OK fix at 0s, under 600s, and exactly 600s is live
+- Older than 600s, future time, invalid time, OK with a stale timestamp, offline, missing, and no coordinates are not live
+- Track proxy sets `gpsLive` false for a stale OK row
+- Route card source does not hardcode Route 1 driver, contact, or locations
 
 ## Frontend
 
-`npm run build` passed earlier same day (~1 minute 7 seconds). Not re-run in the final audit pass.
+| Metric | Count |
+|---|---|
+| Passed | **15** |
+| Failed | **0** |
 
-## Browser
+Command: `node --test src/services/protrackFreshness.test.js src/Pages/TransportManager/RouteData/routeCardGps.test.js`
 
-Canteen order create → API persist → refresh → re-login → controlled fail-save was verified on localhost (see `QMIS_ERP_PRODUCTION_READINESS_REPORT.md` §6). Live ProTrack, SMTP, WhatsApp, and Razorpay were not attempted (configuration empty / out of scope).
+No Jest suite exists in this repo. These are Node’s built-in tests of the freshness and route-card rules.
+
+Production build: `npm run build` succeeded (Vite, about 46 seconds).
+
+## Browser (separate from the automated counts)
+
+Transport Manager Route Data on `localhost:5174`, including after sign-out and sign-in: Route 1 showed saved driver, contact, and erode → coimbatore with **NOT LIVE**. Browser West Route showed **No IMEI**. The only track call was IMEI `355710090439063`.

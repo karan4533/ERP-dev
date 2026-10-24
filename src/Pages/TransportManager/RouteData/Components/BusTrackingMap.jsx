@@ -1,4 +1,5 @@
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet'
+import { normalizeDialNumber } from '../../../../Common/Transport/driverContact'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useMemo } from 'react'
@@ -183,40 +184,55 @@ function FitBounds({ coords }) {
 }
 
 export default function BusTrackingMap({
-    routeName = 'Bus Route — Morning Pick-up',
-    vehicleNumber = 'TN 59 AB 1234',
-    driverName = 'Rajan M.',
-    driverContact = '+919999999999',
-    startLocation = 'Palanganatham',
-    startSubtitle = 'Pickup Point',
-    endLocation = 'Queen Mira School',
-    endSubtitle = 'School Campus',
-    busLabel = 'BUS-001',
+    routeName = '',
+    vehicleNumber = '',
+    driverName = '',
+    driverContact = '',
+    startLocation = '',
+    startSubtitle = '',
+    endLocation = '',
+    endSubtitle = '',
+    busLabel = 'BUS',
     stats = DEFAULT_STATS,
     routeCoords = DEFAULT_ROUTE_COORDS,
     busIndex = 54,
-    /** Live ProTrack GPS [lat, lng] — when set, bus marker follows the device */
+    /** ProTrack GPS [lat, lng] — live or last-known depending on trackingMode */
     livePosition = null,
     liveStatusLabel = '',
-    /** 'live' only when a verified ProTrack fix is shown; otherwise demo geometry */
+    /**
+     * 'live' = fresh OK fix (movement-safe).
+     * 'last-known' = provider coords exist but stale/offline — show pin, never label as live.
+     * 'demo' = layout geometry only.
+     */
     trackingMode = 'demo',
 }) {
-    const isLive = trackingMode === 'live' && Array.isArray(livePosition) && livePosition.length === 2
+    const hasProviderPin = Array.isArray(livePosition) && livePosition.length === 2
+    const isLive = trackingMode === 'live' && hasProviderPin
+    const isLastKnown = trackingMode === 'last-known' && hasProviderPin
     const startPoint = routeCoords[0]
     const endPoint = routeCoords[routeCoords.length - 1]
     const simulatedBus = routeCoords[busIndex] ?? endPoint
-    const busPosition = isLive ? livePosition : simulatedBus
+    const busPosition = (isLive || isLastKnown) ? livePosition : simulatedBus
     const completedCoords = routeCoords.slice(0, busIndex + 1)
     const remainingCoords = routeCoords.slice(busIndex)
-    const progressWidth = isLive
+    const progressWidth = isLive || isLastKnown
         ? '100%'
         : `${Math.min(100, Math.round((busIndex / Math.max(routeCoords.length - 1, 1)) * 100))}%`
+    const statusBadge = isLive
+        ? (liveStatusLabel || 'LIVE GPS')
+        : isLastKnown
+            ? (liveStatusLabel || 'LAST KNOWN — NOT LIVE')
+            : 'DEMO ROUTE — NOT LIVE GPS'
+    const fromLabel = startLocation || '—'
+    const toLabel = endLocation || '—'
+    const driverLabel = driverName || '—'
+    const vehicleLabel = vehicleNumber || '—'
+    const dialNumber = normalizeDialNumber(driverContact)
+    const canCallDriver = Boolean(dialNumber)
 
     const startIcon = useMemo(() => makeStopIcon('#22c55e', '📍 Pickup Point'), [])
     const endIcon = useMemo(() => makeStopIcon('#f59e0b', '🏫 Destination'), [])
     const busIcon = useMemo(() => makeBusIcon(busLabel), [busLabel])
-
-    const phoneHref = driverContact.startsWith('+') ? `tel:${driverContact}` : `tel:+91${driverContact}`
 
     return (
         <div className='flex flex-col'>
@@ -226,23 +242,37 @@ export default function BusTrackingMap({
                         <span className='text-white text-xl'>🚌</span>
                     </div>
                     <div>
-                        <p className='text-[#0C1E5B] font-semibold text-base leading-tight'>{routeName}</p>
+                        <p className='text-[#0C1E5B] font-semibold text-base leading-tight'>{routeName || 'Route'}</p>
                         <p className='text-[#667085] text-xs'>
-                            Vehicle: {vehicleNumber} &nbsp;·&nbsp; Driver: {driverName}
+                            Vehicle: {vehicleLabel} &nbsp;·&nbsp; Driver: {driverLabel}
                         </p>
                     </div>
                 </div>
 
                 <div className='flex items-center gap-3'>
-                    <a
-                        href={phoneHref}
-                        className='flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200 rounded-full px-3 py-1.5'
-                    >
-                        <svg xmlns='http://www.w3.org/2000/svg' className='w-3.5 h-3.5 text-emerald-600' viewBox='0 0 24 24' fill='currentColor'>
-                            <path d='M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z' />
-                        </svg>
-                        <span className='text-emerald-700 text-xs font-semibold'>Call Driver</span>
-                    </a>
+                    {canCallDriver ? (
+                        <a
+                            href={`tel:${dialNumber}`}
+                            className='flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-200 rounded-full px-3 py-1.5'
+                        >
+                            <svg xmlns='http://www.w3.org/2000/svg' className='w-3.5 h-3.5 text-emerald-600' viewBox='0 0 24 24' fill='currentColor'>
+                                <path d='M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z' />
+                            </svg>
+                            <span className='text-emerald-700 text-xs font-semibold'>Call Driver</span>
+                        </a>
+                    ) : (
+                        <button
+                            type='button'
+                            disabled
+                            title='No driver contact saved on this route or vehicle'
+                            className='flex items-center gap-2 bg-[#F9FAFB] border border-[#E4E7EC] rounded-full px-3 py-1.5 cursor-not-allowed opacity-70'
+                        >
+                            <svg xmlns='http://www.w3.org/2000/svg' className='w-3.5 h-3.5 text-[#98A2B3]' viewBox='0 0 24 24' fill='currentColor'>
+                                <path d='M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z' />
+                            </svg>
+                            <span className='text-[#98A2B3] text-xs font-semibold'>No driver contact</span>
+                        </button>
+                    )}
 
                     <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${isLive ? 'bg-[#EDEEF5]' : 'bg-[#FFF7ED] border border-[#FDBA74]'}`}>
                         {isLive ? (
@@ -250,9 +280,11 @@ export default function BusTrackingMap({
                                 <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75' />
                                 <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500' />
                             </span>
-                        ) : null}
+                        ) : (
+                            <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500' />
+                        )}
                         <span className='text-[#0C1E5B] text-xs font-semibold tracking-wide'>
-                            {isLive ? (liveStatusLabel || 'LIVE GPS') : 'DEMO ROUTE — NOT LIVE GPS'}
+                            {statusBadge}
                         </span>
                     </div>
                 </div>
@@ -261,24 +293,24 @@ export default function BusTrackingMap({
             <div className='relative z-0 h-[60vh] min-h-[420px]'>
                 <MapContainer
                     center={busPosition}
-                    zoom={13}
+                    zoom={isLastKnown ? 15 : 13}
                     style={{ height: '100%', width: '100%' }}
                     scrollWheelZoom
                 >
                     <TileLayer
-                        url='https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-                        attribution='&copy; OpenStreetMap &copy; CARTO'
+                        url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     />
 
                     <FitBounds
                         coords={
-                            isLive
-                                ? [startPoint, endPoint, busPosition].filter(Boolean)
+                            isLive || isLastKnown
+                                ? [busPosition]
                                 : routeCoords
                         }
                     />
 
-                    {!isLive && (
+                    {!isLive && !isLastKnown && (
                         <>
                             <Polyline
                                 positions={completedCoords}
@@ -297,33 +329,42 @@ export default function BusTrackingMap({
                         />
                     )}
 
-                    <Marker position={startPoint} icon={startIcon}>
-                        <Popup>
-                            <div className='text-sm font-semibold'>📍 Pickup Point</div>
-                            <div className='text-xs text-gray-500 mt-1'>{startLocation}</div>
-                        </Popup>
-                    </Marker>
+                    {!isLastKnown && (
+                        <>
+                            <Marker position={startPoint} icon={startIcon}>
+                                <Popup>
+                                    <div className='text-sm font-semibold'>📍 Pickup Point</div>
+                                    <div className='text-xs text-gray-500 mt-1'>{fromLabel}</div>
+                                    {startSubtitle ? <div className='text-xs text-gray-400 mt-0.5'>{startSubtitle}</div> : null}
+                                </Popup>
+                            </Marker>
 
-                    <Marker position={endPoint} icon={endIcon}>
-                        <Popup>
-                            <div className='text-sm font-semibold'>🏫 {endLocation}</div>
-                            <div className='text-xs text-gray-500 mt-1'>{endSubtitle}</div>
-                        </Popup>
-                    </Marker>
+                            <Marker position={endPoint} icon={endIcon}>
+                                <Popup>
+                                    <div className='text-sm font-semibold'>🏫 {toLabel}</div>
+                                    {endSubtitle ? <div className='text-xs text-gray-500 mt-1'>{endSubtitle}</div> : null}
+                                </Popup>
+                            </Marker>
+                        </>
+                    )}
 
                     <Marker position={busPosition} icon={busIcon}>
                         <Popup>
                             <div className='text-sm font-semibold'>
-                                🚌 {busLabel} ({isLive ? 'Live GPS' : 'Demo route position'})
+                                🚌 {busLabel} (
+                                {isLive ? 'Live GPS' : isLastKnown ? 'Last known position' : 'Demo route position'}
+                                )
                             </div>
                             <div className='text-xs text-gray-500 mt-1'>
                                 {isLive
                                     ? (liveStatusLabel || `En route to ${endLocation}`)
-                                    : 'Demo geometry only — not a live GPS fix'}
+                                    : isLastKnown
+                                        ? (liveStatusLabel || 'Not live movement — waiting for a fresh OK fix')
+                                        : 'Demo geometry only — not a live GPS fix'}
                             </div>
                             <div className='text-xs text-emerald-600 font-medium mt-1'>
-                                {isLive
-                                    ? `${stats.speed} · ${livePosition[0].toFixed(5)}, ${livePosition[1].toFixed(5)}`
+                                {(isLive || isLastKnown)
+                                    ? `${isLive ? stats.speed : '—'} · ${livePosition[0].toFixed(5)}, ${livePosition[1].toFixed(5)}`
                                     : `Demo layout · ${stats.distanceLeft}`}
                             </div>
                         </Popup>
@@ -335,8 +376,8 @@ export default function BusTrackingMap({
                 <div className='flex items-center gap-4 mb-4'>
                     <div className='flex-1 min-w-0'>
                         <p className='text-[#667085] text-[10px] uppercase tracking-widest mb-0.5'>From</p>
-                        <p className='text-[#0C1E5B] font-semibold text-sm truncate'>{startLocation}</p>
-                        <p className='text-[#667085] text-[11px]'>{startSubtitle}</p>
+                        <p className='text-[#0C1E5B] font-semibold text-sm truncate'>{fromLabel}</p>
+                        {startSubtitle ? <p className='text-[#667085] text-[11px]'>{startSubtitle}</p> : null}
                     </div>
 
                     <div className='flex flex-col items-center gap-1.5 shrink-0'>
@@ -353,8 +394,8 @@ export default function BusTrackingMap({
 
                     <div className='flex-1 min-w-0 text-right'>
                         <p className='text-[#667085] text-[10px] uppercase tracking-widest mb-0.5'>To</p>
-                        <p className='text-[#0C1E5B] font-semibold text-sm truncate'>{endLocation}</p>
-                        <p className='text-[#667085] text-[11px]'>{endSubtitle}</p>
+                        <p className='text-[#0C1E5B] font-semibold text-sm truncate'>{toLabel}</p>
+                        {endSubtitle ? <p className='text-[#667085] text-[11px]'>{endSubtitle}</p> : null}
                     </div>
                 </div>
 

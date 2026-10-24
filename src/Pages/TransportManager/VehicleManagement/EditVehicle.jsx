@@ -1,12 +1,74 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import VehicleDetailsForm from './Components/VehicleDetailsForm'
-import { getVehicleById } from './vehicleManagementData'
+import { getVehicleById, getVehicles, hydrateVehiclesFromApi, saveVehicles } from './vehicleManagementData'
+
+const read = (id) => String(document.getElementById(id)?.value ?? '').trim()
 
 const EditVehicle = () => {
     const navigate = useNavigate()
     const { id } = useParams()
-    const vehicle = getVehicleById(id)
+    const [vehicle, setVehicle] = useState(() => getVehicleById(id))
+
+    useEffect(() => {
+        let active = true
+        hydrateVehiclesFromApi().finally(() => {
+            if (active) setVehicle(getVehicleById(id))
+        })
+        return () => { active = false }
+    }, [id])
+
+    const save = async () => {
+        const vehicleNumber = read('vehicle-number')
+        const vehicleType = read('vehicle-type')
+        if (!vehicleNumber || !vehicleType) {
+            toast.error('Vehicle number and type are required.')
+            return
+        }
+        await hydrateVehiclesFromApi()
+        const gpsImei = read('gps-imei').replace(/\s+/g, '')
+        const existing = getVehicles().filter((row) => String(row.id) !== String(id))
+        const plateNorm = vehicleNumber.replace(/[\s-]/g, '').toUpperCase()
+        const plateClash = existing.find((row) => (
+            String(row.vehicleNumber || '').replace(/[\s-]/g, '').toUpperCase() === plateNorm
+        ))
+        if (plateClash) {
+            toast.error(`Vehicle ${vehicleNumber} is already registered. Edit that record instead of adding a duplicate.`)
+            return
+        }
+        if (gpsImei) {
+            const imeiClash = existing.find((row) => (
+                String(row.gpsImei || row.imei || '').replace(/\s+/g, '') === gpsImei
+            ))
+            if (imeiClash) {
+                toast.error(`GPS IMEI ${gpsImei} is already on vehicle ${imeiClash.vehicleNumber}. Edit that record instead of adding a duplicate.`)
+                return
+            }
+        }
+        const saved = await saveVehicles([{
+            ...vehicle,
+            id: vehicle.id,
+            vehicleNumber,
+            vehicleType,
+            gpsImei,
+            imei: gpsImei,
+            capacity: Number(read('capacity') || 0),
+            driverName: read('driver-name'),
+            driverContact: read('driver-contact'),
+            category: read('vehicle-category') || 'Bus',
+            conductorName: read('conductor-name'),
+            studentStrength: Number(read('student-strength') || 0),
+            staffStrength: Number(read('staff-strength') || 0),
+            currentOdometer: Number(read('odometer') || 0),
+        }, ...existing])
+        if (!saved) {
+            toast.error('The vehicle could not be saved.')
+            return
+        }
+        toast.success('Vehicle updated.')
+        navigate('/transport-manager/vehicle-management')
+    }
 
     if (!vehicle) {
         return (
@@ -45,6 +107,7 @@ const EditVehicle = () => {
                 </button>
                 <button
                     type='button'
+                    onClick={save}
                     className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
                     Save Changes

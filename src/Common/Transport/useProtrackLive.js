@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
     canUseProtrackApi,
-    datastatusLabel,
+    classifyTrackFreshness,
     getProtrackStatusApi,
     listProtrackDevicesApi,
+    trackHasCoordinates,
     trackProtrackImeisApi,
 } from '../../services/protrackApi'
 
 const POLL_MS = 15000
 
 /**
- * Poll ProTrack365 devices + live coordinates for Transport / Parent / Student maps.
+ * Poll ProTrack365 devices + coordinates for Transport / Parent / Student maps.
+ * Live marker only when classifyTrackFreshness → fresh. Stale/offline never labelled as live movement.
  * @param {{ panel?: 'admin'|'parent', preferredImei?: string, preferredPlate?: string }} opts
  */
 export default function useProtrackLive(opts = {}) {
@@ -103,18 +105,31 @@ export default function useProtrackLive(opts = {}) {
         return () => clearInterval(id)
     }, [imei, refreshTrack])
 
-    const livePosition =
-        track && Number.isFinite(Number(track.latitude)) && Number.isFinite(Number(track.longitude))
-            ? [Number(track.latitude), Number(track.longitude)]
-            : null
+    const freshness = classifyTrackFreshness(track)
+    const coords = trackHasCoordinates(track)
+        ? [Number(track.latitude), Number(track.longitude)]
+        : null
+
+    // Only a fresh OK fix may move the live marker / "Live GPS" chrome.
+    const livePosition = freshness.live === true && freshness.state === 'fresh' ? coords : null
+    const lastKnownPosition =
+        freshness.state === 'stale' || freshness.state === 'offline' ? coords : null
 
     const stats = {
-        progress: livePosition ? 'Live GPS' : '—',
-        distanceLeft: livePosition ? 'ProTrack365' : '—',
+        progress: freshness.state === 'fresh' ? 'Live GPS' : freshness.label || '—',
+        distanceLeft:
+            freshness.state === 'fresh'
+                ? 'ProTrack365'
+                : freshness.state === 'stale' || freshness.state === 'offline'
+                    ? 'Last known position — not live movement'
+                    : '—',
         eta: track?.gpstime
             ? new Date(Number(track.gpstime) * 1000).toLocaleTimeString()
             : '—',
-        speed: track?.speed != null ? `${track.speed} km/h` : '—',
+        speed:
+            freshness.state === 'fresh' && track?.speed != null
+                ? `${track.speed} km/h`
+                : '—',
     }
 
     return {
@@ -126,9 +141,11 @@ export default function useProtrackLive(opts = {}) {
             refreshTrack(next)
         },
         track,
+        freshness,
         livePosition,
+        lastKnownPosition,
         stats,
-        liveStatusLabel: track ? datastatusLabel(track.datastatus) : '',
+        liveStatusLabel: freshness.label || '',
         error,
         loading,
         refresh: () => refreshTrack(imei),
