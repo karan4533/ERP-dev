@@ -9,10 +9,6 @@ import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal';
 
-const EXPORT_ROWS = [
-    {book_image: '', book_id: 'BOK1001', book_tittle: 'Math Basic', category: 'Mathematics', author: 'Sandy', published_year: '2026', total_copies: '20', available_copies: '15', shelf_location: 'A1', publisher_name: 'Oxford', language: 'English'},
-]
-
 const BookList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -186,13 +182,7 @@ const BookList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='book-list'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

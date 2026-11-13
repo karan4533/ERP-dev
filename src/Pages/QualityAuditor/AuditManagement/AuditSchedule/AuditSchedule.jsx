@@ -3,10 +3,12 @@ import { useLocation } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, LayoutList, CalendarDays } from 'lucide-react'
+import { toast } from 'react-toastify'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import AuditScheduleCalendar from './AuditScheduleCalendar'
 import {
     getAuditSchedules,
+    saveAuditSchedules,
     addAuditSchedule,
     DEPARTMENTS,
     FREQUENCIES,
@@ -24,6 +26,18 @@ const AuditSchedule = () => {
     const [exportModal, setExportModal] = useState(false)
     const [recurring, setRecurring] = useState(false)
     const [recurrenceType, setRecurrenceType] = useState('Weekly')
+
+    const handleStatusChange = (scheduleId, newStatus) => {
+        const next = schedules.map((item) => {
+            if ((item.scheduleId || item.id) === scheduleId) {
+                return { ...item, status: newStatus }
+            }
+            return item
+        })
+        setSchedules(next)
+        saveAuditSchedules(next)
+        toast.success(`Schedule ${scheduleId} marked as "${newStatus}"`)
+    }
 
     const createSchedule = (event) => {
         event.preventDefault()
@@ -227,9 +241,15 @@ const AuditSchedule = () => {
                                             <td className='px-2 py-4 whitespace-nowrap'>{record.dueDate}</td>
                                             <td className='px-2 py-4'>{record.assignedBy}</td>
                                             <td className='px-2 py-4 rounded-e-lg'>
-                                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.status]}`}>
-                                                    {record.status}
-                                                </span>
+                                                <select
+                                                    value={record.status}
+                                                    onChange={(e) => handleStatusChange(record.scheduleId || record.id, e.target.value)}
+                                                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap border border-slate-200 cursor-pointer outline-none transition hover:border-slate-400 ${statusBadgeColor[record.status] || 'bg-slate-100 text-slate-700'}`}
+                                                >
+                                                    <option value='Pending'>Pending</option>
+                                                    <option value='In Progress'>In Progress</option>
+                                                    <option value='Completed'>Completed</option>
+                                                </select>
                                             </td>
                                         </tr>
                                     ))}

@@ -8,10 +8,6 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 
-const EXPORT_ROWS = [
-    {profile: '', librarian_name: 'Sandy Selva', lib_id: 'LIB-1001', email_id: 'san@gmail.com', gender: 'Male', mobile_number: '9944076993', qualification: 'B.SC, B.ED', experience: '8 Years', city: 'Trichy', state: 'Tamil Nadu'},
-]
-
 const LibrarianList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -181,13 +177,7 @@ const LibrarianList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='librarian-list'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
         </section>

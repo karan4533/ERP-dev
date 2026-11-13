@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import DatePicker from 'react-datepicker'
@@ -8,36 +8,31 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from './Components/ExportModal'
 import {
     STATUS_OPTIONS,
-    convertEnquiryToAdmission,
     deleteAdmissionEnquiry,
     filterAdmissionEnquiries,
+    getAddAdmissionPath,
     getAllAdmissionEnquiries,
     getEnquiryProfileImage,
     getEnquiryRouteBase,
+    isAdminFrontOfficePath,
     statusBadgeColor,
+    updateAdmissionEnquiryStatus,
 } from './admissionEnquiryData'
-import { getAdmissionEditPath } from '../AdminssionList/admissionListData'
 
 const AdmissionEnquiry = () => {
     const navigate = useNavigate()
     const { pathname } = useLocation()
     const routeBase = getEnquiryRouteBase(pathname)
+    const isAdminView = isAdminFrontOfficePath(pathname)
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('')
     const [entriesPerPage, setEntriesPerPage] = useState(10)
-    const [records, setRecords] = useState([])
+    const [records, setRecords] = useState(() => getAllAdmissionEnquiries())
 
-    const refresh = async () => {
-        const rows = await getAllAdmissionEnquiries()
-        setRecords(rows)
-    }
-
-    useEffect(() => {
-        refresh()
-    }, [])
+    const refresh = () => setRecords(getAllAdmissionEnquiries())
 
     const filteredRecords = useMemo(
         () => filterAdmissionEnquiries(records, { search, status }),
@@ -53,37 +48,18 @@ const AdmissionEnquiry = () => {
         setToDate(null)
     }
 
-    const handleDelete = async (id) => {
-        const result = await deleteAdmissionEnquiry(id)
-        if (!result.success) {
-            toast.error(result.message || 'Could not delete enquiry.')
-            return
-        }
-        await refresh()
-        toast.success('Enquiry closed.')
+    const handleDelete = (id) => {
+        deleteAdmissionEnquiry(id)
+        refresh()
+        toast.success('Enquiry deleted.')
     }
 
-    const handleConvertToAdmission = async (record) => {
-        const result = await convertEnquiryToAdmission(record.id)
-        if (!result.success) {
-            toast.error(result.message || 'Convert failed.')
-            return
-        }
-        await refresh()
-        const admissionId = result.admission?.id
-        if (!admissionId) {
-            toast.error('Convert created no admission id. Open Admission List and edit the new row.')
-            return
-        }
-        toast.success('Enquiry converted. Save parent email, then Enroll as Student from Admission List.')
-        // Use edit URL (not add + location.state) so refresh still updates the converted row.
-        navigate(getAdmissionEditPath(pathname, admissionId), {
-            state: {
-                fromEnquiryId: record.id,
-                enquiry: record,
-                admissionId,
-                admission: result.admission,
-            },
+    const handleConvertToAdmission = (record) => {
+        updateAdmissionEnquiryStatus(record.id, 'Success')
+        refresh()
+        toast.success('Enquiry converted. Continue on the admission form.')
+        navigate(getAddAdmissionPath(pathname), {
+            state: { fromEnquiryId: record.id, enquiry: record },
         })
     }
 
@@ -159,13 +135,15 @@ const AdmissionEnquiry = () => {
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
                     <h2 className='text-xl font-medium text-black'>Admission Enquiry List</h2>
                     <div className='flex gap-x-2'>
-                        <NavLink
-                            to={`${routeBase}/add`}
-                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                        >
-                            <Plus size={16} />
-                            Add Admission Enquiry
-                        </NavLink>
+                        {!isAdminView && (
+                            <NavLink
+                                to={`${routeBase}/add`}
+                                className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                            >
+                                <Plus size={16} />
+                                Add Admission Enquiry
+                            </NavLink>
+                        )}
                         <button
                             type='button'
                             onClick={() => setExportModal(true)}
@@ -248,26 +226,30 @@ const AdmissionEnquiry = () => {
                                                     >
                                                         View
                                                     </NavLink>
-                                                    <NavLink
-                                                        to={`${routeBase}/edit/${record.id}`}
-                                                        className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Edit
-                                                    </NavLink>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => handleDelete(record.id)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => handleConvertToAdmission(record)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Convert to Admission
-                                                    </button>
+                                                    {!isAdminView && (
+                                                        <>
+                                                            <NavLink
+                                                                to={`${routeBase}/edit/${record.id}`}
+                                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Edit
+                                                            </NavLink>
+                                                            <button
+                                                                type='button'
+                                                                onClick={() => handleDelete(record.id)}
+                                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                            <button
+                                                                type='button'
+                                                                onClick={() => handleConvertToAdmission(record)}
+                                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Convert to Admission
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </Dropdown>
                                             </td>
                                         </tr>
@@ -296,13 +278,7 @@ const AdmissionEnquiry = () => {
                 )}
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='admission-enquiry'
-                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
-                exportDescription={<>You are exporting {Array.isArray(filteredRecords) ? filteredRecords.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

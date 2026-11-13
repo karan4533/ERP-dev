@@ -1,24 +1,14 @@
 import React from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { DAYS, createTimelineRow } from '../examinationTimetableData'
-import ScrollableSelect from '../../../../Common/CommonComponents/ScrollableSelect'
+import { DAYS, SUBJECTS, createTimelineRow } from '../examinationTimetableData'
+
+const selectClass =
+    'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full bg-white'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
 
-const ExamTimelineEditor = ({
-    timelines,
-    onChange,
-    readOnly = false,
-    subjects = [],
-    classSelected = false,
-}) => {
-    const subjectOptions = Array.isArray(subjects) ? subjects : []
-    const subjectPlaceholder = !classSelected
-        ? 'Select class first'
-        : subjectOptions.length
-          ? 'Select subject'
-          : 'No teacher subjects for this class'
+const ExamTimelineEditor = ({ timelines, onChange, readOnly = false }) => {
     const updateRow = (index, key, value) => {
         onChange(
             timelines.map((row, rowIndex) =>
@@ -67,31 +57,36 @@ const ExamTimelineEditor = ({
                     <tbody>
                         {timelines.map((row, index) => (
                             <tr key={row.id} className='border-b border-[#f2f4f7]'>
-                                <td className='px-2 py-3 min-w-[140px]'>
+                                <td className='px-2 py-3'>
                                     {readOnly ? (
                                         row.day || '—'
                                     ) : (
-                                        <ScrollableSelect
+                                        <select
                                             value={row.day}
-                                            onChange={(value) => updateRow(index, 'day', value)}
-                                            options={DAYS}
-                                            placeholder='Select day'
-                                            listClassName='max-h-40'
-                                        />
+                                            onChange={(e) => updateRow(index, 'day', e.target.value)}
+                                            className={selectClass}
+                                        >
+                                            <option value=''>Select day</option>
+                                            {DAYS.map((day) => (
+                                                <option key={day} value={day}>{day}</option>
+                                            ))}
+                                        </select>
                                     )}
                                 </td>
-                                <td className='px-2 py-3 min-w-[160px]'>
+                                <td className='px-2 py-3'>
                                     {readOnly ? (
                                         row.subject || '—'
                                     ) : (
-                                        <ScrollableSelect
+                                        <select
                                             value={row.subject}
-                                            onChange={(value) => updateRow(index, 'subject', value)}
-                                            options={subjectOptions}
-                                            placeholder={subjectPlaceholder}
-                                            disabled={!subjectOptions.length}
-                                            listClassName='max-h-40'
-                                        />
+                                            onChange={(e) => updateRow(index, 'subject', e.target.value)}
+                                            className={selectClass}
+                                        >
+                                            <option value=''>Select subject</option>
+                                            {SUBJECTS.map((subject) => (
+                                                <option key={subject} value={subject}>{subject}</option>
+                                            ))}
+                                        </select>
                                     )}
                                 </td>
                                 <td className='px-2 py-3'>

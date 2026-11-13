@@ -10,7 +10,7 @@ export const inOutStatusBadgeColor = {
     Late: 'bg-[#FF980033] text-[#FF9800]',
 }
 
-export const CLASSES = ['Grade 1', 'Grade 2', 'Grade 3', '9', '10']
+export const CLASSES = ['9', '10']
 export const SECTIONS = ['A', 'B']
 
 export const ATTENDANCE_LIST = [

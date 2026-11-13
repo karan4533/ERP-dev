@@ -1,17 +1,10 @@
-import { useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { toast } from 'react-toastify'
 import {
-    MD_APPROVAL_STATUS,
-    approveActivityViaApi,
     getActivityById,
     getPersonInCharge,
-    hydrateActivitiesFromApi,
     mdApprovalBadgeColor,
-    updateActivityMdApproval,
 } from './activitiesData'
-import { canUseActivitiesApi } from '../../services/activitiesApi'
 import { getActivityConfig, getActivityRoutes } from './activityConfigs'
 import { getClassDisplayLabel } from '../RBAC/academicsCatalogData'
 
@@ -26,50 +19,9 @@ export default function ViewActivityPage({ roleKey, activityType }) {
     const { id } = useParams()
     const config = getActivityConfig(activityType)
     const routes = getActivityRoutes(activityType, roleKey)
-    const [ready, setReady] = useState(!canUseActivitiesApi())
-    useEffect(() => {
-        if (!canUseActivitiesApi()) return undefined
-        let active = true
-        hydrateActivitiesFromApi(activityType).then(() => {
-            if (active) setReady(true)
-        }).catch(() => {
-            if (active) setReady(true)
-        })
-        return () => {
-            active = false
-        }
-    }, [activityType])
-    const [activity, setActivity] = useState(null)
-    useEffect(() => {
-        if (!ready) return
-        setActivity(getActivityById(id))
-    }, [ready, id, activityType])
-
-    const approvalStatusHeader =
-        roleKey === 'admin' || roleKey === 'superadmin' ? 'Super Admin Approval Status' : 'MD Approval Status'
+    const activity = getActivityById(id)
+    const approvalStatusHeader = roleKey === 'admin' ? 'Super Admin Approval Status' : 'MD Approval Status'
     const players = activity?.players || []
-    const canDecide =
-        roleKey === 'superadmin' && activity?.mdApprovalStatus === MD_APPROVAL_STATUS.PENDING
-
-    const handleApproval = async (status) => {
-        try {
-            const next = canUseActivitiesApi()
-                ? await approveActivityViaApi(id, status)
-                : updateActivityMdApproval(id, status)
-            setActivity(next)
-            toast.success(status === MD_APPROVAL_STATUS.APPROVED ? 'Activity approved.' : 'Activity rejected.')
-        } catch (caught) {
-            toast.error(caught?.message || 'Approval could not be saved.')
-        }
-    }
-
-    if (!ready) {
-        return (
-            <section className='bg-white rounded-2xl shadow-md p-6'>
-                <p className='text-[#667085]'>Loading activity…</p>
-            </section>
-        )
-    }
 
     if (!activity || activity.type !== activityType) {
         return (
@@ -92,30 +44,8 @@ export default function ViewActivityPage({ roleKey, activityType }) {
                     <ArrowLeft size={16} />
                     Back to {config.listTitle}
                 </NavLink>
-                <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                    <div>
-                        <h1 className='text-xl font-semibold text-black'>{activity.eventName}</h1>
-                        <p className='text-sm text-[#667085] mt-1'>{config.formTitle}</p>
-                    </div>
-                    {canDecide && (
-                        <div className='flex flex-wrap gap-2'>
-                            <button
-                                type='button'
-                                onClick={() => handleApproval(MD_APPROVAL_STATUS.APPROVED)}
-                                className='bg-[#2E7D32] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer'
-                            >
-                                Approve
-                            </button>
-                            <button
-                                type='button'
-                                onClick={() => handleApproval(MD_APPROVAL_STATUS.REJECTED)}
-                                className='bg-white text-[#F44336] text-sm px-4 py-2 rounded-md border border-[#F44336] hover:bg-[#F44336] hover:text-white cursor-pointer'
-                            >
-                                Reject
-                            </button>
-                        </div>
-                    )}
-                </div>
+                <h1 className='text-xl font-semibold text-black'>{activity.eventName}</h1>
+                <p className='text-sm text-[#667085] mt-1'>{config.formTitle}</p>
             </div>
 
             <div className='bg-white rounded-2xl shadow-md p-4'>

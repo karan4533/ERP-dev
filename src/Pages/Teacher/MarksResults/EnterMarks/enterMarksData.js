@@ -2,19 +2,31 @@ import { CLASSES, SECTIONS, SUBJECTS } from '../../AssignedClass/assignedClassDa
 import { STUDENTS_LIST } from '../../StudentsList/studentsListData'
 
 export const EXAM_NAMES = [
+    'Continuous Assessment 1 (CA 1 / RCT 1)',
+    'Continuous Assessment 2 (CA 2 / RCT 2)',
+    'Monthly Periodic Test 1 (MPT 1)',
+    'Monthly Periodic Test 2 (MPT 2)',
+    'Monthly Periodic Test 3 (MPT 3)',
+    'Monthly Periodic Test 4 (MPT 4)',
+    'Monthly Periodic Test 5 (MPT 5)',
+    'Monthly Periodic Test 6 (MPT 6)',
+    'Split Test 1 (ST 1)',
+    'Split Test 2 (ST 2)',
+    'Split Test 3 (ST 3)',
+    'Split Test 4 (ST 4)',
     'Mid Term Examination',
-    'Unit Test — Term 1',
-    'Annual Examination',
-    'Pre-Board Examination',
-    'Monthly Assessment',
-    'Practical Examination',
+    'Revision Exam 1',
+    'Revision Exam 2',
+    'Pre-Board Examination 1',
+    'Pre-Board Examination 2',
+    'Annual / Final Board Examination',
 ]
 
-export const GRADES = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F']
-
-const STORAGE_KEY = 'teacher-enter-marks'
+export const GRADES = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'AB', 'ML']
 
 export const computeGrade = (obtained, total) => {
+    if (obtained === 'AB') return 'AB'
+    if (obtained === 'ML') return 'ML'
     const obtainedNum = Number(obtained)
     const totalNum = Number(total)
     if (!totalNum || totalNum <= 0 || Number.isNaN(obtainedNum)) return ''
@@ -55,6 +67,7 @@ const buildEntry = ({
     remarks,
 })
 
+const STORAGE_KEY = 'teacher_marks_entries'
 const DEFAULT_MARKS_ENTRIES = []
 
 export const saveMarksEntries = (records) => {
@@ -92,7 +105,7 @@ export const addMarksEntry = (payload) => {
         studentId: student?.id ?? '',
         admissionNumber: student?.admissionNumber ?? '',
         totalMarks: Number(payload.totalMarks),
-        obtainedMarks: Number(payload.obtainedMarks),
+        obtainedMarks: payload.obtainedMarks === 'AB' || payload.obtainedMarks === 'ML' ? payload.obtainedMarks : Number(payload.obtainedMarks),
         grade: payload.grade,
         remarks: payload.remarks,
     }

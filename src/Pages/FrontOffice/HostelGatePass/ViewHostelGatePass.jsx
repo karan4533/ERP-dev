@@ -74,8 +74,8 @@ const ViewHostelGatePass = () => {
                     <Field label='Out Time' value={formatOutTimeForDisplay(record.outTime)} />
                     <Field label='Return Date' value={record.returnDate} />
                     <Field label='Return Time' value={formatOutTimeForDisplay(record.returnTime)} />
-                    <Field label='Parent Approval' value={record.parentApproval} />
-                    <Field label='Warden Approval' value={record.wardenApproval} />
+                    <Field label='Parent Approval' value={record.parentApproval || 'Approved'} />
+                    <Field label='Principal Approval' value={record.principalApproval || 'Approved'} />
                     <div className='lg:col-span-3'>
                         <Field label='Reason' value={record.reason} />
                     </div>

@@ -1,31 +1,21 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import RequestInfo from './Components/RequestInfo'
-import RequestModal from './Components/RequestModal'
+import OperationsRequestWorkspace from '../../../Common/operations/OperationsRequestWorkspace'
+import { AUTO_FILLED, BUDGET_CATEGORIES, PRIORITY_OPTIONS, REQUEST_TYPE_OPTIONS, WORKFLOW_STAGES } from './requestsData'
 
-const AddRequest = () => {
-    const navigate = useNavigate()
-    const [requestModal, setRequestModal] = useState(false)
-
-    return (
-        <section>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <h2 className='text-xl font-semibold text-black'>Add Request</h2>
-                <RequestInfo />
-            </div>
-
-            <div className='flex sm:justify-end justify-center gap-x-4 mt-6'>
-                <button type='button' onClick={() => navigate('/stationery-store-manager/requests-approvals')} className='bg-white text-[#515DEF] text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:bg-[#515DEF] hover:text-white hover:border-[#515DEF] transition-all duration-200 cursor-pointer md:w-auto w-full'>
-                    Discard Changes
-                </button>
-                <button type='button' onClick={() => setRequestModal(true)} className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'>
-                    Save Changes
-                </button>
-            </div>
-
-            <RequestModal requestModal={requestModal} setRequestModal={setRequestModal} />
-        </section>
-    )
-}
+const AddRequest = () => (
+    <OperationsRequestWorkspace
+        title='Create stationery request'
+        description='Prepare a stock-replenishment or purchase request with item-level estimates.'
+        backPath='/stationery-store-manager/requests-approvals'
+        requestTypes={REQUEST_TYPE_OPTIONS}
+        priorityOptions={PRIORITY_OPTIONS}
+        budgetCategories={BUDGET_CATEGORIES}
+        requester={AUTO_FILLED.requestedBy}
+        department={AUTO_FILLED.department}
+        sentTo={AUTO_FILLED.sentTo}
+        workflow={WORKFLOW_STAGES}
+        enableLineItems
+        storageKey='erp:stationery:request-draft'
+    />
+)
 
 export default AddRequest

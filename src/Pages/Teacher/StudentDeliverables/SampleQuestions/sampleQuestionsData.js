@@ -1,66 +1,52 @@
 import { CLASSES, SECTIONS, SUBJECTS } from '../../AssignedClass/assignedClassData'
-import {
-    createAcademicsCollectionStore,
-    nextPrefixedId,
-} from '../../../../services/academicsCollectionStore'
 
-export { CLASSES, SECTIONS, SUBJECTS }
+const STORAGE_KEY = 'teacher-student-deliverables-sample-questions'
 
 export const ROUTE_BASE = '/teacher/student-deliverables/sample-questions'
 export const DEFAULT_ROUTE_BASE = ROUTE_BASE
-export const SAMPLE_QUESTIONS_UPDATED_EVENT = 'schoolerp-sample-questions-updated'
 
-const normalizeRecord = (raw) => {
-    const id = String(raw?.id || raw?.entryId || '').trim()
-    return {
-        id,
-        entryId: String(raw?.entryId || id).trim() || id,
-        subject: String(raw?.subject || '').trim(),
-        className: String(raw?.className || '').trim(),
-        section: String(raw?.section || '').trim(),
-        title: String(raw?.title || '').trim(),
-        description: String(raw?.description || '').trim(),
-        fileName: String(raw?.fileName || '—').trim() || '—',
-        fileType: String(raw?.fileType || 'pdf').trim() || 'pdf',
-        createdBy: String(raw?.createdBy || '').trim(),
-        createdAt: String(raw?.createdAt || '').trim(),
+const DEFAULT_SAMPLE_QUESTIONS = []
+
+export const getSampleQuestions = () => {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) return JSON.parse(stored)
+    } catch {
+        /* ignore */
     }
+    return DEFAULT_SAMPLE_QUESTIONS
 }
 
-const store = createAcademicsCollectionStore({
-    collection: 'sample-questions',
-    storageKey: 'teacher-student-deliverables-sample-questions',
-    eventName: SAMPLE_QUESTIONS_UPDATED_EVENT,
-    normalize: normalizeRecord,
-    offlineFallback: () => [],
-})
-
-export const hydrateSampleQuestionsFromApi = store.hydrate
-export const clearSampleQuestionsMemory = store.clearMemory
-
-export const getSampleQuestions = () => store.getAll()
-
-export const saveSampleQuestions = (records) => store.saveAll(records)
-
-export const getSampleQuestionById = (id) => {
-    const key = String(id || '')
-    return getSampleQuestions().find((item) => item.id === key || item.entryId === key) ?? null
+export const saveSampleQuestions = (records) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
-export const generateEntryId = () => nextPrefixedId(getSampleQuestions(), 'SQ', 1001)
+export const getSampleQuestionById = (id) =>
+    getSampleQuestions().find((item) => item.id === id) ?? null
 
-export const addSampleQuestion = async (values, meta = {}) => {
-    await store.ensureHydrated()
-    const existing = getSampleQuestions()
-    const entryId = nextPrefixedId(existing, 'SQ', 1001)
-    const record = normalizeRecord({
-        ...values,
+export const generateEntryId = () => {
+    const list = getSampleQuestions()
+    const max = list.reduce((acc, item) => {
+        const num = Number(item.entryId.split('-').pop())
+        return Number.isFinite(num) ? Math.max(acc, num) : acc
+    }, 1000)
+    return `SQ-${max + 1}`
+}
+
+export const addSampleQuestion = (values) => {
+    const entryId = generateEntryId()
+    const record = {
         id: entryId,
         entryId,
-        createdBy: meta.createdBy || '',
-        createdAt: new Date().toISOString(),
-    })
-    await saveSampleQuestions([record, ...existing])
+        subject: values.subject,
+        className: values.className,
+        section: values.section,
+        title: values.title,
+        description: values.description,
+        fileName: values.fileName || '—',
+        fileType: values.fileType || 'pdf',
+    }
+    saveSampleQuestions([record, ...getSampleQuestions()])
     return record
 }
 
@@ -80,3 +66,5 @@ export const filterSampleQuestions = (items, filters) =>
 
         return matchesSearch && matchesSubject && matchesClass && matchesSection
     })
+
+export { CLASSES, SECTIONS, SUBJECTS }

@@ -13,12 +13,11 @@ import {
     DEFAULT_ROUTE_BASE,
     filterStudyMaterials,
     getStudyMaterials,
-    hydrateStudyMaterialsFromApi,
     SECTIONS,
-    STUDY_MATERIALS_UPDATED_EVENT,
     SUBJECTS,
 } from './studyMaterialsData'
-import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
+import { useAuth } from '../../../../context/AuthContext'
+import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
 
 export { DEFAULT_ROUTE_BASE }
 
@@ -64,19 +63,10 @@ const StudyMaterialsEmpty = ({ routeBase, viewMode }) => {
 }
 
 const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const isStudent = viewMode === 'student'
     const [filters, setFilters] = useState(emptyFilters)
-    const assignments = useTeacherAssignments()
-    const staffFilterOptions = useMemo(() => ({
-        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
-        classes: assignments.classes?.length ? assignments.classes : CLASSES,
-        sections: filters.className
-            ? (assignments.sectionsFor?.(filters.className) || [])
-            : (assignments.assignments?.length
-                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
-                : SECTIONS),
-    }), [assignments, filters.className])
-
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
@@ -126,7 +116,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {staffFilterOptions.subjects.map((subject) => (
+                            {SUBJECTS.map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -136,11 +126,11 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                         <select
                             id='class-filter'
                             value={filters.className}
-                            onChange={(event) => setFilters((current) => ({ ...current, className: event.target.value, section: '' }))}
+                            onChange={(event) => updateFilter('className', event.target.value)}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {staffFilterOptions.classes.map((item) => (
+                            {CLASSES.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -154,7 +144,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {staffFilterOptions.sections.map((item) => (
+                            {SECTIONS.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -245,13 +235,15 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                                                     >
                                                         Edit
                                                     </button>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => setDeleteRequestModal(true)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Delete
-                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => setDeleteRequestModal(true)}
+                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                         </Dropdown>
@@ -282,7 +274,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </>
     )
 }
@@ -292,16 +284,7 @@ const StudyMaterials = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }
     const [items, setItems] = useState(() => getStudyMaterials())
 
     useEffect(() => {
-        let cancelled = false
-        hydrateStudyMaterialsFromApi().finally(() => {
-            if (!cancelled) setItems(getStudyMaterials())
-        })
-        const onUpdate = () => setItems(getStudyMaterials())
-        window.addEventListener(STUDY_MATERIALS_UPDATED_EVENT, onUpdate)
-        return () => {
-            cancelled = true
-            window.removeEventListener(STUDY_MATERIALS_UPDATED_EVENT, onUpdate)
-        }
+        setItems(getStudyMaterials())
     }, [location.key])
 
     if (items.length === 0) {

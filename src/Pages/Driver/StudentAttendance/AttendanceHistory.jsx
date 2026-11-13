@@ -1,13 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, Moon, Sun } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
+    ATTENDANCE_HISTORY,
     MARKED_STATUSES,
     filterAttendanceHistory,
-    getAttendanceHistory,
-    hydrateAttendanceHistoryFromApi,
     markedStatusBadgeColor,
 } from './attendanceHistoryData'
 import { ATTENDANCE_PERIODS, ATTENDANCE_PHASES, SCHOOL_NAME } from './studentAttendanceData'
@@ -16,7 +15,6 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const AttendanceHistory = () => {
-    const [history, setHistory] = useState(() => getAttendanceHistory())
     const [period, setPeriod] = useState('Morning')
     const [phase, setPhase] = useState('pickup')
     const [search, setSearch] = useState('')
@@ -26,23 +24,18 @@ const AttendanceHistory = () => {
     const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
 
-    useEffect(() => {
-        hydrateAttendanceHistoryFromApi().finally(() => setHistory(getAttendanceHistory()))
-    }, [])
-
     const phaseOptions = ATTENDANCE_PHASES[period]
     const activePhase = phaseOptions.find((item) => item.key === phase)
 
     const filteredRecords = useMemo(() => filterAttendanceHistory({
-        records: history,
+        records: ATTENDANCE_HISTORY,
         search,
         period,
         phase: phase.charAt(0).toUpperCase() + phase.slice(1),
         status,
         fromDate,
         toDate,
-        timeframe,
-    }), [history, search, period, phase, status, fromDate, toDate, timeframe])
+    }), [search, period, phase, status, fromDate, toDate])
 
     const handlePeriodChange = (nextPeriod) => {
         setPeriod(nextPeriod)

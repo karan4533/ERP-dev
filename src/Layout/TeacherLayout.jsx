@@ -1,66 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import CommonHeader from '../Common/CommonHeader/CommonHeader'
-import CommonSidebar from '../Common/CommonSidebar/CommonSidebar'
-import CommonBreadcrumb from '../Common/CommonBreadcrumb/CommonBreadcrumb'
 import TeacherRoutes from '../Routes/TeacherRoutes'
-import { hydrateTeacherPortalAssignments } from '../Common/Teacher/teacherAssignedClasses'
-import { hydrateEnrolledStudentsFromApi } from '../Common/StudentDatabase/enrolledStudentsData'
-import { hydrateExtraClassesFromApi } from '../Pages/Teacher/ExtraClass/extraClassData'
-import { hydrateOnlineClassesFromApi } from '../Pages/Teacher/OnlineClass/onlineClassData'
-import { isApiStudentsEnabled } from '../services/apiClient'
+import createPortalLayout from './createPortalLayout'
 
-const TeacherLayout = () => {
-    const [sidebarHidden, setSidebarHidden] = useState(() => window.innerWidth < 1024)
+export default createPortalLayout({
+    roleKey: 'teacher',
+    RoutesComponent: TeacherRoutes,
+})
 
-    const toggleSidebar = () => {
-        setSidebarHidden((prevState) => !prevState)
-    }
-
-    useEffect(() => {
-        const handleResize = () => {
-            if (window.innerWidth < 1024) {
-                setSidebarHidden(true)
-            } else {
-                setSidebarHidden(false)
-            }
-        }
-
-        window.addEventListener('resize', handleResize)
-        return () => window.removeEventListener('resize', handleResize)
-    }, [])
-
-    useEffect(() => {
-        ;(async () => {
-            await hydrateTeacherPortalAssignments({ force: true })
-            await Promise.all([hydrateExtraClassesFromApi(), hydrateOnlineClassesFromApi()])
-            if (isApiStudentsEnabled()) {
-                await hydrateEnrolledStudentsFromApi()
-            }
-        })()
-    }, [])
-
-    return (
-        <div className='bg-white min-h-screen font-sans'>
-            <CommonSidebar toggleSidebar={toggleSidebar} sidebarHidden={sidebarHidden} />
-            <CommonHeader toggleSidebar={toggleSidebar} sidebarHidden={sidebarHidden} />
-
-            {!sidebarHidden && (
-                <div
-                    className='fixed inset-0 bg-black/50 z-10 transition-all ease-in-out duration-200 lg:hidden'
-                    onClick={() => setSidebarHidden(true)}
-                />
-            )}
-
-            <main
-                className={`transition-all ease-in-out duration-200 bg-[#f9f9f9] min-h-screen pt-18 ml-0 ${sidebarHidden ? 'lg:ml-[90px]' : 'lg:ml-[280px]'}`}
-            >
-                <div className="p-3 font-inter">
-                    <CommonBreadcrumb />
-                    <TeacherRoutes />
-                </div>
-            </main>
-        </div>
-    )
-}
-
-export default TeacherLayout

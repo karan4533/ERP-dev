@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+﻿import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -6,8 +6,10 @@ import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } fro
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { useAuth } from '../../../Context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import {
-    getDriverMaintenanceRequests, hydrateDriverMaintenanceRequestsFromApi,
+    MAINTENANCE_REQUESTS,
     REQUEST_STATUSES,
     filterMaintenanceRequests,
     priorityBadgeColor,
@@ -18,11 +20,8 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const MaintenanceRequest = () => {
-    const [maintenanceRequests, setMaintenanceRequests] = useState(() => getDriverMaintenanceRequests())
-    useEffect(() => {
-        hydrateDriverMaintenanceRequestsFromApi().finally(() => setMaintenanceRequests(getDriverMaintenanceRequests()))
-    }, [])
-
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const [search, setSearch] = useState('')
     const [requestStatus, setRequestStatus] = useState('')
     const [period, setPeriod] = useState('')
@@ -32,12 +31,12 @@ const MaintenanceRequest = () => {
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
 
     const filteredRecords = useMemo(() => filterMaintenanceRequests({
-        records: maintenanceRequests,
+        records: MAINTENANCE_REQUESTS,
         search,
         requestStatus,
         fromDate,
         toDate,
-    }), [maintenanceRequests, search, requestStatus, fromDate, toDate])
+    }), [search, requestStatus, fromDate, toDate])
 
     const clearFilters = () => {
         setSearch('')
@@ -222,13 +221,15 @@ const MaintenanceRequest = () => {
                                                 >
                                                     Edit
                                                 </NavLink>
-                                                <button
-                                                    type='button'
-                                                    onClick={() => setDeleteRequestModal(true)}
-                                                    className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                >
-                                                    Delete
-                                                </button>
+                                                {canDelete && (
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => setDeleteRequestModal(true)}
+                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                )}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -256,10 +257,12 @@ const MaintenanceRequest = () => {
                 </div>
             </div>
 
-            <DeleteRequestModal
-                deleteRequestModal={deleteRequestModal}
-                setDeleteRequestModal={setDeleteRequestModal}
-            />
+            {canDelete && (
+                <DeleteRequestModal
+                    deleteRequestModal={deleteRequestModal}
+                    setDeleteRequestModal={setDeleteRequestModal}
+                />
+            )}
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )

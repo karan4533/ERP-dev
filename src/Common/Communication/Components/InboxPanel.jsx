@@ -32,10 +32,6 @@ const InboxPanel = ({
     const listRef = useRef(null)
 
     useEffect(() => {
-        setMenuOpenId(null)
-    }, [selectedId])
-
-    useEffect(() => {
         if (!menuOpenId) return undefined
 
         const handlePointerDown = (event) => {

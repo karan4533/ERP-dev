@@ -1,236 +1,161 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
-import Dropdown from '../../../Common/CommonComponents/Dropdown'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { useEffect, useMemo, useState } from 'react'
+import { Download, Eye, FileText, RefreshCw } from 'lucide-react'
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
+import {
+    DataTable,
+    DataToolbar,
+    IntegrationNotice,
+    PageHeader,
+    Pagination,
+    StatusBadge,
+} from '../../../Common/ui'
+import { paginateRows, parseTableState, serializeTableState } from '../../../Common/ui/dataTableState'
 import {
     APPROVAL_STATUSES,
-    approvalStatusColor,
-    canUseExamsApi,
     encodeContextKey,
     filterMarkSessions,
     formatClassLabel,
     getAllMarkSessions,
-    hydrateMarkApprovalsFromApi,
+    getSessionDisplayLabel,
 } from '../../../Common/MarkEntryApproval/markEntryApprovalData'
-
-const filterInputClass =
-    'text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full bg-white'
 
 const MarkEntryApproval = () => {
     const location = useLocation()
-    const api = canUseExamsApi()
-    const [sessions, setSessions] = useState(() => getAllMarkSessions().filter((s) => s.status === 'submitted'))
-    const [loading, setLoading] = useState(api)
-    const [error, setError] = useState('')
-    const [search, setSearch] = useState('')
-    const [approvalStatus, setApprovalStatus] = useState('')
-    const [exportModal, setExportModal] = useState(false)
+    const [urlParams, setUrlParams] = useSearchParams()
+    const initialTableState = parseTableState(urlParams)
+    const [revision, setRevision] = useState(0)
+    const [search, setSearch] = useState(initialTableState.query)
+    const [approvalStatus, setApprovalStatus] = useState(initialTableState.filters.approvalStatus || '')
+    const [page, setPage] = useState(initialTableState.page)
+    const [pageSize, setPageSize] = useState(urlParams.has('pageSize') ? initialTableState.pageSize : 10)
 
-    useEffect(() => {
-        let cancelled = false
-        if (!api) {
-            setSessions(getAllMarkSessions().filter((s) => s.status === 'submitted'))
-            setLoading(false)
-            return undefined
-        }
-        setLoading(true)
-        hydrateMarkApprovalsFromApi()
-            .then((rows) => {
-                if (!cancelled) {
-                    setSessions(rows)
-                    setError('')
-                }
-            })
-            .catch((err) => {
-                if (!cancelled) {
-                    setSessions([])
-                    setError(err?.message || 'Mark submissions could not be loaded.')
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false)
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [api, location.key])
-
-    const pendingCount = useMemo(
-        () => sessions.filter((session) => session.approvalStatus === 'Pending').length,
-        [sessions],
-    )
+    void revision
+    const sessions = getAllMarkSessions()
 
     const filteredSessions = useMemo(
         () => filterMarkSessions(sessions, { search, approvalStatus }),
-        [sessions, search, approvalStatus],
+        [approvalStatus, search, sessions],
     )
+    const pagination = paginateRows(filteredSessions, { page, pageSize })
 
-    const clearFilters = () => {
+    useEffect(() => {
+        setUrlParams(serializeTableState({
+            query: search,
+            page: pagination.page,
+            pageSize,
+            filters: { approvalStatus },
+        }), { replace: true })
+    }, [approvalStatus, pageSize, pagination.page, search, setUrlParams])
+
+    const counts = APPROVAL_STATUSES.reduce((result, status) => ({
+        ...result,
+        [status]: sessions.filter((session) => session.status === 'submitted' && session.approvalStatus === status).length,
+    }), {})
+
+    const resetFilters = () => {
         setSearch('')
         setApprovalStatus('')
+        setPage(1)
     }
 
-    if (loading) return <p className='text-[#667085]'>Loading mark submissions…</p>
-    if (error) return <p className='text-[#B42318]'>{error}</p>
+    const refresh = () => setRevision((current) => current + 1)
+
+    const columns = [
+        {
+            key: 'exam',
+            label: 'Assessment',
+            required: true,
+            render: (session) => (
+                <span>
+                    <span className='block font-semibold text-[var(--erp-ink)]'>{session.exam}</span>
+                    <span className='block text-xs text-[var(--erp-muted)]'>{session.term} · {session.academicYear}</span>
+                </span>
+            ),
+        },
+        { key: 'class', label: 'Class', render: (session) => `${formatClassLabel(session.className)} — ${session.section}` },
+        { key: 'subject', label: 'Subject' },
+        { key: 'submittedByRole', label: 'Submitted by', render: (session) => session.submittedByRole || 'Academic staff' },
+        { key: 'students', label: 'Students', render: (session) => session.students?.length ?? 0 },
+        { key: 'approvalStatus', label: 'Status', render: (session) => <StatusBadge status={session.approvalStatus} /> },
+    ]
 
     return (
-        <section className='space-y-6'>
-            <div>
-                <h1 className='text-2xl font-semibold text-black'>Mark Entry Approval</h1>
-                <p className='text-sm text-[#667085] mt-1'>
-                    Review marks submitted by Teachers and Coordinators before publishing to the student portal.
-                    {api ? ' Live campus marks batches.' : ''}
-                </p>
-            </div>
-
-            {pendingCount > 0 ? (
-                <button
-                    type='button'
-                    onClick={() => setApprovalStatus(approvalStatus === 'Pending' ? '' : 'Pending')}
-                    className={`text-left w-full sm:w-auto rounded-xl border px-4 py-3 transition-all cursor-pointer ${
-                        approvalStatus === 'Pending'
-                            ? 'border-[#515DEF] bg-[#515DEF08] ring-2 ring-[#515DEF]'
-                            : 'border-[#E4E7EC] hover:border-[#515DEF] bg-white'
-                    }`}
-                >
-                    <p className='text-sm font-medium text-[#808080]'>Pending approvals</p>
-                    <p className='text-2xl font-bold text-[#0C1E5B] mt-1'>{pendingCount}</p>
-                    <p className='text-xs text-[#515DEF] mt-1'>
-                        {approvalStatus === 'Pending' ? 'Filter active — click to clear' : 'Click to filter pending submissions'}
-                    </p>
-                </button>
-            ) : null}
-
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button
-                        type='button'
-                        onClick={clearFilters}
-                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
-                    >
-                        Clear Filters
-                    </button>
-                </div>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:mt-6 mt-2'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
-                        <input
-                            id='search'
-                            type='text'
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder='Exam, class, subject, submitter...'
-                            className={filterInputClass}
-                        />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='approval-status' className='text-base font-medium text-[#808080]'>Approval Status</label>
-                        <select
-                            id='approval-status'
-                            value={approvalStatus}
-                            onChange={(e) => setApprovalStatus(e.target.value)}
-                            className={filterInputClass}
-                        >
-                            <option value=''>All</option>
-                            {APPROVAL_STATUSES.map((status) => (
-                                <option key={status} value={status}>{status}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Submitted Mark Entries</h2>
-                    <button
-                        type='button'
-                        onClick={() => setExportModal(true)}
-                        className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                    >
-                        <Download size={16} />
-                        Export
-                    </button>
-                </div>
-
-                <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                            <tr>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Exam</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Subject</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Term</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Submitted By</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Students</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredSessions.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
-                                        No submitted mark entries match the selected filters.
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredSessions.map((session) => (
-                                    <tr key={session.contextKey} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                        <td className='px-2 py-4 rounded-s-lg font-medium text-[#1E1E1E]'>{session.exam}</td>
-                                        <td className='px-2 py-4'>{formatClassLabel(session.className)} — {session.section}</td>
-                                        <td className='px-2 py-4'>{session.subject}</td>
-                                        <td className='px-2 py-4'>{session.term}</td>
-                                        <td className='px-2 py-4'>{session.submittedByRole ?? '—'}</td>
-                                        <td className='px-2 py-4'>{session.students?.length ?? 0}</td>
-                                        <td className='px-2 py-4'>
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${approvalStatusColor[session.approvalStatus] ?? 'bg-[#66708533] text-[#667085]'}`}>
-                                                {session.approvalStatus ?? '—'}
-                                            </span>
-                                        </td>
-                                        <td className='px-2 py-4 text-center rounded-e-lg'>
-                                            <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                                <NavLink
-                                                    to={`/director/mark-entry-approval/review/${encodeContextKey(session.contextKey)}`}
-                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                >
-                                                    {session.approvalStatus === 'Pending' ? 'Review' : 'View'}
-                                                </NavLink>
-                                            </Dropdown>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className='flex justify-between items-center px-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing {filteredSessions.length} submission{filteredSessions.length !== 1 ? 's' : ''}
-                </p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='mark-entry-approvals'
-                rows={filteredSessions}
-                exportDescription={<>You are exporting {filteredSessions.length} record(s).</>}
+        <section className='space-y-5'>
+            <PageHeader
+                title='Mark-entry approvals'
+                description='Review submitted assessment marks and control publication to student and guardian portals.'
+                context={`${sessions.length} submitted assessment record${sessions.length === 1 ? '' : 's'}`}
+                actions={(
+                    <>
+                        <NavLink to='/director/student-evaluation/report-cards' className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-600 bg-blue-50 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-100'>
+                            <FileText size={16} /> Progress Report Cards
+                        </NavLink>
+                        <button type='button' onClick={refresh} className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-4 text-sm font-semibold text-[var(--erp-ink)]'>
+                            <RefreshCw aria-hidden='true' size={16} /> Refresh
+                        </button>
+                        <button type='button' disabled title='Export will be enabled after the assessment reporting API is connected.' className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>
+                            <Download aria-hidden='true' size={16} /> Export unavailable
+                        </button>
+                    </>
+                )}
             />
+
+            <IntegrationNotice
+                state='demo'
+                title='Local assessment approval queue'
+                description='Decisions and publication state are stored in this browser for demonstration. Production requires server-side authorization, immutable audit events, notifications and transaction-safe publication.'
+            />
+
+            {location.state?.feedback ? <p role='status' className='rounded-lg border border-[#B7E1C1] bg-[#EFFAF2] px-4 py-3 text-sm font-medium text-[#176B35]'>{location.state.feedback}</p> : null}
+
+            <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
+                <button type='button' onClick={() => { setApprovalStatus(''); setPage(1) }} className={`rounded-[var(--erp-radius-surface)] border bg-white p-4 text-left ${!approvalStatus ? 'border-[var(--erp-indigo)] ring-1 ring-[var(--erp-indigo)]' : 'border-[var(--erp-line)]'}`}>
+                    <span className='text-xs font-semibold uppercase tracking-wide text-[var(--erp-muted)]'>All submissions</span>
+                    <strong className='mt-2 block text-2xl text-[var(--erp-ink)]'>{sessions.filter((item) => item.status === 'submitted').length}</strong>
+                </button>
+                {APPROVAL_STATUSES.map((status) => (
+                    <button key={status} type='button' onClick={() => { setApprovalStatus(approvalStatus === status ? '' : status); setPage(1) }} className={`rounded-[var(--erp-radius-surface)] border bg-white p-4 text-left ${approvalStatus === status ? 'border-[var(--erp-indigo)] ring-1 ring-[var(--erp-indigo)]' : 'border-[var(--erp-line)]'}`}>
+                        <StatusBadge status={status} />
+                        <strong className='mt-2 block text-2xl text-[var(--erp-ink)]'>{counts[status]}</strong>
+                    </button>
+                ))}
+            </div>
+
+            <div className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white'>
+                <DataToolbar
+                    query={search}
+                    onQueryChange={(value) => { setSearch(value); setPage(1) }}
+                    searchLabel='Search mark-entry submissions'
+                    searchPlaceholder='Exam, class, subject or submitter…'
+                    resultCount={filteredSessions.length}
+                    onReset={resetFilters}
+                    filters={(
+                        <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Approval status
+                            <select value={approvalStatus} onChange={(event) => { setApprovalStatus(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
+                                <option value=''>All statuses</option>
+                                {APPROVAL_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                            </select>
+                        </label>
+                    )}
+                />
+                <DataTable
+                    caption='Submitted mark entries'
+                    rows={pagination.rows}
+                    columns={columns}
+                    rowKey='contextKey'
+                    emptyTitle={approvalStatus === 'Pending' ? 'No mark entries await review' : 'No submitted mark entries'}
+                    emptyDescription={approvalStatus === 'Pending' ? 'All currently submitted mark entries have a decision.' : 'Submissions appear here after a teacher or coordinator completes mark entry.'}
+                    renderActions={(session) => {
+                        const canAct = session.approvalStatus !== 'Approved' && session.approvalStatus !== 'Rejected'
+                        return (
+                            <NavLink to={`/director/mark-entry-approval/review/${encodeContextKey(session.contextKey)}`} aria-label={`${canAct ? 'Review' : 'View'} ${getSessionDisplayLabel(session)}`} className='inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-indigo)]'>
+                                <Eye aria-hidden='true' size={15} /> {canAct ? 'Review & Publish' : 'View'}
+                            </NavLink>
+                        )
+                    }}
+                />
+                <Pagination {...pagination} onPageChange={setPage} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} pageSizeOptions={[10, 25, 50]} />
+            </div>
         </section>
     )
 }

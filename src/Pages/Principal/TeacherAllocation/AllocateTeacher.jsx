@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import React, { useMemo, useRef, useState } from 'react'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import TeacherAllocationForm from './Components/TeacherAllocationForm'
 import {
     ROUTE_BASE,
@@ -7,7 +7,6 @@ import {
     defaultAllocationForm,
     getAllocationByEmployeeId,
     getTeacherById,
-    hydrateTeachersFromDirectory,
     saveTeacherAllocation,
 } from './teacherAllocationData'
 
@@ -29,34 +28,15 @@ const buildInitialValues = (employeeId) => {
 const AllocateTeacher = () => {
     const { employeeId } = useParams()
     const navigate = useNavigate()
-    const [ready, setReady] = useState(false)
-    const [teacher, setTeacher] = useState(() => getTeacherById(employeeId))
+    const location = useLocation()
+    const routeBase = location.pathname.startsWith('/admin') ? '/admin/academic/teacher-allocation' : ROUTE_BASE
+    const teacher = getTeacherById(employeeId)
     const [validationErrors, setValidationErrors] = useState([])
     const continueAfterSave = useRef(false)
-    const initialValues = useMemo(() => buildInitialValues(employeeId), [employeeId, ready])
-
-    useEffect(() => {
-        let cancelled = false
-        hydrateTeachersFromDirectory().finally(() => {
-            if (cancelled) return
-            setTeacher(getTeacherById(employeeId))
-            setReady(true)
-        })
-        return () => {
-            cancelled = true
-        }
-    }, [employeeId])
-
-    if (!ready) {
-        return (
-            <section className='bg-white rounded-2xl shadow-md p-6'>
-                <p className='text-sm text-[#667085]'>Loading teacher from HR directory…</p>
-            </section>
-        )
-    }
+    const initialValues = useMemo(() => buildInitialValues(employeeId), [employeeId])
 
     if (!teacher) {
-        return <Navigate to={ROUTE_BASE} replace />
+        return <Navigate to={routeBase} replace />
     }
 
     const persist = (values, redirectToList = true) => {
@@ -66,7 +46,7 @@ const AllocateTeacher = () => {
             return false
         }
         setValidationErrors([])
-        if (redirectToList) navigate(ROUTE_BASE)
+        if (redirectToList) navigate(routeBase)
         return true
     }
 
@@ -108,7 +88,7 @@ const AllocateTeacher = () => {
             <div className='flex flex-wrap sm:justify-end justify-center gap-3 mt-6'>
                 <button
                     type='button'
-                    onClick={() => navigate(ROUTE_BASE)}
+                    onClick={() => navigate(routeBase)}
                     className='bg-white text-[#515DEF] text-sm px-8 py-2 rounded-md border border-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-all duration-200 cursor-pointer'
                 >
                     Cancel

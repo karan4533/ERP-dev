@@ -1,5 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-const DEFAULT_TASKS = [
+export const TASKS = [
     {
         taskId: 'HK-T-001',
         title: 'Classroom Block A — Deep Clean',
@@ -48,15 +47,3 @@ export const statusBadgeColor = {
     'In Progress': 'bg-[#FF980033] text-[#FF9800]',
     'In Complete': 'bg-[#FF000033] text-[#FF0000]',
 }
-export const TASKS_STORAGE_KEY = 'schoolerp-housekeeping-schedules-v1'
-export function getHousekeepingTasks() {
-    return ensureCampusSeed('schoolerp-housekeeping-schedules-v1', DEFAULT_TASKS)
-}
-export function saveHousekeepingTasks(rows) {
-    return saveCampusJson('schoolerp-housekeeping-schedules-v1', rows)
-}
-export function hydrateHousekeepingTasksFromApi() {
-    if (!usesCampusApiForKey('schoolerp-housekeeping-schedules-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-housekeeping-schedules-v1', DEFAULT_TASKS)
-}
-export const TASKS = DEFAULT_TASKS

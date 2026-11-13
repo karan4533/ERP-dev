@@ -14,8 +14,12 @@ import {
     approvalBadgeColor,
     CLASSES,
 } from './createExamScheduleData'
+import { useAuth } from '../../../context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 
 const CreateExamSchedule = () => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const location = useLocation()
     const [schedules, setSchedules] = useState(() => getExamSchedules())
     const [fromDate, setFromDate] = useState(new Date())
@@ -173,9 +177,11 @@ const CreateExamSchedule = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                Delete
-                                            </button>
+                                            {canDelete && (
+                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                    Delete
+                                                </button>
+                                            )}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -204,7 +210,7 @@ const CreateExamSchedule = () => {
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
             <ExamTimeTableModal
                 open={Boolean(timeTableModal)}
                 onClose={() => setTimeTableModal(null)}

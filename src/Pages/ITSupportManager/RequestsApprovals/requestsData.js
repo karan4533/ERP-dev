@@ -1,5 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-const DEFAULT_REQUESTS = [
+export const REQUESTS = [
     {
         requestId: 'REQ-IT-2026-001',
         requestType: 'Hardware',
@@ -140,17 +139,3 @@ export const stageBadgeColor = {
 
 export const getRequestById = (id) =>
     REQUESTS.find((entry) => entry.requestId === id)
-
-export const REQUESTS_STORAGE_KEY = 'schoolerp-it-requests-v1'
-export function getRequests() {
-    return ensureCampusSeed('schoolerp-it-requests-v1', DEFAULT_REQUESTS)
-}
-export function saveRequests(rows) {
-    return saveCampusJson('schoolerp-it-requests-v1', rows)
-}
-export function hydrateRequestsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-it-requests-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-it-requests-v1', DEFAULT_REQUESTS)
-}
-export const REQUESTS = DEFAULT_REQUESTS
-

@@ -1,6 +1,5 @@
-import { getAuditById } from '../MyAudits/myAuditsData'
+import { getAuditById } from '../MyAudits/myAuditsData.js'
 
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
 export const OBSERVATION_PRIORITIES = ['Critical', 'High', 'Medium', 'Low']
@@ -589,6 +588,7 @@ export const emptyObservation = (parameter, sectionTitle, auditReference = '') =
     priority: 'Medium',
     assignTo: '',
     reportTo: '',
+    dueDate: '',
     observationNumber: '',
     auditReference,
     assignedDate: '',
@@ -637,7 +637,7 @@ export const loadExecuteAuditDraft = (auditId) => {
     const sections = loadChecklistSections(audit)
 
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
+        const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
             const parsed = JSON.parse(stored)
             const sameAudit = !auditId || parsed.header?.auditId === auditId || parsed.header?.auditNumber === audit?.auditId
@@ -675,17 +675,30 @@ export const loadExecuteAuditDraft = (auditId) => {
 
 export const saveExecuteAuditDraft = (draft) => {
     const payload = { ...draft, lastSavedAt: new Date().toISOString() }
-    saveCampusJson(STORAGE_KEY, payload)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     return payload
 }
 
 export const getScoreResult = (_responseType, value) => {
-    if (value === 'Yes') return 'pass'
-    if (value === 'No' || value === 'Error') return 'fail'
+    if (value === null || value === undefined || value === '') return 'na'
+    const str = String(value).trim().toLowerCase()
+    if (str === 'yes' || str === 'pass' || str === '1') return 'pass'
+    if (str === '0.5' || str === 'partial') return 'partial'
+    if (str === 'no' || str === 'fail' || str === 'error' || str === '0') return 'fail'
+
+    const num = Number(str)
+    if (!Number.isNaN(num)) {
+        if (num >= 4) return 'pass'
+        if (num === 3) return 'partial'
+        if (num <= 2 && num >= 0) return 'fail'
+    }
+
     return 'na'
 }
 
-export const isNonCompliant = (_responseType, value) => value === 'No' || value === 'Error'
+export const isNonCompliant = (_responseType, value) => {
+    return getScoreResult(_responseType, value) === 'fail'
+}
 
 export const computeScores = (sections, responses) => {
     let passed = 0
@@ -723,9 +736,12 @@ export const computeFindings = (sections, responses, observations) => {
     sections.forEach((section) => {
         section.parameters.forEach((param) => {
             const response = responses[param.id]?.response
-            if (response === 'Yes') yes += 1
-            else if (response === 'No') no += 1
-            else if (response === 'Error') error += 1
+            const res = getScoreResult(param.responseType, response)
+            if (res === 'pass') yes += 1
+            else if (res === 'fail') {
+                if (String(response).toLowerCase() === 'error') error += 1
+                else no += 1
+            }
         })
     })
 
@@ -735,7 +751,7 @@ export const computeFindings = (sections, responses, observations) => {
 
     return {
         ...scores,
-        totalFindings: no + error,
+        totalFindings: scores.failed,
         yes,
         no,
         criticalAnswered,
@@ -769,6 +785,3 @@ export const getSopDetails = (code) =>
         reference: 'Process Audit SOP Library',
         expectedResult: 'Compliance with institutional standards.',
     }
-
-export const hydrateFromApi = (seed = DEFAULT_CHECKLIST_SECTIONS) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

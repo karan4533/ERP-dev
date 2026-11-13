@@ -1,5 +1,5 @@
 import CommunicationPage from '../../../Common/Communication/CommunicationPage'
 
-const Inbox = ({ roleKey = 'student' }) => <CommunicationPage roleKey={roleKey} />
+const Inbox = () => <CommunicationPage roleKey='student' />
 
 export default Inbox

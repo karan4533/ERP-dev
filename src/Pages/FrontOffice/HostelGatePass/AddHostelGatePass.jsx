@@ -17,26 +17,20 @@ const AddHostelGatePass = () => {
         returnDate: formatGatePassDate(new Date()),
     })
     const [errors, setErrors] = useState({})
-    const [saving, setSaving] = useState(false)
 
-    const handleSave = async () => {
+    const handleSave = () => {
         const validationErrors = validateHostelGatePassForm(formData)
         setErrors(validationErrors)
         if (Object.keys(validationErrors).length > 0) return
 
-        setSaving(true)
-        try {
-            const result = await addHostelGatePass(formData)
-            if (!result.success) {
-                toast.error(result.message || 'Could not save hostel gate pass.')
-                return
-            }
-
-            toast.success('Hostel gate pass saved successfully.')
-            navigate('/front-office/hostel-gate-pass-list')
-        } finally {
-            setSaving(false)
+        const result = addHostelGatePass(formData)
+        if (!result.success) {
+            toast.error(result.message)
+            return
         }
+
+        toast.success('Hostel gate pass saved successfully.')
+        navigate('/front-office/hostel-gate-pass-list')
     }
 
     return (
@@ -59,11 +53,10 @@ const AddHostelGatePass = () => {
                 </button>
                 <button
                     type='button'
-                    disabled={saving}
                     onClick={handleSave}
-                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'
+                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
-                    {saving ? 'Saving…' : 'Save Changes'}
+                    Save Changes
                 </button>
             </div>
         </section>

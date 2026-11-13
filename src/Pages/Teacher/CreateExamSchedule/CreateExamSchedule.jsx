@@ -14,8 +14,12 @@ import {
     approvalBadgeColor,
     CLASSES,
 } from './createExamScheduleData'
+import { useAuth } from '../../../context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 
 const CreateExamSchedule = () => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const location = useLocation()
     const [schedules, setSchedules] = useState(() => getExamSchedules())
     const [fromDate, setFromDate] = useState(new Date())
@@ -96,15 +100,13 @@ const CreateExamSchedule = () => {
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Exam Schedule List</h2>
+                    <div className='flex items-center gap-3'>
+                        <h2 className='text-xl font-medium text-black'>Exam Schedule List</h2>
+                        <span className='inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 border border-slate-200'>
+                            Read Only
+                        </span>
+                    </div>
                     <div className='flex gap-x-2'>
-                        <NavLink
-                            to='/teacher/examination/create-schedule/add'
-                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                        >
-                            <Plus size={16} />
-                            Create Schedule
-                        </NavLink>
                         <button
                             type='button'
                             onClick={() => setExportModal(true)}
@@ -173,9 +175,11 @@ const CreateExamSchedule = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                Delete
-                                            </button>
+                                            {canDelete && (
+                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                    Delete
+                                                </button>
+                                            )}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -202,15 +206,9 @@ const CreateExamSchedule = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='create-exam-schedule'
-                rows={Array.isArray(schedules) ? schedules : []}
-                exportDescription={<>You are exporting {Array.isArray(schedules) ? schedules.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
             <ExamTimeTableModal
                 open={Boolean(timeTableModal)}
                 onClose={() => setTimeTableModal(null)}

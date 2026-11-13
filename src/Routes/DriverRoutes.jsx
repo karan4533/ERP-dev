@@ -1,6 +1,8 @@
-﻿import React from 'react'
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import React from 'react'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
-import Dashboard from '../Pages/Driver/Dashboard'
+import PagePlaceholder from '../Pages/Driver/Components/PagePlaceholder'
+import Dashboard from '../Pages/Driver/Dashboard/Dashboard'
 import VehicleDetails from '../Pages/Driver/VehicleManagement/VehicleDetails'
 import VehicleDocuments from '../Pages/Driver/VehicleManagement/VehicleDocuments'
 import VehicleHealthStatus from '../Pages/Driver/VehicleManagement/VehicleHealthStatus/VehicleHealthStatus'
@@ -24,11 +26,26 @@ import LeaveRequest from '../Pages/Driver/LeaveRequest/LeaveRequest'
 import AddLeaveRequest from '../Pages/Driver/LeaveRequest/AddLeaveRequest'
 import EditLeaveRequest from '../Pages/Driver/LeaveRequest/EditLeaveRequest'
 import ViewLeaveRequest from '../Pages/Driver/LeaveRequest/ViewLeaveRequest'
+import UniversalReportsAnalyticsWorkspace from '../Common/ReportsAnalytics/UniversalReportsAnalyticsWorkspace'
+import CommunicationPage from '../Common/Communication/CommunicationPage'
+import AnnouncementListView from '../Common/Announcement/AnnouncementListView'
+import ViewAnnouncementPage from '../Common/Announcement/ViewAnnouncementPage'
+import AcademicCalendarPage from '../Common/AcademicCalendar/AcademicCalendarPage'
+import EscalationListPage from '../Common/EscalationManagement/EscalationListPage'
+import AddEscalationPage from '../Common/EscalationManagement/AddEscalationPage'
+import ViewEscalationPage from '../Common/EscalationManagement/ViewEscalationPage'
 
 const DriverRoutes = () => {
     return (
         <ReactRoutes>
-            <Route path='/driver/dashboard' element={<Dashboard />} />
+            <Route
+                path='/driver/dashboard'
+                element={<Dashboard />}
+            />
+            <Route
+                path='/driver/vehicle-management'
+                element={<Navigate to='/driver/vehicle-management/vehicle-details' replace />}
+            />
             <Route
                 path='/driver/vehicle-management/vehicle-details'
                 element={<VehicleDetails />}
@@ -82,6 +99,30 @@ const DriverRoutes = () => {
             <Route path='/driver/leave-request/add' element={<AddLeaveRequest />} />
             <Route path='/driver/leave-request/edit/:id' element={<EditLeaveRequest />} />
             <Route path='/driver/leave-request/view/:id' element={<ViewLeaveRequest />} />
+            <Route path="/driver/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+
+            {/* Driver Reports & Analytics */}
+            <Route path='/driver/reports-analytics' element={<UniversalReportsAnalyticsWorkspace roleOverride="driver" />} />
+            <Route path='/driver/reports' element={<UniversalReportsAnalyticsWorkspace roleOverride="driver" />} />
+
+            {/* Driver Communication */}
+            <Route path='/driver/communication' element={<Navigate to='/driver/communication/inbox' replace />} />
+            <Route path='/driver/communication/inbox' element={<CommunicationPage roleKey="driver" />} />
+            <Route path='/driver/communication/inbox/:conversationId' element={<CommunicationPage roleKey="driver" />} />
+
+            {/* Driver Announcements */}
+            <Route path='/driver/announcement' element={<AnnouncementListView roleKey="driver" />} />
+            <Route path='/driver/announcement/view/:id' element={<ViewAnnouncementPage roleKey="driver" />} />
+
+            {/* Driver Academic Calendar */}
+            <Route path='/driver/academic-calendar' element={<AcademicCalendarPage roleKey="driver" />} />
+            <Route path='/driver/calendar' element={<AcademicCalendarPage roleKey="driver" />} />
+
+            {/* Driver Escalations / Report Issues */}
+            <Route path='/driver/escalation-management' element={<EscalationListPage roleKey="driver" />} />
+            <Route path='/driver/escalation-management/add-escalation' element={<AddEscalationPage roleKey="driver" />} />
+            <Route path='/driver/escalation-management/view/:id' element={<ViewEscalationPage roleKey="driver" />} />
+
             <Route path='*' element={<Navigate to='/driver/dashboard' replace />} />
         </ReactRoutes>
     )

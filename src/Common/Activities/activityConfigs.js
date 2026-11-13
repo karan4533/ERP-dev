@@ -18,12 +18,6 @@ export const ACTIVITY_CONFIGS = {
             view: '/director/activities/view-cultural',
             edit: '/director/activities/edit-cultural',
         },
-        superAdminRoutes: {
-            list: '/super-admin/activities/cultural-list',
-            add: '/super-admin/activities/cultural-list',
-            view: '/super-admin/activities/view-cultural',
-            edit: '/super-admin/activities/cultural-list',
-        },
     },
     sports: {
         type: 'sports',
@@ -43,12 +37,6 @@ export const ACTIVITY_CONFIGS = {
             add: '/director/activities/add-sports',
             view: '/director/activities/view-sports',
             edit: '/director/activities/edit-sports',
-        },
-        superAdminRoutes: {
-            list: '/super-admin/activities/sports-list',
-            add: '/super-admin/activities/sports-list',
-            view: '/super-admin/activities/view-sports',
-            edit: '/super-admin/activities/sports-list',
         },
     },
     competition: {
@@ -70,12 +58,6 @@ export const ACTIVITY_CONFIGS = {
             view: '/director/activities/view-competition',
             edit: '/director/activities/edit-competition',
         },
-        superAdminRoutes: {
-            list: '/super-admin/activities/competitions-list',
-            add: '/super-admin/activities/competitions-list',
-            view: '/super-admin/activities/view-competition',
-            edit: '/super-admin/activities/competitions-list',
-        },
     },
 }
 
@@ -83,9 +65,7 @@ export const getActivityConfig = (activityType) => ACTIVITY_CONFIGS[activityType
 
 export const getActivityRoutes = (activityType, roleKey) => {
     const config = getActivityConfig(activityType)
-    if (roleKey === 'admin') return config.adminRoutes
-    if (roleKey === 'superadmin') return config.superAdminRoutes
-    return config.directorRoutes
+    return roleKey === 'admin' ? config.adminRoutes : config.directorRoutes
 }
 
 export const getActivityViewPath = (activityType, roleKey, id) => {

@@ -2,6 +2,8 @@ import { memo, useState } from "react";
 import { format } from "date-fns";
 import { EVENT_COLORS } from "../utils/constants";
 import { toMinutes, toDateKey, parseDateKey } from "../utils/dateHelpers";
+import Dialog from '../../ui/Dialog'
+import FormField from '../../ui/FormField'
 
 function EventModal({ mode, event, onSave, onDelete, onClose }) {
     const [form, setForm] = useState({
@@ -32,51 +34,38 @@ function EventModal({ mode, event, onSave, onDelete, onClose }) {
 
     const inputCls =
         "w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder:text-slate-400";
-    const errCls = "text-xs text-rose-500 mt-1";
-
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                    <h2 className="text-base font-semibold text-slate-800">
-                        {mode === "create" ? "New meeting" : "Edit meeting"}
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-slate-600 transition"
-                        aria-label="Close"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+        <Dialog
+            open
+            onClose={onClose}
+            title={mode === 'create' ? 'New meeting' : 'Edit meeting'}
+            description='Set the meeting date, time, details, and calendar color.'
+            size='md'
+            footer={(
+                <div className='flex w-full items-center justify-between gap-3'>
+                    {mode === 'edit' ? (
+                        <button type='button' onClick={onDelete} className='min-h-10 rounded-lg px-3 text-sm font-semibold text-[var(--erp-red)]'>Delete</button>
+                    ) : <span />}
+                    <div className='flex gap-2'>
+                        <button type='button' onClick={onClose} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold'>Cancel</button>
+                        <button type='button' onClick={handleSubmit} className='min-h-10 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>{mode === 'create' ? 'Save meeting' : 'Update meeting'}</button>
+                    </div>
                 </div>
-
-                {/* Body */}
-                <div className="px-6 py-4 space-y-4">
+            )}
+        >
+                <div className="space-y-4">
                     {/* Title */}
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1 block">
-                            Meeting title *
-                        </label>
+                    <FormField id='meeting-title' label='Meeting title' error={errors.title} required>
                         <input
                             className={inputCls}
                             placeholder="e.g. Sprint planning"
                             value={form.title}
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
                         />
-                        {errors.title && <p className={errCls}>{errors.title}</p>}
-                    </div>
+                    </FormField>
 
                     {/* Description */}
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1 block">
-                            Description
-                        </label>
+                    <FormField id='meeting-description' label='Description'>
                         <textarea
                             className={`${inputCls} resize-none`}
                             rows={2}
@@ -84,22 +73,18 @@ function EventModal({ mode, event, onSave, onDelete, onClose }) {
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
                         />
-                    </div>
+                    </FormField>
 
                     {/* Date + Day */}
                     <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1 block">
-                                Date *
-                            </label>
+                        <FormField id='meeting-date' label='Date' error={errors.date} required>
                             <input
                                 type="date"
                                 className={inputCls}
                                 value={form.date}
                                 onChange={(e) => setForm({ ...form, date: e.target.value })}
                             />
-                            {errors.date && <p className={errCls}>{errors.date}</p>}
-                        </div>
+                        </FormField>
                         <div>
                             <label className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1 block">
                                 Day
@@ -112,29 +97,22 @@ function EventModal({ mode, event, onSave, onDelete, onClose }) {
 
                     {/* Times */}
                     <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1 block">
-                                Start time
-                            </label>
+                        <FormField id='meeting-start-time' label='Start time'>
                             <input
                                 type="time"
                                 className={inputCls}
                                 value={form.startTime}
                                 onChange={(e) => setForm({ ...form, startTime: e.target.value })}
                             />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1 block">
-                                End time
-                            </label>
+                        </FormField>
+                        <FormField id='meeting-end-time' label='End time' error={errors.endTime}>
                             <input
                                 type="time"
                                 className={inputCls}
                                 value={form.endTime}
                                 onChange={(e) => setForm({ ...form, endTime: e.target.value })}
                             />
-                            {errors.endTime && <p className={errCls}>{errors.endTime}</p>}
-                        </div>
+                        </FormField>
                     </div>
 
                     {/* Color */}
@@ -156,38 +134,7 @@ function EventModal({ mode, event, onSave, onDelete, onClose }) {
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100">
-                    {mode === "edit" ? (
-                        <button
-                            onClick={onDelete}
-                            className="flex items-center gap-1.5 text-sm text-rose-500 hover:text-rose-700 transition"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Delete
-                        </button>
-                    ) : (
-                        <span />
-                    )}
-                    <div className="flex gap-2">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSubmit}
-                            className="px-5 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition"
-                        >
-                            {mode === "create" ? "Save meeting" : "Update"}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </Dialog>
     );
 }
 

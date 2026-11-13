@@ -1,3 +1,7 @@
+import GatePassSecurityWorkspace from '../Common/GatePassSecurity/GatePassSecurityWorkspace'
+import VisitorsWorkspace from '../Common/Visitors/VisitorsWorkspace'
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
 import { Navigate, Route, Routes as ReactRoutes } from 'react-router-dom'
 import AdmissionEnquiry from '../Pages/FrontOffice/AdmissionEnquiry/AdmissionEnquiry'
@@ -52,13 +56,18 @@ import ViewTcRequest from '../Pages/FrontOffice/TcRequest/ViewTcRequest'
 import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
 import AnnouncementList from '../Pages/FrontOffice/Announcement/AnnouncementList'
 import ViewAnnouncement from '../Pages/FrontOffice/Announcement/ViewAnnouncement'
+import Dashboard from '../Pages/FrontOffice/Dashboard/Dashboard'
 
 const FrontOfficeRoutes = () => {
     return (
         <ReactRoutes>
-            <Route path="/front-office/dashboard" element={<div>Front Office Dashboard</div>} />
+            <Route path="/front-office" element={<Navigate to="/front-office/dashboard" replace />} />
+            <Route path="/front-office/" element={<Navigate to="/front-office/dashboard" replace />} />
+            <Route path="/front-office/dashboard" element={<Dashboard />} />
             <Route path="/front-office/attendance" element={<Navigate to="/front-office/attendance/my-attendance" replace />} />
-            <Route path="/front-office/attendance/my-attendance" element={<MyAttendance />} />
+            <Route path="/front-office/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            <Route path="/front-office/attendance/my-attendance" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
+            <Route path="/front-office/visitors" element={<VisitorsWorkspace roleOverride="prm" />} />
             <Route path="/front-office/admission-enquiry" element={<AdmissionEnquiry />} />
             <Route path="/front-office/admission-enquiry/add" element={<AddAdmissionEnquiry />} />
             <Route path="/front-office/add-admission-enquiry" element={<AddAdmissionEnquiry />} />
@@ -105,10 +114,10 @@ const FrontOfficeRoutes = () => {
             <Route path="/front-office/announcement" element={<AnnouncementList />} />
             <Route path="/front-office/announcement/view/:id" element={<ViewAnnouncement />} />
             <Route path="/front-office/notifications" element={<Notifications />} />
-            <Route path="/front-office/leave-request/my-requests" element={<MyLeaveRequests />} />
+            <Route path="/front-office/leave-request/my-requests" element={<AttendanceAndLeaveWorkspace defaultTab="my-leaves" />} />
             <Route path="/front-office/leave-request/my-requests/add" element={<AddLeaveRequest />} />
             <Route path="/front-office/leave-request/my-requests/view/:id" element={<ViewMyLeaveRequest />} />
-            <Route path="/front-office/leave-request/received" element={<ReceivedLeaveRequests />} />
+            <Route path="/front-office/leave-request/received" element={<AttendanceAndLeaveWorkspace defaultTab="received-leaves" />} />
             <Route path="/front-office/leave-request/received/view/:id" element={<ViewReceivedLeaveRequest />} />
             <Route path="/front-office/communication" element={<Navigate to="/front-office/communication/inbox" replace />} />
             <Route path="/front-office/communication/inbox" element={<CommunicationInbox />} />
@@ -119,7 +128,9 @@ const FrontOfficeRoutes = () => {
             <Route path="/front-office/escalation-management" element={<EscalationList />} />
             <Route path="/front-office/escalation-management/add-escalation" element={<AddEscalation />} />
             <Route path="/front-office/escalation-management/view/:id" element={<ViewEscalation />} />
-            <Route path="*" element={<div>Front Office Home</div>} />
+            {/* Enterprise Functional Operations (Stores, File Room, Ticketing / Department Helpdesk, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/front-office', role: 'prm' })}
+            <Route path="*" element={<Navigate to="/front-office/dashboard" replace />} />
         </ReactRoutes>
     )
 }

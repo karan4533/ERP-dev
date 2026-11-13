@@ -1,144 +1,32 @@
-import { HR_KEYS, cacheHrCollection, clearHrLocalCache, emitHrStoreChange } from './hrStorage'
-import { SEED, ONBOARDING_ITEMS } from './hrSeed'
-import { PAYROLL_CONFIG } from './payrollConfig'
-import { buildSalaryRow, calculateReferralBonus, summarizePayroll } from './payrollCalculations'
-import { isLockedStatus } from './hrStatus'
-import { connectHrApi, markHrSeeded, pullHrSnapshot, pushHrKey } from '../../../services/hrApi'
+import { HR_KEYS, loadHrCollection, saveHrCollection } from './hrStorage.js'
+import { SEED, ONBOARDING_ITEMS } from './hrSeed.js'
+import { PAYROLL_CONFIG } from './payrollConfig.js'
+import { buildSalaryRow, calculateReferralBonus, summarizePayroll } from './payrollCalculations.js'
+import { isLockedStatus } from './hrStatus.js'
 
 const cache = {}
-let remote = false
-let hydrateError = null
-const pushTimers = {}
 
-const asList = (value, fallback = []) => {
+const asList = (value, fallback) => {
     const source = Array.isArray(value) ? value : fallback
     return (Array.isArray(source) ? source : []).filter((item) => item && typeof item === 'object')
 }
 
-const storageName = (key) => Object.keys(HR_KEYS).find((name) => HR_KEYS[name] === key)
-
-const fallbackFor = (key) => {
-    const name = storageName(key)
-    if (name === 'exit') return SEED.exits
-    return SEED[name]
-}
-
-const emptyFor = (key) => {
-    const seed = fallbackFor(key)
-    if (Array.isArray(seed)) return []
-    if (seed && typeof seed === 'object') {
-        return Object.fromEntries(
-            Object.entries(seed).map(([k, v]) => [k, Array.isArray(v) ? [] : v]),
-        )
-    }
-    return Array.isArray(seed) ? [] : {}
-}
-
 const read = (key, fallback) => {
-    if (!remote) {
-        throw new Error(hydrateError || 'HR API is not ready. Refresh after the API is available.')
-    }
     if (cache[key] === undefined) {
-        cache[key] = Array.isArray(fallback) ? [] : (fallback && typeof fallback === 'object' ? emptyFor(key) : fallback)
+        cache[key] = loadHrCollection(key, fallback)
     }
     if (Array.isArray(fallback)) {
-        const clean = asList(cache[key], [])
+        const clean = asList(cache[key], fallback)
         cache[key] = clean
         return clean
     }
     return cache[key] && typeof cache[key] === 'object' ? cache[key] : fallback
 }
 
-const write = (key, value, sync = true) => {
-    if (!remote) {
-        throw new Error(hydrateError || 'HR API is not ready. Changes are not saved.')
-    }
+const write = (key, value) => {
     const stored = Array.isArray(value) ? asList(value, []) : value
     cache[key] = stored
-    cacheHrCollection(key, stored)
-    emitHrStoreChange()
-    if (sync) schedulePush(key, stored)
-}
-
-const schedulePush = (key, value) => {
-    window.clearTimeout(pushTimers[key])
-    pushTimers[key] = window.setTimeout(() => {
-        pushHrKey(key, value).catch((error) => {
-            console.error('HR API push failed', key, error)
-            hydrateError = error?.message || 'HR API push failed'
-            emitHrStoreChange()
-        })
-    }, 400)
-}
-
-const rememberRemote = (key, value) => {
-    if (Array.isArray(SEED[storageName(key)] || value)) {
-        cache[key] = asList(value, [])
-    } else {
-        cache[key] = value
-    }
-    cacheHrCollection(key, cache[key])
-}
-
-export function getHrHydrateError() {
-    return hydrateError
-}
-
-export function isHrRemoteReady() {
-    return remote
-}
-
-/**
- * Load HR from the API. Fails loudly — no silent localStorage business SoT.
- * @returns {Promise<true>}
- */
-export async function hydrateHrStore() {
-    remote = false
-    hydrateError = null
-    try {
-        const connected = await connectHrApi()
-        if (!connected) {
-            throw new Error('HR API is not available. Sign in again or start the backend.')
-        }
-        const snapshot = await pullHrSnapshot()
-        Object.entries(snapshot.collections).forEach(([key, value]) => rememberRemote(key, value))
-        const hasRemoteRows = Object.values(snapshot.collections).some((value) => {
-            if (Array.isArray(value)) return value.length > 0
-            if (value && typeof value === 'object') {
-                return Object.values(value).some((part) => Array.isArray(part) && part.length > 0)
-            }
-            return false
-        })
-        if (!snapshot.seeded && !hasRemoteRows) {
-            // Brand-new campus: upload the local demo seed once (no SMTP/WhatsApp; data only).
-            await Promise.all(
-                Object.values(HR_KEYS).map((key) => {
-                    const seed = fallbackFor(key)
-                    const value = seed === undefined ? emptyFor(key) : seed
-                    cache[key] = Array.isArray(value) ? asList(value, []) : value
-                    return pushHrKey(key, cache[key])
-                }),
-            )
-        } else if (Array.isArray(cache[HR_KEYS.claims]) && cache[HR_KEYS.claims].length === 0 && SEED.claims?.length) {
-            // Soft-fill claims only when the campus already has other HR data but claims is empty.
-            cache[HR_KEYS.claims] = asList(SEED.claims, [])
-            await pushHrKey(HR_KEYS.claims, cache[HR_KEYS.claims])
-        }
-        if (!snapshot.seeded) {
-            await markHrSeeded()
-        }
-        remote = true
-        hydrateError = null
-        emitHrStoreChange()
-        return true
-    } catch (error) {
-        remote = false
-        hydrateError = error?.message || 'HR API failed to load'
-        clearHrLocalCache()
-        Object.keys(cache).forEach((key) => delete cache[key])
-        emitHrStoreChange()
-        throw error instanceof Error ? error : new Error(hydrateError)
-    }
+    saveHrCollection(key, stored)
 }
 
 export const getEmployees = () => read(HR_KEYS.employees, SEED.employees)
@@ -175,12 +63,12 @@ export const saveTraining = (rows) => write(HR_KEYS.training, rows)
 export const getLeaveBundle = () => {
     const bundle = read(HR_KEYS.leave, SEED.leave)
     if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
-        return { policies: [], requests: [] }
+        return { policies: asList(SEED.leave.policies, []), requests: asList(SEED.leave.requests, []) }
     }
     return {
         ...bundle,
-        policies: asList(bundle.policies, []),
-        requests: asList(bundle.requests, []),
+        policies: asList(bundle.policies, SEED.leave.policies),
+        requests: asList(bundle.requests, SEED.leave.requests),
     }
 }
 export const saveLeaveBundle = (value) => write(HR_KEYS.leave, value)
@@ -203,7 +91,16 @@ export const saveReferrals = (rows) => write(HR_KEYS.referrals, rows)
 export const getConcessions = () => read(HR_KEYS.concessions, SEED.concessions)
 export const saveConcessions = (rows) => write(HR_KEYS.concessions, rows)
 
-export const getDisciplinary = () => read(HR_KEYS.disciplinary, SEED.disciplinary)
+export const getDisciplinary = () => {
+    const rows = read(HR_KEYS.disciplinary, SEED.disciplinary)
+    const ids = new Set(rows.map((item) => item.id))
+    const missing = (SEED.disciplinary || []).filter((item) => item?.id && !ids.has(item.id))
+    if (!missing.length) return rows
+    const next = [...rows, ...missing]
+    cache[HR_KEYS.disciplinary] = next
+    saveHrCollection(HR_KEYS.disciplinary, next)
+    return next
+}
 export const saveDisciplinary = (rows) => write(HR_KEYS.disciplinary, rows)
 
 export const getExits = () => read(HR_KEYS.exit, SEED.exits)
@@ -217,12 +114,6 @@ export const saveNotifications = (rows) => write(HR_KEYS.notifications, rows)
 
 export const getComms = () => read(HR_KEYS.comms, SEED.comms)
 export const saveComms = (rows) => write(HR_KEYS.comms, rows)
-
-export const getAnnouncements = () => read(HR_KEYS.announcements, SEED.announcements || [])
-export const saveAnnouncements = (rows) => write(HR_KEYS.announcements, rows)
-
-export const getClaims = () => read(HR_KEYS.claims, SEED.claims || [])
-export const saveClaims = (rows) => write(HR_KEYS.claims, rows)
 
 export const nextId = (prefix, rows) => {
     const numbers = asList(rows, []).map((row) => Number(String(row.id).split('-').pop())).filter((n) => !Number.isNaN(n))
@@ -239,14 +130,7 @@ export const pushNotification = (notice) => {
 
 export const queueCommunication = ({ channel, subject, audience }) => {
     const rows = getComms()
-    const record = {
-        id: nextId('COM', rows),
-        channel,
-        subject,
-        audience,
-        status: 'queued_stub',
-        at: new Date().toISOString(),
-    }
+    const record = { id: nextId('COM', rows), channel, subject, audience, status: 'DEMO_SENT', at: '24-09-2026 12:30' }
     saveComms([record, ...rows])
     return record
 }
@@ -262,17 +146,16 @@ export const blankChecklist = () => ONBOARDING_ITEMS.map((label) => ({ label, st
 
 const monthRow = (employeeId, month, year) => {
     const bundle = getPayrollBundle()
-    const months = Array.isArray(bundle?.months) ? bundle.months : []
-    return months.find((item) => item?.employeeId === employeeId && item.month === month && Number(item.year) === Number(year))
+    return (bundle.months || []).find((item) => item?.employeeId === employeeId && item.month === month && Number(item.year) === Number(year))
         || { employeeId, month, year: Number(year), workingDays: 26, lates: 0, permission: 0, casualLeave: 0, otherLeave: 0, absent: 0, notPunched: 0, paymentStatus: 'Unpaid', bankRef: '', paymentDate: '', paymentMode: 'Bank Transfer' }
 }
 
 export const salaryRows = (month, year, filters = {}) => {
-    return asList(getEmployees(), [])
+    return getEmployees()
         .filter((employee) => !filters.category || employee.category === filters.category)
         .filter((employee) => !filters.department || employee.department === filters.department)
         .filter((employee) => !filters.status || employee.status === filters.status)
-        .filter((employee) => !filters.search || `${employee.name} ${employee.id}`.toLowerCase().includes(String(filters.search).toLowerCase()))
+        .filter((employee) => !filters.search || `${employee.name} ${employee.id}`.toLowerCase().includes(filters.search.toLowerCase()))
         .map((employee) => buildSalaryRow({
             employee,
             attendance: monthRow(employee.id, month, year),
@@ -309,9 +192,7 @@ export const applyRevision = (revision) => {
 
 export const referralAmountFor = (grossSalary) => calculateReferralBonus(grossSalary)
 
-export const canMutate = (record) => (
-    !isLockedStatus(record?.status) && !isLockedStatus(record?.paymentStatus)
-)
+export const canMutate = (record) => !isLockedStatus(record?.status)
 
 export const advanceNext = (status) => {
     const flow = ['DRAFT', 'SUBMITTED', 'HR_REVIEW', 'FINANCE_REVIEW', 'JD_REVIEW', 'DIRECTOR_REVIEW', 'MD_REVIEW', 'APPROVED']

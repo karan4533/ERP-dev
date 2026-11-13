@@ -1,20 +1,22 @@
-import { ROLES } from '../../constants/roles'
+import { ROLES } from '../../constants/roles.js'
 import {
     buildUserDisplayName,
     getActiveCreatedUserSession,
     getCreatedUsersByRole,
-} from '../RBAC/createdUsersData'
+} from '../RBAC/createdUsersData.js'
 import {
     getActiveAdminSession,
     getAllAdminUsers,
-} from '../../Pages/SuperAdmin/UserCreation/adminUsersData'
-import { getRoleConfig } from './escalationRoleConfig'
+} from '../../Pages/SuperAdmin/UserCreation/adminUsersData.js'
+import { ENTERPRISE_USER_DIRECTORY } from '../../Pages/Authentication/enterpriseUserDirectory.js'
+import { getRoleConfig } from './escalationRoleConfig.js'
 
 export const ESCALATION_ROLE_TO_APP_ROLE = {
     gateKeeper: ROLES.GATEKEEPER,
     gateKeeperManager: ROLES.GATEKEEPER_MANAGER,
     prm: ROLES.PRM,
     student: ROLES.STUDENT,
+    parent: ROLES.PARENT,
     teacher: ROLES.TEACHER,
     coordinator: ROLES.COORDINATOR,
     librarian: ROLES.LIBRARIAN,
@@ -22,6 +24,20 @@ export const ESCALATION_ROLE_TO_APP_ROLE = {
     director: ROLES.DIRECTOR,
     admin: ROLES.ADMIN,
     superAdmin: ROLES.SUPER_ADMIN,
+    driver: ROLES.DRIVER,
+    transportManager: ROLES.TRANSPORT_MANAGER,
+    canteenManager: ROLES.CANTEEN_MANAGER,
+    itSupportManager: ROLES.IT_SUPPORT_MANAGER,
+    stationeryStoreManager: ROLES.STATIONERY_STORE_MANAGER,
+    housekeepingManager: ROLES.HOUSEKEEPING_MANAGER,
+    maintenanceManager: ROLES.MAINTENANCE_MANAGER,
+    jointDirector: ROLES.JOINT_DIRECTOR,
+    jointDirectorAssistant: ROLES.JOINT_DIRECTOR_ASSISTANT,
+    jointDirectorAudit: ROLES.JOINT_DIRECTOR_AUDIT,
+    processAuditor: ROLES.PROCESS_AUDITOR,
+    qualityAuditor: ROLES.QUALITY_AUDITOR,
+    hr: ROLES.HR,
+    accountHead: ROLES.ACCOUNT_HEAD,
 }
 
 export const APP_ROLE_TO_ESCALATION_ROLE = Object.fromEntries(
@@ -58,10 +74,25 @@ export const getEscalationRecipients = (targetEscalationRoleKey) => {
         recipients.push(recipient)
     }
 
+    // 1. Enterprise User Directory (seed staff accounts so recipients are always available)
+    ENTERPRISE_USER_DIRECTORY
+        .filter((user) => user.role === appRole && user.status === 'Active')
+        .forEach((user) =>
+            addRecipient({
+                id: user.id || user.employeeId,
+                name: user.name,
+                email: user.email,
+                subtitle: `${user.department || user.designation} (${user.email})`,
+                source: 'enterprise-directory',
+            })
+        )
+
+    // 2. Created dynamic users from RBAC
     getCreatedUsersByRole(appRole)
         .filter((user) => user.status === 'Active')
         .forEach((user) => addRecipient(mapCreatedUserToRecipient(user)))
 
+    // 3. Admin users
     if (targetEscalationRoleKey === 'admin' || targetEscalationRoleKey === 'superAdmin') {
         getAllAdminUsers()
             .filter((user) => user.status === 'Active')
@@ -90,6 +121,22 @@ export const getCurrentEscalationUser = ({ role: appRole, email, name }) => {
     const escalationRoleKey = resolveEscalationRoleKey(appRole)
     if (!escalationRoleKey) return null
 
+    // Check enterprise directory first
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (normalizedEmail) {
+        const enterpriseMatch = ENTERPRISE_USER_DIRECTORY.find(
+            (user) => user.email?.toLowerCase() === normalizedEmail || user.role === appRole,
+        )
+        if (enterpriseMatch && enterpriseMatch.role === appRole) {
+            return {
+                id: enterpriseMatch.id || enterpriseMatch.employeeId,
+                name: enterpriseMatch.name,
+                email: enterpriseMatch.email,
+                roleKey: escalationRoleKey,
+            }
+        }
+    }
+
     const createdSession = getActiveCreatedUserSession()
     if (createdSession?.id && createdSession.role === appRole) {
         return {
@@ -110,7 +157,6 @@ export const getCurrentEscalationUser = ({ role: appRole, email, name }) => {
         }
     }
 
-    const normalizedEmail = String(email || '').trim().toLowerCase()
     if (normalizedEmail) {
         const createdMatch = getCreatedUsersByRole(appRole).find(
             (user) => user.email?.toLowerCase() === normalizedEmail,

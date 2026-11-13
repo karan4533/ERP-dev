@@ -6,10 +6,6 @@ import mo_user from "../../../../assets/images/no-profile.png"
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 
-const EXPORT_ROWS = [
-    {parent_profile: '', parent_name: 'Saravanan', student_name: 'Sandy', admission_number: 'ADM-NO1845'},
-]
-
 const ParentDetails = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -141,13 +137,7 @@ const ParentDetails = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='parent-details'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
         </section>
     )

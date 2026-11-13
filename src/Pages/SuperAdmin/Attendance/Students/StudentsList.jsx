@@ -11,8 +11,6 @@ import {
     statusBadgeColor,
     STUDENT_ATTENDANCE,
 } from '../../../Admin/Attendance/Students/studentAttendanceData'
-import { canUseAdminAttendanceApi, loadStudentAttendance, toIsoDate } from '../../../../services/adminAttendanceApi'
-import { useAttendanceQuery } from '../../../Admin/Attendance/useAttendanceQuery'
 
 const emptyFilters = { search: '', className: '', section: '' }
 
@@ -21,22 +19,9 @@ const StudentsList = () => {
     const [selectedDate, setSelectedDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
 
-    const apiMode = canUseAdminAttendanceApi()
-    const query = useAttendanceQuery(apiMode, loadStudentAttendance, {
-        date: toIsoDate(selectedDate || new Date()),
-        className: filters.className,
-        section: filters.section,
-    })
-    const classOptions = apiMode ? (query.options?.classOptions ?? []) : CLASS_OPTIONS
-    const sectionOptions = apiMode ? (query.options?.sectionOptions ?? []) : SECTION_OPTIONS
-    const apiRecords = query.data?.records
-
     const filteredRecords = useMemo(
-        () =>
-            apiMode
-                ? filterStudentAttendance(apiRecords ?? [], { search: filters.search })
-                : filterStudentAttendance(STUDENT_ATTENDANCE, filters),
-        [apiMode, apiRecords, filters],
+        () => filterStudentAttendance(STUDENT_ATTENDANCE, filters),
+        [filters],
     )
 
     const clearFilters = () => {
@@ -84,7 +69,7 @@ const StudentsList = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All Classes</option>
-                            {classOptions.map((className) => (
+                            {CLASS_OPTIONS.map((className) => (
                                 <option key={className} value={className}>{className}</option>
                             ))}
                         </select>
@@ -98,7 +83,7 @@ const StudentsList = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All Sections</option>
-                            {sectionOptions.map((section) => (
+                            {SECTION_OPTIONS.map((section) => (
                                 <option key={section} value={section}>{section}</option>
                             ))}
                         </select>
@@ -119,16 +104,9 @@ const StudentsList = () => {
                 </div>
             </div>
 
-            <div className='bg-white rounded-2xl shadow-md p-4'>
+            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <div>
-                        <h2 className='text-xl font-medium text-black'>Student Attendance</h2>
-                        <p className='text-sm text-[#667085] mt-1'>
-                            {apiMode
-                                ? 'Marks from the attendance API — same source Admin and teachers use.'
-                                : 'Local demo rows (API attendance flag off).'}
-                        </p>
-                    </div>
+                    <h2 className='text-xl font-medium text-black'>Student Attendance</h2>
                     <button
                         type='button'
                         onClick={() => setExportModal(true)}
@@ -138,65 +116,43 @@ const StudentsList = () => {
                         Export
                     </button>
                 </div>
-                {apiMode && query.status === 'loading' ? (
-                    <div role='status' className='py-16 text-center text-sm text-[#667085]'>Loading attendance…</div>
-                ) : apiMode && query.status === 'error' ? (
-                    <div role='alert' className='py-16 text-center'>
-                        <h3 className='text-lg font-semibold text-[#B42318]'>Could not load attendance</h3>
-                        <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>{query.error}</p>
-                        <button type='button' onClick={query.reload} className='mt-4 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer'>
-                            Retry
-                        </button>
-                    </div>
-                ) : (
-                    <div className='relative overflow-x-auto'>
-                        <table className='w-full text-sm text-left'>
-                            <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                                <tr>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Admission No</th>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Student Name</th>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Section</th>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>{apiMode ? 'Marked At' : 'On Time'}</th>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>{apiMode ? 'In / Out' : 'Out Time'}</th>
-                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Status</th>
+                <div className='relative overflow-x-auto'>
+                    <table className='w-full text-sm text-left'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                            <tr>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Admission No</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Student Name</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Section</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>On Time</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Out Time</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredRecords.map((record) => (
+                                <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                    <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.admissionNo}</td>
+                                    <td className='px-2 py-4'>{record.studentName}</td>
+                                    <td className='px-2 py-4'>{record.className}</td>
+                                    <td className='px-2 py-4'>{record.section}</td>
+                                    <td className='px-2 py-4'>{record.onTime}</td>
+                                    <td className='px-2 py-4'>{record.outTime}</td>
+                                    <td className='px-2 py-4 rounded-e-lg'>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.status]}`}>
+                                            {record.status}
+                                        </span>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {filteredRecords.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className='px-2 py-10 text-center text-[#667085]'>
-                                            No attendance rows for this filter.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredRecords.map((record) => (
-                                        <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                            <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.admissionNo}</td>
-                                            <td className='px-2 py-4'>{record.studentName}</td>
-                                            <td className='px-2 py-4'>{record.className}</td>
-                                            <td className='px-2 py-4'>{record.section}</td>
-                                            <td className='px-2 py-4'>{apiMode ? record.markedAt : record.onTime}</td>
-                                            <td className='px-2 py-4'>{apiMode ? record.inOut : record.outTime}</td>
-                                            <td className='px-2 py-4 rounded-e-lg'>
-                                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.status]}`}>
-                                                    {record.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    {apiMode && query.status !== 'ready'
-                        ? ''
-                        : `Showing 1 to ${filteredRecords.length} of ${filteredRecords.length} entries`}
+                    Showing 1 to {filteredRecords.length} of {filteredRecords.length} entries
                 </p>
                 <div className='flex gap-x-2'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
@@ -211,20 +167,7 @@ const StudentsList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='super-admin-student-attendance'
-                title='Student Attendance'
-                rows={filteredRecords.map((row) => ({
-                    admission_no: row.admissionNo,
-                    student_name: row.studentName,
-                    class: row.className,
-                    section: row.section,
-                    status: row.status,
-                }))}
-                exportDescription={<>You are exporting {filteredRecords.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

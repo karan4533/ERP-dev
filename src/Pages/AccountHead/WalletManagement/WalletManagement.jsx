@@ -1,67 +1,106 @@
-import React, { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Download, Wallet } from 'lucide-react'
-import { toast } from 'react-toastify'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { IntegrationNotice, PageHeader } from '../../../Common/ui'
 import WalletOverviewTab from './Components/WalletOverviewTab'
 import UserWalletsTab from './Components/UserWalletsTab'
 import RechargeRecordsTab from './Components/RechargeRecordsTab'
 import SpendingHistoryTab from './Components/SpendingHistoryTab'
-import RechargeOptionsTab, { AddRechargeMethodModal } from './Components/RechargeOptionsTab'
+import RechargeOptionsTab from './Components/RechargeOptionsTab'
 import RechargeWalletModal from './Components/RechargeWalletModal'
 import { useFinance } from '../financeDomain/FinanceContext'
-import FinanceSnapshotBanner from '../financeDomain/FinanceSnapshotBanner'
-import { WALLET_ROLE_FILTERS, WALLET_TABS } from './walletManagementData'
+import { PAYMENT_MODES, SOURCE_MODULES } from '../financeDomain/financeConstants'
+import {
+    RECHARGE_RECORDS,
+    USER_WALLETS,
+    WALLET_ROLE_FILTERS,
+    WALLET_TABS,
+    formatRupeeAmount,
+    parseRupeeAmount,
+} from './walletManagementData'
+
+const formatRechargeDateTime = () => {
+    const now = new Date()
+    return now.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    })
+}
 
 const WalletManagement = () => {
-    const {
-        rechargeWallet,
-        ensureStudentWallets,
-        wallets: userWallets,
-        walletRecharges: rechargeRecords,
-        financePersistence,
-    } = useFinance()
+    const { postExternalInflow } = useFinance()
     const [activeTab, setActiveTab] = useState('wallet-overview')
     const [roleFilter, setRoleFilter] = useState(WALLET_ROLE_FILTERS[0])
-    const [exportModal, setExportModal] = useState(false)
-    const [addMethodModal, setAddMethodModal] = useState(false)
     const [rechargeModal, setRechargeModal] = useState(false)
+    const [userWallets, setUserWallets] = useState(USER_WALLETS)
+    const [rechargeRecords, setRechargeRecords] = useState(RECHARGE_RECORDS)
 
-    useEffect(() => {
-        if (!financePersistence?.apiEnabled) return
-        ensureStudentWallets?.().catch(() => {})
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- once when wallets page opens in API mode
-    }, [financePersistence?.apiEnabled])
+    const handleOfflineRecharge = ({ email, amount }) => {
+        const walletIndex = userWallets.findIndex(
+            (wallet) => wallet.email.toLowerCase() === email.toLowerCase(),
+        )
 
-    const handleOfflineRecharge = async ({ email, amount }) => {
-        const result = await rechargeWallet({ email, amount })
-        if (!result.success) {
+        if (walletIndex === -1) {
             return {
                 success: false,
-                message: result.message || 'No wallet found for this email ID. Please verify and try again.',
+                message: 'No wallet found for this email ID. Please verify and try again.',
             }
         }
-        toast.success(result.api ? 'Wallet recharged and saved to finance API.' : 'Wallet recharged.')
-        return { success: true, message: 'Wallet recharged.' }
+
+        const wallet = userWallets[walletIndex]
+        const updatedBalance = parseRupeeAmount(wallet.balance) + amount
+        const updatedWallet = {
+            ...wallet,
+            balance: formatRupeeAmount(updatedBalance),
+            lastRecharge: formatRechargeDateTime().split(',')[0],
+            status: updatedBalance > 0 && wallet.status === 'Zero Balance' ? 'Active' : wallet.status,
+        }
+
+        const newRecord = {
+            id: `RCG-${Date.now().toString().slice(-5)}`,
+            user: wallet.name,
+            initials: wallet.initials,
+            role: wallet.role,
+            mode: 'Offline',
+            amount: formatRupeeAmount(amount),
+            dateTime: formatRechargeDateTime(),
+            status: 'Success',
+        }
+
+        setUserWallets((prev) => prev.map((item, index) => (
+            index === walletIndex ? updatedWallet : item
+        )))
+        setRechargeRecords((prev) => [newRecord, ...prev])
+        postExternalInflow({
+            amount,
+            category: 'Wallet Recharge',
+            paymentMode: PAYMENT_MODES.CASH,
+            reference: newRecord.id,
+            narration: `Offline wallet recharge — ${wallet.name}`,
+            sourceModule: SOURCE_MODULES.WALLET,
+        })
+
+        return {
+            success: true,
+            message: `${formatRupeeAmount(amount)} added to ${wallet.name}'s wallet.`,
+        }
     }
 
     return (
-        <section className='space-y-6'>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4'>
-                    <div>
-                        <h2 className='text-xl font-semibold text-black'>Wallet Management</h2>
-                        <p className='text-sm text-[#667085] mt-1'>
-                            Platform-wide digital wallets
-                            {' · '}
-                            All Roles
-                        </p>
-                        <FinanceSnapshotBanner mockNote='Wallets & recharges persist via GET/PUT /finance/state. Student wallets auto-sync from the finance roster. Recharge method catalog remains illustrative.' />
-                    </div>
-                    <div className='flex flex-wrap items-center gap-3'>
+        <section className='space-y-5'>
+            <PageHeader
+                title='Wallet management'
+                description='Review browser-stored wallet balances and record independently received cash credits without implying a connected wallet or payment service.'
+                context='Local wallet workspace · external payments disconnected'
+                actions={(
+                    <>
                         <select
+                            aria-label='Wallet role filter'
                             value={roleFilter}
                             onChange={(event) => setRoleFilter(event.target.value)}
-                            className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'
+                            className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'
                         >
                             {WALLET_ROLE_FILTERS.map((role) => (
                                 <option key={role} value={role}>{role}</option>
@@ -70,50 +109,52 @@ const WalletManagement = () => {
                         <button
                             type='button'
                             onClick={() => setRechargeModal(true)}
-                            className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
+                            className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'
                         >
                             <Wallet size={16} />
-                            Recharge Wallet
+                            Record wallet credit
                         </button>
                         <button
                             type='button'
-                            onClick={() => setExportModal(true)}
-                            className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                            disabled
+                            title='Export requires the connected wallet reporting API.'
+                            className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-60'
                         >
                             <Download size={16} />
-                            Export
+                            Export unavailable
                         </button>
-                    </div>
-                </div>
+                    </>
+                )}
+            />
+            <IntegrationNotice state='demo' title='Browser-stored wallet register' description='Balances, credits and records remain in this browser. Production requires a wallet ledger, idempotent transactions, RBAC, immutable audit events and settlement reconciliation.' />
 
-                <div className='flex gap-6 overflow-x-auto no-scrollbar mt-6 border-b border-[#F2F4F7]'>
+                <div className='flex gap-2 overflow-x-auto border-b border-[var(--erp-line)]' role='tablist' aria-label='Wallet management views'>
                     {WALLET_TABS.map((tab) => (
                         <button
                             key={tab.id}
                             type='button'
+                            role='tab'
+                            aria-selected={activeTab === tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`whitespace-nowrap px-1 pb-3 text-sm md:text-base font-medium cursor-pointer transition-all duration-200 ${
+                            className={`min-h-11 whitespace-nowrap border-b-2 px-3 text-sm font-semibold ${
                                 activeTab === tab.id
-                                    ? 'text-[#515DEF] border-b-2 border-[#515DEF] font-semibold'
-                                    : 'text-[#808080]'
+                                    ? 'border-[var(--erp-indigo)] text-[var(--erp-indigo)]'
+                                    : 'border-transparent text-[var(--erp-slate)]'
                             }`}
                         >
                             {tab.label}
                         </button>
                     ))}
-                </div>
             </div>
 
             {activeTab === 'wallet-overview' && <WalletOverviewTab />}
-            {activeTab === 'user-wallets' && <UserWalletsTab userWallets={userWallets} />}
-            {activeTab === 'recharge-records' && <RechargeRecordsTab rechargeRecords={rechargeRecords} />}
-            {activeTab === 'spending-history' && <SpendingHistoryTab />}
+            {activeTab === 'user-wallets' && <UserWalletsTab userWallets={userWallets} initialRole={roleFilter} />}
+            {activeTab === 'recharge-records' && <RechargeRecordsTab rechargeRecords={rechargeRecords} initialRole={roleFilter} />}
+            {activeTab === 'spending-history' && <SpendingHistoryTab initialRole={roleFilter} />}
             {activeTab === 'recharge-options' && (
-                <RechargeOptionsTab onAddMethod={() => setAddMethodModal(true)} />
+                <RechargeOptionsTab />
             )}
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <AddRechargeMethodModal isOpen={addMethodModal} onClose={() => setAddMethodModal(false)} />
             <RechargeWalletModal
                 isOpen={rechargeModal}
                 onClose={() => setRechargeModal(false)}

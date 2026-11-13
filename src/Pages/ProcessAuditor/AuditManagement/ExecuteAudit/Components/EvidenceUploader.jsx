@@ -34,7 +34,7 @@ const EvidenceUploader = ({ evidence, onChange, showUrlInput: controlledShowUrl,
                 <input type='file' accept='image/*' className='hidden' onChange={(e) => handleFile('photo', e)} />
             </IconButton>
             <IconButton icon={FileText} active={!!safeEvidence.file} title='Upload File'>
-                <input type='file' accept='.pdf,.doc,.docx' className='hidden' onChange={(e) => handleFile('file', e)} />
+                <input type='file' accept='.pdf,.doc,.docx,.png,.jpg,.jpeg' className='hidden' onChange={(e) => handleFile('file', e)} />
             </IconButton>
             <IconButton icon={Video} active={!!safeEvidence.video} title='Upload Video'>
                 <input type='file' accept='video/*' className='hidden' onChange={(e) => handleFile('video', e)} />

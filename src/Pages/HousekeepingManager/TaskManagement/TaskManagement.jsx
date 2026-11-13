@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -7,14 +7,9 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
-import { getHousekeepingTasks, hydrateHousekeepingTasksFromApi, statusBadgeColor } from './taskData'
+import { TASKS, statusBadgeColor } from './taskData'
 
 const TaskManagement = () => {
-    const [tasks, setTasks] = useState(() => getHousekeepingTasks())
-    useEffect(() => {
-        hydrateHousekeepingTasksFromApi().finally(() => setTasks(getHousekeepingTasks()))
-    }, [])
-
 
     const [fromDate, setFromDate] = useState(null);
     const [toDate, setToDate] = useState(null);
@@ -24,7 +19,7 @@ const TaskManagement = () => {
         const [day, month, year] = String(value || '').split('-').map(Number)
         return year ? new Date(year, month - 1, day) : null
     }
-    const visibleTasks = tasks.filter((task) => {
+    const visibleTasks = TASKS.filter((task) => {
         const query = search.trim().toLowerCase()
         const date = parseDmy(task.assignedDate)
         const start = fromDate ? new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()) : null
@@ -180,7 +175,7 @@ const TaskManagement = () => {
 
             {/* Pagination */}
             <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {tasks.length} of {tasks.length} entries</p>
+                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {TASKS.length} of {TASKS.length} entries</p>
 
                 <div className="flex justify-center gap-x-2 flex-wrap">
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">

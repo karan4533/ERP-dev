@@ -1,63 +1,48 @@
 import React, { useState } from 'react'
 import { Download } from 'lucide-react'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { IntegrationNotice, PageHeader } from '../../../Common/ui'
 import FinancialOverviewTab from './Components/FinancialOverviewTab'
 import IncomeReportsTab from './Components/IncomeReportsTab'
 import ExpenditureReportsTab from './Components/ExpenditureReportsTab'
 import FeeComparisonTab from './Components/FeeComparisonTab'
 import TrendsPatternsTab from './Components/TrendsPatternsTab'
-import FinanceSnapshotBanner from '../financeDomain/FinanceSnapshotBanner'
-import { REPORTS_PERIODS, REPORTS_TABS } from './reportsAnalyticsData'
+import { REPORTS_TABS } from './reportsAnalyticsData'
 
 const ReportsAnalytics = () => {
     const [activeTab, setActiveTab] = useState('financial-overview')
-    const [period, setPeriod] = useState(REPORTS_PERIODS[0])
-    const [exportModal, setExportModal] = useState(false)
 
     return (
-        <section className='space-y-6'>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4'>
-                    <div>
-                        <h2 className='text-xl font-semibold text-black'>Reports & Analytics</h2>
-                        <p className='text-sm text-[#667085] mt-1'>
-                            Academic Year 2025–26
-                            {' · '}
-                            All Modules
-                        </p>
-                        <FinanceSnapshotBanner mockNote='Overview, income, expenditure, fee comparison, and trends derive from the finance snapshot (posted transactions and installments). Tiles that open unused report packs stay as labels only.' />
-                    </div>
-                    <div className='flex flex-wrap items-center gap-3'>
-                        <select
-                            value={period}
-                            onChange={(event) => setPeriod(event.target.value)}
-                            className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'
-                        >
-                            {REPORTS_PERIODS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                        <button
-                            type='button'
-                            onClick={() => setExportModal(true)}
-                            className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
-                        >
-                            <Download size={16} />
-                            Export
-                        </button>
-                    </div>
-                </div>
+        <section className='space-y-5'>
+            <PageHeader
+                title='Reports & analytics'
+                description='Review finance report designs while the reporting and export APIs are being implemented.'
+                context='Academic year 2025–26 · reference dataset · all modules'
+                actions={(
+                    <button type='button' disabled title='Export requires the connected finance reporting API.' className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>
+                        <Download aria-hidden='true' size={16} /> Export unavailable
+                    </button>
+                )}
+            />
 
-                <div className='flex gap-6 overflow-x-auto no-scrollbar mt-6 border-b border-[#F2F4F7]'>
+            <IntegrationNotice
+                state='demo'
+                title='Sample analytics dataset'
+                description='Charts and comparisons on this page are labelled design fixtures. They are not generated from posted ledger entries, reconciliation or a reporting warehouse.'
+            />
+
+            <div className='rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white px-4 pt-3 sm:px-5'>
+                <div className='flex gap-3 overflow-x-auto border-b border-[var(--erp-line)]' role='tablist' aria-label='Finance analytics views'>
                     {REPORTS_TABS.map((tab) => (
                         <button
                             key={tab.id}
                             type='button'
+                            role='tab'
+                            aria-selected={activeTab === tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`whitespace-nowrap px-1 pb-3 text-sm md:text-base font-medium cursor-pointer transition-all duration-200 ${
+                            className={`min-h-11 whitespace-nowrap border-b-2 px-3 text-sm font-semibold ${
                                 activeTab === tab.id
-                                    ? 'text-[#515DEF] border-b-2 border-[#515DEF] font-semibold'
-                                    : 'text-[#808080]'
+                                    ? 'border-[var(--erp-indigo)] text-[var(--erp-indigo)]'
+                                    : 'border-transparent text-[var(--erp-slate)]'
                             }`}
                         >
                             {tab.label}
@@ -72,7 +57,6 @@ const ReportsAnalytics = () => {
             {activeTab === 'fee-comparison' && <FeeComparisonTab />}
             {activeTab === 'trends-patterns' && <TrendsPatternsTab />}
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

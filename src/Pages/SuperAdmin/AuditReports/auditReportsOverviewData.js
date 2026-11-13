@@ -39,17 +39,13 @@ export {
     riskStatusBadgeColor,
 }
 
-export const getComplianceScore = () => {
-    const summary = getComplianceData()?.summary
-    return Number(summary?.overall) || 0
-}
+export const getComplianceScore = () => getComplianceData().summary.overall
 
 export const getComplianceSummaryCards = () => {
     const { summary } = getComplianceData()
-    const departments = Array.isArray(summary?.departments) ? summary.departments : []
     return [
-        { label: 'Overall Compliance', value: `${summary?.overall ?? 0}%`, accent: getComplianceColor(summary?.overall ?? 0) },
-        ...departments.map((item) => ({
+        { label: 'Overall Compliance', value: `${summary.overall}%`, accent: getComplianceColor(summary.overall) },
+        ...summary.departments.map((item) => ({
             label: item.label,
             value: `${item.value}%`,
             accent: getComplianceColor(item.value),
@@ -58,10 +54,9 @@ export const getComplianceSummaryCards = () => {
 }
 
 export const getDepartmentRanking = () => {
-    const rows = getComplianceData()?.departments
-    const departments = Array.isArray(rows) ? rows : []
+    const { departments } = getComplianceData()
     return [...departments]
-        .sort((a, b) => (Number(b.compliance) || 0) - (Number(a.compliance) || 0))
+        .sort((a, b) => b.compliance - a.compliance)
         .map((row, index) => ({ rank: index + 1, ...row }))
 }
 

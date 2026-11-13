@@ -1,3 +1,15 @@
+export const VEHICLE_DETAILS = {
+    vehicleId: 'VEH-1001',
+    vehicleNumber: 'TN-09-AB-4521',
+    vehicleType: 'School Bus',
+    vehicleModel: 'Ashok Leyland',
+    seatingCapacity: '50',
+    assignedDriver: 'Sandy Selva',
+    driverContact: '+91 9944076993',
+    assignedRoute: 'Route 5 — North Campus',
+    status: 'Active',
+}
+
 export const vehicleStatusBadgeColor = {
     Active: 'bg-[#4CAF501A] text-[#4CAF50]',
     Inactive: 'bg-[#6670851A] text-[#667085]',

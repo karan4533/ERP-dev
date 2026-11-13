@@ -31,13 +31,8 @@ const getInventoryAlertCount = () => {
     return criticalAssets + lowStock + outOfStock
 }
 
-const incomeLabels = Array.isArray(INCOME_EXPENDITURE_TREND?.labels) ? INCOME_EXPENDITURE_TREND.labels : []
-const incomeSeries = Array.isArray(INCOME_EXPENDITURE_TREND?.income) ? INCOME_EXPENDITURE_TREND.income : []
-const expenseSeries = Array.isArray(INCOME_EXPENDITURE_TREND?.expenditure) ? INCOME_EXPENDITURE_TREND.expenditure : []
-const complianceValues = Array.isArray(MONTHLY_COMPLIANCE_TREND?.values) ? MONTHLY_COMPLIANCE_TREND.values : []
-
-const juneIndex = Math.max(incomeLabels.length - 1, 0)
-const mayIndex = Math.max(juneIndex - 1, 0)
+const juneIndex = INCOME_EXPENDITURE_TREND.labels.length - 1
+const mayIndex = juneIndex - 1
 
 const calcTrend = (current, previous) => {
     if (!previous) return { trend: '—', trendType: 'neutral' }
@@ -49,31 +44,23 @@ const calcTrend = (current, previous) => {
     }
 }
 
-const revenueThisMonth = incomeSeries[juneIndex] ?? 0
-const revenueLastMonth = incomeSeries[mayIndex] ?? 0
-const expenseThisMonth = expenseSeries[juneIndex] ?? 0
-const expenseLastMonth = expenseSeries[mayIndex] ?? 0
+const revenueThisMonth = INCOME_EXPENDITURE_TREND.income[juneIndex]
+const revenueLastMonth = INCOME_EXPENDITURE_TREND.income[mayIndex]
+const expenseThisMonth = INCOME_EXPENDITURE_TREND.expenditure[juneIndex]
+const expenseLastMonth = INCOME_EXPENDITURE_TREND.expenditure[mayIndex]
 
 const revenueTrend = calcTrend(revenueThisMonth, revenueLastMonth)
 const expenseTrend = calcTrend(expenseThisMonth, expenseLastMonth)
 const complianceTrend = calcTrend(
-    complianceValues[juneIndex] ?? 0,
-    complianceValues[mayIndex] ?? 0,
+    MONTHLY_COMPLIANCE_TREND.values[juneIndex],
+    MONTHLY_COMPLIANCE_TREND.values[mayIndex],
 )
 
-const pendingFindingsRaw = getPendingFindings()
-const pendingFindings = Array.isArray(pendingFindingsRaw) ? pendingFindingsRaw : []
-const pendingApprovals = Number(getPendingApprovalCount()) || 0
-const complianceScore = Number(getComplianceScore()) || 0
-const fleetSummary = getFleetSummary() || {
-    totalVehicles: 0,
-    totalDocuments: 0,
-    expiringDocs: 0,
-}
-const complianceSnapshot = getComplianceData()
-const departmentRows = Array.isArray(complianceSnapshot?.departments)
-    ? complianceSnapshot.departments
-    : []
+const pendingFindings = getPendingFindings()
+const pendingApprovals = getPendingApprovalCount()
+const complianceScore = getComplianceScore()
+const fleetSummary = getFleetSummary()
+const departmentRows = getComplianceData().departments
 
 export const EXECUTIVE_KPI_CARDS = [
     {
@@ -120,7 +107,7 @@ export const EXECUTIVE_KPI_CARDS = [
         trend: revenueTrend.trend,
         trendType: revenueTrend.trendType,
         comparison: 'vs last month',
-        sparkline: incomeSeries,
+        sparkline: INCOME_EXPENDITURE_TREND.income,
         sparkColor: CHART_COLORS.success,
         iconTone: 'success',
     },
@@ -132,7 +119,7 @@ export const EXECUTIVE_KPI_CARDS = [
         trend: expenseTrend.trend,
         trendType: expenseTrend.trendType === 'up' ? 'down' : 'up',
         comparison: 'vs last month',
-        sparkline: expenseSeries,
+        sparkline: INCOME_EXPENDITURE_TREND.expenditure,
         sparkColor: CHART_COLORS.danger,
         iconTone: 'danger',
     },
@@ -164,11 +151,11 @@ export const EXECUTIVE_KPI_CARDS = [
         key: 'compliance',
         label: 'Compliance Score',
         value: `${complianceScore}%`,
-        previousValue: `${complianceValues[mayIndex] ?? 0}%`,
+        previousValue: `${MONTHLY_COMPLIANCE_TREND.values[mayIndex]}%`,
         trend: complianceTrend.trend,
         trendType: complianceTrend.trendType,
         comparison: 'vs last month',
-        sparkline: complianceValues,
+        sparkline: MONTHLY_COMPLIANCE_TREND.values,
         sparkColor: CHART_COLORS.success,
         iconTone: 'success',
     },
@@ -236,9 +223,7 @@ export const PROGRESS_METRICS = [
     },
     {
         label: 'Fleet Document Validity',
-        value: fleetSummary.totalDocuments
-            ? Math.round(((fleetSummary.totalDocuments - (fleetSummary.expiringDocs || 0)) / fleetSummary.totalDocuments) * 100)
-            : 0,
+        value: Math.round((fleetSummary.totalDocuments - fleetSummary.expiringDocs) / fleetSummary.totalDocuments * 100),
         target: 95,
         color: CHART_COLORS.info,
     },

@@ -1,12 +1,11 @@
-import { adminSidebarLinks } from '../../../Common/CommonSidebar/Components/sidebarLinks'
-import { ROLES } from '../../../constants/roles'
+import { adminSidebarLinks } from '../../../Common/CommonSidebar/Components/sidebarLinks.js'
+import { ROLES } from '../../../constants/roles.js'
 import {
     buildUserDisplayName,
     DEFAULT_USER_FORM,
     formatUserDateOfBirth,
     validateUserCreationForm,
-} from '../../../Common/RBAC/createdUsersData'
-import { canUseAdminUsersApi, createAdminUserApi, listAdminUsersApi } from '../../../services/adminUsersApi'
+} from '../../../Common/RBAC/createdUsersData.js'
 
 const STORAGE_KEY = 'schoolerp-super-admin-admin-users'
 const ACTIVE_ADMIN_KEY = 'schoolerp_active_admin_user'
@@ -91,38 +90,6 @@ const saveAdminUsers = (records) => {
 }
 
 export const getAllAdminUsers = () => loadAdminUsers()
-
-/** Map `/admin/users` admin roles into the Super Admin User Creation list shape. */
-const fromAdminUsersApi = (apiUser) => ({
-    id: apiUser.staffCode || apiUser.id,
-    employeeId: apiUser.staffCode || apiUser.id,
-    name: apiUser.name,
-    firstName: apiUser.firstName || '',
-    middleName: apiUser.middleName || '',
-    lastName: apiUser.lastName || '',
-    email: apiUser.email,
-    mobileNumber: apiUser.mobileNumber || '—',
-    department: apiUser.details?.department || 'Administration',
-    role: apiUser.role || ROLES.ADMIN,
-    roleLabel: apiUser.roleLabel || ADMIN_ROLE_LABEL,
-    status: apiUser.status === 'Inactive' ? 'Inactive' : 'Active',
-    username: apiUser.details?.username || String(apiUser.email || '').split('@')[0],
-    permissions: buildFullPermissions(),
-    createdBy: 'System',
-    createdAt: apiUser.createdAt || '',
-    isSystem: false,
-    source: 'api',
-    userId: apiUser.id,
-})
-
-/** Refresh Administrator portal accounts from the shared admin-users API. */
-export const hydrateAdminUsersFromApi = async () => {
-    if (!canUseAdminUsersApi()) return getAllAdminUsers()
-    const rows = await listAdminUsersApi({ role: ROLES.ADMIN })
-    const mapped = (Array.isArray(rows) ? rows : []).map(fromAdminUsersApi)
-    if (mapped.length) saveAdminUsers(mapped)
-    return getAllAdminUsers()
-}
 
 export const getAdminUserById = (id) =>
     loadAdminUsers().find((user) => user.id === id) ?? null
@@ -224,37 +191,6 @@ export const createAdminUser = (payload) => {
     records.unshift(nextUser)
     saveAdminUsers(records)
     return { success: true, user: nextUser }
-}
-
-/** Prefer the shared admin-users API so Super Admin creates the same accounts Admin RBAC uses. */
-export const createAdminUserViaApi = async (payload) => {
-    if (!canUseAdminUsersApi()) return createAdminUser(payload)
-    const validation = validateUserCreationForm(payload)
-    if (!validation.success) return validation
-    try {
-        const created = await createAdminUserApi({
-            role: ROLES.ADMIN,
-            firstName: payload.firstName?.trim() || '',
-            middleName: payload.middleName?.trim() || '',
-            lastName: payload.lastName?.trim() || '',
-            email: payload.email?.trim(),
-            gender: payload.gender || 'Male',
-            mobileNumber: payload.mobileNumber?.trim() || '',
-            password: payload.password?.trim() || undefined,
-            details: {
-                username: payload.username?.trim() || '',
-                department: payload.department?.trim() || 'Administration',
-            },
-        })
-        await hydrateAdminUsersFromApi()
-        return {
-            success: true,
-            user: fromAdminUsersApi(created),
-            temporaryPassword: created.temporaryPassword,
-        }
-    } catch (error) {
-        return { success: false, message: error?.message || 'Could not create admin user.' }
-    }
 }
 
 export const updateAdminUser = (id, payload) => {

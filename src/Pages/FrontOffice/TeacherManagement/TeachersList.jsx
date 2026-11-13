@@ -1,14 +1,13 @@
 import EmployeeDatabaseListView from '../../../Common/UserDatabase/EmployeeDatabaseListView'
-import { ROUTE_BASE, isTeacherDatabaseRecord } from './teacherDatabaseData'
+import { ROUTE_BASE, TEACHER_DEPARTMENT_FILTER } from './teacherDatabaseData'
 
 const TeachersList = () => (
     <EmployeeDatabaseListView
         routeBase={ROUTE_BASE}
         title='Teacher Database'
-        subtitle='Teachers from HR (role Teacher) and teacher logins from User Creation appear here.'
-        recordFilter={isTeacherDatabaseRecord}
+        subtitle='Teachers created through User Creation appear here automatically.'
+        fixedDepartmentFilter={TEACHER_DEPARTMENT_FILTER}
         showDepartmentFilter={false}
-        emptyMessage='No teachers found yet. Accept a teacher offer in HR or create a teacher login, then refresh.'
     />
 )
 

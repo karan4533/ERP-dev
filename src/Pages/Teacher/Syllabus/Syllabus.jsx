@@ -193,13 +193,7 @@ const Syllabus = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='syllabus'
-                rows={Array.isArray(SYLLABUS_LIST) ? SYLLABUS_LIST : []}
-                exportDescription={<>You are exporting {Array.isArray(SYLLABUS_LIST) ? SYLLABUS_LIST.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

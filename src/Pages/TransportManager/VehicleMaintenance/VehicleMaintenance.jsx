@@ -1,16 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
-import { toast } from 'react-toastify'
 import {
-    deleteMaintenanceRecord,
-    getMaintenanceRecords,
-    hydrateMaintenanceRecordsFromApi,
+    MAINTENANCE_RECORDS,
     MAINTENANCE_STATUSES,
     SERVICE_TYPES,
     VEHICLE_TYPES,
@@ -18,37 +16,11 @@ import {
 } from './vehicleMaintenanceData'
 
 const VehicleMaintenance = () => {
-    const [maintenanceRecords, setMaintenanceRecords] = useState(() => getMaintenanceRecords())
-    useEffect(() => {
-        hydrateMaintenanceRecordsFromApi().finally(() => setMaintenanceRecords(getMaintenanceRecords()))
-    }, [])
-
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [deleteModal, setDeleteModal] = useState(false)
-    const [pendingDeleteId, setPendingDeleteId] = useState(null)
-    const [deleting, setDeleting] = useState(false)
-
-    const openDelete = (recordId) => {
-        setPendingDeleteId(recordId)
-        setDeleteModal(true)
-    }
-
-    const handleConfirmDelete = async () => {
-        if (!pendingDeleteId || deleting) return
-        setDeleting(true)
-        const result = await deleteMaintenanceRecord(pendingDeleteId)
-        setDeleting(false)
-        setDeleteModal(false)
-        setPendingDeleteId(null)
-        if (result?.success === false) {
-            toast.error(result.message || 'Could not delete record.')
-            return
-        }
-        setMaintenanceRecords(getMaintenanceRecords())
-        toast.success(result?.api ? 'Record deleted from campus API.' : 'Record deleted.')
-    }
+    const [editRequestModal, setEditRequestModal] = useState(false)
+    const [deleteRequestModal, setDeleteRequestModal] = useState(false)
 
     return (
         <section>
@@ -172,7 +144,7 @@ const VehicleMaintenance = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {maintenanceRecords.map((record) => (
+                            {MAINTENANCE_RECORDS.map((record) => (
                                 <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.serviceId}</td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.vehicleNumber}</td>
@@ -195,15 +167,16 @@ const VehicleMaintenance = () => {
                                             >
                                                 View
                                             </NavLink>
-                                            <NavLink
-                                                to={`/transport-manager/vehicle-maintenance/edit/${record.id}`}
-                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                            >
-                                                Edit
-                                            </NavLink>
                                             <button
                                                 type='button'
-                                                onClick={() => openDelete(record.id)}
+                                                onClick={() => setEditRequestModal(true)}
+                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                type='button'
+                                                onClick={() => setDeleteRequestModal(true)}
                                                 className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Delete
@@ -219,7 +192,7 @@ const VehicleMaintenance = () => {
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {maintenanceRecords.length} of {maintenanceRecords.length} entries
+                    Showing 1 to {MAINTENANCE_RECORDS.length} of {MAINTENANCE_RECORDS.length} entries
                 </p>
                 <div className='flex justify-center gap-x-2 flex-wrap'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
@@ -235,14 +208,8 @@ const VehicleMaintenance = () => {
             </div>
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <DeleteRequestModal
-                deleteRequestModal={deleteModal}
-                setDeleteRequestModal={setDeleteModal}
-                onConfirm={handleConfirmDelete}
-                title='Delete Maintenance Record?'
-                message='This will permanently remove this maintenance record. This action cannot be undone.'
-                confirmLabel={deleting ? 'Deleting…' : 'Delete'}
-            />
+            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </section>
     )
 }

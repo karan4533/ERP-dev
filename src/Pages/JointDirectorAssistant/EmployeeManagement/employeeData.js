@@ -331,8 +331,68 @@ export const EMPLOYEE_PROFILES = {
             { taskId: 'JD-T-004', title: 'Deep cleaning schedule — exam week', assignedDate: '08-06-2026', dueDate: '10-06-2026', status: 'Completed' },
             { taskId: 'JD-T-017', title: 'Zone-wise sanitation inspection — Block A', assignedDate: '09-06-2026', dueDate: '11-06-2026', status: 'In Progress' },
             { taskId: 'JD-T-018', title: 'Cleaning supplies reorder — Q2 stock', assignedDate: '06-06-2026', dueDate: '09-06-2026', status: 'Pending' },
-        ],
+        ],    },
+    'maintenance-manager': {
+        roleTitle: 'Maintenance Manager',
+        profileLabel: 'Maintenance Manager Profile',
+        idLabel: 'Employee ID',
+        employee: {
+            profileImage: null,
+            employeeId: 'EMP-MNT-001',
+            userId: 'USR-400018',
+            firstName: 'Gopalakrishnan',
+            middleName: '',
+            lastName: 'R.',
+            gender: 'Male',
+            dateOfBirth: '14-07-1981',
+            bloodGroup: 'B+',
+            height: '172 cm',
+            weight: '74 kg',
+            medicalHistory: 'None.',
+            address: {
+                address: '42, Substation Enclave, Velachery',
+                country: 'India',
+                state: 'Tamil Nadu',
+                city: 'Chennai',
+                zipCode: '600042',
+            },
+            contact: {
+                mobileNumber: '+91 94441 22334',
+                alternativeNumber: '+91 98402 77889',
+                email: 'maintenancemanager@school.com',
+            },
+            professionalInfo: {
+                qualification: 'B.E. Electrical & Electronics Engineering, Certified Energy Auditor',
+                designation: 'Maintenance Manager',
+                schoolName: 'Queen Mira International School',
+                yearsOfExperience: '18 Years',
+                previousOrganization: 'L&T Campus Infrastructure & Facility Services',
+                joiningDate: '2014-06-01',
+            },
+            employmentInfo: {
+                employeeType: 'Full-time',
+                salary: '₹55,000 / month',
+                workShift: 'General (8:00 AM – 5:00 PM / On-call)',
+                assignedCampus: 'All campus blocks, substations, pump stations & DG yard',
+                managedStaff: 'Electricians, Plumbers, HVAC Techs, Carpenters (14 members)',
+                reportingTo: 'Joint Director',
+            },
+            account: {
+                username: 'maintenancemanager',
+                password: 'School@123',
+            },
+            documents: {
+                idProof: 'Aadhaar Card',
+                qualificationCertificate: 'B.E. Degree & BEE Energy Auditor Certificate',
+                experienceCertificate: 'Experience Letter – L&T Facilities',
+            },
+        },
+        attendanceRecords: BASE_ATTENDANCE,
+        recentTasks: [
+            { taskId: 'JD-T-021', title: '11kV HT transformer BDV oil testing and relay check', assignedDate: '12-10-2026', dueDate: '18-10-2026', status: 'Completed' },
+            { taskId: 'JD-T-022', title: 'Hydro-pneumatic booster pump maintenance — Block A & B', assignedDate: '15-10-2026', dueDate: '20-10-2026', status: 'Completed' },
+            { taskId: 'JD-T-023', title: 'Diesel Generator fuel replenishment & 250kVA AMC visit', assignedDate: '18-10-2026', dueDate: '23-10-2026', status: 'In Progress' },        ],
     },
-}
+};
 
 export const EMPLOYEE_ROLE_SLUGS = Object.keys(EMPLOYEE_PROFILES)

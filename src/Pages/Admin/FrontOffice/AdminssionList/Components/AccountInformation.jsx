@@ -22,93 +22,41 @@ const AccountInformation = ({ form, onChange, isEnrolled = false }) => {
     }
 
     return (
-        <div className='flex flex-col gap-y-8 lg:mt-8 mt-2'>
-            <div>
-                <h3 className='text-base font-semibold text-[#0C1E5B] mb-4'>Parent portal login</h3>
-                <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6'>
-                    <div className='flex flex-col gap-y-2 lg:col-span-2'>
-                        <label htmlFor='parentAccountEmail' className='text-base font-medium text-[#1E1E1E]'>
-                            Parent Username / Email ID:
-                        </label>
-                        <input
-                            id='parentAccountEmail'
-                            type='email'
-                            value={form.parentAccountEmail}
-                            onChange={(e) => {
-                                update('parentAccountEmail', e.target.value)
-                                setExistingParentHint(null)
-                            }}
-                            onBlur={handleEmailBlur}
-                            readOnly={isEnrolled}
-                            className={`${inputClass} ${isEnrolled ? 'bg-[#F5F5F5]' : ''}`}
-                            placeholder='parent@example.com'
-                        />
-                        {existingParentHint && (
-                            <p className='text-sm text-[#515DEF]'>{existingParentHint}</p>
-                        )}
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='parentAccountPassword' className='text-base font-medium text-[#1E1E1E]'>
-                            Parent Password:
-                        </label>
-                        <input
-                            id='parentAccountPassword'
-                            type='password'
-                            value={form.parentAccountPassword}
-                            onChange={(e) => update('parentAccountPassword', e.target.value)}
-                            className={inputClass}
-                            placeholder={
-                                existingParentHint
-                                    ? 'Optional for existing parent'
-                                    : form.hasParentAccountPassword
-                                        ? 'Saved — leave blank to keep'
-                                        : 'Enter password (used on enroll)'
-                            }
-                            autoComplete='new-password'
-                        />
-                    </div>
-                </div>
+        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 lg:mt-8 mt-2'>
+            <div className='flex flex-col gap-y-2 lg:col-span-2'>
+                <label htmlFor='parentAccountEmail' className='text-base font-medium text-[#1E1E1E]'>
+                    Username / Email ID:
+                </label>
+                <input
+                    id='parentAccountEmail'
+                    type='email'
+                    value={form.parentAccountEmail}
+                    onChange={(e) => {
+                        update('parentAccountEmail', e.target.value)
+                        setExistingParentHint(null)
+                    }}
+                    onBlur={handleEmailBlur}
+                    readOnly={isEnrolled}
+                    className={`${inputClass} ${isEnrolled ? 'bg-[#F5F5F5]' : ''}`}
+                    placeholder='parent@example.com'
+                />
+                {existingParentHint && (
+                    <p className='text-sm text-[#515DEF]'>{existingParentHint}</p>
+                )}
             </div>
-
-            <div>
-                <h3 className='text-base font-semibold text-[#0C1E5B] mb-1'>Student portal login</h3>
-                <p className='text-sm text-[#6B7280] mb-4'>
-                    Optional. Save email and password here — enroll uses them (no second password prompt).
-                </p>
-                <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6'>
-                    <div className='flex flex-col gap-y-2 lg:col-span-2'>
-                        <label htmlFor='studentAccountEmail' className='text-base font-medium text-[#1E1E1E]'>
-                            Student Username / Email ID:
-                        </label>
-                        <input
-                            id='studentAccountEmail'
-                            type='email'
-                            value={form.studentAccountEmail || ''}
-                            onChange={(e) => update('studentAccountEmail', e.target.value)}
-                            readOnly={isEnrolled}
-                            className={`${inputClass} ${isEnrolled ? 'bg-[#F5F5F5]' : ''}`}
-                            placeholder='student@example.com'
-                        />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='studentAccountPassword' className='text-base font-medium text-[#1E1E1E]'>
-                            Student Password:
-                        </label>
-                        <input
-                            id='studentAccountPassword'
-                            type='password'
-                            value={form.studentAccountPassword || ''}
-                            onChange={(e) => update('studentAccountPassword', e.target.value)}
-                            className={inputClass}
-                            placeholder={
-                                form.hasStudentAccountPassword
-                                    ? 'Saved — leave blank to keep'
-                                    : 'Enter password (used on enroll)'
-                            }
-                            autoComplete='new-password'
-                        />
-                    </div>
-                </div>
+            <div className='flex flex-col gap-y-2'>
+                <label htmlFor='parentAccountPassword' className='text-base font-medium text-[#1E1E1E]'>
+                    Password:
+                </label>
+                <input
+                    id='parentAccountPassword'
+                    type='password'
+                    value={form.parentAccountPassword}
+                    onChange={(e) => update('parentAccountPassword', e.target.value)}
+                    className={inputClass}
+                    placeholder={existingParentHint ? 'Optional for existing parent' : 'Enter password'}
+                    autoComplete='new-password'
+                />
             </div>
         </div>
     )

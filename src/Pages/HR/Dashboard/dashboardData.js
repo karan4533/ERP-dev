@@ -23,28 +23,12 @@ const GROUP_DEPARTMENTS = {
 
 const list = (rows) => (Array.isArray(rows) ? rows : []).filter((item) => item && typeof item === 'object')
 
-/** Accept DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD (API / DateField mix). */
 const parseDate = (value) => {
-    if (!value) return null
-    if (value instanceof Date && !Number.isNaN(value.getTime())) return value
-    const text = String(value).trim()
-    const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
-    if (dmy) {
-        const parsed = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]))
-        return Number.isNaN(parsed.getTime()) ? null : parsed
-    }
-    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (iso) {
-        const parsed = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
-        return Number.isNaN(parsed.getTime()) ? null : parsed
-    }
-    const fallback = new Date(text)
-    return Number.isNaN(fallback.getTime()) ? null : fallback
-}
-
-export const currentDashboardMonth = () => {
-    const index = new Date().getMonth() // 0 = January
-    return DASHBOARD_MONTHS[index] || 'October'
+    const parts = String(value || '').split('-')
+    if (parts.length !== 3) return null
+    const [day, month, year] = parts.map(Number)
+    if (!day || !month || !year) return null
+    return new Date(year, month - 1, day)
 }
 
 const inAcademicYear = (date, yearLabel) => {
@@ -75,59 +59,15 @@ const groupName = (employee) => {
 
 const priorityFor = (count) => (count >= 5 ? 'High Priority' : count >= 2 ? 'Attention' : 'Normal')
 
-const emptyPayrollSummary = () => summarizePayroll([])
-
 const payrollFor = (employees, month, year) => {
-    try {
-        const ids = new Set(list(employees).map((item) => item.id))
-        const rows = list(salaryRows(month, year)).filter((row) => row && ids.has(row.employeeId))
-        return summarizePayroll(rows)
-    } catch {
-        return emptyPayrollSummary()
-    }
+    const ids = new Set(employees.map((item) => item.id))
+    return summarizePayroll(salaryRows(month, year).filter((row) => row && ids.has(row.employeeId)))
 }
 
-const EMPTY_DASHBOARD = {
-    latestDate: '',
-    kpis: [],
-    workforce: [],
-    attendance: { Present: 0, Leave: 0, Absent: 0, 'On Duty': 0, Late: 0, rate: 0, total: 0 },
-    funnel: [],
-    actions: [],
-    departmentRows: [],
-    events: [],
-    payroll: { gross: '₹0', net: '₹0', employer: '₹0', deductions: '₹0', status: 'Unavailable', trend: [] },
-    performance: { ratings: [], completed: 0, pending: 0, bsc: 0, audit: 0 },
-    movement: { joiners: 0, exiting: 0, net: 0, people: [] },
-    training: { scheduled: 0, completed: 0, trained: 0, feedback: 0, completion: 0 },
-    activity: [],
-    error: null,
-}
-
-export const buildHrDashboard = ({ academicYear = '2026–2027', department = 'All Departments', month = currentDashboardMonth(), revision = 0 } = {}) => {
+export const buildHrDashboard = ({ academicYear = '2026–2027', department = 'All Departments', month = 'September', revision = 0 } = {}) => {
     void revision
-    try {
-        return buildHrDashboardUnsafe({ academicYear, department, month })
-    } catch (error) {
-        console.error('HR dashboard build failed', error)
-        return {
-            ...EMPTY_DASHBOARD,
-            error: error?.message || 'HR dashboard data is unavailable.',
-            kpis: [{
-                label: 'Dashboard unavailable',
-                value: '—',
-                hint: 'Refresh after HR API is ready',
-                lines: [error?.message || 'Could not load HR snapshot'],
-                to: '/hr/dashboard',
-            }],
-        }
-    }
-}
-
-const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
-    const monthNumber = MONTH_INDEX[month] || monthOf(new Date())
-    const allEmployees = list(getEmployees())
-    const employees = allEmployees.filter((item) => matchesDepartment(item, department))
+    const monthNumber = MONTH_INDEX[month] || 9
+    const employees = list(getEmployees()).filter((item) => matchesDepartment(item, department))
     const ids = new Set(employees.map((item) => item.id))
     const inScope = (row) => row && (!row.employeeId || ids.has(row.employeeId))
     const dated = (value) => {
@@ -137,18 +77,7 @@ const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
 
     const active = employees.filter((item) => item.status === 'Active' || item.status === 'Probation' || item.status === 'On Leave')
     const inactive = employees.filter((item) => item.status === 'Inactive' || item.status === 'Relieved')
-    // New joiners = employees whose joining date falls in the selected month,
-    // plus onboarding "Joiners" rows for that month (so Accept Offer → Joiners always counts).
-    const joinerById = new Map()
-    employees.filter((item) => dated(item.joiningDate)).forEach((item) => joinerById.set(item.id, item))
-    list(getOnboarding()).forEach((item) => {
-        const employee = allEmployees.find((row) => row.id === item.employeeId)
-        if (!employee || !matchesDepartment(employee, department)) return
-        if (dated(employee.joiningDate) || dated(item.joiningDate)) {
-            joinerById.set(employee.id, employee)
-        }
-    })
-    const joiners = [...joinerById.values()]
+    const joiners = employees.filter((item) => dated(item.joiningDate))
     const attendance = list(getAttendance()).filter((item) => inScope(item) && dated(item.date))
     const latestDate = attendance.map((item) => item.date).sort((a, b) => (parseDate(a) || 0) - (parseDate(b) || 0)).at(-1) || ''
     const today = latestDate ? attendance.filter((item) => item.date === latestDate) : []
@@ -163,8 +92,7 @@ const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
     const attendanceTotal = Object.values(attendanceCounts).reduce((sum, value) => sum + value, 0)
     const attendanceRate = attendanceTotal ? Math.round(((attendanceCounts.Present + attendanceCounts.Late) / attendanceTotal) * 1000) / 10 : 0
 
-    const leaveBundle = getLeaveBundle() || { requests: [], policies: [] }
-    const leaveRequests = list(leaveBundle.requests).filter(inScope)
+    const leaveRequests = list(getLeaveBundle().requests).filter(inScope)
     const pendingLeave = leaveRequests.filter((item) => item.status === 'Pending')
     const onLeaveNow = employees.filter((item) => item.status === 'On Leave')
     const leaveGroups = ['Academics', 'Administration', 'Support'].map((label) => ({
@@ -233,18 +161,12 @@ const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
         ...interviews.map((item) => ({ date: item.date, time: item.time, title: `${item.level} Interview`, detail: item.position, to: '/hr/recruitment/interviews' })),
         ...monthTraining.filter((item) => item.status === 'Scheduled').map((item) => ({ date: item.startDate, time: item.time, title: item.title, detail: item.department, to: '/hr/training' })),
         ...list(getOffers()).filter((item) => dated(item.joiningDate) && item.status !== 'Draft' && (department === 'All Departments' || matchesDepartment({ department: item.department }, department))).map((item) => ({ date: item.joiningDate, time: '', title: 'New joiner', detail: item.position, to: '/hr/onboarding/joiners' })),
-        ...pendingExits
-            .filter((item) => item.lastWorkingDate)
-            .map((item) => ({
-                date: item.lastWorkingDate,
-                time: '',
-                title: 'Exit date',
-                detail: employeeName(item.employeeId),
-                to: '/hr/exit',
-            })),
+        ...pendingReviews.map((item) => ({ date: '30-09-2026', time: '', title: 'Performance review', detail: employeeName(item.employeeId), to: '/hr/performance-review' })),
+        ...pendingExits.map((item) => ({ date: item.lastWorkingDate, time: '', title: 'Exit date', detail: employeeName(item.employeeId), to: '/hr/exit' })),
+        { date: `30-${String(monthNumber).padStart(2, '0')}-2026`, time: '', title: 'Payroll processing', detail: month, to: '/hr/payroll/salary-statement' },
     ].filter((item) => {
         const date = parseDate(item.date)
-        return date && inAcademicYear(date, academicYear) && monthOf(date) === monthNumber
+        return inAcademicYear(date, academicYear) && monthOf(date) === monthNumber
     }).sort((a, b) => (parseDate(a.date) || 0) - (parseDate(b.date) || 0)).filter((item, index, rows) => rows.findIndex((other) => other.date === item.date && other.title === item.title && other.detail === item.detail) === index).slice(0, 6)
 
     const selectedPayroll = payrollFor(employees, month, 2026)
@@ -257,9 +179,7 @@ const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
     const ratings = ratingOrder.map((rating) => ({ rating, count: reviews.filter((item) => item.rating === rating).length }))
     const average = (key) => reviews.length ? Math.round(reviews.reduce((sum, item) => sum + (Number(item[key]) || 0), 0) / reviews.length) : 0
     const completedTraining = training.filter((item) => item.status === 'Completed')
-    const trained = new Set(completedTraining.flatMap((item) => (
-        Array.isArray(item.participantIds) ? item.participantIds : []
-    ))).size
+    const trained = new Set(completedTraining.flatMap((item) => item.participantIds || [])).size
     const feedbackScores = training.flatMap((item) => list(item.feedback).map((row) => Number(row.overall) || 0))
     const movement = [
         ...joiners.map((item) => ({ name: item.name, detail: `Joined — ${item.designation}`, to: `/hr/employee-management/employee-profile/${item.id}` })),
@@ -267,71 +187,15 @@ const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
     ].slice(0, 4)
 
     const activity = [
-        ...list(getNotifications()).slice(0, 4).map((item) => ({
-            id: item.id || `ntf-${item.notificationDate}-${item.title}`,
-            title: item.title,
-            detail: item.message,
-            when: item.notificationDate,
-            module: item.type,
-            to: '/hr/notifications',
-        })),
-        ...list(getOffers()).filter((item) => item.status === 'Issued' || item.status === 'Accepted').slice(0, 2).map((item) => ({
-            id: item.id || `offer-${item.offerDate}-${item.position}-${item.candidateId || ''}`,
-            title: 'Offer issued',
-            detail: item.position,
-            when: item.offerDate,
-            module: 'Recruitment',
-            to: '/hr/onboarding/offers',
-        })),
-        ...leaveRequests.filter((item) => item.status === 'Approved').slice(0, 2).map((item) => ({
-            id: item.id || `leave-${item.fromDate}-${item.employeeId}`,
-            title: 'Leave approved',
-            detail: employeeName(item.employeeId),
-            when: item.fromDate,
-            module: 'Leave',
-            to: '/hr/leave-management',
-        })),
-        ...list(getAdvances()).filter((item) => item.status === 'APPROVED').slice(0, 1).map((item) => ({
-            id: item.id || `adv-${item.requestedDate}-${item.employeeId}`,
-            title: 'Salary advance approved',
-            detail: employeeName(item.employeeId),
-            when: item.requestedDate,
-            module: 'Payroll',
-            to: '/hr/payroll/salary-advance',
-        })),
-        ...completedTraining.slice(0, 1).map((item) => ({
-            id: item.id || `trn-${item.startDate}-${item.title}`,
-            title: 'Training completed',
-            detail: item.title,
-            when: item.startDate,
-            module: 'Training',
-            to: '/hr/training-records',
-        })),
-        ...reviews.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({
-            id: item.id || `rev-${item.period}-${item.employeeId}`,
-            title: 'Performance review submitted',
-            detail: item.employeeId,
-            when: item.period,
-            module: 'Performance',
-            to: '/hr/performance-review',
-        })),
-        ...list(getDisciplinary()).filter((item) => item.acknowledgement === 'Acknowledged').slice(0, 1).map((item) => ({
-            id: item.id || `disc-${item.date}-${item.employeeId}`,
-            title: 'Disciplinary memo acknowledged',
-            detail: employeeName(item.employeeId),
-            when: item.date,
-            module: 'Disciplinary',
-            to: '/hr/disciplinary',
-        })),
-        ...exits.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({
-            id: item.id || `exit-${item.lastWorkingDate}-${item.employeeId}`,
-            title: 'Exit clearance completed',
-            detail: employeeName(item.employeeId),
-            when: item.lastWorkingDate,
-            module: 'Exit',
-            to: '/hr/exit',
-        })),
-    ].map((item, index) => ({ ...item, id: item.id || `activity-${index}` })).slice(0, 8)
+        ...list(getNotifications()).slice(0, 4).map((item) => ({ title: item.title, detail: item.message, when: item.notificationDate, module: item.type, to: '/hr/notifications' })),
+        ...list(getOffers()).filter((item) => item.status === 'Issued' || item.status === 'Accepted').slice(0, 2).map((item) => ({ title: 'Offer issued', detail: item.position, when: item.offerDate, module: 'Recruitment', to: '/hr/onboarding/offers' })),
+        ...leaveRequests.filter((item) => item.status === 'Approved').slice(0, 2).map((item) => ({ title: 'Leave approved', detail: employeeName(item.employeeId), when: item.fromDate, module: 'Leave', to: '/hr/leave-management' })),
+        ...list(getAdvances()).filter((item) => item.status === 'APPROVED').slice(0, 1).map((item) => ({ title: 'Salary advance approved', detail: employeeName(item.employeeId), when: item.requestedDate, module: 'Payroll', to: '/hr/payroll/salary-advance' })),
+        ...completedTraining.slice(0, 1).map((item) => ({ title: 'Training completed', detail: item.title, when: item.startDate, module: 'Training', to: '/hr/training-records' })),
+        ...reviews.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({ title: 'Performance review submitted', detail: item.employeeId, when: item.period, module: 'Performance', to: '/hr/performance-review' })),
+        ...list(getDisciplinary()).filter((item) => item.acknowledgement === 'Acknowledged').slice(0, 1).map((item) => ({ title: 'Disciplinary memo acknowledged', detail: employeeName(item.employeeId), when: item.date, module: 'Disciplinary', to: '/hr/disciplinary' })),
+        ...exits.filter((item) => item.status === 'Completed').slice(0, 1).map((item) => ({ title: 'Exit clearance completed', detail: employeeName(item.employeeId), when: item.lastWorkingDate, module: 'Exit', to: '/hr/exit' })),
+    ].slice(0, 8)
 
     const pendingTotal = actions.reduce((sum, item) => sum + item.count, 0)
     return {
@@ -343,7 +207,7 @@ const buildHrDashboardUnsafe = ({ academicYear, department, month }) => {
             { label: 'Open Positions', value: jobs.reduce((sum, item) => sum + (Number(item.openings) || 1), 0), hint: `${jobs.length} openings`, lines: jobs.slice(0, 2).map((item) => item.position), to: '/hr/recruitment/job-openings' },
             { label: 'Candidates in Recruitment', value: candidates.length, hint: `${stageCount('Interview')} in interview`, lines: [`Screening: ${stageCount('Screening')}`, `Selected: ${stageCount('Selected')}`], to: '/hr/recruitment/candidates' },
             { label: 'Pending HR Actions', value: pendingTotal, hint: 'Across people operations', lines: actions.slice(0, 3).map((item) => `${item.label.split(' ').slice(0, 2).join(' ')} ${item.count}`), to: '/hr/leave-management' },
-            { label: 'New Joiners This Month', value: joiners.length, hint: `${month} · ${pendingExits.length} exiting`, lines: [`Net change: ${joiners.length - pendingExits.length >= 0 ? '+' : ''}${joiners.length - pendingExits.length}`, 'Uses joining date + Joiners list'], to: '/hr/onboarding/joiners' },
+            { label: 'New Joiners This Month', value: joiners.length, hint: `${pendingExits.length} exiting`, lines: [`Net change: ${joiners.length - pendingExits.length >= 0 ? '+' : ''}${joiners.length - pendingExits.length}`], to: '/hr/onboarding/joiners' },
             { label: 'Payroll Cost This Month', value: formatInr(selectedPayroll.totals.grossSalary), hint: month, lines: [`Net ${formatInr(selectedPayroll.totals.netSalary)}`], to: '/hr/payroll/salary-statement' },
         ],
         workforce,

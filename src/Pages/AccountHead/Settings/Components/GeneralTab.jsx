@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'react-toastify'
-import { Percent, RefreshCw, WalletCards } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import {
     ACADEMIC_YEARS,
     BOOKS_CLOSURE_TOGGLES,
@@ -20,23 +20,13 @@ import {
 } from './SettingsShared'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import { formatDisplayDateTime } from '../../financeDomain/financeHelpers'
+import { ConfirmAction, IntegrationNotice } from '../../../../Common/ui'
 
 const GeneralTab = () => {
     const [general, setGeneral] = useState(GENERAL_SETTINGS)
     const [booksClosure, setBooksClosure] = useState(BOOKS_CLOSURE_TOGGLES)
-    const {
-        financePersistence,
-        applyHrConcessions,
-        reloadFinanceFromApi,
-        financeStatus,
-        financeError,
-        bootstrapDemoFeeLedger,
-        installments,
-        students,
-    } = useFinance()
-    const [applyingConcessions, setApplyingConcessions] = useState(false)
-    const [reloading, setReloading] = useState(false)
-    const [bootstrapping, setBootstrapping] = useState(false)
+    const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+    const { resetFinanceDemoData, financePersistence } = useFinance()
 
     const updateGeneral = (key, value) => {
         setGeneral((prev) => ({ ...prev, [key]: value }))
@@ -48,123 +38,99 @@ const GeneralTab = () => {
         )
     }
 
-    const handleApplyHrConcessions = async () => {
-        setApplyingConcessions(true)
-        try {
-            const result = await applyHrConcessions()
-            if (!result?.success) {
-                toast.error(result?.message || 'Could not apply HR concessions.')
-                return
-            }
-            toast.success(`Applied ${result.applied ?? 0} staff-child concession(s) to fee installments.`)
-        } finally {
-            setApplyingConcessions(false)
-        }
-    }
-
-    const handleReloadFromApi = async () => {
-        setReloading(true)
-        try {
-            await reloadFinanceFromApi()
-            toast.success('Finance snapshot reloaded from API.')
-        } catch (error) {
-            toast.error(error?.message || 'Finance API reload failed.')
-        } finally {
-            setReloading(false)
-        }
-    }
-
-    const handleBootstrapFeeLedger = () => {
-        setBootstrapping(true)
-        try {
-            const result = bootstrapDemoFeeLedger({ force: false })
-            if (!result?.success) {
-                toast.error(result?.message || 'Could not bootstrap fee ledger.')
-                return
-            }
-            toast.success(
-                `Fee ledger ready: ${result.structures} structure(s), ${result.installments} unpaid installment(s)`
-                + (result.approvals ? `, ${result.approvals} pending approval(s)` : '')
-                + '. Snapshot will sync to the API.',
-            )
-        } finally {
-            setBootstrapping(false)
-        }
+    const handleResetDemoData = () => {
+        resetFinanceDemoData()
+        setResetConfirmOpen(false)
+        toast.success('Finance demo data has been restored to the original seed.')
     }
 
     return (
         <div className='space-y-6'>
             <SettingsPanel title='Institution & financial year'>
                 <FormGrid>
-                    <FormField label='Institution name'>
+                    <FormField label='School / Institution Name'>
                         <input
-                            className={fieldClass}
+                            type='text'
                             value={general.institutionName}
                             onChange={(event) => updateGeneral('institutionName', event.target.value)}
+                            className={fieldClass}
                         />
                     </FormField>
-                    <FormField label='Academic year'>
-                        <select
+                    <FormField label='GSTIN'>
+                        <input
+                            type='text'
+                            value={general.gstin}
+                            onChange={(event) => updateGeneral('gstin', event.target.value)}
                             className={fieldClass}
+                        />
+                    </FormField>
+                    <FormField label='Current Academic Year'>
+                        <select
                             value={general.academicYear}
                             onChange={(event) => updateGeneral('academicYear', event.target.value)}
+                            className={fieldClass}
                         >
-                            {ACADEMIC_YEARS.map((year) => (
-                                <option key={year} value={year}>{year}</option>
+                            {ACADEMIC_YEARS.map((item) => (
+                                <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
                     </FormField>
-                    <FormField label='Financial year starts'>
+                    <FormField label='Financial Year Start Month'>
                         <select
-                            className={fieldClass}
                             value={general.financialYearStart}
                             onChange={(event) => updateGeneral('financialYearStart', event.target.value)}
+                            className={fieldClass}
                         >
                             {FINANCIAL_YEAR_STARTS.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
                     </FormField>
-                    <FormField label='Term structure'>
-                        <select
-                            className={fieldClass}
-                            value={general.termStructure}
-                            onChange={(event) => updateGeneral('termStructure', event.target.value)}
-                        >
-                            {TERM_STRUCTURES.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                    </FormField>
+                </FormGrid>
+            </SettingsPanel>
+
+            <SettingsPanel title='Currency & formatting'>
+                <FormGrid>
                     <FormField label='Currency'>
                         <select
-                            className={fieldClass}
                             value={general.currency}
                             onChange={(event) => updateGeneral('currency', event.target.value)}
+                            className={fieldClass}
                         >
                             {CURRENCIES.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
                     </FormField>
-                    <FormField label='Date format'>
+                    <FormField label='Number Format'>
                         <select
+                            value={general.numberFormat}
+                            onChange={(event) => updateGeneral('numberFormat', event.target.value)}
                             className={fieldClass}
+                        >
+                            {NUMBER_FORMATS.map((item) => (
+                                <option key={item} value={item}>{item}</option>
+                            ))}
+                        </select>
+                    </FormField>
+                    <FormField label='Date Format'>
+                        <select
                             value={general.dateFormat}
                             onChange={(event) => updateGeneral('dateFormat', event.target.value)}
+                            className={fieldClass}
                         >
                             {DATE_FORMATS.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
                     </FormField>
-                    <FormField label='Number format'>
+                    <FormField label='Default Term Structure'>
                         <select
+                            value={general.termStructure}
+                            onChange={(event) => updateGeneral('termStructure', event.target.value)}
                             className={fieldClass}
-                            value={general.numberFormat}
-                            onChange={(event) => updateGeneral('numberFormat', event.target.value)}
                         >
-                            {NUMBER_FORMATS.map((item) => (
+                            {TERM_STRUCTURES.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -185,53 +151,19 @@ const GeneralTab = () => {
             </SettingsPanel>
 
             <SettingsPanel
-                title='HR staff-child concessions'
-                sub='Pull approved HR concessions onto matching finance fee installments (API).'
-            >
-                <button
-                    type='button'
-                    disabled={applyingConcessions}
-                    onClick={handleApplyHrConcessions}
-                    className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer disabled:opacity-60'
-                >
-                    <Percent size={16} />
-                    {applyingConcessions ? 'Applying…' : 'Apply HR concessions to fees'}
-                </button>
-            </SettingsPanel>
-
-            <SettingsPanel
-                title='Demo fee ledger'
-                sub={`Enrolled finance students: ${students?.length ?? 0}. Installments on campus: ${installments?.length ?? 0}. Creates tuition demand rows (UNPAID) from student classes — does not invent paid collections.`}
-            >
-                <button
-                    type='button'
-                    disabled={bootstrapping || !students?.length}
-                    onClick={handleBootstrapFeeLedger}
-                    className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer disabled:opacity-60'
-                >
-                    <WalletCards size={16} />
-                    {bootstrapping ? 'Building…' : 'Bootstrap campus fee ledger'}
-                </button>
-            </SettingsPanel>
-
-            <SettingsPanel
-                title='Finance API source of truth'
-                sub='Collections, receipts, and books live on the server. Browser storage is cache only and is ignored on load when the API flag is on.'
+                title='Demo data'
+                sub='Local browser storage used by the current frontend prototype.'
             >
                 <div className='space-y-3 text-sm text-[#667085]'>
+                    <IntegrationNotice
+                        state='demo'
+                        title='Finance API not connected'
+                        description='Transactions, receipts, cheque updates, and settings on this screen are stored only in this browser and are not suitable as financial records.'
+                    />
+                    <p>Local demo persistence: <span className='font-medium text-[#1E1E1E]'>Enabled</span></p>
+                    <p>Storage key: <span className='font-mono text-xs text-[#1E1E1E]'>{financePersistence?.storageKey}</span></p>
                     <p>
-                        Status:{' '}
-                        <span className='font-medium text-[#1E1E1E]'>{financeStatus}</span>
-                        {financeError ? ` — ${financeError}` : ''}
-                    </p>
-                    <p>
-                        Mode:{' '}
-                        <span className='font-medium text-[#1E1E1E]'>
-                            {financePersistence?.mode || (financePersistence?.apiEnabled ? 'api' : 'offline')}
-                        </span>
-                    </p>
-                    <p>
-                        Last API save:{' '}
+                        Last saved:{' '}
                         <span className='text-[#1E1E1E]'>
                             {financePersistence?.lastSavedAt
                                 ? formatDisplayDateTime(financePersistence.lastSavedAt)
@@ -239,19 +171,28 @@ const GeneralTab = () => {
                         </span>
                     </p>
                     <p className='text-xs'>
-                        Gateway / WhatsApp / email receipt send remain <code>queued_stub</code> until real provider keys are configured — the UI must not treat stubs as delivered.
+                        Clearing site data, using another browser, or another device removes this demo state.
+                        Real production data must live in a Finance API and database.
                     </p>
                     <button
                         type='button'
-                        disabled={reloading}
-                        onClick={handleReloadFromApi}
-                        className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer disabled:opacity-60'
+                        onClick={() => setResetConfirmOpen(true)}
+                        className='inline-flex items-center gap-2 text-sm font-medium text-[#FF5722] border border-[#FF5722] px-4 py-2 rounded-md hover:bg-[#FF5722] hover:text-white transition-colors cursor-pointer'
                     >
-                        <RefreshCw size={16} />
-                        {reloading ? 'Reloading…' : 'Reload snapshot from API'}
+                        <RotateCcw size={16} />
+                        Reset Finance Demo Data
                     </button>
                 </div>
             </SettingsPanel>
+            <ConfirmAction
+                open={resetConfirmOpen}
+                onClose={() => setResetConfirmOpen(false)}
+                onConfirm={handleResetDemoData}
+                title='Reset all browser-stored finance data?'
+                description='This removes local transactions, receipts, cheque updates and manual changes, then restores the original seed. Connected backend records are not affected.'
+                confirmLabel='Reset local finance data'
+                tone='danger'
+            />
         </div>
     )
 }

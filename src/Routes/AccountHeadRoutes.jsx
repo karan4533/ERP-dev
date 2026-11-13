@@ -1,3 +1,5 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/AccountHead/Dashboard/Dashboard'
@@ -32,6 +34,8 @@ const AccountHeadRoutes = () => {
             <Route path="/account-head/mfp" element={<MfpPlaceholder />} />
             <Route path="/account-head/fee-projection" element={<FeeProjectionPanel />} />
             {TaskManagementRoutes({ basePath: '/account-head' })}
+                        <Route path="/account-head/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            {EnterpriseOperationsRoutes({ basePath: '/account-head', role: 'accounthead' })}
             <Route path="*" element={<Navigate to="/account-head/dashboard" replace />} />
         </ReactRoutes>
     )

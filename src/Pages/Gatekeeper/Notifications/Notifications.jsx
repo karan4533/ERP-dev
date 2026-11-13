@@ -1,4 +1,5 @@
-import StaffNotificationsPage from '../../../Common/Notifications/StaffNotificationsPage'
+import React from 'react'
+import NotificationsListView from '../../../Common/Notifications/NotificationsListView'
 import {
     STAFF_NOTIFICATIONS,
     STAFF_NOTIFICATION_TYPES,
@@ -6,11 +7,10 @@ import {
 } from '../../../Common/Notifications/staffNotificationsData'
 
 const Notifications = () => (
-    <StaffNotificationsPage
-        fallback={STAFF_NOTIFICATIONS}
+    <NotificationsListView
+        notifications={STAFF_NOTIFICATIONS}
         notificationTypes={STAFF_NOTIFICATION_TYPES}
         typeBadgeColor={staffTypeBadgeColor}
-        title="Gate Keeper Notifications"
     />
 )
 

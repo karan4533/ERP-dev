@@ -7,35 +7,17 @@ import {
     TC_STATUSES,
     getAllTcRequests,
     getPendingSuperAdminCount,
-    hydrateTcRequestsFromApi,
     statusBadgeColor,
 } from '../../../Common/TcRequest/tcRequestData'
-import { canUseTcApi } from '../../../services/tcApi'
 
 const TcRequestApprovalList = () => {
     const location = useLocation()
-    const [requests, setRequests] = useState(() => (canUseTcApi() ? [] : getAllTcRequests()))
+    const [requests, setRequests] = useState([])
     const [statusFilter, setStatusFilter] = useState('')
     const [exportModal, setExportModal] = useState(false)
 
-    const [loadError, setLoadError] = useState('')
-
     useEffect(() => {
-        if (!canUseTcApi()) return undefined
-        let active = true
-        hydrateTcRequestsFromApi()
-            .then((rows) => {
-                if (active) {
-                    setRequests(rows)
-                    setLoadError('')
-                }
-            })
-            .catch((error) => {
-                if (active) setLoadError(error?.message || 'TC requests could not be loaded.')
-            })
-        return () => {
-            active = false
-        }
+        setRequests(getAllTcRequests())
     }, [location.key])
 
     const pendingCount = useMemo(() => getPendingSuperAdminCount(), [requests])
@@ -52,7 +34,6 @@ const TcRequestApprovalList = () => {
                 <p className='text-sm text-[#667085] mt-1'>
                     Super Admin approval for Transfer Certificate requests forwarded by PRM. Approved TCs are sent to the student portal.
                 </p>
-                {loadError ? <p className='text-sm text-[#B42318] mt-2'>{loadError}</p> : null}
             </div>
 
             {pendingCount > 0 ? (
@@ -146,19 +127,7 @@ const TcRequestApprovalList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='tc-approvals'
-                rows={filteredRequests.map((r) => ({
-                    requestId: r.requestId,
-                    studentName: r.studentName,
-                    admissionNumber: r.admissionNumber,
-                    status: r.status,
-                    forwardedOn: r.forwardedOn,
-                }))}
-                exportDescription={<>You are exporting {filteredRequests.length} record{filteredRequests.length === 1 ? '' : 's'}.</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { Check, Search, X, XCircle } from 'lucide-react'
-import { toast } from 'react-toastify'
 import {
+    PENDING_REQUESTS,
+    PENDING_SUMMARY,
     departmentBadgeColor,
 } from '../approvalsData'
 import {
@@ -10,13 +11,10 @@ import {
     TableCard,
     TablePagination,
     UserAvatar,
-    tdClass,
-    thClass,
 } from './ApprovalsShared'
-import { useFinance } from '../../financeDomain/FinanceContext'
+import { tdClass, thClass } from './approvalStyles'
 
-export const ReviewRequestModal = ({ request, isOpen, onClose, onDecide }) => {
-    const [remarks, setRemarks] = useState('')
+export const ReviewRequestModal = ({ request, isOpen, onClose }) => {
     if (!isOpen || !request?.detail) return null
 
     const { detail } = request
@@ -60,8 +58,6 @@ export const ReviewRequestModal = ({ request, isOpen, onClose, onDecide }) => {
                         <label className='text-sm font-medium text-[#808080]'>Remarks (optional)</label>
                         <textarea
                             rows={2}
-                            value={remarks}
-                            onChange={(event) => setRemarks(event.target.value)}
                             placeholder='Add a note for the record...'
                             className='w-full mt-2 text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 focus:outline-none focus:border-[#515DEF] resize-none'
                         />
@@ -71,7 +67,7 @@ export const ReviewRequestModal = ({ request, isOpen, onClose, onDecide }) => {
                 <div className='flex justify-end gap-3 px-6 py-4 border-t border-[#F2F4F7]'>
                     <button
                         type='button'
-                        onClick={() => onDecide?.('rejected', remarks)}
+                        onClick={onClose}
                         className='inline-flex items-center gap-2 text-sm font-medium text-[#FF5722] border border-[#FF5722] px-4 py-2 rounded-md hover:bg-[#FF5722] hover:text-white transition-colors cursor-pointer'
                     >
                         <XCircle size={16} />
@@ -79,7 +75,7 @@ export const ReviewRequestModal = ({ request, isOpen, onClose, onDecide }) => {
                     </button>
                     <button
                         type='button'
-                        onClick={() => onDecide?.('approved', remarks)}
+                        onClick={onClose}
                         className='inline-flex items-center gap-2 bg-[#4CAF50] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
                     >
                         <Check size={16} />
@@ -91,95 +87,12 @@ export const ReviewRequestModal = ({ request, isOpen, onClose, onDecide }) => {
     )
 }
 
-const parseAmount = (value) => {
-    const digits = String(value ?? '').replace(/[^\d.]/g, '')
-    return Number(digits) || 0
-}
-
-const formatInr = (amount) => {
-    try {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0,
-        }).format(amount)
-    } catch {
-        return `₹${amount}`
-    }
-}
-
 const PendingTab = () => {
-    const { approvals, decideApproval, syncTransportOpsIntoFinance } = useFinance()
     const [reviewRequest, setReviewRequest] = useState(null)
-    const [busyId, setBusyId] = useState('')
-
-    useEffect(() => {
-        syncTransportOpsIntoFinance?.().catch(() => {})
-        // Mount-only: sync is throttled inside FinanceContext.
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional once on open
-    }, [])
-
-    const pending = useMemo(
-        () => (approvals || []).filter((row) => !row.status || String(row.status).toLowerCase() === 'pending'),
-        [approvals],
-    )
-
-    const runDecision = async (approvalId, decision, remarks = '') => {
-        setBusyId(approvalId)
-        try {
-            const result = await decideApproval({ approvalId, decision, remarks })
-            if (result?.success === false) {
-                toast.error(result.message || 'Could not update approval.')
-                return
-            }
-            toast.success(decision === 'approved' ? 'Request approved.' : 'Request rejected.')
-        } catch (err) {
-            toast.error(err?.message || 'Could not update approval.')
-        } finally {
-            setBusyId('')
-        }
-    }
-    const summaryCards = useMemo(() => {
-        const rows = approvals || []
-        const pendingRows = rows.filter((row) => !row.status || row.status === 'Pending')
-        const approvedRows = rows.filter((row) => String(row.status || '').toLowerCase() === 'approved')
-        const rejectedRows = rows.filter((row) => String(row.status || '').toLowerCase() === 'rejected')
-        const pendingValue = pendingRows.reduce((sum, row) => sum + parseAmount(row.amount), 0)
-        const approvedValue = approvedRows.reduce((sum, row) => sum + parseAmount(row.amount), 0)
-        const rejectedValue = rejectedRows.reduce((sum, row) => sum + parseAmount(row.amount), 0)
-        return [
-            {
-                label: 'Pending Approvals',
-                value: String(pendingRows.length),
-                sub: `${formatInr(pendingValue)} total value`,
-                subTone: 'danger',
-                iconTone: 'danger',
-            },
-            {
-                label: 'Approved (campus snapshot)',
-                value: String(approvedRows.length),
-                sub: `${formatInr(approvedValue)} disbursed`,
-                subTone: 'success',
-                iconTone: 'success',
-            },
-            {
-                label: 'Rejected (campus snapshot)',
-                value: String(rejectedRows.length),
-                sub: `${formatInr(rejectedValue)} value`,
-                iconTone: 'warning',
-            },
-            {
-                label: 'Live finance SoT',
-                value: 'API',
-                sub: 'Live approvals only — demo APR-11xx samples are stripped',
-                iconTone: 'success',
-            },
-        ]
-    }, [approvals])
 
     return (
         <div className='space-y-6'>
-            <SummaryCards cards={summaryCards} />
+            <SummaryCards cards={PENDING_SUMMARY} />
 
             <TableCard
                 title='Pending approval requests'
@@ -205,7 +118,7 @@ const PendingTab = () => {
                         </select>
                     </div>
                 )}
-                footer={<TablePagination summary={`${pending.length} pending`} />}
+                footer={<TablePagination summary='16 pending of 82 total' />}
             >
                 <table className='w-full text-sm text-left mt-4'>
                     <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -220,7 +133,7 @@ const PendingTab = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {pending.map((row) => (
+                        {PENDING_REQUESTS.map((row) => (
                             <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                 <td className={`${tdClass} rounded-s-lg font-mono text-xs text-[#1E1E1E]`}>{row.id}</td>
                                 <td className={tdClass}>
@@ -236,21 +149,11 @@ const PendingTab = () => {
                                 <td className={tdClass}>{row.raisedOn}</td>
                                 <td className={`${tdClass} rounded-e-lg`}>
                                     <ApproveRejectActions
-                                        disabled={busyId === row.id}
                                         onReview={row.detail ? () => setReviewRequest(row) : undefined}
-                                        onApprove={() => runDecision(row.id, 'approved')}
-                                        onReject={() => runDecision(row.id, 'rejected')}
                                     />
                                 </td>
                             </tr>
                         ))}
-                        {!pending.length && (
-                            <tr>
-                                <td colSpan={7} className={`${tdClass} text-center py-8 text-[#667085]`}>
-                                    No pending approvals. Transport claims sync from TM / Principal when available.
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </TableCard>
@@ -259,11 +162,6 @@ const PendingTab = () => {
                 request={reviewRequest}
                 isOpen={Boolean(reviewRequest)}
                 onClose={() => setReviewRequest(null)}
-                onDecide={async (decision, remarks) => {
-                    if (!reviewRequest) return
-                    await runDecision(reviewRequest.id, decision, remarks)
-                    setReviewRequest(null)
-                }}
             />
         </div>
     )

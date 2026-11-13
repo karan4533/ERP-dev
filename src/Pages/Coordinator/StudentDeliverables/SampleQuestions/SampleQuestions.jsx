@@ -12,12 +12,11 @@ import {
     DEFAULT_ROUTE_BASE,
     filterSampleQuestions,
     getSampleQuestions,
-    hydrateSampleQuestionsFromApi,
-    SAMPLE_QUESTIONS_UPDATED_EVENT,
     SECTIONS,
     SUBJECTS,
 } from './sampleQuestionsData'
-import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
+import { useAuth } from '../../../../context/AuthContext'
+import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
 
 const emptyFilters = {
     search: '',
@@ -56,19 +55,10 @@ const SampleQuestionsEmpty = ({ routeBase, viewMode }) => {
 }
 
 const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const isStudent = viewMode === 'student'
     const [filters, setFilters] = useState(emptyFilters)
-    const assignments = useTeacherAssignments()
-    const staffFilterOptions = useMemo(() => ({
-        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
-        classes: assignments.classes?.length ? assignments.classes : CLASSES,
-        sections: filters.className
-            ? (assignments.sectionsFor?.(filters.className) || [])
-            : (assignments.assignments?.length
-                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
-                : SECTIONS),
-    }), [assignments, filters.className])
-
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
@@ -118,7 +108,7 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {staffFilterOptions.subjects.map((subject) => (
+                            {SUBJECTS.map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -128,11 +118,11 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                         <select
                             id='class-filter'
                             value={filters.className}
-                            onChange={(event) => setFilters((current) => ({ ...current, className: event.target.value, section: '' }))}
+                            onChange={(event) => updateFilter('className', event.target.value)}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {staffFilterOptions.classes.map((item) => (
+                            {CLASSES.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -146,7 +136,7 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {staffFilterOptions.sections.map((item) => (
+                            {SECTIONS.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -237,13 +227,15 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                                                     >
                                                         Edit
                                                     </button>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => setDeleteRequestModal(true)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Delete
-                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => setDeleteRequestModal(true)}
+                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                         </Dropdown>
@@ -274,7 +266,7 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </>
     )
 }
@@ -284,16 +276,7 @@ const SampleQuestions = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' 
     const [items, setItems] = useState(() => getSampleQuestions())
 
     useEffect(() => {
-        let cancelled = false
-        hydrateSampleQuestionsFromApi().finally(() => {
-            if (!cancelled) setItems(getSampleQuestions())
-        })
-        const onUpdate = () => setItems(getSampleQuestions())
-        window.addEventListener(SAMPLE_QUESTIONS_UPDATED_EVENT, onUpdate)
-        return () => {
-            cancelled = true
-            window.removeEventListener(SAMPLE_QUESTIONS_UPDATED_EVENT, onUpdate)
-        }
+        setItems(getSampleQuestions())
     }, [location.key])
 
     if (items.length === 0) {

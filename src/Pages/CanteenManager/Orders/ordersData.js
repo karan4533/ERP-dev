@@ -1,5 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-const DEFAULT_ORDERS = [
+export const ORDERS = [
     {
         orderId: 'ORD-1042',
         customerName: 'Rahul Sharma',
@@ -84,17 +83,3 @@ export const orderStatusBadgeColor = {
     Completed: 'bg-[#4CAF5033] text-[#4CAF50]',
     Cancelled: 'bg-[#FF000033] text-[#FF0000]',
 }
-
-export const ORDERS_STORAGE_KEY = 'schoolerp-canteen-orders-v1'
-export function getOrders() {
-    return ensureCampusSeed('schoolerp-canteen-orders-v1', DEFAULT_ORDERS)
-}
-export function saveOrders(rows) {
-    return saveCampusJson('schoolerp-canteen-orders-v1', rows)
-}
-export function hydrateOrdersFromApi() {
-    if (!usesCampusApiForKey('schoolerp-canteen-orders-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-canteen-orders-v1', DEFAULT_ORDERS)
-}
-export const ORDERS = DEFAULT_ORDERS
-

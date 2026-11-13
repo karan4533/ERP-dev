@@ -1,13 +1,6 @@
-import { getStudentGatePasses, hydrateStudentGatePassesFromApi } from '../../FrontOffice/GatePass/gatePassData'
-import {
-    getHostelGatePasses,
-    hydrateHostelGatePassesFromApi,
-} from '../../FrontOffice/HostelGatePass/hostelGatePassData'
-import {
-    getMaterialGatePasses,
-    hydrateMaterialGatePassesFromApi,
-} from '../../FrontOffice/MaterialGatePass/materialGatePassData'
-import { frontOfficeApiOn } from '../../FrontOffice/frontOfficeStore'
+import noProfile from '../../../assets/images/no-profile.png'
+import { getHostelGatePasses } from '../../FrontOffice/HostelGatePass/hostelGatePassData'
+import { getMaterialGatePasses } from '../../FrontOffice/MaterialGatePass/materialGatePassData'
 
 export const ROUTE_BASE = '/super-admin/gate-pass'
 
@@ -29,6 +22,45 @@ export const passCategoryBadgeColor = {
     Material: 'bg-[#FF980033] text-[#FF9800]',
 }
 
+const STUDENT_GATE_PASSES = [
+    {
+        id: 'student-SGP-001',
+        passCategory: 'Student',
+        passId: 'SGP-001',
+        profile: noProfile,
+        studentId: 'STD-NO1845',
+        studentName: 'Sandy Selva',
+        classSection: '10 A',
+        gender: 'Male',
+        mobileNumber: '9944076993',
+        city: 'Pudukkottai',
+        reason: 'Going to Hospital',
+        date: '20-05-2026',
+        outTime: '10:00 AM',
+        status: 'Approved',
+        createdBy: 'Front Office',
+        createdAt: '20-05-2026 09:00 AM',
+    },
+    {
+        id: 'student-SGP-002',
+        passCategory: 'Student',
+        passId: 'SGP-002',
+        profile: noProfile,
+        studentId: 'STD-NO1846',
+        studentName: 'John Milton',
+        classSection: '12 B',
+        gender: 'Male',
+        mobileNumber: '9944076993',
+        city: 'Madurai',
+        reason: 'Going to Home Town',
+        date: '24-05-2026',
+        outTime: '12:00 PM',
+        status: 'Pending',
+        createdBy: 'Front Office',
+        createdAt: '24-05-2026 08:30 AM',
+    },
+]
+
 const toListItem = (record) => ({
     id: record.id,
     passCategory: record.passCategory,
@@ -42,28 +74,8 @@ const toListItem = (record) => ({
     details: record,
 })
 
-/** Pull student / hostel / material gate passes from the same Front Office SoT (API when signed in). */
-export const hydrateAllGatePassesFromApi = async () => {
-    if (frontOfficeApiOn()) {
-        await Promise.all([
-            hydrateStudentGatePassesFromApi(),
-            hydrateHostelGatePassesFromApi(),
-            hydrateMaterialGatePassesFromApi(),
-        ])
-    }
-    return getAllGatePasses()
-}
-
 export const getAllGatePasses = () => {
-    const studentItems = getStudentGatePasses().map((record) =>
-        toListItem({
-            ...record,
-            id: `student-${record.id}`,
-            passCategory: 'Student',
-            passId: record.gatePassId || record.id,
-            createdBy: record.createdBy || 'Front Office',
-        }),
-    )
+    const studentItems = STUDENT_GATE_PASSES.map(toListItem)
     const hostelItems = getHostelGatePasses().map((record) =>
         toListItem({
             ...record,

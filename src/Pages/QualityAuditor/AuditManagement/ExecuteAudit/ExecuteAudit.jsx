@@ -11,13 +11,14 @@ import StickyAuditFooter from './Components/StickyAuditFooter'
 import SubmitValidationModal from './Components/SubmitValidationModal'
 import StructuredRecommendations from './Components/StructuredRecommendations'
 import SopPopup from './Components/SopPopup'
+import AuditExecutionContract from '../../../../Common/AuditGovernance/AuditExecutionContract'
+import { getAuditSubmissionGaps } from '../../../../Common/AuditGovernance/auditGovernanceState.js'
 import {
     loadExecuteAuditDraft,
     saveExecuteAuditDraft,
     computeScores,
     computeFindings,
     computeProgress,
-    getUnansweredQuestions,
     buildSectionStats,
     emptyObservation,
     isNonCompliant,
@@ -67,6 +68,11 @@ const ExecuteAudit = () => {
     const sectionStats = useMemo(
         () => buildSectionStats(draft.sections, draft.responses, draft.observations),
         [draft.sections, draft.responses, draft.observations],
+    )
+
+    const submissionGaps = useMemo(
+        () => getAuditSubmissionGaps(draft),
+        [draft],
     )
 
     const persist = useCallback((nextDraft) => {
@@ -146,7 +152,7 @@ const ExecuteAudit = () => {
 
     const handleSubmitObservation = (parameterId) => {
         const target = draftRef.current.observations.find((obs) => obs.parameterId === parameterId)
-        if (!target?.title?.trim() || !target?.assignTo) return
+        if (!target?.title?.trim() || !target?.description?.trim() || !target?.assignTo || !target?.dueDate) return
 
         persist({
             ...draftRef.current,
@@ -178,33 +184,28 @@ const ExecuteAudit = () => {
         const next = {
             ...draft,
             header: { ...draft.header, status: 'Submitted' },
-            timeline: markTimelineStage(
-                markTimelineStage(draft.timeline, 'Submitted'),
-                'Verified',
-            ),
+            timeline: markTimelineStage(draft.timeline, 'Submitted'),
         }
         persist(next)
         if (draft.header.auditId) {
-            updateAuditStatus(draft.header.auditId, 'Completed')
+            updateAuditStatus(draft.header.auditId, 'Submitted')
         }
         navigate('/quality-auditor/audit-management/my-audits')
     }
 
     const handleSubmit = () => {
-        const unanswered = getUnansweredQuestions(draft.sections, draft.responses)
-        if (unanswered.length > 0) {
+        if (submissionGaps.length > 0) {
             setSubmitModal(true)
             return
         }
         finalizeSubmit()
     }
 
-    const handleReviewUnanswered = () => {
+    const handleReviewBlockers = () => {
         setSubmitModal(false)
-        const unanswered = getUnansweredQuestions(draft.sections, draft.responses)
-        if (unanswered.length === 0) return
+        const first = submissionGaps.find((item) => item.sectionId)
+        if (!first) return
 
-        const first = unanswered[0]
         setActiveSectionId(first.sectionId)
         setTimeout(() => {
             checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -223,6 +224,8 @@ const ExecuteAudit = () => {
                 timeline={draft.timeline}
                 lastSavedAt={draft.lastSavedAt}
             />
+
+            <AuditExecutionContract header={draft.header} sections={draft.sections} responses={draft.responses} observations={draft.observations} auditMode='quality' />
 
             <AuditProgressBar progress={progress} scores={scores} />
 
@@ -279,12 +282,8 @@ const ExecuteAudit = () => {
 
             <SubmitValidationModal
                 open={submitModal}
-                unansweredCount={progress.unanswered}
-                onContinue={() => {
-                    setSubmitModal(false)
-                    finalizeSubmit()
-                }}
-                onReview={handleReviewUnanswered}
+                gaps={submissionGaps}
+                onReview={handleReviewBlockers}
                 onClose={() => setSubmitModal(false)}
             />
 

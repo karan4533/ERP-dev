@@ -1,210 +1,99 @@
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, EllipsisIcon, Download } from 'lucide-react'
-import Dropdown from '../../../Common/CommonComponents/Dropdown'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { ArrowRight, Download, RotateCcw, Search } from 'lucide-react'
 import {
-    getFindings, hydrateFindingsFromApi,
-    DEPARTMENTS,
-    SEVERITY_OPTIONS,
-    FINDING_STATUSES,
-    COMPLIANCE_STATUSES,
-    severityBadgeColor,
-    statusBadgeColor,
-    complianceBadgeColor,
-} from './findingsComplianceData'
+    IntegrationNotice,
+    PageHeader,
+    ResponsiveRecordList,
+    StatusBadge,
+} from '../../../Common/ui'
+import { filterGovernanceFindings } from '../../../Common/AuditGovernance/auditGovernanceState'
+import { FINDINGS, DEPARTMENTS, SEVERITY_OPTIONS } from './findingsComplianceData'
+
+const INITIAL_FILTERS = {
+    query: '', department: '', severity: '', rcaStatus: '', capaStatus: '', verificationStatus: '', closureStatus: '',
+}
+
+const selectClass = 'min-h-10 w-full rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 py-2 text-sm text-[var(--erp-ink)] outline-none focus:border-[var(--erp-primary)] focus:ring-2 focus:ring-[var(--erp-primary)]/15'
+
+const FindingLink = ({ finding }) => (
+    <NavLink to={`/joint-director-audit/findings-compliance/view/${finding.id}`} className='inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--erp-primary)] px-3 py-1.5 text-sm font-semibold text-[var(--erp-primary)] hover:bg-[var(--erp-primary)] hover:text-white'>
+        Review record <ArrowRight size={15} aria-hidden='true' />
+    </NavLink>
+)
+
+const FilterSelect = ({ label, value, options, onChange }) => (
+    <label>
+        <span className='mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--erp-muted)]'>{label}</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)} className={selectClass}>
+            <option value=''>All</option>
+            {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+    </label>
+)
 
 const FindingsComplianceList = () => {
-    const [findings, setFindings] = useState(() => getFindings())
-    useEffect(() => {
-        hydrateFindingsFromApi().finally(() => setFindings(getFindings()))
-    }, [])
+    const [filters, setFilters] = useState(INITIAL_FILTERS)
+    const records = useMemo(() => filterGovernanceFindings(FINDINGS, filters), [filters])
+    const updateFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }))
 
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
-    const [exportModal, setExportModal] = useState(false)
+    const columns = [
+        { key: 'id', label: 'Finding', render: (row) => <span className='font-semibold text-[var(--erp-primary)]'>{row.id}</span> },
+        { key: 'title', label: 'Risk / department', render: (row) => <span>{row.title}<small className='mt-0.5 block font-normal text-[var(--erp-muted)]'>{row.department} · {row.auditId}</small></span> },
+        { key: 'severity', label: 'Severity', render: (row) => <StatusBadge status={row.severity} /> },
+        { key: 'owner', label: 'Owner / due', render: (row) => <span>{row.owner}<small className='mt-0.5 block font-normal text-[var(--erp-muted)]'>Due {row.dueDate}</small></span> },
+        { key: 'rcaStatus', label: 'RCA', render: (row) => <StatusBadge status={row.rcaStatus} /> },
+        { key: 'capaStatus', label: 'CAPA', render: (row) => <StatusBadge status={row.capaStatus} /> },
+        { key: 'verificationStatus', label: 'Verification', render: (row) => <StatusBadge status={row.verificationStatus} /> },
+        { key: 'closureStatus', label: 'Closure', render: (row) => <StatusBadge status={row.closureStatus} /> },
+    ]
 
     return (
         <section>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <p className='text-sm text-[#667085] mb-4'>
-                    Track every audit observation and corrective action. Monitor severity, ownership, and compliance closure across departments.
-                </p>
-                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
-                        Clear Filters
-                    </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
+            <PageHeader
+                title='Findings & compliance'
+                description='Review risk, ownership, root cause, corrective action, independent verification and closure as one governed record.'
+                context={`${records.length} of ${FINDINGS.length} reference findings`}
+                actions={<button type='button' disabled title='Requires reporting and document services' className='inline-flex min-h-10 cursor-not-allowed items-center gap-2 rounded-lg bg-[var(--erp-primary)] px-4 py-2 text-sm font-semibold text-white opacity-50'><Download size={16} aria-hidden='true' /> Export</button>}
+            />
+
+            <IntegrationNotice state='demo' title='Reference audit records' description='These records are static frontend reference data. Authoritative evidence files, auditee submissions, immutable history, reminders, verification signatures, closure approvals and export require the audit backend.' className='mb-5' />
+
+            <div className='mb-5 rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white p-4 shadow-[var(--erp-shadow-subtle)]'>
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4'>
+                    <label className='sm:col-span-2 xl:col-span-2'>
+                        <span className='mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--erp-muted)]'>Search finding, audit or owner</span>
+                        <span className='relative block'>
+                            <Search className='pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--erp-muted)]' size={16} aria-hidden='true' />
+                            <input value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} className={`${selectClass} pl-9`} placeholder='e.g. transport, FND-2026-038' />
+                        </span>
+                    </label>
+                    <FilterSelect label='Department' value={filters.department} options={DEPARTMENTS} onChange={(value) => updateFilter('department', value)} />
+                    <FilterSelect label='Severity' value={filters.severity} options={SEVERITY_OPTIONS} onChange={(value) => updateFilter('severity', value)} />
+                    <FilterSelect label='RCA' value={filters.rcaStatus} options={['Not recorded', 'Pending', 'Submitted', 'Approved']} onChange={(value) => updateFilter('rcaStatus', value)} />
+                    <FilterSelect label='CAPA' value={filters.capaStatus} options={['Not started', 'In progress', 'Completed']} onChange={(value) => updateFilter('capaStatus', value)} />
+                    <FilterSelect label='Verification' value={filters.verificationStatus} options={['Pending', 'Verified']} onChange={(value) => updateFilter('verificationStatus', value)} />
+                    <FilterSelect label='Closure' value={filters.closureStatus} options={['Open', 'Closed']} onChange={(value) => updateFilter('closureStatus', value)} />
                 </div>
-                <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type='text' id='search' placeholder='Finding ID, audit ID, title...' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='department' className='text-base font-medium text-[#808080]'>Department</label>
-                        <select id='department' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value=''>All</option>
-                            {DEPARTMENTS.map((dept) => (
-                                <option key={dept} value={dept}>{dept}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='severity' className='text-base font-medium text-[#808080]'>Severity</label>
-                        <select id='severity' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value=''>All</option>
-                            {SEVERITY_OPTIONS.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='status' className='text-base font-medium text-[#808080]'>Status</label>
-                        <select id='status' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value=''>All</option>
-                            {FINDING_STATUSES.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='compliance' className='text-base font-medium text-[#808080]'>Compliance Status</label>
-                        <select id='compliance' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value=''>All</option>
-                            {COMPLIANCE_STATUSES.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
-                        <div className='relative w-full'>
-                            <DatePicker
-                                selected={fromDate}
-                                onChange={(date) => setFromDate(date)}
-                                isClearable
-                                showMonthYearDropdown
-                                scrollableMonthYearDropdown
-                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
-                            />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>To</label>
-                        <div className='relative'>
-                            <DatePicker
-                                selected={toDate}
-                                onChange={(date) => setToDate(date)}
-                                isClearable
-                                showMonthYearDropdown
-                                scrollableMonthYearDropdown
-                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
-                            />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
+                <div className='mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--erp-line)] pt-4'>
+                    <p className='text-sm text-[var(--erp-slate)]' aria-live='polite'>{records.length} matching findings</p>
+                    <button type='button' onClick={() => setFilters(INITIAL_FILTERS)} className='inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-3 py-1.5 text-sm font-semibold text-[var(--erp-slate)] hover:border-[var(--erp-primary)] hover:text-[var(--erp-primary)]'><RotateCcw size={15} aria-hidden='true' /> Reset filters</button>
                 </div>
             </div>
 
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Findings & Compliance List</h2>
-                    <button
-                        type='button'
-                        onClick={() => setExportModal(true)}
-                        className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                    >
-                        <Download size={16} />
-                        Export
-                    </button>
-                </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
-                <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left rtl:text-right'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                            <tr>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Finding ID</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Audit ID</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Department</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Finding Title</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Severity</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Responsible Person</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Due Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Compliance Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {findings.map((item) => (
-                                <tr key={item.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{item.id}</td>
-                                    <td className='px-2 py-4 whitespace-nowrap'>{item.auditId}</td>
-                                    <td className='px-2 py-4'>{item.department}</td>
-                                    <td className='px-2 py-4 max-w-[180px] truncate' title={item.title}>{item.title}</td>
-                                    <td className='px-2 py-4'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${severityBadgeColor[item.severity]}`}>
-                                            {item.severity}
-                                        </span>
-                                    </td>
-                                    <td className='px-2 py-4 whitespace-nowrap'>{item.responsiblePerson}</td>
-                                    <td className='px-2 py-4 whitespace-nowrap'>{item.dueDate}</td>
-                                    <td className='px-2 py-4'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[item.status]}`}>
-                                            {item.status}
-                                        </span>
-                                    </td>
-                                    <td className='px-2 py-4'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${complianceBadgeColor[item.complianceStatus]}`}>
-                                            {item.complianceStatus}
-                                        </span>
-                                    </td>
-                                    <td className='px-2 py-4 text-center rounded-e-lg'>
-                                        <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                            <NavLink
-                                                to={`/joint-director-audit/findings-compliance/view/${item.id}`}
-                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                            >
-                                                View
-                                            </NavLink>
-                                        </Dropdown>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+            <div className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white shadow-[var(--erp-shadow-subtle)]'>
+                {records.length ? <>
+                    <ResponsiveRecordList rows={records} columns={columns} getRowKey={(row) => row.id} renderActions={(row) => <FindingLink finding={row} />} />
+                    <div className='hidden overflow-x-auto md:block'>
+                        <table className='w-full min-w-[1120px] text-left text-sm'>
+                            <thead className='bg-[var(--erp-canvas)] text-xs uppercase tracking-wide text-[var(--erp-navy)]'><tr>{columns.map((column) => <th key={column.key} className='px-4 py-3 font-semibold'>{column.label}</th>)}<th className='px-4 py-3 font-semibold'>Action</th></tr></thead>
+                            <tbody className='divide-y divide-[var(--erp-line)]'>
+                                {records.map((row) => <tr key={row.id} className='align-top hover:bg-[var(--erp-canvas)]/70'>{columns.map((column) => <td key={column.key} className='px-4 py-4 text-[var(--erp-slate)]'>{column.render ? column.render(row) : row[column.key]}</td>)}<td className='px-4 py-4'><FindingLink finding={row} /></td></tr>)}
+                            </tbody>
+                        </table>
+                    </div>
+                </> : <div className='px-6 py-12 text-center'><p className='font-semibold text-[var(--erp-ink)]'>No findings match these filters.</p><p className='mt-1 text-sm text-[var(--erp-muted)]'>Reset filters or broaden the search.</p></div>}
             </div>
-
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {findings.length} of {findings.length} entries</p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

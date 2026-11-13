@@ -1,9 +1,7 @@
-import { hydrateCampusKey, usesCampusApiForKey } from '../../services/campusJsonStore'
 import { ensureSeed, loadJson, nextSerial, saveJson } from './storage'
 import { logActivity } from './activityLog'
 
 export const PROCUREMENT_KEY = 'schoolerp-procurement-requests-v1'
-export const IT_PROCUREMENT_KEY = 'schoolerp-it-procurement-v1'
 export const PO_KEY = 'schoolerp-purchase-orders-v1'
 
 export const PROCUREMENT_STATUSES = [
@@ -19,6 +17,13 @@ export const PROCUREMENT_STATUSES = [
     'REJECTED',
     'COMPLETED',
 ]
+
+const withHistory = (request) => ({
+    ...request,
+    history: Array.isArray(request.history) && request.history.length
+        ? request.history
+        : [{ at: request.createdAt || 'Seed record', actor: request.requestedBy, status: request.status, note: 'Current imported state' }],
+})
 
 const seedRequests = [
     {
@@ -60,31 +65,20 @@ const seedOrders = [
     },
 ]
 
-function seedForKey(key) {
-    if (usesCampusApiForKey(key)) return []
-    if (key === IT_PROCUREMENT_KEY) return seedRequests.filter((row) => row.department === 'IT Support')
-    return seedRequests
-}
-
-export function getProcurementRequests(key = PROCUREMENT_KEY) {
-    return ensureSeed(key, seedForKey(key))
-}
-
-export function hydrateProcurementFromApi(key = PROCUREMENT_KEY) {
-    if (!usesCampusApiForKey(key)) return Promise.resolve(false)
-    return hydrateCampusKey(key, [])
+export function getProcurementRequests() {
+    return ensureSeed(PROCUREMENT_KEY, seedRequests).map(withHistory)
 }
 
 export function getPurchaseOrders() {
     return ensureSeed(PO_KEY, seedOrders)
 }
 
-export function saveProcurement(requests, key = PROCUREMENT_KEY) {
-    saveJson(key, requests)
+export function saveProcurement(requests) {
+    saveJson(PROCUREMENT_KEY, requests)
 }
 
-export function createProcurementRequest(input, key = PROCUREMENT_KEY) {
-    const requests = getProcurementRequests(key)
+export function createProcurementRequest(input) {
+    const requests = getProcurementRequests()
     const record = {
         id: nextSerial('REQ-2026-', requests, 'id'),
         title: input.title,
@@ -98,14 +92,15 @@ export function createProcurementRequest(input, key = PROCUREMENT_KEY) {
         poNumber: '',
         primaryApprover: input.primaryApprover || 'Department Head',
         createdAt: new Date().toISOString(),
+        history: [{ at: new Date().toISOString(), actor: input.requestedBy, status: 'QUOTATION_PENDING', note: 'Request created' }],
     }
-    saveProcurement([record, ...requests], key)
+    saveProcurement([record, ...requests])
     logActivity({ actor: input.requestedBy, action: 'CREATE', module: 'Procurement', recordId: record.id, details: record.title })
     return record
 }
 
-export function advanceProcurement(id, actor = 'Approver', key = PROCUREMENT_KEY) {
-    const requests = getProcurementRequests(key)
+export function advanceProcurement(id, actor = 'Approver') {
+    const requests = getProcurementRequests()
     const current = requests.find((item) => item.id === id)
     if (!current) return null
     const order = current.minorPurchase
@@ -119,8 +114,13 @@ export function advanceProcurement(id, actor = 'Approver', key = PROCUREMENT_KEY
         poNumber = nextSerial('PO-2026-', orders, 'id')
         saveJson(PO_KEY, [{ id: poNumber, requestId: id, vendor: 'Selected vendor', amount: current.amount, status: 'PO_RAISED', date: new Date().toISOString().slice(0, 10) }, ...orders])
     }
-    const next = requests.map((item) => (item.id === id ? { ...item, status, poNumber } : item))
-    saveProcurement(next, key)
+    const next = requests.map((item) => (item.id === id ? {
+        ...item,
+        status,
+        poNumber,
+        history: [...(item.history || []), { at: new Date().toISOString(), actor, status, note: `${current.status} → ${status}` }],
+    } : item))
+    saveProcurement(next)
     logActivity({ actor, action: 'STATUS_CHANGE', module: 'Procurement', recordId: id, before: current.status, after: status })
     return next.find((item) => item.id === id)
 }
@@ -137,7 +137,7 @@ export function downloadQuotationTemplate() {
     logActivity({ action: 'DOWNLOAD_CLICK', module: 'Procurement', details: 'Comparative quotation template' })
 }
 
-export function loadProcurementSafe(key = PROCUREMENT_KEY) {
-    const stored = loadJson(key, null)
-    return Array.isArray(stored) ? stored : getProcurementRequests(key)
+export function loadProcurementSafe() {
+    const stored = loadJson(PROCUREMENT_KEY, null)
+    return Array.isArray(stored) ? stored : getProcurementRequests()
 }

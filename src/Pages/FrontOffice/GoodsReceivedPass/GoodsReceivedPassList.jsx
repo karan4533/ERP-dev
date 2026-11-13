@@ -1,19 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import React, { useMemo, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus, Printer } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { useAuth } from '../../../Context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import {
     STATUS_OPTIONS,
     deleteGoodsReceivedPass,
     formatDisplayTime,
     getGoodsReceivedPasses,
-    hydrateGoodsReceivedPassesFromApi,
     statusBadgeColor,
 } from './goodsReceivedPassData'
-import { frontOfficeApiOn } from '../frontOfficeStore'
 
 const parseDate = (value) => {
     if (!value) return null
@@ -23,9 +23,9 @@ const parseDate = (value) => {
 }
 
 const GoodsReceivedPassList = () => {
-    const location = useLocation()
-    const [records, setRecords] = useState(() => (frontOfficeApiOn() ? [] : getGoodsReceivedPasses()))
-    const [loadError, setLoadError] = useState('')
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
+    const [records, setRecords] = useState(() => getGoodsReceivedPasses())
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [fromDate, setFromDate] = useState(null)
@@ -35,31 +35,6 @@ const GoodsReceivedPassList = () => {
     const [exportModal, setExportModal] = useState(false)
     const [deleteModal, setDeleteModal] = useState(false)
     const [selectedId, setSelectedId] = useState(null)
-
-    useEffect(() => {
-        if (!frontOfficeApiOn()) {
-            setRecords(getGoodsReceivedPasses())
-            setLoadError('')
-            return undefined
-        }
-        let active = true
-        hydrateGoodsReceivedPassesFromApi()
-            .then((rows) => {
-                if (active) {
-                    setRecords(rows)
-                    setLoadError('')
-                }
-            })
-            .catch((error) => {
-                if (active) {
-                    setRecords([])
-                    setLoadError(error?.message || 'Could not load goods received passes.')
-                }
-            })
-        return () => {
-            active = false
-        }
-    }, [location.key])
 
     const filteredRecords = useMemo(() => {
         return records.filter((record) => {
@@ -102,7 +77,6 @@ const GoodsReceivedPassList = () => {
 
     return (
         <section>
-            {loadError ? <p className='text-sm text-[#B42318] mb-3'>{loadError}</p> : null}
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
@@ -198,7 +172,9 @@ const GoodsReceivedPassList = () => {
                                             <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
                                                 <NavLink to={`/front-office/goods-received-pass/view/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
                                                 <NavLink to={`/front-office/goods-received-pass/edit/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Edit</NavLink>
-                                                <button type='button' onClick={() => { setSelectedId(record.id); setDeleteModal(true) }} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Delete</button>
+                                                {canDelete && (
+                                                    <button type='button' onClick={() => { setSelectedId(record.id); setDeleteModal(true) }} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Delete</button>
+                                                )}
                                                 <NavLink to={`/front-office/goods-received-pass/view/${record.id}?print=1`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'><span className='inline-flex items-center gap-1'><Printer size={14} /> Print</span></NavLink>
                                             </Dropdown>
                                         </td>
@@ -221,22 +197,9 @@ const GoodsReceivedPassList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='goods-received-passes'
-                rows={filteredRecords.map((r) => ({
-                    id: r.id || r.publicId,
-                    supplierName: r.supplierName,
-                    billNo: r.billNo,
-                    date: r.date,
-                    paymentType: r.paymentType,
-                    status: r.status,
-                }))}
-                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'} {statusFilter && <span className='text-[#515DEF]'>( Filtered: {statusFilter} )</span>}</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'} {statusFilter && <span className='text-[#515DEF]'>( Filtered: {statusFilter} )</span>}</>} />
 
-            {deleteModal && (
+            {canDelete && deleteModal && (
                 <div className='fixed inset-0 z-500 flex items-center justify-center'>
                     <div className='absolute inset-0 bg-black/40' onClick={() => setDeleteModal(false)} />
                     <div className='relative z-10 w-full max-w-md rounded-xl bg-white shadow-lg p-6'>

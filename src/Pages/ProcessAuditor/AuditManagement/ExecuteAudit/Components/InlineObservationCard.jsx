@@ -25,7 +25,7 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
         })
     }
 
-    const canSubmit = observation.title?.trim() && observation.assignTo
+    const canSubmit = observation.title?.trim() && observation.description?.trim() && observation.assignTo && observation.dueDate
     const displayStatus = observation.status || (observation.saved ? 'Pending Assignment' : 'Unsaved')
     const statusColor = observationStatusBadgeColor[observation.status] ?? 'bg-[#EDEEF5] text-[#667085]'
 
@@ -88,6 +88,10 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
                         className={readOnlyClass}
                     />
                 </div>
+                <div>
+                    <label htmlFor={`finding-due-${parameter.id}`} className='text-xs font-medium text-[#808080] mb-1 block'>Due date <span className='text-[#FF0000]'>*</span></label>
+                    <input id={`finding-due-${parameter.id}`} type='date' value={observation.dueDate || ''} onChange={(event) => update('dueDate', event.target.value)} className={inputClass} />
+                </div>
             </div>
 
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3 p-3 rounded-lg bg-white/60 border border-[#EDEEF5]'>
@@ -123,7 +127,7 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
             </div>
 
             <div className='mb-3'>
-                <label className='text-xs font-medium text-[#808080] mb-1 block'>Description</label>
+                <label className='text-xs font-medium text-[#808080] mb-1 block'>Description <span className='text-[#FF0000]'>*</span></label>
                 <textarea
                     value={observation.description}
                     onChange={(e) => update('description', e.target.value)}

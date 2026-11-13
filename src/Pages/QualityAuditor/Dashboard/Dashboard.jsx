@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
     LayoutDashboard,
@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import {
     KPI_CARDS,
-    hydrateAuditorDashboardFromApi,
     MONTHLY_COMPLIANCE_TREND,
     DEPARTMENT_COMPLIANCE,
     OBSERVATION_STATUS,
@@ -44,16 +43,6 @@ const Panel = ({ title, children, className = '' }) => (
 )
 
 const Dashboard = () => {
-    const [kpiCards, setKpiCards] = useState(KPI_CARDS)
-
-    useEffect(() => {
-        let active = true
-        hydrateAuditorDashboardFromApi().then((next) => {
-            if (active) setKpiCards(next)
-        })
-        return () => { active = false }
-    }, [])
-
     const monthlyComplianceOption = useMemo(() => ({
         tooltip: {
             trigger: 'axis',
@@ -223,7 +212,7 @@ const Dashboard = () => {
             </div>
 
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                {kpiCards.map((card) => {
+                {KPI_CARDS.map((card) => {
                     const Icon = KPI_ICONS[card.label] ?? ClipboardList
                     return (
                         <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     Archive,
     ChevronLeft,
@@ -11,9 +11,8 @@ import {
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import {
-    getPublishedAuditTemplates,
-    hydratePublishedAuditTemplatesFromApi,
     PUBLISH_STATUS_OPTIONS,
+    PUBLISH_TEMPLATES,
     bumpVersion,
     formatToday,
     publishStatusBadgeColor,
@@ -23,16 +22,12 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const PublishTemplatesList = () => {
-    const [publishedTemplates, setPublishedTemplates] = useState(() => getPublishedAuditTemplates())
-    useEffect(() => {
-        hydratePublishedAuditTemplatesFromApi().finally(() => setPublishedTemplates(getPublishedAuditTemplates()))
-    }, [])
-
+    const [templates, setTemplates] = useState(PUBLISH_TEMPLATES)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [exportModal, setExportModal] = useState(false)
 
-    const filteredTemplates = useMemo(() => publishedTemplates.filter((item) => {
+    const filteredTemplates = useMemo(() => templates.filter((item) => {
         const searchValue = search.trim().toLowerCase()
         const matchesSearch = !searchValue
             || item.templateName.toLowerCase().includes(searchValue)
@@ -40,7 +35,7 @@ const PublishTemplatesList = () => {
         const matchesStatus = !statusFilter || item.status === statusFilter
 
         return matchesSearch && matchesStatus
-    }), [publishedTemplates, search, statusFilter])
+    }), [templates, search, statusFilter])
 
     const clearFilters = () => {
         setSearch('')
@@ -48,7 +43,7 @@ const PublishTemplatesList = () => {
     }
 
     const handlePublish = (templateId) => {
-        setPublishedTemplates((prev) => prev.map((item) => {
+        setTemplates((prev) => prev.map((item) => {
             if (item.id !== templateId) return item
             const nextVersion = item.status === 'Draft' ? item.currentVersion : bumpVersion(item.currentVersion)
             return {
@@ -62,7 +57,7 @@ const PublishTemplatesList = () => {
     }
 
     const handleRollback = (templateId) => {
-        setPublishedTemplates((prev) => prev.map((item) => {
+        setTemplates((prev) => prev.map((item) => {
             if (item.id !== templateId || !item.previousVersion) return item
             return {
                 ...item,
@@ -75,7 +70,7 @@ const PublishTemplatesList = () => {
     }
 
     const handleArchive = (templateId) => {
-        setPublishedTemplates((prev) => prev.map((item) => (
+        setTemplates((prev) => prev.map((item) => (
             item.id === templateId
                 ? { ...item, status: 'Archived' }
                 : item

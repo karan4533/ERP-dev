@@ -1,50 +1,34 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { ConfirmAction, DataTable } from '../../../Common/ui'
 import { EMPLOYEE_CATEGORIES } from '../domain/hrStatus'
-import { employeeName, getAttendance, getEmployees, getLeaveBundle, nextId, pushNotification, saveAttendance, saveLeaveBundle } from '../domain/hrStore'
-import { Badge, Modal, PageIntro, PrimaryButton, Select, TableWrap, inputClass, td, th, useHrTick } from '../components/HrUi'
-import {
-    hydrateLeaveRequestsFromApi,
-    getReceivedLeaveRequestsForRole,
-} from '../../../Common/LeaveRequest/leaveRequestData'
-import { syncAllStaffLeavesIntoHr } from '../../../Common/LeaveRequest/leaveHrPayrollBridge'
-import { ROLES } from '../../../constants/roles'
+import { employeeName, getEmployees, getLeaveBundle, nextId, pushNotification, saveLeaveBundle } from '../domain/hrStore'
+import { Badge, Modal, PageIntro, PrimaryButton, Select, TableWrap, inputClass } from '../components/HrUi'
+import { useHrTick } from '../components/hrUiState'
 
 const LeaveManagement = () => {
     const policiesMode = useLocation().pathname.includes('policies')
     const tick = useHrTick()
-    const [syncTick, setSyncTick] = useState(0)
-    const bundle = useMemo(() => getLeaveBundle(), [tick, syncTick])
-    const employees = useMemo(() => getEmployees(), [tick, syncTick])
+    const bundle = useMemo(() => {
+        void tick
+        return getLeaveBundle()
+    }, [tick])
+    const employees = useMemo(() => {
+        void tick
+        return getEmployees()
+    }, [tick])
     const [status, setStatus] = useState('')
     const [form, setForm] = useState(null)
-
-    useEffect(() => {
-        hydrateLeaveRequestsFromApi()
-            .finally(() => {
-                try {
-                    syncAllStaffLeavesIntoHr(getReceivedLeaveRequestsForRole(ROLES.HR))
-                } catch {
-                    /* ignore */
-                }
-                setSyncTick((value) => value + 1)
-            })
-    }, [])
-
+    const [decisionCandidate, setDecisionCandidate] = useState(null)
     const requests = bundle.requests.filter((item) => !status || item.status === status)
 
     const decide = (request, next) => {
         const requestsNext = getLeaveBundle().requests.map((item) => item.id === request.id ? { ...item, status: next, approvedBy: next === 'Approved' ? 'Reporting Manager' : item.approvedBy } : item)
         saveLeaveBundle({ ...getLeaveBundle(), requests: requestsNext })
-        if (next === 'Approved') {
-            const attendanceId = `LVE-${request.id}`
-            const attendance = getAttendance().filter((row) => row.id !== attendanceId)
-            const attendanceStatus = String(request.leaveType || '').toLowerCase().includes('permission') ? 'Permission' : 'Leave'
-            saveAttendance([{ id: attendanceId, employeeId: request.employeeId, date: request.fromDate, status: attendanceStatus, source: 'Leave approval', checkIn: '—', checkOut: '—', punchIn: '', punchOut: '' }, ...attendance])
-        }
         if (next === 'Pending') pushNotification({ type: 'Leave', title: 'Leave Approval Pending', message: `${employeeName(request.employeeId)} requested ${request.leaveType}.`, relatedDate: request.fromDate })
         toast.success(`Leave ${next.toLowerCase()}.`)
+        setDecisionCandidate(null)
     }
 
     const savePolicy = (event) => {
@@ -55,6 +39,31 @@ const LeaveManagement = () => {
         toast.success('Leave policy saved.')
         setForm(null)
     }
+
+    const policyRows = bundle.policies.map((row) => {
+        const entitlement = Number(row.entitlement || 0)
+        const term = Math.floor(entitlement / 3)
+        const used = bundle.requests.filter((item) => item.leaveType === row.leaveType && item.status === 'Approved').reduce((sum, item) => sum + (Number(item.days) || 0), 0)
+        return { ...row, entitlement, termAllocation: `${term} / ${term} / ${entitlement - (term * 2)}`, used, balance: Math.max(0, entitlement - used) }
+    })
+    const policyColumns = [
+        { key: 'name', label: 'Policy', required: true },
+        { key: 'category', label: 'Category' },
+        { key: 'leaveType', label: 'Type', required: true },
+        { key: 'entitlement', label: 'Year entitlement' },
+        { key: 'termAllocation', label: 'Term 1 / 2 / 3' },
+        { key: 'used', label: 'Used' },
+        { key: 'balance', label: 'Balance' },
+        { key: 'carryForward', label: 'Carry forward', render: (row) => row.carryForward ? 'Yes' : 'No' },
+        { key: 'maxConsecutive', label: 'Max days' },
+    ]
+    const requestColumns = [
+        { key: 'employeeId', label: 'Employee', required: true, render: (row) => employeeName(row.employeeId) },
+        { key: 'leaveType', label: 'Type', required: true },
+        { key: 'dates', label: 'Dates', render: (row) => `${row.fromDate} – ${row.toDate}` },
+        { key: 'reason', label: 'Reason' },
+        { key: 'status', label: 'Status', render: (row) => <Badge value={row.status} /> },
+    ]
 
     const saveRequest = (event) => {
         event.preventDefault()
@@ -68,37 +77,29 @@ const LeaveManagement = () => {
 
     return (
         <section>
-            <PageIntro text='Staff leave (including Driver → Transport Manager → HR) syncs here for attendance and payroll LOP. Department-head approvals feed this list automatically.'>
+            <PageIntro text='Leave requests move from employee submission to manager decision and stay visible to HR for attendance and payroll.'>
                 {!policiesMode && <Select label='Status' value={status} onChange={(e) => setStatus(e.target.value)} options={['Pending', 'Approved', 'Rejected']} />}
             </PageIntro>
             {policiesMode ? (
                 <TableWrap title='Leave Policies' action={<PrimaryButton onClick={() => setForm({ name: '', category: 'Academics', leaveType: 'Casual Leave', entitlement: 12, maxConsecutive: 3, carryForward: false })}>Add Policy</PrimaryButton>}>
-                    <table className='w-full text-left'><thead className='bg-[#EDEEF5]'><tr>{['Policy', 'Category', 'Type', 'Year entitlement', 'Term 1 / 2 / 3', 'Used', 'Balance', 'Carry Forward', 'Max Days'].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-                        <tbody>{bundle.policies.map((row) => {
-                            const term = Math.floor(Number(row.entitlement || 0) / 3)
-                            const used = bundle.requests.filter((item) => item.leaveType === row.leaveType && item.status === 'Approved').reduce((sum, item) => sum + (Number(item.days) || 0), 0)
-                            return <tr key={row.id} className='border-b border-[#f2f4f7]'><td className={td}>{row.name}</td><td className={td}>{row.category}</td><td className={td}>{row.leaveType}</td><td className={td}>{row.entitlement}</td><td className={td}>{term} / {term} / {Number(row.entitlement) - (term * 2)}</td><td className={td}>{used}</td><td className={td}>{Math.max(0, Number(row.entitlement) - used)}</td><td className={td}>{row.carryForward ? 'Yes' : 'No'}</td><td className={td}>{row.maxConsecutive}</td></tr>
-                        })}</tbody>
-                    </table>
+                    <DataTable caption='Leave policy register' rows={policyRows} columns={policyColumns} rowKey='id' emptyTitle='No leave policies configured' emptyDescription='Create a policy to define entitlement and carry-forward rules.' />
                 </TableWrap>
             ) : (
                 <TableWrap title='Leave Requests' action={<PrimaryButton onClick={() => employees[0] && setForm({ employeeId: employees[0].id, leaveType: 'Casual Leave', fromDate: '2026-09-28', toDate: '2026-09-28', days: 1, reason: '' })}>Add Request</PrimaryButton>}>
-                    <table className='w-full text-left'><thead className='bg-[#EDEEF5]'><tr>{['Employee', 'Dept / Role', 'Type', 'Dates', 'Reason', 'Source', 'Status', ''].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-                        <tbody>{requests.length === 0 ? (
-                            <tr><td className={td} colSpan={8}>No leave records yet. Driver / staff requests appear here after they are filed.</td></tr>
-                        ) : requests.map((row) => (
-                            <tr key={row.id} className='border-b border-[#f2f4f7]'>
-                                <td className={td}>{row.employeeName || employeeName(row.employeeId)}</td>
-                                <td className={td}>{row.department || '—'}{row.submitterRole ? ` · ${row.submitterRole}` : ''}</td>
-                                <td className={td}>{row.leaveType}</td>
-                                <td className={td}>{row.fromDate} – {row.toDate}</td>
-                                <td className={td}>{row.reason}</td>
-                                <td className={td}>{row.source === 'staff-leave' ? 'Staff panel' : 'HR entry'}</td>
-                                <td className={td}><Badge value={row.status} /></td>
-                                <td className={td}>{row.status === 'Pending' && !row.staffLeaveId && <><button type='button' className='text-[#4CAF50] mr-2' onClick={() => decide(row, 'Approved')}>Approve</button><button type='button' className='text-red-500' onClick={() => decide(row, 'Rejected')}>Reject</button></>}{row.staffLeaveId && row.status === 'Pending' ? <span className='text-xs text-[#667085]'>Awaiting chain</span> : null}</td>
-                            </tr>
-                        ))}</tbody>
-                    </table>
+                    <DataTable
+                        caption='Leave request register'
+                        rows={requests}
+                        columns={requestColumns}
+                        rowKey='id'
+                        emptyTitle='No leave requests found'
+                        emptyDescription='Change the status filter or submit a leave request.'
+                        renderActions={(row) => row.status === 'Pending' ? (
+                            <>
+                                <button type='button' className='min-h-9 rounded-md border border-[#039855] px-3 text-xs font-semibold text-[#027A48] hover:bg-[#ECFDF3]' onClick={() => setDecisionCandidate({ request: row, next: 'Approved' })}>Approve</button>
+                                <button type='button' className='min-h-9 rounded-md border border-[#D92D20] px-3 text-xs font-semibold text-[#B42318] hover:bg-[#FEF3F2]' onClick={() => setDecisionCandidate({ request: row, next: 'Rejected' })}>Reject</button>
+                            </>
+                        ) : null}
+                    />
                 </TableWrap>
             )}
             {form && <Modal title={policiesMode ? 'Leave policy' : 'Leave request'} onClose={() => setForm(null)}>
@@ -118,6 +119,17 @@ const LeaveManagement = () => {
                     <PrimaryButton type='submit'>Save</PrimaryButton>
                 </form>
             </Modal>}
+            <ConfirmAction
+                open={Boolean(decisionCandidate)}
+                onClose={() => setDecisionCandidate(null)}
+                onConfirm={() => decisionCandidate && decide(decisionCandidate.request, decisionCandidate.next)}
+                title={`${decisionCandidate?.next === 'Approved' ? 'Approve' : 'Reject'} leave request?`}
+                description='Review the employee, leave type, dates, and reason before recording this decision.'
+                confirmLabel={decisionCandidate?.next === 'Approved' ? 'Approve request' : 'Reject request'}
+                tone={decisionCandidate?.next === 'Rejected' ? 'danger' : 'primary'}
+            >
+                <p><strong>{decisionCandidate ? employeeName(decisionCandidate.request.employeeId) : ''}</strong> · {decisionCandidate?.request.leaveType} · {decisionCandidate?.request.fromDate} to {decisionCandidate?.request.toDate}. Production must capture the authenticated approver, timestamp, remarks, and attendance/payroll effects.</p>
+            </ConfirmAction>
         </section>
     )
 }

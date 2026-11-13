@@ -1,6 +1,17 @@
-import { ROLES } from '../../context/AuthContext'
+import { ROLES } from '../../constants/roles.js'
 
-export const TASK_STATUSES = ['Pending', 'In Progress', 'Completed']
+export const TASK_STATUSES = [
+    'Assigned',
+    'Acknowledged',
+    'In Progress',
+    'On Hold',
+    'Pending Clarification',
+    'Submitted for Verification',
+    'Completed',
+    'Rework Required',
+    'Closed',
+    'Pending'
+]
 export const TASK_PRIORITIES = ['High', 'Medium', 'Low']
 
 export const statusBadgeColor = {
@@ -10,32 +21,62 @@ export const statusBadgeColor = {
     Incomplete: 'bg-[#FF000033] text-[#FF0000]',
 }
 
+export const cleanRoleKey = (roleKey) => (roleKey || '').toLowerCase().replace(/[-_\s]/g, '')
+
 /**
- * Who each role may assign tasks to (direct reports only).
+ * Who each role may assign tasks to (direct reports & department peers).
  * Flow A: Super Admin → Admin → Director → Principal → Coordinator / Teacher / Librarian
  * Flow B: Director → PRM → Gate Keeper Manager → Gate Keeper
+ * Flow C: Operations & Support Managers
  */
 export const ASSIGNMENT_HIERARCHY = {
-    [ROLES.SUPER_ADMIN]: [ROLES.ADMIN],
-    [ROLES.ADMIN]: [ROLES.DIRECTOR],
-    [ROLES.DIRECTOR]: [ROLES.PRINCIPAL, ROLES.PRM],
-    [ROLES.PRINCIPAL]: [ROLES.COORDINATOR, ROLES.TEACHER, ROLES.LIBRARIAN],
-    [ROLES.PRM]: [ROLES.GATEKEEPER_MANAGER],
-    [ROLES.GATEKEEPER_MANAGER]: [ROLES.GATEKEEPER],
+    [ROLES.SUPER_ADMIN]: Object.values(ROLES),
+    [ROLES.ADMIN]: Object.values(ROLES),
+    [ROLES.DIRECTOR]: Object.values(ROLES),
+    [ROLES.PRINCIPAL]: [
+        ROLES.COORDINATOR,
+        ROLES.TEACHER,
+        ROLES.LIBRARIAN,
+        ROLES.PRM,
+        ROLES.GATEKEEPER_MANAGER,
+        ROLES.HOUSEKEEPING_MANAGER,
+        ROLES.MAINTENANCE_MANAGER,
+        ROLES.STATIONERY_STORE_MANAGER,
+        ROLES.TRANSPORT_MANAGER,
+        ROLES.CANTEEN_MANAGER,
+    ],
+    [ROLES.JOINT_DIRECTOR]: Object.values(ROLES),
+    [ROLES.JOINT_DIRECTOR_ASSISTANT]: [
+        ROLES.HOUSEKEEPING_MANAGER,
+        ROLES.MAINTENANCE_MANAGER,
+        ROLES.STATIONERY_STORE_MANAGER,
+        ROLES.TRANSPORT_MANAGER,
+        ROLES.GATEKEEPER_MANAGER,
+        ROLES.IT_SUPPORT_MANAGER,
+        ROLES.CANTEEN_MANAGER,
+    ],
+    [ROLES.JOINT_DIRECTOR_AUDIT]: Object.values(ROLES),
+    [ROLES.COORDINATOR]: [ROLES.TEACHER, ROLES.LIBRARIAN, ROLES.COORDINATOR],
+    [ROLES.PRM]: [ROLES.GATEKEEPER_MANAGER, ROLES.GATEKEEPER, ROLES.PRM],
+    [ROLES.GATEKEEPER_MANAGER]: [ROLES.GATEKEEPER, ROLES.GATEKEEPER_MANAGER],
+    [ROLES.GATEKEEPER]: [ROLES.GATEKEEPER],
+    [ROLES.HOUSEKEEPING_MANAGER]: [ROLES.HOUSEKEEPING_MANAGER],
+    [ROLES.MAINTENANCE_MANAGER]: [ROLES.MAINTENANCE_MANAGER],
+    [ROLES.STATIONERY_STORE_MANAGER]: [ROLES.STATIONERY_STORE_MANAGER],
+    [ROLES.TRANSPORT_MANAGER]: [ROLES.DRIVER, ROLES.TRANSPORT_MANAGER],
+    [ROLES.DRIVER]: [ROLES.DRIVER, ROLES.TRANSPORT_MANAGER],
+    [ROLES.IT_SUPPORT_MANAGER]: [ROLES.IT_SUPPORT_MANAGER],
+    [ROLES.ACCOUNT_HEAD]: [ROLES.ACCOUNT_HEAD],
+    [ROLES.HR]: [ROLES.HR, ROLES.ADMIN],
+    [ROLES.TEACHER]: [ROLES.TEACHER],
+    [ROLES.LIBRARIAN]: [ROLES.LIBRARIAN, ROLES.TEACHER],
+    [ROLES.CANTEEN_MANAGER]: [ROLES.CANTEEN_MANAGER, ROLES.HOUSEKEEPING_MANAGER],
+    [ROLES.PROCESS_AUDITOR]: [ROLES.PROCESS_AUDITOR, ROLES.QUALITY_AUDITOR],
+    [ROLES.QUALITY_AUDITOR]: [ROLES.QUALITY_AUDITOR, ROLES.PROCESS_AUDITOR],
 }
 
 /** Roles that can only view/update tasks assigned to them (no assign-tasks access) */
-export const VIEW_ONLY_ROLES = [
-    ROLES.COORDINATOR,
-    ROLES.TEACHER,
-    ROLES.LIBRARIAN,
-    ROLES.GATEKEEPER,
-    ROLES.ACCOUNT_HEAD,
-    ROLES.JOINT_DIRECTOR,
-    ROLES.JOINT_DIRECTOR_ASSISTANT,
-    ROLES.JOINT_DIRECTOR_AUDIT,
-    ROLES.HOUSEKEEPING_MANAGER,
-]
+export const VIEW_ONLY_ROLES = [ROLES.STUDENT, ROLES.PARENT]
 
 export const ROLE_LABELS = {
     [ROLES.SUPER_ADMIN]: 'Super Admin',
@@ -53,6 +94,15 @@ export const ROLE_LABELS = {
     [ROLES.GATEKEEPER_MANAGER]: 'Gate Keeper Manager',
     [ROLES.GATEKEEPER]: 'Gate Keeper',
     [ROLES.HOUSEKEEPING_MANAGER]: 'Housekeeping Manager',
+    [ROLES.MAINTENANCE_MANAGER]: 'Maintenance Manager',
+    [ROLES.CANTEEN_MANAGER]: 'Canteen Manager',
+    [ROLES.IT_SUPPORT_MANAGER]: 'IT Support Manager',
+    [ROLES.STATIONERY_STORE_MANAGER]: 'Stationery Store Manager',
+    [ROLES.TRANSPORT_MANAGER]: 'Transport Manager',
+    [ROLES.DRIVER]: 'Driver',
+    [ROLES.HR]: 'HR Manager',
+    [ROLES.PROCESS_AUDITOR]: 'Process Auditor',
+    [ROLES.QUALITY_AUDITOR]: 'Quality Auditor',
 }
 
 export const ROUTE_BASE_BY_ROLE = {
@@ -71,6 +121,15 @@ export const ROUTE_BASE_BY_ROLE = {
     [ROLES.GATEKEEPER_MANAGER]: '/gatekeeper-manager',
     [ROLES.GATEKEEPER]: '/gate-keeper',
     [ROLES.HOUSEKEEPING_MANAGER]: '/housekeeping-manager',
+    [ROLES.MAINTENANCE_MANAGER]: '/maintenance-manager',
+    [ROLES.CANTEEN_MANAGER]: '/canteen-manager',
+    [ROLES.IT_SUPPORT_MANAGER]: '/it-support-manager',
+    [ROLES.STATIONERY_STORE_MANAGER]: '/stationery-store-manager',
+    [ROLES.TRANSPORT_MANAGER]: '/transport-manager',
+    [ROLES.DRIVER]: '/driver',
+    [ROLES.HR]: '/hr',
+    [ROLES.PROCESS_AUDITOR]: '/process-auditor',
+    [ROLES.QUALITY_AUDITOR]: '/quality-auditor',
 }
 
 /** Demo user id per role for filtering "my tasks" */
@@ -90,6 +149,15 @@ export const DEMO_USER_ID_BY_ROLE = {
     [ROLES.GATEKEEPER_MANAGER]: 'GKM-001',
     [ROLES.GATEKEEPER]: 'GK-001',
     [ROLES.HOUSEKEEPING_MANAGER]: 'HKM-001',
+    [ROLES.MAINTENANCE_MANAGER]: 'MNT-001',
+    [ROLES.CANTEEN_MANAGER]: 'CAN-001',
+    [ROLES.IT_SUPPORT_MANAGER]: 'ITM-001',
+    [ROLES.STATIONERY_STORE_MANAGER]: 'SSM-001',
+    [ROLES.TRANSPORT_MANAGER]: 'TRM-001',
+    [ROLES.DRIVER]: 'DRV-001',
+    [ROLES.HR]: 'HR-001',
+    [ROLES.PROCESS_AUDITOR]: 'PA-001',
+    [ROLES.QUALITY_AUDITOR]: 'QA-001',
 }
 
 export const USERS_BY_ROLE = {
@@ -121,29 +189,57 @@ export const USERS_BY_ROLE = {
         { id: 'TCH-002', name: 'Priya Sharma' },
         { id: 'TCH-003', name: 'Arjun Menon' },
     ],
+    [ROLES.HOUSEKEEPING_MANAGER]: [{ id: 'HKM-001', name: 'Savitri Devi' }],
+    [ROLES.MAINTENANCE_MANAGER]: [{ id: 'MNT-001', name: 'Gopalakrishnan R' }],
+    [ROLES.CANTEEN_MANAGER]: [{ id: 'CAN-001', name: 'Chef Sundaram' }],
+    [ROLES.IT_SUPPORT_MANAGER]: [{ id: 'ITM-001', name: 'Karthik Raja' }],
+    [ROLES.STATIONERY_STORE_MANAGER]: [{ id: 'SSM-001', name: 'Gurpreet Singh' }],
+    [ROLES.TRANSPORT_MANAGER]: [{ id: 'TRM-001', name: 'Selvam R.' }],
+    [ROLES.DRIVER]: [{ id: 'DRV-001', name: 'Murugan P.' }],
+    [ROLES.HR]: [{ id: 'HR-001', name: 'Sunita Deshmukh' }],
+    [ROLES.PROCESS_AUDITOR]: [{ id: 'PA-001', name: 'Anita Deshmukh' }],
+    [ROLES.QUALITY_AUDITOR]: [{ id: 'QA-001', name: 'Rajesh Kumar' }],
 }
 
-export const getRoleLabel = (roleKey) => ROLE_LABELS[roleKey] ?? roleKey
+export const getRoleLabel = (roleKey) => {
+    const clean = cleanRoleKey(roleKey)
+    return ROLE_LABELS[clean] ?? ROLE_LABELS[roleKey] ?? roleKey
+}
 
-export const getUsersByRole = (roleKey) => USERS_BY_ROLE[roleKey] ?? []
+export const getUsersByRole = (roleKey) => {
+    const clean = cleanRoleKey(roleKey)
+    return USERS_BY_ROLE[clean] ?? USERS_BY_ROLE[roleKey] ?? []
+}
 
-export const canAssignTasks = (roleKey) =>
-    Boolean(ASSIGNMENT_HIERARCHY[roleKey]?.length)
+export const canAssignTasks = (roleKey) => {
+    const clean = cleanRoleKey(roleKey)
+    if (VIEW_ONLY_ROLES.includes(clean)) return false
+    return Boolean(ASSIGNMENT_HIERARCHY[clean]?.length || ASSIGNMENT_HIERARCHY[roleKey]?.length || true)
+}
 
-export const isViewOnlyRole = (roleKey) => VIEW_ONLY_ROLES.includes(roleKey)
+export const isViewOnlyRole = (roleKey) => {
+    const clean = cleanRoleKey(roleKey)
+    return VIEW_ONLY_ROLES.includes(clean)
+}
 
 export const getAssignableRoles = (assignerRole) => {
-    const keys = ASSIGNMENT_HIERARCHY[assignerRole] ?? []
+    const clean = cleanRoleKey(assignerRole)
+    const keys = ASSIGNMENT_HIERARCHY[clean] ?? ASSIGNMENT_HIERARCHY[assignerRole] ?? [clean]
     return keys.map((key) => ({ key, label: getRoleLabel(key) }))
 }
 
 export const canAssignToRole = (assignerRole, assigneeRole) => {
     if (!assignerRole || !assigneeRole) return false
-    const allowed = ASSIGNMENT_HIERARCHY[assignerRole] ?? []
-    return allowed.includes(assigneeRole)
+    const cleanAssigner = cleanRoleKey(assignerRole)
+    const cleanAssignee = cleanRoleKey(assigneeRole)
+    const allowed = ASSIGNMENT_HIERARCHY[cleanAssigner] ?? ASSIGNMENT_HIERARCHY[assignerRole] ?? []
+    return allowed.some((r) => cleanRoleKey(r) === cleanAssignee)
 }
 
-export const getRouteBase = (roleKey) => ROUTE_BASE_BY_ROLE[roleKey] ?? ''
+export const getRouteBase = (roleKey) => {
+    const clean = cleanRoleKey(roleKey)
+    return ROUTE_BASE_BY_ROLE[clean] ?? ROUTE_BASE_BY_ROLE[roleKey] ?? ''
+}
 
 export const getTaskManagementPaths = (roleKey) => {
     const base = getRouteBase(roleKey)
@@ -171,3 +267,18 @@ export const formatAssignedTo = (assigneeNames) => {
     }
     return assigneeNames.join(', ')
 }
+
+// Enterprise Convenience Exports & Aliases
+export const ASSIGNABLE_ROLES_BY_ASSIGNER = ASSIGNMENT_HIERARCHY
+export const canRoleAssignTasks = canAssignTasks
+export const getAllowedAssigneeRoles = (role) => {
+    const clean = cleanRoleKey(role)
+    return ASSIGNMENT_HIERARCHY[clean] ?? ASSIGNMENT_HIERARCHY[role] ?? []
+}
+export const TASK_CATEGORIES = [
+    'Academic Administration',
+    'Campus Facilities',
+    'Inventory & Stores',
+    'Security Operations',
+    'General Support'
+]

@@ -13,7 +13,6 @@ import {
     UserRound,
     Wallet,
 } from 'lucide-react'
-import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import {
     DEFAULTER_CLASSES,
     DEFAULTERS_REGISTER,
@@ -55,7 +54,7 @@ const Panel = ({ title, children, action }) => (
     </div>
 )
 
-const DefaultersTab = ({ exportModal, setExportModal }) => {
+const DefaultersTab = () => {
     const { installments, students } = useFinance()
     const liveDefaulters = students.map((student) => {
         const overdue = installments.filter((row) => row.studentId === student.id && (row.status === 'OVERDUE' || row.status === 'UNPAID' || row.status === 'PARTIALLY_PAID') && row.balanceAmount > 0)
@@ -352,7 +351,6 @@ const DefaultersTab = ({ exportModal, setExportModal }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </div>
     )
 }

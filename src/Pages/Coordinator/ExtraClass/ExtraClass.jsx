@@ -8,8 +8,12 @@ import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
 import { EXTRA_CLASSES, SUBJECTS, CLASSES, SECTIONS } from './extraClassData'
+import { useAuth } from '../../../context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 
 const ExtraClass = () => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
@@ -153,9 +157,11 @@ const ExtraClass = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                Delete
-                                            </button>
+                                            {canDelete && (
+                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                    Delete
+                                                </button>
+                                            )}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -184,7 +190,7 @@ const ExtraClass = () => {
 
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </section>
     )
 }

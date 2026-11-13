@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import MaterialGatePassForm, {
     recordToFormData,
     validateMaterialGatePassForm,
@@ -13,7 +12,6 @@ const EditMaterialGatePass = () => {
     const existingRecord = getMaterialGatePassById(id)
     const [formData, setFormData] = useState(() => (existingRecord ? recordToFormData(existingRecord) : null))
     const [errors, setErrors] = useState({})
-    const [saving, setSaving] = useState(false)
 
     if (!existingRecord || !formData) {
         return (
@@ -25,25 +23,13 @@ const EditMaterialGatePass = () => {
         )
     }
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         const validationErrors = validateMaterialGatePassForm(formData)
         setErrors(validationErrors)
         if (Object.keys(validationErrors).length > 0) return
 
-        setSaving(true)
-        try {
-            const updated = await updateMaterialGatePass(id, formData)
-            if (!updated) {
-                toast.error('Material gate pass not found.')
-                return
-            }
-            toast.success('Material gate pass updated successfully.')
-            navigate('/front-office/material-gate-pass-list')
-        } catch (error) {
-            toast.error(error?.message || 'Could not update material gate pass.')
-        } finally {
-            setSaving(false)
-        }
+        updateMaterialGatePass(id, formData)
+        navigate('/front-office/material-gate-pass-list')
     }
 
     return (
@@ -65,11 +51,10 @@ const EditMaterialGatePass = () => {
                 </button>
                 <button
                     type='button'
-                    disabled={saving}
                     onClick={handleSubmit}
-                    className='bg-[#515DEF] text-white text-sm px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'
+                    className='bg-[#515DEF] text-white text-sm px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
-                    {saving ? 'Saving…' : 'Update Gate Pass'}
+                    Update Gate Pass
                 </button>
             </div>
         </section>

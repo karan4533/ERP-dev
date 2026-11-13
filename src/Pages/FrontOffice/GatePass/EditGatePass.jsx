@@ -26,12 +26,12 @@ const EditGatePass = () => {
         setFormData(toGatePassFormState(record))
     }, [id])
 
-    const handleSave = async () => {
+    const handleSave = () => {
         const validationErrors = validateStudentGatePassForm(formData)
         setErrors(validationErrors)
         if (Object.keys(validationErrors).length > 0) return
 
-        const result = await updateStudentGatePass(id, formData)
+        const result = updateStudentGatePass(id, formData)
         if (!result.success) {
             toast.error(result.message)
             return

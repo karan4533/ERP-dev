@@ -1,27 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { toast } from 'react-toastify'
 import {
     DUTY_STATUSES,
-    getMyDuties, hydrateMyDutiesFromApi,
+    MY_DUTIES,
     SHIFTS,
     dutyStatusBadgeColor,
     filterMyDuties,
-    setMyDutyStatus,
 } from './myDutyData'
 
 const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const MyDuty = () => {
-    const [myDuties, setMyDuties] = useState(() => getMyDuties())
-    useEffect(() => {
-        hydrateMyDutiesFromApi().finally(() => setMyDuties(getMyDuties()))
-    }, [])
-
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
@@ -31,13 +24,13 @@ const MyDuty = () => {
     const [exportModal, setExportModal] = useState(false)
 
     const filteredDuties = useMemo(() => filterMyDuties({
-        duties: myDuties,
+        duties: MY_DUTIES,
         search,
         shift,
         status,
         fromDate,
         toDate,
-    }), [myDuties, search, shift, status, fromDate, toDate])
+    }), [search, shift, status, fromDate, toDate])
 
     const clearFilters = () => {
         setSearch('')
@@ -46,21 +39,6 @@ const MyDuty = () => {
         setPeriod('')
         setFromDate(null)
         setToDate(null)
-    }
-
-    const handleStatusChange = async (duty, nextStatus) => {
-        const result = await setMyDutyStatus(duty.dutyId || duty.id, nextStatus)
-        if (result?.success === false) {
-            toast.error(result.message || 'Could not update duty status.')
-            return
-        }
-        await hydrateMyDutiesFromApi()
-        setMyDuties(getMyDuties())
-        toast.success(
-            nextStatus === 'Completed'
-                ? 'Duty marked done — Parent/Student live track for this trip is cleared.'
-                : `Duty set to ${nextStatus}.`,
-        )
     }
 
     return (
@@ -196,14 +174,13 @@ const MyDuty = () => {
                                 <th className={thClass}>Pickup Time</th>
                                 <th className={thClass}>Drop Time</th>
                                 <th className={thClass}>Assigned By</th>
-                                <th className={thClass}>Duty Status</th>
-                                <th className={`${thClass} rounded-e-lg`}>Actions</th>
+                                <th className={`${thClass} rounded-e-lg`}>Duty Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredDuties.length === 0 ? (
                                 <tr>
-                                    <td colSpan={12} className='px-2 py-8 text-center text-[#667085]'>
+                                    <td colSpan={11} className='px-2 py-8 text-center text-[#667085]'>
                                         No duties found for the selected filters.
                                     </td>
                                 </tr>
@@ -214,46 +191,18 @@ const MyDuty = () => {
                                             {duty.dutyId}
                                         </td>
                                         <td className={tdClass}>{duty.dutyDate}</td>
-                                        <td className={tdClass}>
-                                            {duty.dutyType || duty.shift}
-                                            {duty.dutyType ? ` · ${duty.shift || ''}` : ''}
-                                        </td>
-                                        <td className={tdClass}>{duty.reportingTime || duty.startTime || '—'}</td>
-                                        <td className={tdClass}>{duty.departureTime || duty.endTime || '—'}</td>
+                                        <td className={tdClass}>{duty.shift}</td>
+                                        <td className={tdClass}>{duty.reportingTime}</td>
+                                        <td className={tdClass}>{duty.departureTime}</td>
                                         <td className={tdClass}>{duty.vehicleNumber}</td>
                                         <td className={tdClass}>{duty.routeName}</td>
-                                        <td className={tdClass}>{duty.pickupTime || duty.startTime || '—'}</td>
-                                        <td className={tdClass}>{duty.dropTime || duty.endTime || '—'}</td>
+                                        <td className={tdClass}>{duty.pickupTime}</td>
+                                        <td className={tdClass}>{duty.dropTime}</td>
                                         <td className={tdClass}>{duty.assignedBy}</td>
-                                        <td className={tdClass}>
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${dutyStatusBadgeColor[duty.dutyStatus] || ''}`}>
+                                        <td className={`${tdClass} rounded-e-lg`}>
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${dutyStatusBadgeColor[duty.dutyStatus]}`}>
                                                 {duty.dutyStatus}
                                             </span>
-                                        </td>
-                                        <td className={`${tdClass} rounded-e-lg`}>
-                                            <div className='flex flex-wrap gap-2'>
-                                                {duty.dutyStatus === 'Assigned' && (
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => handleStatusChange(duty, 'In Progress')}
-                                                        className='text-xs px-2 py-1 rounded-md border border-[#515DEF] text-[#515DEF] hover:bg-[#515DEF] hover:text-white cursor-pointer'
-                                                    >
-                                                        Start
-                                                    </button>
-                                                )}
-                                                {['Assigned', 'In Progress'].includes(duty.dutyStatus) && (
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => handleStatusChange(duty, 'Completed')}
-                                                        className='text-xs px-2 py-1 rounded-md border border-[#4CAF50] text-[#4CAF50] hover:bg-[#4CAF50] hover:text-white cursor-pointer'
-                                                    >
-                                                        Mark done
-                                                    </button>
-                                                )}
-                                                {duty.dutyStatus === 'Completed' && (
-                                                    <span className='text-xs text-[#667085]'>Trip closed</span>
-                                                )}
-                                            </div>
                                         </td>
                                     </tr>
                                 ))

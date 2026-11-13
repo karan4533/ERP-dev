@@ -1,5 +1,3 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-
 export const ASSET_CATEGORIES = [
     'Laptop',
     'Desktop',
@@ -163,7 +161,16 @@ export const statusBadgeColor = {
     Retired: 'bg-[#9E9E9E33] text-[#616161]',
 }
 
-const readList = (key, seed) => ensureCampusSeed(key, seed)
+const readList = (key, seed) => {
+    try {
+        const raw = localStorage.getItem(key)
+        if (raw) return JSON.parse(raw)
+    } catch {
+        /* seed */
+    }
+    localStorage.setItem(key, JSON.stringify(seed))
+    return seed
+}
 
 const SERVICE_SEED = [
     { id: 'SRV-2026-001', assetId: 'AST-2026-0142', serviceDate: '12-01-2026', serviceType: 'Battery check', issue: 'Battery warning', provider: 'Dell Authorized Partner', location: 'Outside', cost: '₹1,200', status: 'Completed', completedDate: '13-01-2026', remarks: 'Battery replaced', createdBy: 'IT Support', createdAt: '12-01-2026' },
@@ -175,66 +182,14 @@ const TRANSFER_SEED = [
 ]
 
 export const getAssets = () => readList(ASSET_KEY, ASSETS)
-export const saveAssets = (rows) => saveCampusJson(ASSET_KEY, rows)
-export function hydrateAssetsFromApi() {
-    if (!usesCampusApiForKey(ASSET_KEY)) return Promise.resolve(false)
-    return hydrateCampusKey(ASSET_KEY, ASSETS)
-}
+export const saveAssets = (rows) => localStorage.setItem(ASSET_KEY, JSON.stringify(rows))
 export const getAssetById = (id) => getAssets().find((entry) => entry.assetId === id) ?? null
 
-const nextImportedId = (index) => `AST-IMP-${Date.now()}-${index}`
-
-export function normalizeImportedAsset(row, index = 0) {
-    const category = ASSET_CATEGORIES.includes(row.category) ? row.category : (row.category || 'Others')
-    const status = STATUS_OPTIONS.includes(row.status) ? row.status : 'Active'
-    const assetId = String(row.assetId || '').trim() || nextImportedId(index)
-    return {
-        id: assetId,
-        assetId,
-        assetName: String(row.assetName || '').trim(),
-        category,
-        brand: String(row.brand || '').trim() || 'Imported',
-        model: String(row.model || '').trim(),
-        serialNumber: String(row.serialNumber || '').trim(),
-        assetTagNumber: String(row.assetTagNumber || row.assetTag || '').trim(),
-        purchaseDate: String(row.purchaseDate || '').trim(),
-        warrantyExpiry: String(row.warrantyExpiry || row.warrantyEndDate || '').trim(),
-        status,
-        department: String(row.department || '').trim(),
-        custodian: String(row.custodian || '').trim(),
-        vendorName: String(row.vendorName || '').trim(),
-        purchaseCost: String(row.purchaseCost || '').trim(),
-        invoiceNumber: String(row.invoiceNumber || '').trim(),
-        warrantyStartDate: String(row.warrantyStartDate || row.purchaseDate || '').trim(),
-        warrantyEndDate: String(row.warrantyEndDate || row.warrantyExpiry || '').trim(),
-        quantity: Number(row.quantity) || 1,
-    }
-}
-
-export const addAsset = async (asset) => {
-    await hydrateAssetsFromApi()
-    const rows = getAssets().filter((item) => item.assetName !== asset.assetName)
-    const record = { ...asset, id: asset.assetId || `AST-${Date.now()}`, assetId: asset.assetId || `AST-${Date.now()}` }
-    record.assetId = record.id
-    await saveAssets([record, ...rows])
+export const addAsset = (asset) => {
+    const rows = getAssets()
+    const record = { ...asset, assetId: asset.assetId || `AST-${Date.now()}` }
+    saveAssets([record, ...rows])
     return record
-}
-
-export async function importAssets(incoming) {
-    await hydrateAssetsFromApi()
-    const existing = getAssets()
-    const seen = new Set(existing.flatMap((item) => [item.assetId, item.serialNumber].filter(Boolean)))
-    const records = (incoming || [])
-        .map((row, index) => normalizeImportedAsset(row, index))
-        .filter((record) => record.assetName)
-        .filter((record) => {
-            if (seen.has(record.assetId) || (record.serialNumber && seen.has(record.serialNumber))) return false
-            seen.add(record.assetId)
-            if (record.serialNumber) seen.add(record.serialNumber)
-            return true
-        })
-    if (records.length) await saveAssets([...records, ...existing])
-    return records
 }
 
 export const updateAsset = (assetId, patch) => {
@@ -250,7 +205,7 @@ export const getServiceHistory = (assetId) => readList(SERVICE_KEY, SERVICE_SEED
 export const addServiceRecord = (record) => {
     const rows = readList(SERVICE_KEY, SERVICE_SEED)
     const next = { ...record, id: `SRV-${Date.now()}`, createdAt: new Date().toISOString().slice(0, 10) }
-    saveCampusJson(SERVICE_KEY, [next, ...rows])
+    localStorage.setItem(SERVICE_KEY, JSON.stringify([next, ...rows]))
     return next
 }
 
@@ -272,6 +227,6 @@ export const transferAsset = (asset, payload) => {
         transferredBy: 'IT Support',
         status: 'Completed',
     }
-    saveCampusJson(TRANSFER_KEY, [entry, ...history])
+    localStorage.setItem(TRANSFER_KEY, JSON.stringify([entry, ...history]))
     return updateAsset(asset.assetId, { department: payload.toDepartment, custodian: payload.toCustodian, status: 'Assigned' })
 }

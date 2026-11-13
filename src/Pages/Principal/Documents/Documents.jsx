@@ -8,12 +8,12 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
-
-const EXPORT_ROWS = [
-    {document_id: 'DOC001', document_name: 'Government Education Circular', document_format: 'Education-Circle-Circular.pdf', document_category: 'Government Orders', document_description: 'Latest government guidelines for school administration.', uploaded_by: 'Director', upload_date: '10-08-2025'},
-]
+import { useAuth } from '../../../Context/AuthContext';
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions';
 
 const Documents = () => {
+    const { role } = useAuth();
+    const canDelete = canRoleDelete(role);
     
     const [fromDate, setFromDate] = useState(new Date());
     const [toDate, setToDate] = useState(new Date());
@@ -147,9 +147,11 @@ const Documents = () => {
                                         <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                             Edit
                                         </button>
-                                        <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                            Delete
-                                        </button>
+                                        {canDelete && (
+                                            <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                                Delete
+                                            </button>
+                                        )}
                                     </Dropdown>
                                 </td>
                             </tr>
@@ -181,17 +183,11 @@ const Documents = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='documents'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
 
         </section>
     )

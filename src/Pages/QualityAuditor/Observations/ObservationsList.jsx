@@ -7,7 +7,6 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
     getObservations,
-    hydrateFromApi,
     DEPARTMENTS,
     PRIORITIES,
     CATEGORIES,
@@ -29,9 +28,7 @@ const ObservationsList = ({ variant = 'open' }) => {
     const [exportModal, setExportModal] = useState(false)
 
     useEffect(() => {
-        hydrateFromApi().finally(() => {
-            setRecords(getObservations().filter((item) => statusFilter.includes(item.status)))
-        })
+        setRecords(getObservations().filter((item) => statusFilter.includes(item.status)))
     }, [location.pathname, statusFilter])
 
     const title = variant === 'open' ? 'Open Observations' : 'Closed Observations'
