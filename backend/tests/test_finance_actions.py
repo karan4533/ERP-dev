@@ -159,10 +159,11 @@ def test_collect_payment_includes_late_fee_in_balance(client):
         json={"receiptId": receipt_id, "channel": "whatsapp"},
     )
     assert sent.status_code == 200, sent.text
-    assert sent.json()["delivery"]["status"] == "queued_stub"
+    # Without WhatsApp credentials, delivery must stay NOT_CONFIGURED (never fake success).
+    assert sent.json()["delivery"]["status"] == "NOT_CONFIGURED"
     assert sent.json()["delivery"]["delivered"] is False
     assert sent.json()["receipt"]["communication"]["whatsapp"] is False
-    assert sent.json()["receipt"]["communication"]["whatsappStatus"] == "queued_stub"
+    assert sent.json()["receipt"]["communication"]["whatsappStatus"] == "NOT_CONFIGURED"
 
 
 def test_gateway_intent_and_approval(client):
@@ -176,20 +177,14 @@ def test_gateway_intent_and_approval(client):
     assert intent.status_code == 200, intent.text
     assert intent.json()["intent"]["gateway"] == "stub"
     reference = intent.json()["intent"]["reference"]
+    # Stub gateway cannot be confirmed without Razorpay credentials — honest 503.
     confirmed = client.post(
         "/api/v1/finance/actions/gateway-confirm",
         headers=headers,
         json={"reference": reference},
     )
-    assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["intent"]["status"] == "PAID"
-    again = client.post(
-        "/api/v1/finance/actions/gateway-confirm",
-        headers=headers,
-        json={"reference": reference},
-    )
-    assert again.status_code == 200
-    assert again.json().get("skipped") is True
+    assert confirmed.status_code == 503, confirmed.text
+    assert confirmed.json()["detail"]["code"] == "NOT_CONFIGURED"
     decided = client.post(
         "/api/v1/finance/actions/decide-approval",
         headers=headers,
