@@ -8,23 +8,34 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ---
 
-## 19 November 2026 — Regression fixes + Hostel Warden checkpoint (no commit)
+## 19 November 2026 — Push checkpoint + Transport Manager LIVE start
 
-**Status:** Local only. **Do not commit/push until explicit approval.** Keep PRM and Hostel Warden identifiable.
+**Status:** PRM + Hostel + regression **pushed**. Transport Manager Phase B core fleet wired locally.
+
+### Done
+- Pushed root `irul` (`6741b1a`, `1f439fd`) to `origin/irul`; FE `a8c666b`, `77b5f5c` to `new-ui/main`
+- Transport Manager LIVE: `transportApiService` + dashboard/drivers/vehicles/routes/student-assignments/duties; Live layout banner; leave/announcement formal routes
+- Pytest transport+hostel+ops **13 passed**; FE build **Pass**; API probe TM login + ops write + admin **403**
+
+### Still open
+- TM GPS track UI, maintenance/approvals/expenses, NOC — MOCK/BLOCKED
+- Manual browser UAT for TM login still recommended
+
+---
+
+## 19 November 2026 — Regression fixes + Hostel Warden checkpoint
+
+**Status:** Committed/pushed same day.
 
 ### Done
 - Fixed admissions `AdmissionCreate.student_account_email` AttributeError (schema + enroll soft-skip); Parent TC cascade cleared
 - Attendance roster includes pending+placed; finance_actions expect Razorpay `NOT_CONFIGURED`; HR 409 not reproduced
 - Added backend `hostelwarden` role (matrix, seed, creatable STAFF, ops writers, `students.read`)
-- Frontend Hostel Warden layout/routes/dashboard/assignments/payments + `hostelApiService` against `/api/v1/ops/hostel-assignments|hostel-payments`
-- Nav/sidebar/Auth/roles/announcement/leave configs wired; enterprise directory seed entry
-- Browser UAT: login Live banner; allocate Fee Child A-202; payments Live; RBAC 403s
-- Pytest broader pack **93 passed / 0 failed**; FE build **Pass**
-- Tracker + testing report updated
+- Frontend Hostel Warden layout/routes/dashboard/assignments/payments + `hostelApiService`
+- Browser UAT hostel; pytest **93/0**; FE build **Pass**
 
 ### Still open
 - Hostel blocks/rooms masters, outpass, visitors, mess, complaints — **BLOCKED** (no APIs)
-- Await ack to commit; suggest separate commits for (1) regression fixes, (2) PRM FE, (3) Hostel Warden FE/BE
 
 ---
 

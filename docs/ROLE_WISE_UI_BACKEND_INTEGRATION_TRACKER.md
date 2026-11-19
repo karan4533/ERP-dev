@@ -749,7 +749,40 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 | Teacher PUT hostel-assignments | **403** |
 | Warden finance/state + admin/users | **403** |
 
-**Hostel Warden expansion checkpoint:** COMPLETE for ops-backed LIVE scope. **Do not commit/push until explicit approval.** Keep PRM vs Hostel Warden identifiable in review.
+**Hostel Warden expansion checkpoint:** COMPLETE for ops-backed LIVE scope. Committed/pushed 2026-11-19 (`irul` + `ERP_QMIS`/`new-ui`).
+
+---
+
+## Transport Manager — Phase A audit + Phase B LIVE (ops-backed)
+
+**Login:** `transportmanager@qmis.edu` / `transport123` → JWT `transportmanager` → `/transport-manager/dashboard`  
+**Layout / routes:** `TransportManagerLayout.jsx` (Live banner) → `TransportManagerRoutes.jsx`  
+**Service:** `transportApiService.js` → `GET/PUT /api/v1/ops/transport-*`
+
+### Feature classification
+
+| Feature | Status | Notes |
+|---|---|---|
+| Dashboard counts | **LIVE** | drivers/vehicles/routes/assignments |
+| Drivers | **LIVE** | `transport-drivers` |
+| Vehicles | **LIVE** | `transport-vehicles` |
+| Routes | **LIVE** | `transport-routes` |
+| Student assignments | **LIVE** | `transport-student-assignments` + `GET /students` |
+| Duties | **LIVE** | `transport-duties` |
+| Announcements / my leave | **LIVE**-capable | formal routes + enterprise stub skip |
+| GPS / ProTrack track UI | **MOCK** / deferred | APIs exist; track page not rewired |
+| Maintenance / approvals / expenses | **MOCK** | ops exist; second slice |
+| Driver/Conductor NOC | **BLOCKED** | no API |
+| Fake `/api/v1/transport/*` | **BLOCKED** | do not use |
+
+### Verification
+
+- Pytest `test_transport_manager_apis` + hostel + ops: **13 passed**
+- API probe: login role `transportmanager`; PUT drivers/vehicles **200**; admin users **403**
+- FE build: **Pass**
+- Browser UI UAT: deferred (session occupied); use credentials above for manual check
+
+**Transport Manager expansion checkpoint:** Phase B core fleet LIVE complete (local; push with this session).
 
 ---
 
@@ -757,7 +790,8 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 
 | Date | Change |
 |---|---|
-| 2026-11-19 | Regression fixes (admissions/TC/attendance/finance tests); Hostel Warden role + ops LIVE assignments/payments; UAT + pytest + build (no commit) |
+| 2026-11-19 | Transport Manager LIVE: drivers/vehicles/routes/student-assignments/duties via ops transport-*; dashboard + layout banner; pytest + build |
+| 2026-11-19 | Regression fixes (admissions/TC/attendance/finance tests); Hostel Warden role + ops LIVE assignments/payments; committed/pushed |
 | 2026-11-18 | PRM/Front Office LIVE: enquiries CRUD/convert, students/teachers, TC forward, FO collection lists, leave route fix, layout banner; UAT + pytest + build (no commit yet) |
 | 2026-11-18 | Regression audit SuperAdmin→Coordinator PASS; Librarian LIVE library-books/issues/members; UAT + build |
 | 2026-11-18 | Coordinator LIVE checkpoint: students/attendance/leave/placement; layout banner; enterprise leave skip; UAT + pytest + build |
