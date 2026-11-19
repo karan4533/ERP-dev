@@ -1,35 +1,50 @@
 # Testing report
 
-**Date:** 23 October 2026  
-**Branch:** `ERP1`  
-**Context:** Final pending-requirements audit (code re-check + targeted pytest)
+**Date:** 19 November 2026  
+**Context:** Regression fixes + Hostel Warden ops LIVE checkpoint  
+**Scope:** Local only — no commit/push
 
-## Backend (this audit)
+## Backend
 
-| Metric | Count |
+| Suite | Passed | Failed | Notes |
+|---|---|---|---|
+| Broader regression (hostel warden + admissions + parent TC + attendance + HR + finance + finance_actions + phase1 finance + ops/audit + front office + leave + auth static + admin users + teacher + coordinator + principal) | **93** | **0** | Ran to completion |
+| Earlier focused: hostel + admissions + TC + attendance + finance_actions + HR + ops + leave + auth + teacher + coordinator + principal + FO | **53** | **0** | Pre-final pack |
+| `test_admin_users::test_creatable_roles_for_admin` + finance packs | **16** | **0** | After adding `hostelwarden` to expected creatable set |
+| Hostel Warden API (`test_hostel_warden_apis`) | **3** | **0** | assign/list, teacher 403 write, finance/admin 403 |
+
+### Fixes verified
+
+| Area | Result |
 |---|---|
-| Passed | **19** |
-| Failed | **0** |
-| Skipped | 0 |
-| Warnings | 1 (Starlette TestClient / httpx deprecation) |
-| Duration | ~27 seconds |
-
-Command: `python -m pytest tests/test_remaining_workflows.py tests/test_frontend_production_readiness_static.py tests/test_protrack_proxy.py tests/test_integrations_ready.py -q` from `backend/`.
-
-## Backend (earlier same day — full suite)
-
-| Metric | Count |
-|---|---|
-| Passed | **464** |
-| Failed | **0** |
-| Duration | 4 minutes 41 seconds |
-
-Command: `python -m pytest tests/ -q` from `backend/`.
+| Admissions `student_account_email` | **Pass** — schema fields + enroll soft-skip without password |
+| Parent TC | **Pass** — cascading admissions AttributeError resolved |
+| Attendance | **Pass** — pending+placed roster (not admissions cascade only) |
+| HR vertical | **Pass** — no `409 already_exists` on this run |
+| Finance / Razorpay | **Pass** — `NOT_CONFIGURED`/503 expectations; no fake payments |
+| Librarian/ops | Covered via `test_ops_and_audit_collections` in 93-pass pack |
+| PRM / FO | Covered via `test_front_office_api` in 93-pass pack |
+| Shared RBAC / auth static | Covered via `test_frontend_auth_static` + role portal suites |
 
 ## Frontend
 
-`npm run build` passed earlier same day (~1 minute 7 seconds). Not re-run in the final audit pass.
+| Check | Result |
+|---|---|
+| `npm run build` (ERP_QMIS) | **Pass** (~70s, exit 0) |
 
-## Browser
+## Browser / API UAT (Hostel Warden)
 
-Canteen order create → API persist → refresh → re-login → controlled fail-save was verified on localhost (see `QMIS_ERP_PRODUCTION_READINESS_REPORT.md` §6). Live ProTrack, SMTP, WhatsApp, and Razorpay were not attempted (configuration empty / out of scope).
+| Check | Result |
+|---|---|
+| Login `hostelwarden@qmis.edu` / `hostelwarden123` | **Pass** → `/hostel-warden/dashboard` + Live banner |
+| Dashboard Live counts | **Pass** — Active residents **1** after API seed |
+| Assign Fee Child A-202/B2 via UI | **Pass** — persisted `HAS-0002` |
+| Payments page Live | **Pass** — resident options include Fee Child |
+| Vacate (API) + teacher PUT assignments | **Pass** / teacher **403** |
+| Warden finance/state + admin/users | **403** |
+
+## Coverage notes
+
+- Do not invent `/api/v1/hostel/*`; LIVE scope is ops collections only.
+- Outpass, visitors, mess, room masters remain **BLOCKED** (no API).
+- PRM uncommitted work preserved alongside Hostel Warden FE/BE changes.

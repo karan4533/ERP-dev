@@ -146,7 +146,7 @@ def _writers_for(collection: str) -> set[str]:
     if collection == "biometric-attendance":
         return _BIOMETRIC
     if collection.startswith("hostel-"):
-        return _ADMINS
+        return {"hostelwarden"} | _ADMINS
     return _ADMINS
 
 

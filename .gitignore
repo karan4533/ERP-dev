@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -23,11 +25,66 @@ dist-ssr
 *.sln
 *.sw?
 
-#miscelaneous
+# miscellaneous
 /scripts
-*.md
 scratch/
 output/
 .playwright-mcp/
 .superpowers/
 eslint_src_report.json
+
+# Local probe / PDF-extraction scratch (not for version control)
+probe_snippets.py
+scratch_probe.py
+extracted_*.txt
+
+# Keep project READMEs + manager reports + backend docs; ignore other local notes
+*.md
+!README.md
+!backend/README.md
+!backend/docs/**/*.md
+!docs/**/*.md
+!reports/daily-work-report.md
+!reports/testing-report.md
+!reports/QMIS-ERP-Full-Panel-Test-Guide.md
+!reports/QMIS-ERP-Module-Flow-Test-Guide.md
+!reports/QMIS-ERP-Linked-Module-Flow-Test-Guide.md
+!reports/QMIS-ERP-Journey-Flow-Testing-Report-20oct.md
+!reports/QMIS-ERP-Tester-Journey-Flow-20oct.md
+!reports/QMIS-ERP-Teammate-Leftover-Ops-Prompt-20oct.md
+!reports/CURSOR-CONTINUE-PROMPT-20oct.md
+!QMIS_ERP_FINAL_PENDING_REQUIREMENTS.md
+!QMIS_ERP_PRODUCTION_READINESS_REPORT.md
+!QMIS_ERP_COMPLETE_SYSTEM_AUDIT_REPORT.md
+!REMAINING_MODULES_IMPLEMENTATION_REPORT.md
+
+# Local credential / seed dumps must never be committed
+cred.txt
+**/cred.txt
+backend/login.json
+**/login.json
+
+# Python / FastAPI backend
+backend/.venv/
+backend/venv/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/**/*.egg-info/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.env
+backend/*.db
+backend/*.sqlite3
+backend/qmis_erp.db
+backend/uploads/
+
+# Word lock / temp / lock-workaround copies (SoT remains the non-unlocked .docx)
+~$*
+*.docx.tmp
+*.unlocked.docx
+erp complete documentation/*.docx.tmp
+
+backend/_audit_results.json

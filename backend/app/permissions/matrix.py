@@ -6,6 +6,7 @@ FRONTEND_ROLES: list[tuple[str, str]] = [
     ("student", "Student"),
     ("parent", "Parent"),
     ("librarian", "Librarian"),
+    ("hostelwarden", "Hostel Warden"),
     ("prm", "PRM"),
     ("gatekeeper", "Gate Keeper"),
     ("gatekeepermanager", "Gate Keeper Manager"),
@@ -349,6 +350,7 @@ for _code, _perms in ROLE_PERMISSIONS.items():
 # Ops campus collections (library / gate / transport / stores / JD / biometric).
 _OPS_ROLES = {
     "librarian",
+    "hostelwarden",
     "gatekeeper",
     "gatekeepermanager",
     "transportmanager",
@@ -375,6 +377,11 @@ for _code, _perms in ROLE_PERMISSIONS.items():
 # Transport Manager assigns students to bus routes — needs campus student roster (read-only).
 for _code, _perms in ROLE_PERMISSIONS.items():
     if _code == "transportmanager" and "students.read" not in _perms:
+        _perms.append("students.read")
+
+# Hostel Warden allocates beds against the campus student roster (read-only).
+for _code, _perms in ROLE_PERMISSIONS.items():
+    if _code == "hostelwarden" and "students.read" not in _perms:
         _perms.append("students.read")
 
 # Campus audit collections (JD Audit + Process/Quality auditors).
