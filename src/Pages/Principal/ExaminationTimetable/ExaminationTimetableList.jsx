@@ -8,7 +8,7 @@ import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestMo
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import TimeTableModal from './Components/TimeTableModal'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
-import { useAuth } from '../../../Context/AuthContext'
+import { useAuth } from '../../../context/AuthContext'
 import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import {
     CREATE_ROUTE,

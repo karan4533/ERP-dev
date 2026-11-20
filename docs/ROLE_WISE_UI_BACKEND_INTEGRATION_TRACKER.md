@@ -102,16 +102,32 @@ Do not start the next role until the current role checkpoint is reported.
 |---|---|---|
 | Auth / login | LIVE | **UAT VERIFIED** (`superadmin@qmis.edu`) |
 | Announcements | LIVE | Pass (shared Common) |
-| Dashboard KPIs | LIVE | **UAT VERIFIED** (live KPI strip) |
-| Administrator accounts list/create/status/reset | LIVE | **UAT VERIFIED** (list shows ADM-0001 after create) |
+| Dashboard KPIs | LIVE | **UAT VERIFIED** 2026-11-20 (students=1, employees=3; quick-nav uses live counts) |
+| Dashboard charts / finance surplus widgets | MOCK | Honest notice: demo visuals remain |
+| Administrator accounts list/create/status/reset | LIVE | Prior UAT; export still unavailable (honest disabled control) |
 | Module permission toggles | BLOCKED | N/A (honest UI notice) |
-| Student directory | LIVE | **UAT VERIFIED** (ADM-DEMO-001) |
-| Employee directory | LIVE | **UAT VERIFIED** (6 portal employees via shared HR API) |
-| Escalations / Tasks / Leave / Approvals / Comm / Calendar / Notifications / Gate / Finance / Audit UI / Stars / Transport / Ops | MOCK | — |
+| Student directory | LIVE | **UAT VERIFIED** (ADM-DEMO-001); PDF export uses SA valid-PDF helper |
+| Employee directory | LIVE | LIVE list; SA PDF/CSV export wired (no fake `.xlsx`/broken PDF) |
+| Student attendance (SA page) | LIVE / PARTIAL | Wired to `GET /api/v1/attendance`; empty date/filter shows honest empty |
+| Compliance Score Cards UI | MOCK (layout fixed) | 91% kept top-right; dept cards tightened; MOCK banner shown |
+| Audit reports tables/charts | MOCK | No dedicated SA compliance API |
+| PDF export (students/employees/attendance) | LIVE (client PDF) | Root cause: shared ExportModal wrote invalid PDF text; SA now builds real `%PDF-` |
+| Escalations / Tasks / Leave / Approvals / Comm / Calendar / Notifications / Gate / Finance / Stars / Transport / Ops | MOCK / PARTIAL | Unchanged this slice |
 
-**RBAC spot-check:** teacher `GET /api/v1/admin/users` → **403**. Super Admin can create `role=admin` (seed API create `ADM-0001`).
+### Super Admin mock-removal slice (2026-11-20)
 
-**Super Admin checkpoint:** Priority slice complete (acked via push + Admin start).
+- Removed SA usage of broken Common `ExportModal` fake PDF for students/employees/attendance.
+- Added `Pages/SuperAdmin/utils/buildValidPdf.js` + `SuperAdminExportModal.jsx` (valid PDF + honest CSV).
+- PDF validation: signature `%PDF-`, `pypdf` pages=1, extractable text, `%%EOF`.
+- Compliance layout: overview + compliance section — overall score top-right, balanced dept cards, no calculation change.
+- Dashboard quick-nav no longer shows fake 1,240/248 counts when live KPIs exist.
+- Browser UAT: login SA → live KPIs → compliance MOCK banner + 91% → students live list → Export PDF modal (Valid PDF document).
+- Tests: `test_admin_users` + `test_admin_attendance_api` + `test_security_p0` → **89 passed**. FE build **Pass**.
+- No commit/push.
+
+**RBAC spot-check (prior):** teacher `GET /api/v1/admin/users` → **403**.
+
+**Super Admin checkpoint:** Priority slice + 2026-11-20 PDF/compliance/attendance honesty updates (uncommitted).
 
 ### Files modified (this slice)
 
@@ -778,11 +794,27 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 ### Verification
 
 - Pytest `test_transport_manager_apis` + hostel + ops: **13 passed**
-- API probe: login role `transportmanager`; PUT drivers/vehicles **200**; admin users **403**
-- FE build: **Pass**
-- Browser UI UAT: deferred (session occupied); use credentials above for manual check
+- Pytest `test_sqlite_concurrency` (file SQLite NullPool, alone): **3 passed**
+- Live uvicorn concurrent HTTP burst (64 parallel GETs): all transport **200**, admin/finance **403**, process stayed up
+- FE build: **Pass** (`✓ built in 3m 33s`)
+- Browser UAT 2026-11-19 (post NullPool fix; FE `5175` → API `8001`):
 
-**Transport Manager expansion checkpoint:** Phase B core fleet LIVE complete (local; push with this session).
+| Check | Result | Evidence |
+|---|---|---|
+| Login + role sidebar | **Pass** | `transportmanager` → `/transport-manager/dashboard` |
+| LIVE banner + honesty | **Pass** | Banner states GPS/ProTrack, NOC, fake `/api/v1/transport/*` are **not LIVE** |
+| Dashboard real counts | **Pass** | Drivers **2** / Vehicles **0** / Routes **0** / assignments **0** after create |
+| Drivers/Vehicles/Routes/Assignments/Duties UI | **Pass** | Lists load; empty collections show honest empty tables |
+| Create + refresh persist | **Pass** | UI save `TDR-0002` ConcFix Driver; dashboard refresh Drivers=2; API still returns `TDR-UAT-LOCAL` + `TDR-0002` |
+| Admin-only blocked | **Pass** | finance/state + admin/users **403** |
+| GPS / maintenance / approvals / expenses / NOC | **Pass** (honest MOCK) | Route Data / Maintenance / Approvals / Expenses / NOC still non-ops UI; banner honesty unchanged |
+
+### Root cause + fix (local SQLite)
+
+1. **Cause:** Request path used `app.core.database` with **StaticPool** + `check_same_thread=False`, sharing one SQLite connection across anyio worker threads → `sqlite3.InterfaceError` / Windows AV exit `3221225477`. Prior `pool_size=1` tweak hit unused `app.db.session` engine only.
+2. **Fix:** File SQLite → **NullPool** (one connection per Session); `:memory:` tests keep **StaticPool**. `app.db.session` re-exports the same engine/session. FE keeps sequential collection loads + stale-load guards.
+
+**Transport Manager expansion checkpoint:** Phase B LIVE + local concurrency crash fixed (uncommitted). GPS/maintenance/approvals/expenses/NOC remain MOCK/BLOCKED.
 
 ---
 
@@ -790,6 +822,8 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 
 | Date | Change |
 |---|---|
+| 2026-11-20 | Super Admin: valid PDF export, attendance LIVE wiring, compliance card layout + MOCK honesty, dashboard live quick-nav counts (uncommitted) |
+| 2026-11-19 | TM SQLite concurrency: NullPool on file SQLite request engine; FE sequential+stale guards; concurrent + browser UAT Pass (uncommitted) |
 | 2026-11-19 | Transport Manager LIVE: drivers/vehicles/routes/student-assignments/duties via ops transport-*; dashboard + layout banner; pytest + build |
 | 2026-11-19 | Regression fixes (admissions/TC/attendance/finance tests); Hostel Warden role + ops LIVE assignments/payments; committed/pushed |
 | 2026-11-18 | PRM/Front Office LIVE: enquiries CRUD/convert, students/teachers, TC forward, FO collection lists, leave route fix, layout banner; UAT + pytest + build (no commit yet) |

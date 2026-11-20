@@ -8,7 +8,7 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
-import { useAuth } from '../../../Context/AuthContext';
+import { useAuth } from '../../../context/AuthContext';
 import { canRoleDelete } from '../../../Common/RBAC/actionPermissions';
 
 const Documents = () => {

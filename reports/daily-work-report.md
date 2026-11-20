@@ -8,18 +8,45 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ---
 
-## 19 November 2026 — Push checkpoint + Transport Manager LIVE start
+## 19 November 2026 — TM SQLite concurrency crash fix
 
-**Status:** PRM + Hostel + regression **pushed**. Transport Manager Phase B core fleet wired locally.
+**Status:** Fixed and re-UAT’d locally. No commit/push.
 
 ### Done
-- Pushed root `irul` (`6741b1a`, `1f439fd`) to `origin/irul`; FE `a8c666b`, `77b5f5c` to `new-ui/main`
-- Transport Manager LIVE: `transportApiService` + dashboard/drivers/vehicles/routes/student-assignments/duties; Live layout banner; leave/announcement formal routes
-- Pytest transport+hostel+ops **13 passed**; FE build **Pass**; API probe TM login + ops write + admin **403**
+- Root cause: request-path `StaticPool` shared SQLite connection across threads (`app.core.database`)
+- Fix: file SQLite **NullPool**; unify `db.session` onto same engine; FE sequential loads + stale guards
+- Concurrent pytest **3 passed**; live 64-way burst survived; transport/hostel/ops **13 passed**; FE build **Pass**
+- Browser UAT: dashboard counts, lists, create `TDR-0002`, refresh, RBAC 403, MOCK honesty **Pass**
+
+### Still open
+- GPS / maintenance / approvals / expenses / NOC still MOCK/BLOCKED
+- Commit/push when approved
+
+---
+
+## 19 November 2026 — Transport Manager browser UAT
+
+**Status:** Browser UAT was **partial** before NullPool fix (superseded by section above).
+
+### Done
+- Browser: TM login + sidebar + Live banner (honest GPS/NOC wording) **Pass**
+- Sequential API: lists + create `TDR-UAT-LOCAL` persist + admin/finance **403** **Pass**
+
+### Failures (at that time)
+- Dashboard/list UI data **Fail** under concurrent StaticPool crash — later fixed same day
+
+---
+
+## 19 November 2026 — Push checkpoint + Transport Manager LIVE start
+
+**Status:** PRM + Hostel + regression **pushed**. Transport Manager Phase B core fleet wired and pushed earlier same day.
+
+### Done
+- Pushed root `irul` and FE `new-ui/main` (regression, PRM, Hostel, TM LIVE)
+- Pytest transport+hostel+ops **13 passed**; FE build **Pass**
 
 ### Still open
 - TM GPS track UI, maintenance/approvals/expenses, NOC — MOCK/BLOCKED
-- Manual browser UAT for TM login still recommended
 
 ---
 
