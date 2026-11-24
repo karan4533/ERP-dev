@@ -10,6 +10,7 @@ import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from urllib.parse import unquote
 
 # File DB (not :memory:) — StaticPool sharing is what crashed local uvicorn.
 _FD, _DB_PATH = tempfile.mkstemp(prefix="qmis_sqlite_conc_", suffix=".db")
@@ -23,7 +24,7 @@ import atexit
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from app.core import database as database_module
 from app.main import app
@@ -47,9 +48,17 @@ def client():
         yield test_client
 
 
-def test_file_sqlite_engine_uses_null_pool():
-    url = str(database_module.engine.url)
+def _engine_is_memory_sqlite() -> bool:
+    """Detect :memory: even when SQLAlchemy renders it URL-encoded (%3Amemory%3A)."""
+    url = unquote(str(database_module.engine.url))
     if ":memory:" in url:
+        return True
+    # Full-suite import order may already bind StaticPool for pytest memory DB.
+    return database_module.engine.pool.__class__ is StaticPool
+
+
+def test_file_sqlite_engine_uses_null_pool():
+    if _engine_is_memory_sqlite():
         pytest.skip("engine already bound to :memory: by another test module; run this file alone")
     assert database_module.engine.pool.__class__ is NullPool
 

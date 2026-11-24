@@ -98,7 +98,8 @@ COLLECTIONS: dict[str, str] = {
 
 _ADMINS = {"admin", "superadmin", "managing_director"}
 _LIBRARY = {"librarian"} | _ADMINS
-_GATE = {"gatekeeper", "gatekeepermanager"} | _ADMINS
+# PRM shares visitor check-in/out with gate staff (W1 — single SoT gate-visitors).
+_GATE = {"gatekeeper", "gatekeepermanager", "prm"} | _ADMINS
 _TRANSPORT = {"transportmanager", "driver"} | _ADMINS
 # Principal final-approves maintenance/fuel requests and posts the linked expense.
 _TRANSPORT_PRINCIPAL_WRITE = {

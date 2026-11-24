@@ -88,3 +88,7 @@ backend/uploads/
 erp complete documentation/*.docx.tmp
 
 backend/_audit_results.json
+
+# Local FE junction for static tests / dev — never commit partner UI tree into root repo
+ERP_QMIS/
+

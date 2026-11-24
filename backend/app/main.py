@@ -33,6 +33,7 @@ from app.api.v1.endpoints.lesson_plans import router as lesson_plans_router
 from app.api.v1.endpoints.exams import router as exams_router
 from app.api.v1.endpoints.escalations import router as escalations_router
 from app.api.v1.endpoints.leave import router as leave_router
+from app.api.v1.endpoints.substitute_duties import router as substitute_duties_router
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.models import Base
@@ -84,6 +85,7 @@ app.include_router(approvals_router)
 app.include_router(lesson_plans_router)
 app.include_router(exams_router)
 app.include_router(leave_router)
+app.include_router(substitute_duties_router)
 app.include_router(escalations_router)
 app.include_router(finance_router)
 app.include_router(hr_router)
