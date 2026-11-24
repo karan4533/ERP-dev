@@ -88,3 +88,8 @@ backend/uploads/
 erp complete documentation/*.docx.tmp
 
 backend/_audit_results.json
+
+# Local staging secrets
+.env.staging
+backend/.env.staging
+
