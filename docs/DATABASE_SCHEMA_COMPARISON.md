@@ -1,5 +1,7 @@
 # QMIS ERP — Database Schema Comparison (Read-Only Audit)
 
+> **Canonical update (2026-11-24):** For the current code-derived production schema (56 tables, Alembic through `0026`, JSON collection inventory, role mapping, PG sequence), use [`QMIS_PRODUCTION_DATABASE_SCHEMA.md`](./QMIS_PRODUCTION_DATABASE_SCHEMA.md). This file remains a historical SQLite-vs-PG access snapshot from 19 November 2026.
+
 **Date:** 19 November 2026  
 **Scope:** Compare local SQLite artifacts with SQLAlchemy metadata and the intended PostgreSQL target.  
 **Constraint:** No database modifications. PostgreSQL live introspection was **not** completed (see access limitation).

@@ -1,8 +1,40 @@
 # QMIS ERP — PostgreSQL Migration Readiness
 
+> **Canonical update (2026-11-24):** Schema dictionary, gaps, and recommended production sequence live in [`QMIS_PRODUCTION_DATABASE_SCHEMA.md`](./QMIS_PRODUCTION_DATABASE_SCHEMA.md). This file remains the 19 November 2026 readiness notes (PG login blocked; SQLite runtime observations).
+
 **Date:** 19 November 2026  
 **Status:** Read-only audit complete. **No migration executed.**  
-**Companion:** [`DATABASE_SCHEMA_COMPARISON.md`](./DATABASE_SCHEMA_COMPARISON.md)
+**Companion:** [`DATABASE_SCHEMA_COMPARISON.md`](./DATABASE_SCHEMA_COMPARISON.md) · [`QMIS_PRODUCTION_DATABASE_SCHEMA.md`](./QMIS_PRODUCTION_DATABASE_SCHEMA.md)
+
+### Staging setup (2026-11-24) — READY (migrations not run)
+
+| Check | Result |
+|---|---|
+| PostgreSQL 18 service | Running on `127.0.0.1:5432` |
+| Database `qmis_erp_staging` | Created empty (`public` base tables = 0) |
+| Role `qmis_staging_user` | LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE |
+| Isolation | Staging user can connect to `qmis_erp_staging` only; denied `qmis_erp`, `qmis_academic_browser`, `postgres` |
+| `backend/.env` (SQLite) | Unchanged |
+| `backend/.env.staging` | Created, gitignored; `ENVIRONMENT=production` (no demo seed passwords) |
+| Alembic / seed | **Not executed** — awaiting separate approval |
+
+### Alembic upgrade attempt (2026-11-24) — FAILED (no repair)
+
+Target confirmed: `qmis_erp_staging` / user `qmis_staging_user` only.
+
+| Step | Result |
+|---|---|
+| Pre-check `current_database()` | `qmis_erp_staging` |
+| Before revision | empty (no `alembic_version`) |
+| `alembic upgrade head` | **Failed at `0005_document_records`** |
+| After revision (transaction left stamp) | `0004_class_details_fields` |
+| Public tables | only `alembic_version` |
+
+**Exact error:** `psycopg.errors.UndefinedTable: relation "campuses" does not exist` while creating `document_records` (FK to `campuses`).
+
+**Root cause:** `0001_baseline` is a **no-op** (`upgrade(): pass`). Revisions `0002`–`0004` alter assumed existing tables; they do not create the core schema. Empty PG cannot be bootstrapped by `alembic upgrade head` alone — historical design expected prior `Base.metadata.create_all` (or an equivalent baseline dump).
+
+**Not done (per safety):** no rollback, no drop, no migration file edits, no seed, no connect to `qmis_erp`.
 
 ---
 
