@@ -195,7 +195,9 @@ export default function BusTrackingMap({
     stats = DEFAULT_STATS,
     routeCoords = DEFAULT_ROUTE_COORDS,
     busIndex = 54,
+    trackingMode = 'demo',
 }) {
+    const isLiveGps = trackingMode === 'live'
     const startPoint = routeCoords[0]
     const endPoint = routeCoords[routeCoords.length - 1]
     const busPosition = routeCoords[busIndex] ?? endPoint
@@ -235,12 +237,20 @@ export default function BusTrackingMap({
                         <span className='text-emerald-700 text-xs font-semibold'>Call Driver</span>
                     </a>
 
-                    <div className='flex items-center gap-2 bg-[#EDEEF5] rounded-full px-3 py-1.5'>
+                    <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${isLiveGps ? 'bg-[#EDEEF5]' : 'bg-amber-50 border border-amber-200'}`}>
                         <span className='relative flex h-2.5 w-2.5'>
-                            <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75' />
-                            <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500' />
+                            {isLiveGps ? (
+                                <>
+                                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75' />
+                                    <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500' />
+                                </>
+                            ) : (
+                                <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500' />
+                            )}
                         </span>
-                        <span className='text-[#0C1E5B] text-xs font-semibold tracking-wide'>LIVE</span>
+                        <span className={`text-xs font-semibold tracking-wide ${isLiveGps ? 'text-[#0C1E5B]' : 'text-amber-800'}`}>
+                            {isLiveGps ? 'LIVE GPS' : 'DEMO ROUTE — NOT LIVE GPS'}
+                        </span>
                     </div>
                 </div>
             </div>

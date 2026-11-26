@@ -28,7 +28,7 @@ const MapPlaceholder = () => (
                 <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75' />
                 <span className='relative inline-flex rounded-full h-2 w-2 bg-emerald-500' />
             </span>
-            <span className='text-[10px] font-semibold text-[#0C1E5B]'>LIVE</span>
+            <span className='text-[10px] font-semibold text-amber-800'>DEMO ROUTE — NOT LIVE GPS</span>
         </div>
     </div>
 )
