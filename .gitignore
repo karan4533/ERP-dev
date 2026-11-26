@@ -95,3 +95,26 @@ ERP_QMIS/
 # Local staging secrets
 .env.staging
 backend/.env.staging
+
+# Local integration workspaces, backups and evidence
+/_integration/
+/_sync_backups/
+
+# Nested repositories (they have their own remotes)
+/school-erp-demo2/
+
+# Local databases and backups
+*.db
+*.db.bak*
+*.sqlite
+*.sqlite3
+
+# Env files of any name (templates still allowed)
+*.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Shell probe output and personal files
+shell-check*.txt
+Timesheet_*.xlsx
