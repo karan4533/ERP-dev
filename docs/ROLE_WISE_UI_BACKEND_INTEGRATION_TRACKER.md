@@ -1,13 +1,48 @@
 # Role-Wise UI ↔ Backend Integration Tracker
 
-**Updated:** 2026-11-19  
+**Updated:** 2026-11-23\
 **Frontend:** `C:\karan\irul\ERP_QMIS`  
 **Backend:** `C:\karan\irul\backend`  
 **Live mode:** `VITE_USE_MOCK=false` + `VITE_API_BASE_URL=http://127.0.0.1:8000`
 
-Status: **LIVE** | **PARTIAL** | **MOCK** | **BLOCKED** | **UAT VERIFIED**
+Status: **LIVE** | **PARTIAL** | **MOCK** | **LOCAL ONLY** | **BLOCKED** | **UAT VERIFIED**
 
-Shared checkpoint (preserve): Auth LIVE · Announcements LIVE · HR Employees LIVE (portal edit limits).
+Shared checkpoint (preserve): Auth LIVE · Announcements LIVE · HR Employees LIVE (portal edit limits) · controlled triage fixes (migration 0007, NullPool skip, Track Bus DEMO, Roles honesty, calendar hydrate).
+
+**Phase 1 seven-role evidence (2026-11-23):** [`docs/PHASE1_CORE_ROLES_EVIDENCE_REPORT.md`](./PHASE1_CORE_ROLES_EVIDENCE_REPORT.md)\
+**Phase 1 final stabilization (2026-11-23):** [`docs/PHASE1_FINAL_STABILIZATION_REPORT.md`](./PHASE1_FINAL_STABILIZATION_REPORT.md) — exams schedules LIVE, identity `/me` APIs, attendance honesty, finance MOCK labels.
+
+**Phase 2 (approved 2026-11-23):**
+- Librarian — accepted — [`PHASE2_LIBRARIAN_VERIFICATION_REPORT.md`](./PHASE2_LIBRARIAN_VERIFICATION_REPORT.md)
+- Transport Manager — accepted — [`PHASE2_TRANSPORT_MANAGER_VERIFICATION_REPORT.md`](./PHASE2_TRANSPORT_MANAGER_VERIFICATION_REPORT.md)
+- Transport Driver — accepted — [`PHASE2_TRANSPORT_DRIVER_VERIFICATION_REPORT.md`](./PHASE2_TRANSPORT_DRIVER_VERIFICATION_REPORT.md)
+- Hostel Warden — verification ready — [`PHASE2_HOSTEL_WARDEN_VERIFICATION_REPORT.md`](./PHASE2_HOSTEL_WARDEN_VERIFICATION_REPORT.md)\
+**Next:** Gate Keeper (not started).
+
+### Phase 1 core-role rollup (evidence-based)
+
+| Role | Overall | Browser UAT highlight | Still MOCK / BLOCKED (examples) |
+|---|---|---|---|
+| HR | PARTIAL (core LIVE) | Training LIVE collection re-verified | Dashboard; enterprise attendance workspace; relieving |
+| Finance | PARTIAL (core LIVE) | POS/Book Fee MOCK notices visible | POS gateway BLOCKED; Budget/MFP MOCK |
+| Principal | PARTIAL (core LIVE) | Exam timetable Live list | Allocation approval; many enterprise menus |
+| Teacher | PARTIAL (core LIVE) | Exam page View Only; create 403 | Leave decide 403; announcements create blocked; Home Fun |
+| Coordinator | PARTIAL (core LIVE) | Exam Management schedules LIVE (2 exams) | Blueprints/grading/duties LOCAL; announcements create blocked |
+| Parent | PARTIAL | Children from `/parents/me/children` UUID | Escalations BLOCKED; dashboard KPIs MOCK |
+| Student | PARTIAL | `/students/me` identity + Live attendance (honest empty) | Home Fun; Track Bus; class-scoped attendance over-fetch |
+
+**Partner handoff sheet (SA/Director LIVE vs MOCK):** [`docs/SUPER_ADMIN_DIRECTOR_LIVE_VS_MOCK_SHEET.md`](./SUPER_ADMIN_DIRECTOR_LIVE_VS_MOCK_SHEET.md)
+
+**Full-application integration audit (2026-11-22):**
+- [`docs/QMIS_FULL_APPLICATION_BACKEND_INTEGRATION_MATRIX.md`](./QMIS_FULL_APPLICATION_BACKEND_INTEGRATION_MATRIX.md)
+- [`docs/QMIS_ROLE_WISE_INTEGRATION_AUDIT.md`](./QMIS_ROLE_WISE_INTEGRATION_AUDIT.md)
+- [`docs/QMIS_BACKEND_INTEGRATION_REMEDIATION_ROADMAP.md`](./QMIS_BACKEND_INTEGRATION_REMEDIATION_ROADMAP.md)
+
+**NEW UI ↔ reference backend delivery (2026-11-22):**
+- [`docs/NEW_UI_REFERENCE_BACKEND_INTEGRATION_MATRIX.md`](./NEW_UI_REFERENCE_BACKEND_INTEGRATION_MATRIX.md)
+- [`docs/NEW_UI_REFERENCE_BACKEND_IMPLEMENTATION_REPORT.md`](./NEW_UI_REFERENCE_BACKEND_IMPLEMENTATION_REPORT.md)
+- Phase 1 core-role evidence complete (this report). Phase 2 specialty/ops domains remain MOCK without approval.
+- SA / Admin / PRM: regression only (no reimplementation).
 
 ---
 
@@ -112,7 +147,18 @@ Do not start the next role until the current role checkpoint is reported.
 | Compliance Score Cards UI | MOCK (layout fixed) | 91% kept top-right; dept cards tightened; MOCK banner shown |
 | Audit reports tables/charts | MOCK | No dedicated SA compliance API |
 | PDF export (students/employees/attendance) | LIVE (client PDF) | Root cause: shared ExportModal wrote invalid PDF text; SA now builds real `%PDF-` |
-| Escalations / Tasks / Leave / Approvals / Comm / Calendar / Notifications / Gate / Finance / Stars / Transport / Ops | MOCK / PARTIAL | Unchanged this slice |
+| Approvals inbox + Refresh | LIVE | `GET /api/v1/approvals/inbox`; Refresh shows spinner/toast; decide via `POST …/decide` |
+| Escalations / Tasks / Leave / Comm / Calendar / Notifications / Gate / Finance / Transport / Ops | MOCK / PARTIAL | Unchanged this slice |
+| Star Ratings SOM/SOY (enterprise recognition) | PARTIAL (FE awardsService + local SOM SoT) | **UAT 2026-11-20:** SOY eligibility/GPA/Audit Gates/nominate/nav defects fixed (uncommitted) |
+| Activity Logs | DEMO / PARTIAL | **UAT 2026-11-20:** Data Changes values + Inspect/Back category routes; Deleted/Demo Inspect fixed (uncommitted) |
+| Stores & Procurement | PARTIAL (local SoT) | **UAT 2026-11-20:** tab/route sync, RFQ jump, edit-before-approval, modal/nav labels (uncommitted) |
+| Physical File Room | PARTIAL (local SoT + fileRoomService exists) | **UAT 2026-11-20:** Docket + Log Inward/rack mapping fixed (uncommitted) |
+| Department Helpdesk | PARTIAL (local SoT) | **UAT 2026-11-20:** ticket#/actions/SLA/head/category + real CSV downloads (uncommitted) |
+| Activity Monitoring | PARTIAL (local SoT) | **UAT 2026-11-20:** filter/review no longer bounce to Overview; dialog closes (uncommitted) |
+| Lost & Found | PARTIAL (service + local) | **UAT 2026-11-20:** status badge wrap + custody CSV download (uncommitted) |
+| Attendance & Leave workspace | MOCK / PARTIAL | **UAT 2026-11-20:** leave list refresh after submit (memory-first + tab jump) (uncommitted) |
+| Task Management | MOCK | **UAT 2026-11-20:** created-tab refresh + role-key normalize (uncommitted) |
+| Academic Calendar | PARTIAL (FE custom SoT; BE `/calendar` LIVE for API clients) | **UAT 2026-11-20:** end≥start FE+BE; timed/all-day FE local; times need BE schema for API persist (uncommitted) |
 
 ### Super Admin mock-removal slice (2026-11-20)
 
@@ -128,6 +174,21 @@ Do not start the next role until the current role checkpoint is reported.
 **RBAC spot-check (prior):** teacher `GET /api/v1/admin/users` → **403**.
 
 **Super Admin checkpoint:** Priority slice + 2026-11-20 PDF/compliance/attendance honesty updates (uncommitted).
+
+### Super Admin — Star Ratings SOY defect fix (2026-11-20)
+
+| Defect | Root cause | Fix | UAT |
+|---|---|---|---|
+| Eligible despite GPA gate fail | Leaderboard `isEligible` used only `somCount≥2 && cumulativeScore≥85`; Audit Gates used wrong/`NaN` GPA field; overall summary reused `isEligible` | Shared `evaluateMandatorySoyGates` (4 gates); GPA = avgScore\|avgKpi / 10; overall = all gates | **Pass** — Aarav 9.83 GPA, all 4 PASSED, Eligible (all 4 gates) |
+| Nominate fails while UI Eligible | Display gates ≠ `verifySoyEligibility`; `(Number(gpa)\|\|9.0)` silent pass; ID SoT mismatch | Same evaluator; no GPA/attendance defaults; accept `somWinsCount` from leaderboard | **Pass** (unit + service); nominate button only when Eligible |
+| Audit Gates success when Gate 2 FAILED | Summary tied to incomplete `isEligible`; Gate 2 `gpa` undefined → NaN display | Portal modal; gate cards from `eligibilityGates`; overall PASSED/FAILED from gate aggregation | **Pass** — heading fully visible; GPA 9.83 not NaN |
+| Leaderboard cramped / clipped badges | Narrow columns / no wrap | `min-w-[1100px]`, fixed widths, wrapping eligibility badges, horizontal scroll | **Pass** |
+| Audit Gates heading clipped | Modal under AppShell stacking / overflow | `RecognitionModalOverlay` portal `z-[400]` | **Pass** |
+| SOM↔SOY tab desync (URL/sidebar/breadcrumb) | Tabs only `setRecognitionType` local state | Tab navigates `star-of-month` ↔ `star-of-year`; type derived from route `view` | **Pass** — tab click updates URL + breadcrumb + content |
+
+**Remaining:** Star Ratings still **PARTIAL** (FE `awardsService` + local recognition SoT; no dedicated REST star-ratings domain). Dual nominee IDs (`STU-2024-0142` vs seed `STU-001`) mitigated via `somWinsCount` on nominate.
+
+**Tests:** FE `soyEligibility` + awards #11 + recognition calc → **pass**; Vite build → **Pass** (~2m 8s). No commit/push.
 
 ### Files modified (this slice)
 
@@ -497,7 +558,7 @@ Dedicated suite: `tests/test_principal_portal_apis.py`.
 | Calendar | `/principal/academic-calendar` | AcademicCalendarPage | `/calendar` | **PARTIAL** (API 200; FE not live-gated yet) |
 | Tasks | `/principal/task-management` | Enterprise/Task workspaces | `/tasks` | **PARTIAL** (API 200; FE mostly mock) |
 | Escalations | `/principal/escalation-management` | Principal pages / Common | `/escalations` | **PARTIAL** |
-| Exams / mark entry / report cards | examination + evaluation routes | local/demo | `/exams`, marks | **MOCK** / **PARTIAL** (API exists; no FE apiService yet) |
+| Exams / mark entry / report cards | examination + evaluation routes | shared exam SoT + `examsApiService` | `/exams`, marks | **PARTIAL** (create/submit/list/decide FE client; Director approvals shared+live) |
 | Class timetable / teacher allocation | localStorage keys | `GET/PUT /academics/{collection}` (principal full writer) | **MOCK** FE (API LIVE-capable) |
 | Home Fun / Star ratings | demo | academics collections / — | **MOCK** |
 | Gate / stores / file room / L&F / reports | enterprise ops | frontoffice read; ops read (+ limited ops write) | **MOCK** FE / **PARTIAL** API |
@@ -519,6 +580,22 @@ Dedicated suite: `tests/test_principal_portal_apis.py`.
 - Frontend `npm run build`: **Pass**
 
 **Principal expansion checkpoint:** COMPLETE for agreed priority workflows with real backends.
+
+---
+
+## Director — defect slice (2026-11-20)
+
+| Module | Status | Notes |
+|---|---|---|
+| Exam Timetable Approvals | **PARTIAL** (UAT VERIFIED shared SoT) | Shared Principal↔Director register; EXM003=`Unit -4a`; approve persists in localStorage; live `GET /api/v1/exams` preferred when non-empty; empty live falls back to shared. `examsApiService` + decide wired. |
+| Student Profile academic session | **PARTIAL** | Session-scoped timetable + effective dates in `userDatabaseIntegrator`; empty historical message. Not full REST year history. |
+| Teacher Database academic year | **PARTIAL** | Year-dependent assignment column + empty-year labels; master employee rows preserved. |
+| Cultural Activities list refresh | **PARTIAL** | `ACTIVITIES_UPDATED_EVENT` + location remount refresh; local SoT. |
+| Progress Report Cards | **PARTIAL** | TDZ fixed (`classFilteredStudents` before `trackingReport`). Page opens. |
+| Student Home Fun attachments | **MOCK** / **PARTIAL** UI | Preview modal + Blob download wired; no live LMS file URLs yet. |
+| Academic Calendar | **PARTIAL** | Initial month = current local month (Nov 2026 UAT). |
+
+Browser UAT (`director@qmis.edu` / `director123`): EXM003 Unit -4a; EXM001 Approved after refresh (localStorage); Report Cards no TDZ; Calendar November 2026; Home Fun preview modal + download click.
 
 ---
 
@@ -626,6 +703,52 @@ Dedicated suite: `tests/test_coordinator_portal_apis.py`.
 
 **Coordinator expansion checkpoint:** COMPLETE for agreed priority workflows with real backends.
 
+### Coordinator — Phase 1 evidence delta (2026-11-23)
+
+- Announcement create removed from FE creator set (no `announcements.write`) — **BLOCKED** honestly
+- Browser UAT: Student Placement Live banner re-verified
+- Enterprise Exam Management page still **MOCK** UI (API `POST /exams` exists — wire deferred; no new domain)
+
+---
+
+## Parent — Phase 1 evidence board (2026-11-23)
+
+**Login:** `parent@qmis.edu` / `parent123` → `/parent/dashboard`\
+**Evidence report:** [`PHASE1_CORE_ROLES_EVIDENCE_REPORT.md`](./PHASE1_CORE_ROLES_EVIDENCE_REPORT.md)
+
+| Area | Backend | Status |
+|---|---|---|
+| Fees Payment | `GET/POST /finance/my-fees`, `pay-my-fees` | **LIVE** |
+| TC Request | `/tc-requests` | **LIVE** |
+| Announcements | `/announcements` | **LIVE** |
+| Calendar | `/calendar/events` hydrate | **LIVE** |
+| Attendance summary | class attendance + client filter | **PARTIAL** |
+| Escalations | no parent escalate permission | **BLOCKED** (fail-closed UI) |
+| Child picker / profile | FE seed bridged to `ADM-DEMO-001` | **PARTIAL** (no enrollment identity API) |
+| Dashboard KPIs / Track Bus / Home Fun | — | **MOCK** |
+
+**UAT:** Escalation page shows **Parent escalations blocked**; child **Demo Child Sharma** (`ADM-DEMO-001`) selectable after seed align.\
+**HTTP:** `my-fees`/`tc-requests` **200**; escalations **403**.
+
+---
+
+## Student — Phase 1 evidence board (2026-11-23)
+
+**Login:** `student@qmis.edu` / `student123` → `/student/dashboard`
+
+| Area | Backend | Status |
+|---|---|---|
+| Fees Payment | `my-fees` / `pay-my-fees` | **LIVE** / **UAT VERIFIED** (Live my-fees ledger) |
+| TC Request | `/tc-requests` | **LIVE** |
+| Announcements | `/announcements` | **LIVE** |
+| Calendar | hydrate | **LIVE** |
+| Escalations | student escalate perms | **LIVE** (permissioned) |
+| Attendance calendar | `/attendance/students/{uuid}/calendar` | **PARTIAL** (needs student UUID; no invented P/A) |
+| Profile identity | portal defaults | **LOCAL ONLY** / **PARTIAL** |
+| Track Bus / Home Fun / hostel-transport pay / dashboard KPIs | — | **MOCK** |
+
+**HTTP:** `my-fees`/`tc-requests` **200**.
+
 ---
 
 ## Regression audit — Super Admin → Coordinator (2026-11-18)
@@ -660,12 +783,15 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 | Members list/add | `/librarian/members/member-list` | `library-members` | **LIVE** |
 | Issue / return | Circulation tab | books+issues+members replace | **LIVE** (API UAT persist) |
 | Announcements | `/librarian/announcement` | shared | **LIVE** (read) |
-| Book requests / dashboard KPIs | — | no dedicated API | **MOCK** |
+| Dashboard KPIs + Mark Returned | `/librarian/dashboard` | `library-*` GET/PUT | **LIVE** / **UAT VERIFIED** (Phase 2) |
+| Book requests / SMS reminders | dashboard requests tab | no dedicated API | **MOCK / LOCAL ONLY** |
 | Finance / students dir | — | missing perms | **BLOCKED** |
 
 **Librarian verification:** Browser Live banner + catalog UAT Physics (TOTAL TITLES 1); API issue/return avail 2→1→2; build Pass.
 
-**Librarian expansion checkpoint:** COMPLETE.
+**Phase 2 re-verification (2026-11-23):** Dashboard LIVE hydrate; persist `Phase2 Librarian Atlas`; teacher PUT **403**; pytest library ops **2 passed**; build Pass. Report: [`PHASE2_LIBRARIAN_VERIFICATION_REPORT.md`](./PHASE2_LIBRARIAN_VERIFICATION_REPORT.md).
+
+**Librarian expansion checkpoint:** COMPLETE (stop before Transport Manager).
 
 ---
 
@@ -689,7 +815,7 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 | FO collections list | `/api/v1/front-office/{collection}` | **LIVE** list (gate/transfer/re-enroll/hostel/material/goods); Add forms **PARTIAL**/local |
 | Announcements | shared announcements | **LIVE** (read) |
 | My leave | shared leave pages (enterprise stubs skipped for `prm`) | **LIVE**-capable routes |
-| Visitors | no collection | **BLOCKED** (404) |
+| Visitors | `GET/PUT /api/v1/ops/gate-visitors` (+ FO alias `/front-office/visitors`) | **LIVE (W1 VERIFIED)** — list/check-in/checkout persist; teacher write **403**; unauth **401** |
 | Dashboard KPIs / parent DB / reports / communication UX | — | **MOCK** |
 | Admission Add form full enroll | schema/UI gap | **PARTIAL** / known admissions AttributeError |
 | Documents dedicated API | — | **BLOCKED** |
@@ -701,7 +827,7 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 | Call | Result |
 |---|---|
 | enquiries/admissions/students/hr portal/tc/FO collections/announcements | **200** |
-| FO visitors | **404** |
+| FO visitors alias / ops gate-visitors | **200** (W1); teacher write **403** |
 | finance/state, admin/users | **403** |
 | Create enquiry + patch Success + create SGP-0001 | **201/OK** |
 
@@ -738,12 +864,12 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 
 | Feature | Status | Notes |
 |---|---|---|
-| Dashboard (assignment/payment counts) | **LIVE** / **UAT VERIFIED** | GET ops hostel collections |
+| Dashboard (assignment/payment counts) | **LIVE** / **UAT VERIFIED** | GET ops hostel collections; not invented bed availability |
 | Student allocation / room occupancy rows | **LIVE** / **UAT VERIFIED** | GET/PUT `/api/v1/ops/hostel-assignments` (+ students list) |
 | Check-in / vacate (status + dates on assignment row) | **LIVE** / **UAT** (UI allocate + API vacate) | No dedicated check-in endpoint |
-| Hostel payment dues ledger | **LIVE** / **UAT** (page + API put) | Not Razorpay; ops rows only |
+| Hostel payment dues ledger + Mark Paid | **LIVE** / **UAT VERIFIED** | Ops register only — not gateway confirmation |
 | Announcements / my leave | **LIVE**-capable (shared) | Configured under `/hostel-warden/...` |
-| Dedicated hostel/room master, outpass, visitors, mess, movement register, complaints, maintenance, hostel fee collect | **BLOCKED** | No backend APIs |
+| Dedicated hostel/room master, outpass, visitors, mess, movement register, complaints, maintenance, hostel fee collect | **BLOCKED** | No backend APIs; warden `/hostel*` deep-link = honest MOCK/BLOCKED page |
 | Enterprise ops stubs in sidebar | **MOCK**/enterprise | Skipped inventing hostel domain |
 
 ### Endpoint mapping
@@ -767,6 +893,8 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 
 **Hostel Warden expansion checkpoint:** COMPLETE for ops-backed LIVE scope. Committed/pushed 2026-11-19 (`irul` + `ERP_QMIS`/`new-ui`).
 
+**Phase 2 re-verification (2026-11-24):** Persist `HAS-P2-UAT` / `HPY-P2-UAT`; Mark Paid register honesty; `/hostel` MOCK/BLOCKED page; teacher **403**; finance/admin **403**; pytest **3 passed**; build Pass; browser UAT dashboard/assignments/payments/hostel. Report: [`PHASE2_HOSTEL_WARDEN_VERIFICATION_REPORT.md`](./PHASE2_HOSTEL_WARDEN_VERIFICATION_REPORT.md). Await approval before Gate Keeper.
+
 ---
 
 ## Transport Manager — Phase A audit + Phase B LIVE (ops-backed)
@@ -786,10 +914,15 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 | Student assignments | **LIVE** | `transport-student-assignments` + `GET /students` |
 | Duties | **LIVE** | `transport-duties` |
 | Announcements / my leave | **LIVE**-capable | formal routes + enterprise stub skip |
-| GPS / ProTrack track UI | **MOCK** / deferred | APIs exist; track page not rewired |
-| Maintenance / approvals / expenses | **MOCK** | ops exist; second slice |
+| GPS / ProTrack track UI | **DEMO / MOCK** | Fail-closed; DEMO badge; never LIVE |
+| Vehicle maintenance list/add | **LIVE** | `transport-maintenance` (Phase 2) |
+| Request approvals (driver fuel/maint) | **LIVE** | `transport-driver-fuel` / `transport-driver-maintenance` (Phase 2) |
+| Transport expenses ledger | **LIVE** | `transport-expenses` (Phase 2); Add form **PARTIAL** |
+| Budget overview | **MOCK** | local helper |
 | Driver/Conductor NOC | **BLOCKED** | no API |
 | Fake `/api/v1/transport/*` | **BLOCKED** | do not use |
+
+**Phase 2 re-verification (2026-11-23):** Persist seed rows; teacher PUT **403**; pytest transport/ops **10 passed**; build Pass; browser UAT dashboard/maintenance/expenses LIVE + Track Bus DEMO. Report: [`PHASE2_TRANSPORT_MANAGER_VERIFICATION_REPORT.md`](./PHASE2_TRANSPORT_MANAGER_VERIFICATION_REPORT.md).
 
 ### Verification
 
@@ -818,10 +951,150 @@ Pytest: ops+teacher+coordinator+leave **14 passed**; core roles **60 passed / 1 
 
 ---
 
+## Gate Keeper — Phase A audit + Phase B LIVE (ops + FO read)
+
+**Login:** `gatekeeper@qmis.edu` / `gatekeeper123` → JWT `gatekeeper` → `/gate-keeper/dashboard`\
+**Layout / routes:** `GateKeeperLayout.jsx` (Live banner) → `GateKeeperRoutes.jsx`\
+**RBAC:** `frontoffice.read`/`write` in matrix, but FO service write remains **PRM/admin only** (gatekeeper may **read** `*-gate-passes` only). Ops `gate-*` R/W via `ops.read`/`ops.write`.
+
+### Endpoint mapping (this slice)
+
+| Feature | API | Status |
+|---|---|---|
+| Dashboard KPIs / lists | `GET /api/v1/ops/gate-visitors`, `gate-incidents` + `GET /front-office/student-gate-passes` | **LIVE** |
+| Visitors check-in/out | `GET/PUT /api/v1/ops/gate-visitors` | **LIVE** |
+| My Duty status | `GET/PUT /api/v1/ops/gate-duties` | **LIVE** |
+| Incidents list/add/view/advance | `GET/PUT /api/v1/ops/gate-incidents` | **LIVE** |
+| Hostel gate pass list | `GET /api/v1/front-office/hostel-gate-passes` | **LIVE** read; write **BLOCKED** (403) |
+| Student FO pass verify/exit write | FO PUT/POST | **BLOCKED** (honest notice) |
+| GatePassSecurityWorkspace / registers / handover / vendors tabs | localStorage / demo | **MOCK** |
+| Announcements | shared Common | **LIVE** (read) |
+| Attendance & Leave workspace / Communication / Calendar / Tasks / enterprise ops | mixed | **MOCK** / shared PARTIAL |
+
+**Service added:** `ERP_QMIS/src/services/api/gateApiService.js`
+
+### Files modified (Gate Keeper slice)
+
+- `Layout/GateKeeperLayout.jsx`
+- `Routes/GateKeeperRoutes.jsx` (visitors → live page)
+- `Pages/GateKeeper/Dashboard/Dashboard.jsx`
+- `Pages/GateKeeper/MyDuty/MyDuty.jsx`
+- `Pages/GateKeeper/HosteGatePass/HosteGatePass.jsx`
+- `Pages/GateKeeper/Incidents/{Incidents,AddIncidents,ViewIncident}.jsx`
+- `Pages/GateKeeper/Visitors/VisitorsLive.jsx` (new)
+
+### Verification (2026-11-20)
+
+- Pytest `test_front_office_api` + `test_remaining_workflows`: **15 passed**
+- Frontend `npm run build`: **Pass**
+- Browser UAT (`gatekeeper@qmis.edu`): Live banner on dashboard; Visitors live page; My Duty `Showing 1 of 1` after API seed `GDU-UAT-1` (Pending); FO hostel-gate-passes readable (count 1 via API)
+- FO write remains **403** for gatekeeper (existing test preserved)
+
+**Gate Keeper expansion checkpoint:** Phase B LIVE for duties/visitors/incidents + FO hostel/student pass reads. Await review before Gate Keeper Manager.
+
+---
+
+## Gate Keeper Manager — Phase A audit + Phase B LIVE
+
+**Login:** `gatekeepermanager@qmis.edu` / `gkm1234567` → JWT `gatekeepermanager` → `/gatekeeper-manager/dashboard`\
+**Layout / routes:** `GateKeeperManagerLayout.jsx` (Live banner) → `GateKeeperManagerRoutes.jsx`\
+**RBAC:** Same ops `gate-*` R/W as Gate Keeper; FO `*-gate-passes` **read-only**; leave decide for gatekeeper reports; announcements shared.
+
+### Endpoint mapping (this slice)
+
+| Feature | API | Status |
+|---|---|---|
+| Dashboard KPIs | ops gate-visitors/incidents/duties + FO student-gate-passes | **LIVE** |
+| Assign Duty list/create/status/delete | `GET/PUT /api/v1/ops/gate-duties` | **LIVE** |
+| Incident command queue | `GET/PUT /api/v1/ops/gate-incidents` | **LIVE** |
+| Announcements | shared Common | **LIVE** (read/write per announcements API) |
+| Received / my leave | shared leaveApiService pages | **LIVE**-capable |
+| FO gate-pass write | — | **BLOCKED** (403) |
+| Enterprise GatePassSecurity / stores / communication UX | demo | **MOCK** |
+
+**Files:** `GateKeeperManagerLayout.jsx`, `AssignDuty.jsx`, `AssignDutyList.jsx`, `IncidentManagement/IncidentsList.jsx`, `Dashboard/Dashboard.jsx` (reuse `gateApiService.js`).
+
+### Verification (2026-11-20)
+
+- Pytest FO + remaining workflows: **15 passed**
+- Frontend `npm run build`: **Pass**
+- Browser UAT (`gatekeepermanager@qmis.edu` / `gkm1234567`): Live banner; Assign Duty List **Showing 1 of 1**; Dashboard Visitors Inside **1**, Open Duties **1**
+
+**Gate Keeper Manager expansion checkpoint:** Phase B LIVE for duties/incidents/dashboard. Await review before Driver.
+
+---
+
+## Driver — Phase A audit + Phase B LIVE (ops-scoped)
+
+**Login:** `driver@qmis.edu` / `driver123` → JWT `driver` → `/driver/dashboard`\
+**Layout / routes:** `DriverLayout.jsx` (Live banner) → `DriverRoutes.jsx`\
+**Service:** `transportApiService.js` → `GET/PUT /api/v1/ops/transport-*` with server-side `_driver_scope` (email / vehicle / route)
+
+### Feature classification
+
+| Feature | Status | Notes |
+|---|---|---|
+| Dashboard KPIs / recent duties | **LIVE** | duties/vehicles/routes/fuel/maintenance counts |
+| My Duty (list + status update) | **LIVE** | `transport-duties` |
+| Vehicle details | **LIVE** | `transport-vehicles` (scoped) |
+| Route details | **LIVE** | `transport-routes` (scoped) |
+| Route stops | **LIVE** | `transport-route-stops` |
+| Student boarding attendance + history | **LIVE** | roster from `transport-student-assignments`; marks via `transport-student-attendance` |
+| Vehicle health list/add | **LIVE** | `transport-vehicle-health` |
+| Fuel request list/add/view | **LIVE** | `transport-driver-fuel`; Add prefills scoped vehicle |
+| Maintenance request list/add/view | **LIVE** | `transport-driver-maintenance`; Add prefills scoped vehicle |
+| My leave | **LIVE**-capable | shared leave API (`roleKey=driver`) |
+| Announcements / calendar / communication | shared | mixed LIVE/PARTIAL |
+| Vehicle document upload | **BLOCKED** | no file/ops document API; UI-only notice |
+| Fuel/maintenance/health edit detail routes | **LOCAL ONLY** | honest empty; create via Add; view is LIVE |
+| GPS / live track | **DEMO / MOCK** | not wired in Driver portal; never claimed LIVE |
+
+### Files (this slice)
+
+- `Layout/DriverLayout.jsx`
+- `Pages/Driver/Dashboard/Dashboard.jsx`
+- `Pages/Driver/MyDuty/MyDuty.jsx`
+- `Pages/Driver/VehicleManagement/*` (details/health LIVE; documents BLOCKED; edit/view MOCK)
+- `Pages/Driver/MyRoute/RouteDetails.jsx`, `RouteStops.jsx`
+- `Pages/Driver/StudentAttendance/StudentAttendance.jsx`, `AttendanceHistory.jsx`
+- `Pages/Driver/FuelRequest/*`, `MaintenanceRequest/*`
+- `services/api/transportApiService.js` (route-stops + student-attendance helpers)
+- `backend/tests/test_driver_ops_scope.py`
+
+### Verification (2026-11-20)
+
+- Pytest `test_driver_ops_scope` + `test_transport_manager_apis`: **7 passed**
+- Frontend `npm run build`: **Pass** (`✓ built in 1m 31s`)
+- Browser UAT (`driver@qmis.edu` / `driver123`) after TM seed of driver email↔vehicle/route:
+
+| Check | Result | Evidence |
+|---|---|---|
+| Login + Live banner | **Pass** | `/driver/dashboard` · Live Driver workspace |
+| Dashboard counts | **Pass** | Vehicles **1** / Routes **1** / Open Duties **1** |
+| Student Attendance | **Pass** | `UAT Driver Loop · TN33UATDRV`; roster **UAT Boarder** Present |
+| Route Stops | **Pass** | Showing **1 of 1** (`transport-route-stops`) |
+| Out-of-scope fuel write | **Pass** (API) | pytest 403 for other vehicle |
+
+**Phase 2 re-verification (2026-11-23):** Merge-seed `driver@qmis.edu` ↔ `TN33DRV001` / Driver Loop; Driver sees **1** vehicle (TM sees **2**); fuel/maint/health PUT **200**; vehicle-only foreign plate **403**; teacher drivers PUT **403**; view pages + vehicle prefill wired; documents **BLOCKED**; GPS not LIVE; pytest **7 passed**; build Pass; browser UAT dashboard/vehicle/duty/fuel/maint/documents. Report: [`PHASE2_TRANSPORT_DRIVER_VERIFICATION_REPORT.md`](./PHASE2_TRANSPORT_DRIVER_VERIFICATION_REPORT.md).
+
+**Driver expansion checkpoint:** Phase 2 verification ready. Await approval before Hostel Warden.
+
+---
+
 ## Change log (continued)
 
 | Date | Change |
 |---|---|
+| 2026-11-24 | Phase 2 Hostel Warden verification: Mark Paid dues register; MOCK/BLOCKED hostel deep-link; honesty banners; persist + 403; pytest 3; build Pass; browser UAT; report (uncommitted) |
+| 2026-11-23 | Phase 2 Transport Driver verification: view fuel/maint/health LIVE; Add vehicle prefill; honesty banners; scope persist + 403; pytest 7; build Pass; browser UAT; report (uncommitted) |
+| 2026-11-20 | Director multi-module defects: Exam Timetable Approvals shared SoT + live empty fallback + persist; Student/Teacher year scoping; Cultural activity list refresh; ReportCard `classFilteredStudents` TDZ; Home Fun preview/download; Academic Calendar current month; FE node tests 17 pass (exam+calendar+…); BE academics/calendar 17 pass; Vite build Pass; browser UAT Director (uncommitted) |
+| 2026-11-20 | Super Admin multi-module defects: File Room Log Inward/rack, Helpdesk field map+CSV, Activity Monitoring tab stay, L&F badge+CSV, Leave/Task list refresh, Academic Calendar date validation+timed/all-day FE; FE node tests 14 pass; BE calendar 2 pass; Vite build Pass; browser UAT Helpdesk+Calendar (uncommitted) |
+| 2026-11-20 | Super Admin Activity Logs + Stores/Procurement + File Room defect fixes: category-aware Inspect/Back, change-value aliases, tab/route sync, requisition edit, inward/return mapping; FE tests + build (uncommitted) |
+| 2026-11-20 | Super Admin Star Ratings SOY: shared 4-gate eligibility + strict GPA parse; Audit Gates portal/aggregation; nominate consistency; leaderboard layout; SOM/SOY route sync; FE tests + build + browser UAT (uncommitted) |
+| 2026-11-20 | Super Admin Approvals Refresh: LIVE inbox via GET /api/v1/approvals/inbox + loading/toast; View decide via POST …/decide (uncommitted) |
+| 2026-11-20 | Driver LIVE: scoped transport-* (duty/vehicle/route/stops/attendance/health/fuel/maintenance); documents BLOCKED; layout banner; pytest + build + UAT (uncommitted) |
+| 2026-11-20 | Gate Keeper Manager LIVE: duties assign/list, incidents queue, dashboard; layout banner (uncommitted) |
+| 2026-11-20 | Gate Keeper LIVE: ops gate-duties/visitors/incidents + FO gate-pass reads; layout banner; dashboard (uncommitted) |
 | 2026-11-20 | Super Admin: valid PDF export, attendance LIVE wiring, compliance card layout + MOCK honesty, dashboard live quick-nav counts (uncommitted) |
 | 2026-11-19 | TM SQLite concurrency: NullPool on file SQLite request engine; FE sequential+stale guards; concurrent + browser UAT Pass (uncommitted) |
 | 2026-11-19 | Transport Manager LIVE: drivers/vehicles/routes/student-assignments/duties via ops transport-*; dashboard + layout banner; pytest + build |
