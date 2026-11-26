@@ -25,6 +25,10 @@ class StatusIn(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
 
+class NoteIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
 class TaskIn(BaseModel):
     assigneeId: UUID
     title: str = Field(min_length=1, max_length=200)
@@ -95,6 +99,18 @@ def status_route(
     user: User = Depends(require_permission("escalations.resolve")),
 ) -> dict:
     return svc.update_status(db, user, escalation_id, status=body.status, note=body.note)
+
+
+@router.post("/escalations/{escalation_id}/not-satisfied")
+def not_satisfied_route(
+    escalation_id: UUID,
+    body: NoteIn | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("escalations.write")),
+) -> dict:
+    """Manual 'Not Satisfied' escalate to next level (client complaint overflow)."""
+    note = body.note if body else None
+    return svc.mark_not_satisfied(db, user, escalation_id, note=note)
 
 
 # -------------------------------------------------------------------- tasks

@@ -222,6 +222,53 @@ def list_escalations(db: Session, actor: User, *, box: str, status: str | None) 
     return [o for o in out if o["status"] == status] if status else out
 
 
+def mark_not_satisfied(db: Session, actor: User, escalation_id: UUID, *, note: str | None) -> dict:
+    """Client rule: raiser can manually escalate with 'Not Satisfied' (in addition to 24h auto)."""
+    row = _load_esc(db, actor, escalation_id)
+    if row.raised_by_id != actor.id:
+        fail(403, "forbidden", "Only the person who raised it can mark Not Satisfied.")
+    if row.status == "Closed":
+        fail(409, "conflict", "A closed escalation cannot change.")
+    now = _now()
+    nxt = ESCALATES_TO.get(row.to_role)
+    if not nxt:
+        fail(409, "conflict", "Already at the top escalation level (MD/Admin).")
+    previous_role = row.to_role
+    row.to_role, row.to_user_id = nxt, None
+    row.level += 1
+    row.status = "Pending"
+    row.resolve_by = now + timedelta(hours=RESOLUTION_SLA_HOURS)
+    note_text = (note or "Not Satisfied — escalated to next level.").strip()
+    _add_trail(
+        row,
+        action="not_satisfied",
+        at=now,
+        byRole=role_code_for(db, actor),
+        fromRole=previous_role,
+        toRole=nxt,
+        note=note_text,
+    )
+    _notify(
+        db,
+        campus_id=row.campus_id,
+        title=f"Not Satisfied — escalated: {row.description[:80]}",
+        body=f"Moved from {previous_role} to {nxt}. {note_text}",
+        entity_type="escalation",
+        entity_id=str(row.id),
+        role_code=nxt,
+    )
+    write_audit(
+        db,
+        action="ESCALATION_NOT_SATISFIED",
+        entity_type="escalation",
+        entity_id=str(row.id),
+        actor_id=actor.id,
+        campus_id=actor.campus_id,
+    )
+    db.commit()
+    return _out_esc(db, row, trail=True)
+
+
 def update_status(db: Session, actor: User, escalation_id: UUID, *, status: str, note: str | None) -> dict:
     row = _load_esc(db, actor, escalation_id)
     role = role_code_for(db, actor)

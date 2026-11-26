@@ -4,6 +4,8 @@ import BusRouteCard from './Components/BusRouteCard'
 import IntegrationNotice from '../../../Common/ui/IntegrationNotice'
 
 const TrackBus = ({ showRouteDetails = false }) => {
+    // ProTrack GPS is not configured — never present DEMO as LIVE.
+    const hasLiveGps = false
     return (
         <section>
             {showRouteDetails && <BusRouteCard title="Bus Route Details" />}
@@ -19,7 +21,7 @@ const TrackBus = ({ showRouteDetails = false }) => {
             </div>
 
             <div className='bg-white rounded-2xl shadow-md mt-8 overflow-hidden'>
-                <BusTrackingMap />
+                <BusTrackingMap trackingMode={hasLiveGps ? 'live' : 'demo'} />
             </div>
         </section>
     )
