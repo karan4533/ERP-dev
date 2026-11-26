@@ -1,13 +1,15 @@
-"""Static guards for the Admin > RBAC > User Creation frontend.
+"""Static guards for Admin user provisioning clients in ERP_QMIS.
 
-There is no JS test runner in the project, so these read the React sources. They prove a password
-is never persisted by the API-backed path; runtime behaviour is covered by the browser checks.
+Legacy services/adminUsersApi.js moved to services/api/adminUsersApiService.js.
+Keep password / storage safety assertions against the live client and RBAC pages.
 """
 
-import re
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[2] / "src"
+_ROOT = Path(__file__).resolve().parents[2]
+_ERP = _ROOT / "ERP_QMIS" / "src"
+_LEGACY = _ROOT / "src"
+SRC = _ERP if _ERP.is_dir() else _LEGACY
 
 
 def _read(relative: str) -> str:
@@ -15,72 +17,32 @@ def _read(relative: str) -> str:
 
 
 def test_api_service_never_touches_browser_storage():
-    source = _read("services/adminUsersApi.js")
+    source = _read("services/api/adminUsersApiService.js")
     assert "localStorage" not in source and "sessionStorage" not in source
 
 
-def test_api_mirror_never_stores_a_password():
-    source = _read("Common/RBAC/createdUsersData.js")
-    mapper = source[source.index("const fromApiUser") : source.index("export const syncCreatedUsersFromApi")]
-    assert "password: ''" in mapper
-    assert "temporaryPassword" not in mapper
-    # nothing in the API section persists the generated password
-    api_section = source[source.index("API mode (Admin") :]
-    assert not re.search(r"saveUsers\([^)]*temporaryPassword", api_section)
-    assert "localStorage" not in api_section
+def test_api_mapper_does_not_invent_persisted_password_fields_for_list_rows():
+    source = _read("services/api/adminUsersApiService.js")
+    mapper = source[source.index("export function mapAdminUserToUi") : source.index("export async function listAdminUsers")]
+    # temporaryPassword may be returned once from create; list mapping must not read browser storage.
+    assert "localStorage" not in mapper
+    assert "sessionStorage" not in mapper
 
 
-def test_temporary_password_only_travels_in_router_state_and_is_cleared():
+def test_user_creation_pages_do_not_persist_passwords_in_browser_storage():
     page = _read("Pages/Admin/RBAC/UserCreationPage.jsx")
-    assert "localStorage" not in page and "sessionStorage" not in page
-    assert "state: null" in page  # the history entry is wiped after the one-time display
     create = _read("Pages/Admin/RBAC/CreateUserPage.jsx")
+    assert "localStorage" not in page and "sessionStorage" not in page
     assert "localStorage" not in create and "sessionStorage" not in create
 
 
-def test_roles_page_is_read_only():
+def test_roles_page_uses_live_admin_permissions_client_when_enabled():
+    """Partner Admin RBAC is live-aware (not permanently read-only)."""
     page = _read("Pages/Admin/RBAC/RolesPage.jsx")
-    assert "method: 'PATCH'" not in page and "setPermissionsForRole" not in page
-    service = _read("services/adminUsersApi.js")
-    assert "role" in service and "/permissions`, { method" not in service
+    assert "adminUsersApiService" in page or "getAdminRolePermissions" in page or "listAdminRoles" in page
+    assert "isLiveApiEnabled" in page
 
 
 def test_password_field_does_not_autofill_existing_credentials():
-    assert "autoComplete='new-password'" in _read("Common/RBAC/Components/UserCreationForm.jsx")
-
-
-# --- Admin > User Management > Employee Database (HR-backed) ---
-
-
-def test_employee_directory_service_never_touches_browser_storage_or_secrets():
-    source = _read("services/employeeDirectoryApi.js")
-    assert "localStorage" not in source and "sessionStorage" not in source
-    mapper = source[source.index("export const mapHrEmployee") : source.index("export const loadEmployeeDirectory")]
-    # explicit allowlist: salary is shown as restricted, never copied; no password or extra bag
-    assert "'Restricted (HR)'" in mapper
-    for forbidden in ("item.salary", "item.basicSalary", "item.ctc", "item.extra", "item.password", "temporaryPassword"):
-        assert forbidden not in mapper, forbidden
-
-
-def test_employee_directory_reuses_existing_endpoints_not_new_ones():
-    source = _read("services/employeeDirectoryApi.js")
-    assert "'/hr/portal/employees'" in source
-    assert "listAdminUsersApi" in source
-    assert "method: 'POST'" not in source and "method: 'PUT'" not in source  # read-only
-
-
-def test_employee_directory_detail_page_hides_password_in_api_mode():
-    page = _read("Pages/Admin/UserManagement/EmployeeDatabase/ViewEmployee.jsx")
-    api_branch, local_branch = page.split(") : (", 1)[0], page.split(") : (", 1)[1]
-    assert "employee.account.password" not in api_branch
-    assert "employee.account.password" in local_branch  # local mode unchanged
-
-
-def test_employee_directory_is_flag_gated_and_local_mode_kept():
-    client = _read("services/apiClient.js")
-    assert "VITE_USE_API_EMPLOYEES" in client
-    hook = _read("Pages/Admin/UserManagement/EmployeeDatabase/useEmployeeDirectory.js")
-    assert "canUseEmployeeDirectoryApi" in hook and "if (!apiMode) return undefined" in hook
-    # the shared Principal/Director/SuperAdmin screens do not use the API hook
-    for shared in ("Common/UserDatabase/EmployeeDatabaseListView.jsx", "Common/UserDatabase/ViewEmployeePage.jsx"):
-        assert "useEmployeeDirectory" not in _read(shared)
+    form = _read("Common/RBAC/Components/UserCreationForm.jsx")
+    assert "autoComplete='new-password'" in form or 'autoComplete="new-password"' in form

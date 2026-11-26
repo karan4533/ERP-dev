@@ -1,3 +1,5 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
 import { Navigate, Route, Routes as ReactRoutes } from 'react-router-dom'
 import Dashboard from '../Pages/SuperAdmin/Dashboard/Dashboard'
@@ -22,6 +24,7 @@ import ViewEmployee from '../Pages/SuperAdmin/UserManagement/EmployeeDatabase/Vi
 import GatePassList from '../Pages/SuperAdmin/GatePass/GatePassList'
 import ViewGatePass from '../Pages/SuperAdmin/GatePass/ViewGatePass'
 import StarRatings from '../Pages/SuperAdmin/StarRatings/StarRatings'
+import EnterpriseRecognitionPage from '../Common/Recognition/EnterpriseRecognitionPage'
 import ActivityLogList from '../Pages/SuperAdmin/ActivityLogs/ActivityLogList'
 import ViewActivityLog from '../Pages/SuperAdmin/ActivityLogs/ViewActivityLog'
 import { DemoActivityPage, ReentryPage } from '../Common/demoDomain/DemoScreens'
@@ -37,24 +40,16 @@ import AdminUsersList from '../Pages/SuperAdmin/UserCreation/AdminUsersList'
 import CreateAdminUser from '../Pages/SuperAdmin/UserCreation/CreateAdminUser'
 import ViewAdminUser from '../Pages/SuperAdmin/UserCreation/ViewAdminUser'
 import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
-import ActivityListView from '../Common/Activities/ActivityListView'
-import ViewActivityPage from '../Common/Activities/ViewActivityPage'
 
 const SuperAdminRoutes = () => {
     return (
         <ReactRoutes>
             <Route path="/super-admin/dashboard" element={<Dashboard />} />
 
-            <Route path="/super-admin/activities/cultural-list" element={<ActivityListView roleKey="superadmin" activityType="cultural" />} />
-            <Route path="/super-admin/activities/view-cultural/:id" element={<ViewActivityPage roleKey="superadmin" activityType="cultural" />} />
-            <Route path="/super-admin/activities/sports-list" element={<ActivityListView roleKey="superadmin" activityType="sports" />} />
-            <Route path="/super-admin/activities/view-sports/:id" element={<ViewActivityPage roleKey="superadmin" activityType="sports" />} />
-            <Route path="/super-admin/activities/competitions-list" element={<ActivityListView roleKey="superadmin" activityType="competition" />} />
-            <Route path="/super-admin/activities/view-competition/:id" element={<ViewActivityPage roleKey="superadmin" activityType="competition" />} />
-
             <Route path="/super-admin/attendance" element={<Navigate to="/super-admin/attendance/students/list" replace />} />
             <Route path="/super-admin/attendance/students/list" element={<StudentsAttendanceList />} />
-            <Route path="/super-admin/attendance/employees" element={<EmployeesAttendanceList />} />
+            <Route path="/super-admin/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            <Route path="/super-admin/attendance/employees" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
 
             <Route path="/super-admin/user-database" element={<Navigate to="/super-admin/user-database/students" replace />} />
             <Route path="/super-admin/user-database/students" element={<StudentsList />} />
@@ -72,12 +67,12 @@ const SuperAdminRoutes = () => {
             <Route path="/super-admin/transport-overview" element={<TransportOverview />} />
 
             <Route path="/super-admin/star-ratings" element={<Navigate to="/super-admin/star-ratings/star-of-month" replace />} />
-            <Route path="/super-admin/star-ratings/star-of-month" element={<StarRatings view="som" />} />
-            <Route path="/super-admin/star-ratings/star-of-year" element={<StarRatings view="soy" />} />
+            <Route path="/super-admin/star-ratings/star-of-month" element={<EnterpriseRecognitionPage view="som" />} />
+            <Route path="/super-admin/star-ratings/star-of-year" element={<EnterpriseRecognitionPage view="soy" />} />
 
             {TaskManagementRoutes({ basePath: '/super-admin' })}
 
-            <Route path="/super-admin/leave-request/received" element={<ReceivedLeaveRequests />} />
+            <Route path="/super-admin/leave-request/received" element={<AttendanceAndLeaveWorkspace defaultTab="received-leaves" />} />
             <Route path="/super-admin/leave-request/received/view/:id" element={<ViewReceivedLeaveRequest />} />
 
             <Route path="/super-admin/approvals" element={<ApprovalsList />} />
@@ -128,6 +123,9 @@ const SuperAdminRoutes = () => {
             <Route path="/super-admin/reentry" element={<ReentryPage />} />
             <Route path="/super-admin/module-health" element={<CriticalInventoryPage />} />
             <Route path="/super-admin/activity-logs/view/:id" element={<ViewActivityLog />} />
+
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/super-admin', role: 'super-admin' })}
 
             <Route path="*" element={<Navigate to="/super-admin/dashboard" replace />} />
         </ReactRoutes>

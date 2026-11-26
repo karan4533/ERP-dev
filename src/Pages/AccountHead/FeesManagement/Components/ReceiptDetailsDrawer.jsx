@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { toast } from 'react-toastify'
-import { logWhatsAppDelivery } from '../../../../Common/demoDomain/financeExtras'
-import { Download, Mail, MessageCircle, Printer, RotateCcw, X } from 'lucide-react'
+import { Download, Mail, MessageCircle, Printer, RotateCcw } from 'lucide-react'
 import { paymentModeLabel } from '../../financeDomain/financeConstants'
 import { formatCurrency, formatDisplayDate } from '../../financeDomain/financeHelpers'
+import IntegrationNotice from '../../../../Common/ui/IntegrationNotice'
+import Drawer from '../../../../Common/ui/Drawer'
 
 const Field = ({ label, value }) => (
     <div className='flex items-center justify-between py-2 border-b border-[#F2F4F7] text-sm'>
@@ -18,7 +19,6 @@ const ReceiptDetailsDrawer = ({
     receipt,
     student,
     onReprint,
-    onSend,
     onPrint,
 }) => {
     const [reason, setReason] = useState('')
@@ -30,15 +30,13 @@ const ReceiptDetailsDrawer = ({
     }
 
     return (
-        <div className='fixed inset-0 z-50 flex justify-end'>
-            <div className='absolute inset-0 bg-black/40' onClick={onClose} aria-hidden='true' />
-            <div className='relative z-10 w-full max-w-md h-full bg-white shadow-xl p-5 overflow-y-auto'>
-                <div className='flex items-center justify-between mb-4'>
-                    <h3 className='text-lg font-semibold'>Receipt {receipt.receiptNo}</h3>
-                    <button type='button' onClick={onClose} className='text-[#667085] hover:text-[#FF5722] cursor-pointer' aria-label='Close'>
-                        <X size={20} />
-                    </button>
-                </div>
+        <Drawer open={isOpen} onClose={onClose} title={`Receipt ${receipt.receiptNo}`} description='Payment record and delivery actions'>
+                <IntegrationNotice
+                    state='disconnected'
+                    title='Delivery unavailable'
+                    description='Dedicated browser printing is available. PDF download, email and WhatsApp delivery require connected document and messaging services.'
+                    className='mb-4'
+                />
                 <Field label='Student' value={student?.name} />
                 <Field label='Admission No.' value={student?.admissionNo || receipt.admissionNo} />
                 <Field label='Academic Year' value={receipt.academicYear} />
@@ -67,50 +65,20 @@ const ReceiptDetailsDrawer = ({
                     <button type='button' onClick={() => onPrint?.(receipt)} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
                         <Printer size={14} /> Print
                     </button>
-                    <button type='button' onClick={() => toast.info('PDF download is mocked until a report service is connected.')} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
-                        <Download size={14} /> Download
+                    <button type='button' disabled title='PDF download requires the connected document service.' className='inline-flex items-center justify-center gap-2 rounded-md border border-[var(--erp-line-strong)] px-3 py-2 text-sm text-[var(--erp-muted)] opacity-60'>
+                        <Download size={14} /> PDF unavailable
                     </button>
                     <button type='button' onClick={reprint} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
                         <RotateCcw size={14} /> Reprint
                     </button>
-                    <button type='button' onClick={async () => {
-                        const result = await onSend({ receiptId: receipt.id, channel: 'email' })
-                        const status = result?.delivery?.status
-                        if (result?.success === false) {
-                            toast.error(result.message || 'Email send failed.')
-                        } else if (status === 'MOCK_QUEUED') {
-                            toast.info('Email MOCK_QUEUED to local outbox — not a real mailbox delivery.')
-                        } else if (status === 'NOT_CONFIGURED' || status === 'queued_stub') {
-                            toast.info(result?.delivery?.message || 'Email is NOT_CONFIGURED — not delivered until SMTP is connected.')
-                        } else if (status === 'sent' && result?.delivery?.delivered) {
-                            toast.success('Email accepted by SMTP.')
-                        } else {
-                            toast.info(result?.delivery?.message || `Email status: ${status || 'unknown'}`)
-                        }
-                    }} className='inline-flex items-center justify-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-3 py-2 rounded-md cursor-pointer'>
-                        <Mail size={14} /> Email
+                    <button type='button' disabled title='Email delivery requires the connected messaging service.' className='inline-flex items-center justify-center gap-2 rounded-md border border-[var(--erp-line-strong)] px-3 py-2 text-sm text-[var(--erp-muted)] opacity-60'>
+                        <Mail size={14} /> Email unavailable
                     </button>
-                    <button type='button' onClick={async () => {
-                        const result = await onSend({ receiptId: receipt.id, channel: 'whatsapp' })
-                        logWhatsAppDelivery(receipt.id)
-                        const status = result?.delivery?.status
-                        if (result?.success === false) {
-                            toast.error(result.message || 'WhatsApp send failed.')
-                        } else if (status === 'MOCK_QUEUED') {
-                            toast.info('WhatsApp MOCK_QUEUED to local outbox — not a real WhatsApp delivery.')
-                        } else if (status === 'NOT_CONFIGURED' || status === 'queued_stub') {
-                            toast.info(result?.delivery?.message || 'WhatsApp is NOT_CONFIGURED — not delivered until API credentials are connected.')
-                        } else if (status === 'sent' && result?.delivery?.delivered) {
-                            toast.success('WhatsApp accepted by provider.')
-                        } else {
-                            toast.info(result?.delivery?.message || `WhatsApp status: ${status || 'unknown'}`)
-                        }
-                    }} className='col-span-2 inline-flex items-center justify-center gap-2 text-sm bg-[#515DEF] text-white px-3 py-2 rounded-md cursor-pointer'>
-                        <MessageCircle size={14} /> Send to WhatsApp
+                    <button type='button' disabled title='WhatsApp delivery requires the connected messaging service.' className='col-span-2 inline-flex items-center justify-center gap-2 rounded-md border border-[var(--erp-line-strong)] px-3 py-2 text-sm text-[var(--erp-muted)] opacity-60'>
+                        <MessageCircle size={14} /> WhatsApp unavailable
                     </button>
                 </div>
-            </div>
-        </div>
+        </Drawer>
     )
 }
 

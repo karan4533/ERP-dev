@@ -1,26 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
-import Dropdown from '../../../Common/CommonComponents/Dropdown'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { logActivity } from '../../../Common/demoDomain/activityLog'
-import { getTickets, hydrateTicketsFromApi, TICKETS_UPDATED_EVENT } from '../../../Common/demoDomain/itTickets'
-import { ISSUE_TYPES, priorityBadgeColor, statusBadgeColor } from './supportTicketsData'
+import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../Common/ui'
+import { getTickets, TICKETS_UPDATED_EVENT } from '../../../Common/demoDomain/itTickets'
+import { ISSUE_TYPES, PRIORITY_OPTIONS, STATUS_OPTIONS } from './supportTicketsData'
 
-const STATUSES = ['Open', 'Pending', 'In Progress', 'Resolved', 'Closed']
+const SLA_HOURS = { Critical: 4, High: 8, Medium: 24, Low: 48 }
+const PRIORITY_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+const selectClass = 'min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm text-[var(--erp-ink)]'
 
 const SupportTicketsList = () => {
     const [tickets, setTickets] = useState(() => getTickets())
     const [search, setSearch] = useState('')
     const [issueType, setIssueType] = useState('')
+    const [priority, setPriority] = useState('')
     const [status, setStatus] = useState('')
     const [fromDate, setFromDate] = useState('')
     const [toDate, setToDate] = useState('')
     const [pageSize, setPageSize] = useState(10)
-    const [exportModal, setExportModal] = useState(false)
 
     useEffect(() => {
-        hydrateTicketsFromApi().finally(() => setTickets(getTickets()))
         const refresh = () => setTickets(getTickets())
         window.addEventListener(TICKETS_UPDATED_EVENT, refresh)
         window.addEventListener('focus', refresh)
@@ -32,100 +30,67 @@ const SupportTicketsList = () => {
 
     const filtered = useMemo(() => tickets.filter((ticket) => {
         const query = search.trim().toLowerCase()
-        const matchesSearch = !query || [ticket.ticketId, ticket.requesterName, ticket.subject, ticket.remarks].join(' ').toLowerCase().includes(query)
-        const matchesType = !issueType || ticket.issueType === issueType
-        const matchesStatus = !status || ticket.status === status
-        const created = ticket.createdDate || ''
-        const matchesFrom = !fromDate || created >= fromDate
-        const matchesTo = !toDate || created <= toDate
-        return matchesSearch && matchesType && matchesStatus && matchesFrom && matchesTo
-    }), [tickets, search, issueType, status, fromDate, toDate])
+        const matchesSearch = !query || [ticket.ticketId, ticket.requesterName, ticket.subject, ticket.location, ticket.assignedTo, ticket.remarks].join(' ').toLowerCase().includes(query)
+        
+        let tDate = ticket.createdDate || ''
+        if (tDate.includes('-') && tDate.split('-')[0].length === 2) {
+            const [d, m, y] = tDate.split('-')
+            tDate = `${y}-${m}-${d}`
+        }
+        const matchesFrom = !fromDate || tDate >= fromDate
+        const matchesTo = !toDate || tDate <= toDate
+
+        return matchesSearch && matchesFrom && matchesTo && (!issueType || ticket.issueType === issueType) && (!priority || ticket.priority === priority) && (!status || ticket.status === status)
+    }).sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)), [tickets, search, issueType, priority, status, fromDate, toDate])
 
     const visible = filtered.slice(0, Number(pageSize))
 
-    return (
-        <section>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex justify-between items-center gap-3'>
-                    <button type='button' onClick={() => { setSearch(''); setIssueType(''); setStatus(''); setFromDate(''); setToDate('') }} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 rounded-lg cursor-pointer'>Clear Filters</button>
-                    <span className='text-sm text-[#515DEF]'>Total Records: {filtered.length}</span>
-                </div>
-                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 lg:mt-8 mt-2'>
-                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>Search
-                        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder='Ticket ID, requester...' className='text-sm border border-[#D9D9D9] rounded-md px-2 py-2' />
-                    </label>
-                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>Issue Type
-                        <select value={issueType} onChange={(event) => setIssueType(event.target.value)} className='text-sm border border-[#D9D9D9] rounded-md px-2 py-2'>
-                            <option value=''>All</option>
-                            {ISSUE_TYPES.map((type) => <option key={type}>{type}</option>)}
-                        </select>
-                    </label>
-                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>Status
-                        <select value={status} onChange={(event) => setStatus(event.target.value)} className='text-sm border border-[#D9D9D9] rounded-md px-2 py-2'>
-                            <option value=''>All</option>
-                            {STATUSES.map((item) => <option key={item}>{item}</option>)}
-                        </select>
-                    </label>
-                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>From Date
-                        <input type='date' value={fromDate} onChange={(event) => setFromDate(event.target.value)} className='text-sm border border-[#D9D9D9] rounded-md px-2 py-2' />
-                    </label>
-                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>To Date
-                        <input type='date' value={toDate} onChange={(event) => setToDate(event.target.value)} className='text-sm border border-[#D9D9D9] rounded-md px-2 py-2' />
-                    </label>
-                </div>
-            </div>
+    const columns = [
+        { key: 'ticketId', label: 'Ticket', required: true },
+        { key: 'subject', label: 'Issue', required: true, render: (ticket) => <span className='block'><span className='block font-semibold text-[var(--erp-ink)]'>{ticket.subject}</span><span className='block text-xs text-[var(--erp-muted)]'>{ticket.issueType} · {ticket.requesterName}</span></span> },
+        { key: 'location', label: 'Location', required: true, render: (ticket) => ticket.location || ticket.department || 'Not recorded' },
+        { key: 'assignedTo', label: 'Assigned to', required: true, render: (ticket) => ticket.assignedTo || 'IT Queue' },
+        { key: 'priority', label: 'Priority / SLA', render: (ticket) => <span className='block'><StatusBadge status={ticket.priority} /><span className='mt-1 block text-xs text-[var(--erp-muted)]'>{SLA_HOURS[ticket.priority] || 24}h response target</span></span> },
+        { key: 'status', label: 'Status', render: (ticket) => <StatusBadge status={ticket.status} /> },
+        { key: 'remarks', label: 'Remarks / Resolution', render: (ticket) => <span className='block max-w-[200px] truncate text-xs text-[var(--erp-ink)]'>{ticket.remarks || ticket.resolution || 'Pending review'}</span> },
+        { key: 'createdDate', label: 'Created' },
+    ]
 
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center gap-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Tickets</h2>
-                    <button type='button' onClick={() => { setExportModal(true); logActivity({ action: 'EXPORT_REQUESTED', module: 'IT Tickets', details: 'Export format dialog' }) }} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md cursor-pointer flex items-center gap-x-2'>
-                        <Download size={16} /> Export
-                    </button>
-                </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select value={pageSize} onChange={(event) => setPageSize(event.target.value)} className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        {[10, 20, 30].map((size) => <option key={size} value={size}>{size}</option>)}
-                    </select>
-                    <span className='text-sm text-[#515DEF]'>Entries Per Page · showing {visible.length}</span>
-                </div>
-                <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap'>
-                            <tr>
-                                {['S.No', 'Ticket ID', 'Requester', 'Department', 'Issue Type', 'Priority', 'Status', 'Remarks', 'Created'].map((label) => (
-                                    <th key={label} className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>{label}</th>
-                                ))}
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {visible.map((ticket, index) => (
-                                <tr key={ticket.ticketId} className='border-b text-[#667085] border-[#f2f4f7]'>
-                                    <td className='px-2 py-4'>{index + 1}</td>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{ticket.ticketId}</td>
-                                    <td className='px-2 py-4'>{ticket.requesterName}</td>
-                                    <td className='px-2 py-4'>{ticket.department}</td>
-                                    <td className='px-2 py-4'>{ticket.issueType}</td>
-                                    <td className='px-2 py-4'><span className={`px-2 py-1 rounded-lg text-xs font-semibold ${priorityBadgeColor[ticket.priority] || ''}`}>{ticket.priority}</span></td>
-                                    <td className='px-2 py-4'><span className={`px-2 py-1 rounded-lg text-xs font-semibold ${statusBadgeColor[ticket.status] || 'bg-[#2196F333] text-[#2196F3]'}`}>{ticket.status}</span></td>
-                                    <td className='px-2 py-4 max-w-[160px] truncate'>{ticket.remarks || '—'}</td>
-                                    <td className='px-2 py-4 whitespace-nowrap'>{ticket.createdDate}</td>
-                                    <td className='px-2 py-4'>
-                                        <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                            <NavLink to={`/it-support-manager/support-tickets/view-ticket/${ticket.ticketId}`} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer block'>View</NavLink>
-                                        </Dropdown>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                <div className='flex justify-between items-center mt-4 text-sm text-[#667085]'>
-                    <span>Showing {visible.length} of {filtered.length}</span>
-                    <span className='inline-flex items-center gap-2'><ChevronLeft size={16} /><ChevronRight size={16} /></span>
-                </div>
+    const reset = () => {
+        setSearch('')
+        setIssueType('')
+        setPriority('')
+        setStatus('')
+        setFromDate('')
+        setToDate('')
+    }
+
+    return (
+        <section className='space-y-5'>
+            <IntegrationNotice state='demo' title='Local ticket queue' description='Priority, SLA target, assignment and status are browser-stored demonstration data. Production escalation timers and notifications require the connected service desk API.' />
+            <div className='overflow-hidden rounded-2xl bg-white shadow-md'>
+                <DataToolbar
+                    query={search}
+                    onQueryChange={setSearch}
+                    searchLabel='Search support tickets'
+                    searchPlaceholder='Ticket, issue, requester, location or assignee…'
+                    resultCount={filtered.length}
+                    onReset={reset}
+                    filters={
+                        <>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Issue type<select className={selectClass} value={issueType} onChange={(event) => setIssueType(event.target.value)}><option value=''>All types</option>{ISSUE_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Priority<select className={selectClass} value={priority} onChange={(event) => setPriority(event.target.value)}><option value=''>All priorities</option>{PRIORITY_OPTIONS.map((item) => <option key={item}>{item}</option>)}</select></label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status<select className={selectClass} value={status} onChange={(event) => setStatus(event.target.value)}><option value=''>All statuses</option>{STATUS_OPTIONS.map((item) => <option key={item}>{item}</option>)}</select></label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>From Date<input type='date' className={selectClass} value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>To Date<input type='date' className={selectClass} value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Rows<select className={selectClass} value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>{[10, 20, 30].map((size) => <option key={size}>{size}</option>)}</select></label>
+                        </>
+                    }
+                    actions={<button type='button' disabled title='Export requires the connected service desk API.' className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Export unavailable</button>}
+                />
+                <DataTable caption='IT support ticket queue' rows={visible} columns={columns} rowKey='ticketId' emptyTitle='No tickets match these filters' emptyDescription='Reset the filters to review the active support queue.' renderActions={(ticket) => <NavLink to={`/it-support-manager/support-tickets/view-ticket/${ticket.ticketId}`} className='inline-flex min-h-9 items-center rounded-md border border-[var(--erp-indigo)] px-3 text-xs font-semibold text-[var(--erp-indigo)]'>View ticket</NavLink>} />
+                <p className='border-t border-[var(--erp-line)] px-4 py-3 text-xs text-[var(--erp-muted)]'>Showing {visible.length} of {filtered.length} matching tickets. Critical and high priority work is listed first.</p>
             </div>
-            {exportModal && <ExportModal exportModal={exportModal} setExportModal={setExportModal} />}
         </section>
     )
 }

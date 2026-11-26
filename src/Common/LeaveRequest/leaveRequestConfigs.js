@@ -1,4 +1,4 @@
-import { ROLES } from '../../constants/roles'
+import { ROLES } from '../../constants/roles.js'
 
 export const LEAVE_ROUTE_CONFIG = {
     admin: {
@@ -23,6 +23,8 @@ export const LEAVE_ROUTE_CONFIG = {
         myList: '/coordinator/leave-request/my-requests',
         add: '/coordinator/leave-request/my-requests/add',
         myView: '/coordinator/leave-request/my-requests/view',
+        receivedList: '/coordinator/leave-request/received',
+        receivedView: '/coordinator/leave-request/received/view',
     },
     principal: {
         myList: '/principal/leave-request/my-requests',
@@ -63,13 +65,102 @@ export const LEAVE_ROUTE_CONFIG = {
         myView: '/driver/leave-request/view',
     },
     transportmanager: {
+        myList: '/transport-manager/leave-request/my-requests',
+        add: '/transport-manager/leave-request/my-requests/add',
+        myView: '/transport-manager/leave-request/my-requests/view',
         receivedList: '/transport-manager/leave-request',
         receivedView: '/transport-manager/leave-request/view',
     },
-    // HR is the final step of every staff leave chain (Academics doc 4.9)
+    librarian: {
+        myList: '/librarian/leave-request/my-requests',
+        add: '/librarian/leave-request/my-requests/add',
+        myView: '/librarian/leave-request/my-requests/view',
+        receivedList: '/librarian/leave-request/received',
+        receivedView: '/librarian/leave-request/received/view',
+    },
+    canteenmanager: {
+        myList: '/canteen-manager/leave-request/my-requests',
+        add: '/canteen-manager/leave-request/my-requests/add',
+        myView: '/canteen-manager/leave-request/my-requests/view',
+        receivedList: '/canteen-manager/leave-request/received',
+        receivedView: '/canteen-manager/leave-request/received/view',
+    },
+    itsupportmanager: {
+        myList: '/it-support-manager/leave-request/my-requests',
+        add: '/it-support-manager/leave-request/my-requests/add',
+        myView: '/it-support-manager/leave-request/my-requests/view',
+        receivedList: '/it-support-manager/leave-request/received',
+        receivedView: '/it-support-manager/leave-request/received/view',
+    },
+    stationerystoremanager: {
+        myList: '/stationery-store-manager/leave-request/my-requests',
+        add: '/stationery-store-manager/leave-request/my-requests/add',
+        myView: '/stationery-store-manager/leave-request/my-requests/view',
+        receivedList: '/stationery-store-manager/leave-request/received',
+        receivedView: '/stationery-store-manager/leave-request/received/view',
+    },
+    housekeepingmanager: {
+        myList: '/housekeeping-manager/leave-request/my-requests',
+        add: '/housekeeping-manager/leave-request/my-requests/add',
+        myView: '/housekeeping-manager/leave-request/my-requests/view',
+        receivedList: '/housekeeping-manager/leave-request/received',
+        receivedView: '/housekeeping-manager/leave-request/received/view',
+    },
+    maintenancemanager: {
+        myList: '/maintenance-manager/leave-request/my-requests',
+        add: '/maintenance-manager/leave-request/my-requests/add',
+        myView: '/maintenance-manager/leave-request/my-requests/view',
+        receivedList: '/maintenance-manager/leave-request/received',
+        receivedView: '/maintenance-manager/leave-request/received/view',
+    },
+    jointdirector: {
+        myList: '/joint-director/leave-request/my-requests',
+        add: '/joint-director/leave-request/my-requests/add',
+        myView: '/joint-director/leave-request/my-requests/view',
+        receivedList: '/joint-director/leave-request/received',
+        receivedView: '/joint-director/leave-request/received/view',
+    },
+    jointdirectorassistant: {
+        myList: '/joint-director-assistant/leave-request/my-requests',
+        add: '/joint-director-assistant/leave-request/my-requests/add',
+        myView: '/joint-director-assistant/leave-request/my-requests/view',
+        receivedList: '/joint-director-assistant/leave-request/received',
+        receivedView: '/joint-director-assistant/leave-request/received/view',
+    },
+    jointdirectoraudit: {
+        myList: '/joint-director-audit/leave-request/my-requests',
+        add: '/joint-director-audit/leave-request/my-requests/add',
+        myView: '/joint-director-audit/leave-request/my-requests/view',
+        receivedList: '/joint-director-audit/leave-request/received',
+        receivedView: '/joint-director-audit/leave-request/received/view',
+    },
     hr: {
+        myList: '/hr/leave-request/my-requests',
+        add: '/hr/leave-request/my-requests/add',
+        myView: '/hr/leave-request/my-requests/view',
         receivedList: '/hr/leave-request/received',
         receivedView: '/hr/leave-request/received/view',
+    },
+    accounthead: {
+        myList: '/account-head/leave-request/my-requests',
+        add: '/account-head/leave-request/my-requests/add',
+        myView: '/account-head/leave-request/my-requests/view',
+        receivedList: '/account-head/leave-request/received',
+        receivedView: '/account-head/leave-request/received/view',
+    },
+    processauditor: {
+        myList: '/process-auditor/leave-request/my-requests',
+        add: '/process-auditor/leave-request/my-requests/add',
+        myView: '/process-auditor/leave-request/my-requests/view',
+        receivedList: '/process-auditor/leave-request/received',
+        receivedView: '/process-auditor/leave-request/received/view',
+    },
+    qualityauditor: {
+        myList: '/quality-auditor/leave-request/my-requests',
+        add: '/quality-auditor/leave-request/my-requests/add',
+        myView: '/quality-auditor/leave-request/my-requests/view',
+        receivedList: '/quality-auditor/leave-request/received',
+        receivedView: '/quality-auditor/leave-request/received/view',
     },
 }
 
@@ -186,7 +277,16 @@ export const APPROVER_DECISION_TITLES = {
     [ROLES.TEACHER]: 'Teacher Decision',
     [ROLES.DIRECTOR]: 'Director Decision',
     [ROLES.TRANSPORT_MANAGER]: 'Transport Manager Decision',
+    [ROLES.COORDINATOR]: 'Coordinator Decision',
     [ROLES.HR]: 'HR Decision',
+    [ROLES.ACCOUNT_HEAD]: 'Account Head Decision',
+    [ROLES.JOINT_DIRECTOR]: 'Joint Director Decision',
+    [ROLES.JOINT_DIRECTOR_ASSISTANT]: 'Joint Director Assistant Decision',
+    [ROLES.JOINT_DIRECTOR_AUDIT]: 'Joint Director Audit Decision',
+    [ROLES.CANTEEN_MANAGER]: 'Canteen Manager Decision',
+    [ROLES.IT_SUPPORT_MANAGER]: 'IT Support Manager Decision',
+    [ROLES.STATIONERY_STORE_MANAGER]: 'Stationery Store Manager Decision',
+    [ROLES.HOUSEKEEPING_MANAGER]: 'Housekeeping Manager Decision',
 }
 
 export const resolveRoleKey = (roleKey) => {

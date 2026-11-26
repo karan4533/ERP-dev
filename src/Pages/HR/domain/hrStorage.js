@@ -24,8 +24,6 @@ export const HR_KEYS = {
     performance: 'school-erp-hr-performance-v1',
     notifications: 'school-erp-hr-notifications-v1',
     comms: 'school-erp-hr-comms-v1',
-    claims: 'school-erp-hr-claims-v1',
-    announcements: 'school-erp-hr-announcements-v1',
 }
 
 const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -37,43 +35,30 @@ export const subscribeHrStore = (listener) => {
 
 export const getHrStoreVersion = () => version
 
-/** Notify React subscribers that in-memory HR data changed. */
-export const emitHrStoreChange = () => {
+const emit = () => {
     version += 1
     listeners.forEach((listener) => listener())
 }
 
-/**
- * Optional offline cache only. Never used as source of truth after API hydrate.
- * Cleared on hard failure so wiping site data does not matter for business SoT.
- */
-export function cacheHrCollection(key, value) {
-    if (!canUseStorage()) return
+export function loadHrCollection(key, fallback) {
+    if (!canUseStorage()) return structuredClone(fallback)
     try {
-        window.localStorage.setItem(key, JSON.stringify(value))
-    } catch (error) {
-        console.error(`Unable to cache ${key}`, error)
+        const raw = window.localStorage.getItem(key)
+        if (!raw) return structuredClone(fallback)
+        const parsed = JSON.parse(raw)
+        if (parsed == null || typeof parsed !== 'object') return structuredClone(fallback)
+        return parsed
+    } catch {
+        return structuredClone(fallback)
     }
 }
 
-/** @deprecated localStorage is not SoT — kept for one-release migration cleanup only */
-export function loadHrCollection(key, fallback) {
-    return structuredClone(fallback)
-}
-
-/** @deprecated use cacheHrCollection + emitHrStoreChange */
 export function saveHrCollection(key, value) {
-    cacheHrCollection(key, value)
-    emitHrStoreChange()
-}
-
-export function clearHrLocalCache() {
     if (!canUseStorage()) return
-    Object.values(HR_KEYS).forEach((key) => {
-        try {
-            window.localStorage.removeItem(key)
-        } catch {
-            /* ignore */
-        }
-    })
+    try {
+        window.localStorage.setItem(key, JSON.stringify(value))
+        emit()
+    } catch (error) {
+        console.error(`Unable to persist ${key}`, error)
+    }
 }

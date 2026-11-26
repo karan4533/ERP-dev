@@ -1,47 +1,17 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Eye } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { hydrateEnrolledStudentsFromApi } from '../../../Common/StudentDatabase/enrolledStudentsData'
-import { getStudentsList } from '../../../Common/StudentDatabase/studentDatabaseData'
-import noProfile from '../../../assets/images/no-profile.png'
-import { isApiStudentsEnabled } from '../../../services/apiClient'
+import { STUDENTS_LIST, GENDERS } from './studentsListData'
 import { CLASSES, SECTIONS } from '../AssignedClass/assignedClassData'
-import { GENDERS } from './studentsListData'
-
-const ROUTE_BASE = '/coordinator/user-management/students-list'
-
-const profileFor = (student) => student.profileImage || student.profile || noProfile
 
 const StudentsList = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [rows, setRows] = useState(() => getStudentsList())
-    const [loading, setLoading] = useState(isApiStudentsEnabled())
-
-    useEffect(() => {
-        let cancelled = false
-        if (!isApiStudentsEnabled()) {
-            setRows(getStudentsList())
-            setLoading(false)
-            return undefined
-        }
-        setLoading(true)
-        hydrateEnrolledStudentsFromApi()
-            .then(() => {
-                if (!cancelled) setRows(getStudentsList())
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false)
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [])
 
     return (
         <section>
@@ -129,10 +99,20 @@ const StudentsList = () => {
                         Export
                     </button>
                 </div>
+                <div className='flex gap-x-2 items-center my-2'>
+                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
+                        <option value='10'>10</option>
+                        <option value='20'>20</option>
+                        <option value='30'>30</option>
+                        <option value='40'>40</option>
+                        <option value='50'>50</option>
+                    </select>
+                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
+                </div>
                 <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left'>
+                    <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                            <tr>
+                            <tr className='rounded-lg'>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase text-center rounded-s-lg'>Profile</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Admission Number</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Name</th>
@@ -143,24 +123,14 @@ const StudentsList = () => {
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Country</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>State</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>City</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
+                                <th className='px-3 py-3.5 text-[#0C1E5B] font-medium uppercase text-center rounded-e-lg'>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && (
-                                <tr>
-                                    <td colSpan={11} className='px-2 py-10 text-center text-[#667085]'>Loading students…</td>
-                                </tr>
-                            )}
-                            {!loading && rows.length === 0 && (
-                                <tr>
-                                    <td colSpan={11} className='px-2 py-10 text-center text-[#667085]'>No enrolled students yet.</td>
-                                </tr>
-                            )}
-                            {!loading && rows.map((student) => (
-                                <tr key={student.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                            {STUDENTS_LIST.map((student) => (
+                                <tr key={student.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
                                     <td className='px-2 py-4 flex justify-center rounded-s-lg'>
-                                        <img src={profileFor(student)} alt={student.name} className='w-9 h-9 rounded-full object-cover' />
+                                        <img src={student.profile} alt={student.name} className='w-9 h-9 rounded-full object-cover' />
                                     </td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{student.admissionNumber}</td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{student.name}</td>
@@ -171,15 +141,30 @@ const StudentsList = () => {
                                     <td className='px-2 py-4'>{student.country}</td>
                                     <td className='px-2 py-4'>{student.state}</td>
                                     <td className='px-2 py-4'>{student.city}</td>
-                                    <td className='px-2 py-4 text-center rounded-e-lg'>
-                                        <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
+                                    <td className='px-3 py-4 text-center rounded-e-lg'>
+                                        <div className='flex items-center justify-center gap-2'>
                                             <NavLink
-                                                to={`${ROUTE_BASE}/view/${student.id}`}
-                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                to={`/coordinator/user-management/students-list/view/${student.id}/full`}
+                                                className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-semibold shadow-2xs transition-all whitespace-nowrap cursor-pointer'
+                                                title='View Complete Student Profile & Parents Details'
                                             >
-                                                View
+                                                <Eye size={13} /> View Full Details
                                             </NavLink>
-                                        </Dropdown>
+                                            <Dropdown buttonContent={<EllipsisIcon size={16} className='text-slate-600' />}>
+                                                <NavLink
+                                                    to={`/coordinator/user-management/students-list/view/${student.id}`}
+                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer text-xs'
+                                                >
+                                                    Quick Summary
+                                                </NavLink>
+                                                <NavLink
+                                                    to={`/coordinator/user-management/students-list/view/${student.id}/full`}
+                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer text-xs font-semibold'
+                                                >
+                                                    Full Details (with Parents)
+                                                </NavLink>
+                                            </Dropdown>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -190,15 +175,15 @@ const StudentsList = () => {
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    {loading || rows.length === 0
-                        ? 'Showing 0 entries'
-                        : `Showing 1 to ${rows.length} of ${rows.length} entries`}
+                    Showing 1 to {STUDENTS_LIST.length} of {STUDENTS_LIST.length} entries
                 </p>
-                <div className='flex gap-x-2'>
+                <div className='flex justify-center gap-x-2 flex-wrap'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
                         <ChevronLeft size={16} />
                     </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>1</button>
+                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
+                        1
+                    </button>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
                         <ChevronRight size={16} />
                     </button>

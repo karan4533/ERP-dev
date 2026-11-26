@@ -1,5 +1,5 @@
 ﻿import AcademicCalendarPage from '../../../Common/AcademicCalendar/AcademicCalendarPage'
 
-const AcademicCalendar = ({ roleKey = 'student' }) => <AcademicCalendarPage roleKey={roleKey} />
+const AcademicCalendar = () => <AcademicCalendarPage roleKey='student' />
 
 export default AcademicCalendar

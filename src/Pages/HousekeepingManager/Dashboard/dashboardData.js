@@ -1,15 +1,43 @@
-import { getAnnouncementsForRole } from '../../../Common/Announcement/announcementData'
-import { getDuties } from '../../../Common/demoDomain/housekeeping'
-import { hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-import { getInventoryItems, hydrateInventoryItemsFromApi } from '../Inventory/inventoryData'
-import { getRequests, hydrateRequestsFromApi } from '../RequestsApprovals/requestsData'
-import { getHousekeepingTasks, hydrateHousekeepingTasksFromApi } from '../TaskManagement/taskData'
+export const SUMMARY_CARDS = [
+    { label: 'Active Tasks Today', value: '18', sub: 'Across all zones' },
+    { label: 'Tasks Completed', value: '12', sub: 'Today so far' },
+    { label: 'Pending Tasks', value: '6', sub: 'Due today' },
+    { label: 'Low Stock Items', value: '9', sub: 'Cleaning supplies' },
+    { label: 'Staff On Duty', value: '14', sub: 'Morning shift' },
+    { label: 'Pending Requests', value: '4', sub: 'Awaiting approval' },
+    { label: 'Zones Inspected', value: '22', sub: 'Of 28 total zones' },
+]
+
+export const RECENT_TASKS = [
+    { taskId: 'HK-T-042', title: 'Classroom Block A — Deep Clean', assignedTo: 'Ramesh Kumar', status: 'In Progress' },
+    { taskId: 'HK-T-041', title: 'Restroom Sanitization — Floor 2', assignedTo: 'Sunita Devi', status: 'Completed' },
+    { taskId: 'HK-T-040', title: 'Corridor Mopping — Admin Block', assignedTo: 'Vijay Singh', status: 'In Progress' },
+    { taskId: 'HK-T-039', title: 'Playground Litter Pickup', assignedTo: 'Anita Sharma', status: 'Pending' },
+]
+
+export const LOW_STOCK_ITEMS = [
+    { item: 'Floor Cleaner (5L)', availableQty: '6', reorderLevel: '15' },
+    { item: 'Garbage Bags (Large)', availableQty: '8', reorderLevel: '20' },
+    { item: 'Disinfectant Spray', availableQty: '4', reorderLevel: '12' },
+    { item: 'Mop Heads', availableQty: '3', reorderLevel: '10' },
+]
+
+export const PENDING_REQUESTS = [
+    { requestId: 'REQ-HK-2026-005', type: 'Supply Purchase', status: 'Pending' },
+    { requestId: 'REQ-HK-2026-004', type: 'Equipment', status: 'Pending' },
+    { requestId: 'REQ-HK-2026-003', type: 'Vendor Bill', status: 'Pending' },
+]
+
+export const RECENT_ANNOUNCEMENTS = [
+    { title: 'Deep cleaning schedule — exam week', date: '10-06-2026' },
+    { title: 'New disinfectant protocol for restrooms', date: '08-06-2026' },
+    { title: 'Staff shift change effective Monday', date: '05-06-2026' },
+]
 
 export const taskStatusBadgeColor = {
     Pending: 'bg-[#FF980033] text-[#FF9800]',
     'In Progress': 'bg-[#2196F333] text-[#2196F3]',
     Completed: 'bg-[#4CAF5033] text-[#4CAF50]',
-    'In Complete': 'bg-[#FF000033] text-[#FF0000]',
 }
 
 export const requestStatusBadgeColor = {
@@ -17,86 +45,3 @@ export const requestStatusBadgeColor = {
     Approved: 'bg-[#4CAF5033] text-[#4CAF50]',
     Rejected: 'bg-[#FF000033] text-[#FF0000]',
 }
-
-const DUTY_KEY = 'schoolerp-housekeeping-duty-v1'
-
-const isLowStock = (item) => {
-    if (item.status === 'Low Stock' || item.status === 'Out of Stock') return true
-    const qty = Number(item.availableQuantity)
-    const reorder = Number(item.reorderLevel)
-    return Number.isFinite(qty) && Number.isFinite(reorder) && qty <= reorder
-}
-
-const taskZone = (task) => {
-    const title = String(task.title || '')
-    const parts = title.split('—')
-    return (parts[1] || parts[0] || 'Campus').trim()
-}
-
-const isOpenTask = (task) => String(task.status || '') !== 'Completed'
-
-export function buildHousekeepingDashboard() {
-    const items = getInventoryItems()
-    const tasks = getHousekeepingTasks()
-    const requests = getRequests()
-    const duties = getDuties()
-    const notices = getAnnouncementsForRole('housekeepingmanager')
-    const lowStock = items.filter(isLowStock)
-    const pending = requests.filter((row) => String(row.status || '').toLowerCase() === 'pending')
-    const completed = tasks.filter((task) => task.status === 'Completed')
-    const pendingTasks = tasks.filter((task) => task.status === 'Pending' || task.status === 'In Complete')
-    const active = tasks.filter(isOpenTask)
-    const onDuty = new Set(
-        (duties.length ? duties : tasks.filter(isOpenTask))
-            .map((row) => row.staff || row.assignedTo)
-            .filter(Boolean),
-    )
-    const zones = new Set(completed.map(taskZone))
-
-    return {
-        summaryCards: [
-            { label: 'Active Tasks Today', value: String(active.length), sub: 'Across all zones' },
-            { label: 'Tasks Completed', value: String(completed.length), sub: 'In current store' },
-            { label: 'Pending Tasks', value: String(pendingTasks.length), sub: 'Still open' },
-            { label: 'Low Stock Items', value: String(lowStock.length), sub: 'Cleaning supplies' },
-            { label: 'Staff On Duty', value: String(onDuty.size), sub: duties.length ? 'Duty allotment' : 'From open tasks' },
-            { label: 'Pending Requests', value: String(pending.length), sub: 'Awaiting approval' },
-            { label: 'Zones Inspected', value: String(zones.size), sub: 'Completed task zones' },
-        ],
-        recentTasks: tasks.slice(0, 4).map((task) => ({
-            taskId: task.taskId,
-            title: task.title,
-            assignedTo: task.assignedTo,
-            status: task.status === 'In Complete' ? 'Pending' : task.status,
-        })),
-        lowStockItems: lowStock.slice(0, 6).map((item) => ({
-            item: item.productName,
-            availableQty: String(item.availableQuantity ?? 0),
-            reorderLevel: String(item.reorderLevel ?? 0),
-        })),
-        pendingRequests: pending.slice(0, 6).map((row) => ({
-            requestId: row.requestId,
-            type: row.requestType || row.title || 'Request',
-            status: row.status,
-        })),
-        recentAnnouncements: notices.slice(0, 4).map((row) => ({
-            title: row.title,
-            date: row.announcementDate || row.date || '',
-        })),
-    }
-}
-
-export async function hydrateHousekeepingDashboardFromApi() {
-    const tasks = [hydrateInventoryItemsFromApi(), hydrateHousekeepingTasksFromApi(), hydrateRequestsFromApi()]
-    if (usesCampusApiForKey(DUTY_KEY)) tasks.push(hydrateCampusKey(DUTY_KEY, []))
-    await Promise.all(tasks)
-    return buildHousekeepingDashboard()
-}
-
-const FALLBACK = buildHousekeepingDashboard()
-
-export const SUMMARY_CARDS = FALLBACK.summaryCards
-export const RECENT_TASKS = FALLBACK.recentTasks
-export const LOW_STOCK_ITEMS = FALLBACK.lowStockItems
-export const PENDING_REQUESTS = FALLBACK.pendingRequests
-export const RECENT_ANNOUNCEMENTS = FALLBACK.recentAnnouncements

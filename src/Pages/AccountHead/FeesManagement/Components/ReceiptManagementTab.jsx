@@ -12,7 +12,6 @@ import {
     Search,
     TrendingUp,
 } from 'lucide-react'
-import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import { formatCurrency } from '../../financeDomain/financeHelpers'
 import {
@@ -62,7 +61,7 @@ const Panel = ({ title, action, children, className = '' }) => (
     </div>
 )
 
-const ReceiptManagementTab = ({ exportModal, setExportModal }) => {
+const ReceiptManagementTab = () => {
     const [paymentPeriod, setPaymentPeriod] = useState('Monthly')
     const { receipts, students } = useFinance()
     const liveRows = receipts.map((item) => {
@@ -411,7 +410,6 @@ const ReceiptManagementTab = ({ exportModal, setExportModal }) => {
                 </Panel>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </div>
     )
 }

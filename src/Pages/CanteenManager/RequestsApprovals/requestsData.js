@@ -1,5 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-const DEFAULT_REQUESTS = [
+export const REQUESTS = [
     {
         requestId: 'REQ-2026-001',
         requestType: 'Stock',
@@ -120,17 +119,3 @@ export const statusBadgeColor = {
     Approved: 'bg-[#4CAF5033] text-[#4CAF50]',
     Rejected: 'bg-[#FF000033] text-[#FF0000]',
 }
-
-export const REQUESTS_STORAGE_KEY = 'schoolerp-canteen-requests-v1'
-export function getRequests() {
-    return ensureCampusSeed('schoolerp-canteen-requests-v1', DEFAULT_REQUESTS)
-}
-export function saveRequests(rows) {
-    return saveCampusJson('schoolerp-canteen-requests-v1', rows)
-}
-export function hydrateRequestsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-canteen-requests-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-canteen-requests-v1', DEFAULT_REQUESTS)
-}
-export const REQUESTS = DEFAULT_REQUESTS
-

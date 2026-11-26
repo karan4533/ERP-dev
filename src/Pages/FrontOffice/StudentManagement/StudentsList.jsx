@@ -10,7 +10,7 @@ const StudentsList = () => {
         <>
             <StudentDatabaseListView
                 routeBase={ROUTE_BASE}
-                title='Students List'
+                title='Student Database'
                 renderExtraActions={() => (
                     <button
                         type='button'

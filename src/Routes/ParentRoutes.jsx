@@ -25,7 +25,6 @@ const ParentRoutes = () => (
                     sampleQuestionsRoute={PARENT_SAMPLE_QUESTIONS_ROUTE}
                     communicationInboxBase={PARENT_COMMUNICATION_INBOX}
                     dashboardComponent={ParentDashboard}
-                    roleKey='parent'
                     includeOnlineClass
                     includeExtraClass
                     includeStarRatings={false}

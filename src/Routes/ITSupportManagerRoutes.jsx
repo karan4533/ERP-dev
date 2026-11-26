@@ -1,5 +1,9 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
 import React from 'react'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
+import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
+import DepartmentTicketingWorkspace from '../Common/DepartmentTicketing/DepartmentTicketingWorkspace'
 import Dashboard from '../Pages/ITSupportManager/Dashboard/Dashboard'
 import AssetManagement from '../Pages/ITSupportManager/AssetManagement/AssetManagement'
 import AddAsset from '../Pages/ITSupportManager/AssetManagement/AddAsset'
@@ -14,9 +18,8 @@ import AnnouncementList from '../Pages/ITSupportManager/Announcement/Announcemen
 import ViewAnnouncement from '../Pages/ITSupportManager/Announcement/ViewAnnouncement'
 import AddAnnouncement from '../Pages/ITSupportManager/Announcement/AddAnnouncement'
 import MaintenanceInventory from '../Pages/ITSupportManager/MaintenanceInventory/MaintenanceInventory'
-import DataImport from '../Pages/ITSupportManager/DataImport/DataImport'
-import { ProcurementBoard } from '../Common/demoDomain/WorkflowScreens'
-import { IT_PROCUREMENT_KEY } from '../Common/demoDomain/procurement'
+import StoresProcurementWorkspace from '../Common/StoresProcurement/StoresProcurementWorkspace'
+import UnavailableWorkflowPage from '../Common/ui/UnavailableWorkflowPage'
 
 const ITSupportManagerRoutes = () => {
     return (
@@ -26,7 +29,11 @@ const ITSupportManagerRoutes = () => {
             <Route path="/it-support-manager/asset-management" element={<AssetManagement />} />
             <Route path="/it-support-manager/asset-management/add-asset" element={<AddAsset />} />
             <Route path="/it-support-manager/asset-management/view-asset/:id" element={<ViewAsset />} />
-            <Route path="/it-support-manager/support-tickets" element={<SupportTicketsList />} />
+            <Route path="/it-support-manager/data-import" element={<UnavailableWorkflowPage title="Data Import & Bulk Migration" />} />
+            <Route path="/it-support-manager/purchase-workflow" element={<StoresProcurementWorkspace defaultTab="purchase-orders" roleOverride="it-support-manager" />} />
+            
+            {/* IT Service Desk / Support Tickets */}
+            <Route path="/it-support-manager/support-tickets" element={<DepartmentTicketingWorkspace roleOverride="it-support-manager" defaultTab="department-queue" />} />
             <Route path="/it-support-manager/support-tickets/view-ticket/:id" element={<ViewSupportTicket />} />
             <Route path="/it-support-manager/requests-approvals" element={<RequestsApprovalsList />} />
             <Route path="/it-support-manager/requests-approvals/add-request" element={<AddRequest />} />
@@ -35,8 +42,14 @@ const ITSupportManagerRoutes = () => {
             <Route path="/it-support-manager/broadcast" element={<AnnouncementList />} />
             <Route path="/it-support-manager/broadcast/view-broadcast/:id" element={<ViewAnnouncement />} />
             <Route path="/it-support-manager/broadcast/add-broadcast" element={<AddAnnouncement />} />
-            <Route path="/it-support-manager/data-import" element={<DataImport />} />
-            <Route path="/it-support-manager/purchase-workflow" element={<ProcurementBoard department="IT Support" requestedBy="IT Support Manager" storageKey={IT_PROCUREMENT_KEY} />} />
+
+            {/* Universal Task Management */}
+            {TaskManagementRoutes({ basePath: '/it-support-manager' })}
+
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/it-support-manager', role: 'it-support-manager' })}
+
+                        <Route path="/it-support-manager/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
             <Route path="*" element={<Navigate to="/it-support-manager/dashboard" replace />} />
         </ReactRoutes>
     )

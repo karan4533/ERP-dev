@@ -6,8 +6,12 @@ import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal'
 import { getMarksEntries, CLASSES, SECTIONS, SUBJECTS, EXAM_NAMES } from './enterMarksData'
+import { useAuth } from '../../../../context/AuthContext'
+import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
 
 const EnterMarks = () => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const location = useLocation()
     const [records, setRecords] = useState(() => getMarksEntries())
     const [exportModal, setExportModal] = useState(false)
@@ -147,9 +151,11 @@ const EnterMarks = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                Delete
-                                            </button>
+                                            {canDelete && (
+                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                    Delete
+                                                </button>
+                                            )}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -176,15 +182,9 @@ const EnterMarks = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='enter-marks'
-                rows={Array.isArray(records) ? records : []}
-                exportDescription={<>You are exporting {Array.isArray(records) ? records.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </section>
     )
 }

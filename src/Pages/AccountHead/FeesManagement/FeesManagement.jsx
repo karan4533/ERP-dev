@@ -1,622 +1,174 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import {
-    AlertTriangle,
-    CloudUpload,
-    Download,
-    FileSpreadsheet,
-    Pencil,
-    Plus,
-    Search,
-    Settings2,
-    Trash2,
-    Upload,
-    Bell,
-    Send,
-    Printer,
-} from 'lucide-react'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import DefineFeeStructureModal from './Components/DefineFeeStructureModal'
-import ConfigureFeeStructureModal from './Components/ConfigureFeeStructureModal'
-import { toast } from 'react-toastify'
-import FeeCollectionTab from './Components/FeeCollectionTab'
+import { useCallback, useMemo, useState } from 'react'
+import { AlertCircle, Bell, Calculator, Download, Plus, Settings2, Upload } from 'lucide-react'
+import { DataTable, DataToolbar, IntegrationNotice, PageHeader, StatusBadge } from '../../../Common/ui'
 import { useFinance } from '../financeDomain/FinanceContext'
 import { FEE_FREQUENCIES } from '../financeDomain/financeConstants'
 import { formatCurrency } from '../financeDomain/financeHelpers'
-import ConcessionsWaiversTab from './Components/ConcessionsWaiversTab'
-import DefaultersTab from './Components/DefaultersTab'
-import ReceiptManagementTab from './Components/ReceiptManagementTab'
 import ActivityFeesTab from './Components/ActivityFeesTab'
-import {
-    FEE_TABS,
-    TERMS,
-    feeStructureStatusBadgeColor,
-} from './feesManagementData'
-import { buildFeeQuickStats } from '../financeDomain/financeLiveViews'
-import FinanceSnapshotBanner from '../financeDomain/FinanceSnapshotBanner'
-import { FEE_STRUCTURE_CSV_TEMPLATE, parseFeeStructureUpload } from './feeStructureImport'
-import { loadAdminAcademicYears } from './feeCampusOptions'
+import ConfigureFeeStructureModal from './Components/ConfigureFeeStructureModal'
+import FeeIncrementSimulatorModal from './Components/FeeIncrementSimulatorModal'
+import ChequeBounceTrackerModal from './Components/ChequeBounceTrackerModal'
+import ConcessionsWaiversTab from './Components/ConcessionsWaiversTab'
+import DefineFeeStructureModal from './Components/DefineFeeStructureModal'
+import DefaultersTab from './Components/DefaultersTab'
+import FeeCollectionTab from './Components/FeeCollectionTab'
+import AdmissionClearancesTab from './Components/AdmissionClearancesTab'
+import ReceiptManagementTab from './Components/ReceiptManagementTab'
+import RefundsManagementTab from './Components/RefundsManagementTab'
+import { ACADEMIC_YEARS, FEE_TABS, GRADES, QUICK_STATS } from './feesManagementData'
 
-const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
-const tdClass = 'px-2 py-4 text-[#667085]'
+const primaryButton = 'inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'
+const secondaryButton = 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-indigo)] bg-white px-4 text-sm font-semibold text-[var(--erp-indigo)]'
+const unavailableButton = 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-60'
 
-const downloadFeeTemplate = () => {
-    const blob = new Blob([FEE_STRUCTURE_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'fee-structure-template.csv'
-    link.click()
-    URL.revokeObjectURL(url)
-}
-
-const FeeStructureTab = ({
-    exportModal,
-    setExportModal,
-    onImportFile,
-    fileInputRef,
-    onEditStructure,
-    onDeleteStructure,
-    deletingId,
-}) => {
-    const { feeStructures, feeCategories, students, installments, financePersistence } = useFinance()
-    const [search, setSearch] = useState('')
-    const [yearFilter, setYearFilter] = useState('')
-    const [gradeFilter, setGradeFilter] = useState('All Grades')
-    const [adminYears, setAdminYears] = useState([])
-
-    useEffect(() => {
-        let cancelled = false
-        loadAdminAcademicYears()
-            .then((years) => { if (!cancelled) setAdminYears(years) })
-            .catch(() => { if (!cancelled) setAdminYears([]) })
-        return () => { cancelled = true }
-    }, [])
-
-    const quickStats = useMemo(
-        () => buildFeeQuickStats({ feeStructures, feeCategories, students, installments, adminYears }),
-        [feeStructures, feeCategories, students, installments, adminYears],
-    )
-    const filteredStructures = useMemo(() => {
-        const query = search.trim().toLowerCase()
-        return feeStructures.filter((row) => {
-            if (yearFilter && row.academicYear !== yearFilter) return false
-            if (gradeFilter !== 'All Grades' && row.className !== gradeFilter) return false
-            if (!query) return true
-            return [row.className, row.feeHead, row.academicYear]
-                .join(' ')
-                .toLowerCase()
-                .includes(query)
-        })
-    }, [feeStructures, search, yearFilter, gradeFilter])
-    const categoryName = (id) => feeCategories.find((item) => item.id === id)?.name ?? id
+const FeeStructureTab = () => {
+    const { feeStructures, feeCategories } = useFinance()
+    const [query, setQuery] = useState('')
+    const [academicYear, setAcademicYear] = useState(ACADEMIC_YEARS[0])
+    const [grade, setGrade] = useState(GRADES[0])
+    const categoryName = useCallback((id) => feeCategories.find((item) => item.id === id)?.name ?? id, [feeCategories])
     const frequencyLabel = (id) => FEE_FREQUENCIES.find((item) => item.id === id)?.label ?? id
 
+    const filteredRows = useMemo(() => feeStructures.filter((row) => {
+        if (academicYear !== ACADEMIC_YEARS[0] && row.academicYear !== academicYear) return false
+        if (grade !== GRADES[0] && row.className !== grade) return false
+        const normalizedQuery = query.trim().toLowerCase()
+        if (!normalizedQuery) return true
+        return [row.academicYear, row.className, categoryName(row.feeCategoryId), row.feeHead, row.status]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedQuery)
+    }), [academicYear, categoryName, feeStructures, grade, query])
+
+    const columns = [
+        { key: 'academicYear', label: 'Academic year' },
+        { key: 'className', label: 'Class', required: true },
+        { key: 'category', label: 'Category', render: (row) => categoryName(row.feeCategoryId) },
+        { key: 'feeHead', label: 'Fee head' },
+        { key: 'frequency', label: 'Frequency', render: (row) => frequencyLabel(row.frequency) },
+        { key: 'amount', label: 'Amount', render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{formatCurrency(row.amount)}</span> },
+        { key: 'dueDayOfMonth', label: 'Due day', render: (row) => row.dueDayOfMonth || 'Not set' },
+        { key: 'mandatory', label: 'Requirement', render: (row) => row.mandatory ? 'Mandatory' : 'Optional' },
+        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    ]
+
     return (
-    <div className='space-y-6'>
-        <FinanceSnapshotBanner mockNote='Quick statistics and the structure table use the campus finance snapshot (not hardcoded 2023-24 demo figures).' />
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-            <div className='bg-white rounded-2xl shadow-md p-5'>
-                <div className='border-2 border-dashed border-[#515DEF]/30 rounded-2xl bg-[#515DEF]/5 px-6 py-10 text-center'>
-                    <div className='mx-auto mb-4 size-14 rounded-full bg-[#515DEF]/10 text-[#515DEF] flex items-center justify-center'>
-                        <CloudUpload size={28} />
+        <div className='space-y-5'>
+            <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]'>
+                <IntegrationNotice
+                    state='disconnected'
+                    title='Fee structure import unavailable'
+                    description='Excel and CSV imports require a validated file contract and connected fee API. Define individual structures with the governed form until that integration is available.'
+                />
+                <section className='rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white p-4 sm:p-5' aria-labelledby='fee-reference-summary'>
+                    <div className='flex items-start justify-between gap-3'>
+                        <div><h3 id='fee-reference-summary' className='text-base font-semibold text-[var(--erp-ink)]'>Reference setup summary</h3><p className='mt-1 text-xs text-[var(--erp-muted)]'>Static onboarding fixture · {QUICK_STATS.academicYear}</p></div>
+                        <StatusBadge status='Sample data' />
                     </div>
-                    <h3 className='text-base font-semibold text-[#1E1E1E]'>Import Fee Structure</h3>
-                    <p className='text-sm text-[#667085] mt-2'>
-                        Upload a CSV (or .xlsx saved as CSV). Columns:{' '}
-                        <span className='font-medium text-[#1E1E1E]'>academicYear, className, feeCategory, feeHead, frequency, amount, dueDay</span>.
-                    </p>
-                    <button
-                        type='button'
-                        onClick={() => fileInputRef?.current?.click()}
-                        className='mt-4 text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'
-                    >
-                        browse file
-                    </button>
-                    <div className='flex justify-center gap-2 mt-4'>
-                        <span className='text-xs font-medium px-2.5 py-1 rounded bg-[#515DEF]/10 text-[#515DEF]'>.csv</span>
-                        <span className='text-xs font-medium px-2.5 py-1 rounded bg-[#6670851A] text-[#667085]'>.xlsx → save as CSV</span>
-                    </div>
-                </div>
-                <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-4 border-t border-[#F2F4F7]'>
-                    <button
-                        type='button'
-                        onClick={downloadFeeTemplate}
-                        className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] hover:opacity-80 cursor-pointer'
-                    >
-                        <Download size={16} />
-                        Download sample template
-                    </button>
-                    <p className='text-sm text-[#667085]'>
-                        Snapshot:{' '}
-                        <span className='font-semibold text-[#4CAF50]'>
-                            {financePersistence?.apiEnabled ? 'API' : 'Offline'} · {quickStats.structureCount} structures
-                        </span>
-                    </p>
-                </div>
+                    <dl className='mt-4 grid grid-cols-2 gap-3'>
+                        <div className='rounded-lg bg-[var(--erp-canvas)] p-3'><dt className='text-xs text-[var(--erp-muted)]'>Grades configured</dt><dd className='mt-1 text-lg font-semibold text-[var(--erp-ink)]'>{QUICK_STATS.gradesConfigured}</dd></div>
+                        <div className='rounded-lg bg-[var(--erp-canvas)] p-3'><dt className='text-xs text-[var(--erp-muted)]'>Fee categories</dt><dd className='mt-1 text-lg font-semibold text-[var(--erp-ink)]'>{QUICK_STATS.feeCategories}</dd></div>
+                        <div className='rounded-lg bg-[var(--erp-canvas)] p-3'><dt className='text-xs text-[var(--erp-muted)]'>Terms split</dt><dd className='mt-1 text-lg font-semibold text-[var(--erp-indigo)]'>{QUICK_STATS.termsSplit}</dd></div>
+                        <div className='rounded-lg bg-[var(--erp-canvas)] p-3'><dt className='text-xs text-[var(--erp-muted)]'>Annual billing</dt><dd className='mt-1 text-lg font-semibold text-[var(--erp-indigo)]'>{QUICK_STATS.annualBilling}</dd></div>
+                    </dl>
+                </section>
             </div>
 
-            <div className='bg-white rounded-2xl shadow-md p-5'>
-                <div className='flex items-start justify-between gap-3 mb-4'>
-                    <h3 className='text-base font-semibold text-[#1E1E1E]'>Quick Statistics</h3>
-                    <span className='text-[10px] font-semibold px-2.5 py-1 rounded bg-[#515DEF]/10 text-[#515DEF] whitespace-nowrap'>
-                        {quickStats.academicYear}
-                    </span>
-                </div>
-
-                <div className='grid grid-cols-2 gap-3'>
-                    <div className='border border-[#EDEEF5] rounded-xl p-3'>
-                        <p className='text-[10px] font-semibold text-[#808080] uppercase tracking-wide'>Grades Configured</p>
-                        <p className='text-lg font-semibold text-[#1E1E1E] mt-1'>{quickStats.gradesConfigured}</p>
-                    </div>
-                    <div className='border border-[#EDEEF5] rounded-xl p-3'>
-                        <p className='text-[10px] font-semibold text-[#808080] uppercase tracking-wide'>Fee Categories</p>
-                        <p className='text-lg font-semibold text-[#1E1E1E] mt-1'>{quickStats.feeCategories}</p>
-                    </div>
-                    <div className='border border-[#EDEEF5] rounded-xl p-3'>
-                        <p className='text-[10px] font-semibold text-[#808080] uppercase tracking-wide'>Billing mode</p>
-                        <p className='text-lg font-semibold text-[#515DEF] mt-1'>{quickStats.termsSplit}</p>
-                    </div>
-                    <div className='border border-[#EDEEF5] rounded-xl p-3'>
-                        <p className='text-[10px] font-semibold text-[#808080] uppercase tracking-wide'>Structure total</p>
-                        <p className='text-lg font-semibold text-[#515DEF] mt-1'>{quickStats.annualBilling}</p>
-                    </div>
-                </div>
-
-                <div className='mt-5'>
-                    <div className='flex items-center justify-between text-sm mb-2'>
-                        <span className='text-[#667085]'>Overall Setup Progress</span>
-                        <span className='font-semibold text-[#515DEF]'>{quickStats.setupProgress}%</span>
-                    </div>
-                    <div className='h-2 rounded-full bg-[#EDEEF5] overflow-hidden'>
-                        <div
-                            className='h-full rounded-full bg-[#515DEF] transition-all duration-300'
-                            style={{ width: `${quickStats.setupProgress}%` }}
-                        />
-                    </div>
-                </div>
-
-                <div className='mt-4 flex items-start gap-3 rounded-xl border border-[#FF572233] bg-[#FF57220D] px-4 py-3'>
-                    <AlertTriangle size={18} className='text-[#FF5722] shrink-0 mt-0.5' />
-                    <div className='flex-1 min-w-0'>
-                        <p className='text-sm text-[#667085]'>{quickStats.alertMessage}</p>
-                    </div>
-                </div>
-            </div>
+            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='fee-structure-register-title'>
+                <div className='px-4 pt-4 sm:px-5'><h3 id='fee-structure-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>Configured fee structures</h3></div>
+                <DataToolbar
+                    query={query}
+                    onQueryChange={setQuery}
+                    searchLabel='Search fee structures'
+                    searchPlaceholder='Class, category, fee head or status…'
+                    resultCount={filteredRows.length}
+                    onReset={() => { setQuery(''); setAcademicYear(ACADEMIC_YEARS[0]); setGrade(GRADES[0]) }}
+                    filters={(
+                        <>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Academic year
+                                <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{ACADEMIC_YEARS.map((year) => <option key={year}>{year}</option>)}</select>
+                            </label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Grade
+                                <select value={grade} onChange={(event) => setGrade(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{GRADES.map((item) => <option key={item}>{item}</option>)}</select>
+                            </label>
+                        </>
+                    )}
+                />
+                <DataTable
+                    caption='Configured fee structures'
+                    rows={filteredRows}
+                    columns={columns}
+                    rowKey='id'
+                    emptyTitle='No fee structures found'
+                    emptyDescription='Reset the filters or define a new fee structure.'
+                    renderActions={() => (
+                        <button type='button' disabled title='Editing and version history require the connected fee configuration API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Edit unavailable</button>
+                    )}
+                />
+            </section>
         </div>
-
-        <div className='bg-white rounded-2xl shadow-md p-4'>
-            <div className='flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4'>
-                <h3 className='text-base font-semibold text-[#1E1E1E]'>Configured Fee Structures</h3>
-                <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
-                    <div className='relative min-w-[180px]'>
-                        <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
-                        <input
-                            type='text'
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder='Search grades...'
-                            className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
-                        />
-                    </div>
-                    <select
-                        value={yearFilter}
-                        onChange={(e) => setYearFilter(e.target.value)}
-                        className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[170px]'
-                    >
-                        <option value=''>All academic years</option>
-                        {quickStats.years.map((year) => (
-                            <option key={year} value={year}>Academic Year: {year}</option>
-                        ))}
-                    </select>
-                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'>
-                        {TERMS.map((term) => (
-                            <option key={term} value={term}>{term}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={gradeFilter}
-                        onChange={(e) => setGradeFilter(e.target.value)}
-                        className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'
-                    >
-                        {quickStats.classOptions.map((grade) => (
-                            <option key={grade} value={grade}>{grade}</option>
-                        ))}
-                    </select>
-                    <button
-                        type='button'
-                        onClick={() => setExportModal(true)}
-                        className='size-10 flex items-center justify-center border border-[#D9D9D9] rounded-md text-[#667085] hover:text-[#515DEF] hover:border-[#515DEF] transition-colors cursor-pointer'
-                        aria-label='Export fee structures'
-                    >
-                        <Upload size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <div className='relative overflow-x-auto'>
-                <table className='w-full text-sm text-left'>
-                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                        <tr>
-                            <th className={`${thClass} rounded-s-lg`}>Academic Year</th>
-                            <th className={thClass}>Class</th>
-                            <th className={thClass}>Category</th>
-                            <th className={thClass}>Fee Head</th>
-                            <th className={thClass}>Frequency</th>
-                            <th className={thClass}>Amount</th>
-                            <th className={thClass}>Due Day</th>
-                            <th className={thClass}>Mandatory</th>
-                            <th className={thClass}>Status</th>
-                            <th className={`${thClass} rounded-e-lg`}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredStructures.length === 0 ? (
-                            <tr>
-                                <td colSpan={10} className='px-2 py-10 text-center text-sm text-[#667085]'>
-                                    No fee structures in the campus snapshot yet. Define one above, or import enrolled students and bootstrap from Settings.
-                                </td>
-                            </tr>
-                        ) : filteredStructures.map((row) => (
-                            <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                <td className={`${tdClass} font-medium text-[#1E1E1E] rounded-s-lg`}>{row.academicYear}</td>
-                                <td className={tdClass}>{row.className}</td>
-                                <td className={tdClass}>{categoryName(row.feeCategoryId)}</td>
-                                <td className={tdClass}>{row.feeHead}</td>
-                                <td className={tdClass}>{frequencyLabel(row.frequency)}</td>
-                                <td className={`${tdClass} font-semibold text-[#515DEF]`}>{formatCurrency(row.amount)}</td>
-                                <td className={tdClass}>{row.dueDayOfMonth ? `${row.dueDayOfMonth}` : '—'}</td>
-                                <td className={tdClass}>{row.mandatory ? 'Yes' : 'Optional'}</td>
-                                <td className={tdClass}>
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${feeStructureStatusBadgeColor[row.status] || 'bg-[#F2F4F7] text-[#667085]'}`}>
-                                        {row.status}
-                                    </span>
-                                </td>
-                                <td className={`${tdClass} rounded-e-lg`}>
-                                    <div className='flex items-center gap-2'>
-                                        <button
-                                            type='button'
-                                            onClick={() => onEditStructure?.(row)}
-                                            className='p-1.5 rounded-md hover:bg-[#EDEEF5] text-[#667085] hover:text-[#515DEF] cursor-pointer'
-                                            aria-label='Edit fee structure'
-                                            title='Edit'
-                                        >
-                                            <Pencil size={16} />
-                                        </button>
-                                        <button
-                                            type='button'
-                                            disabled={deletingId === row.id}
-                                            onClick={() => onDeleteStructure?.(row)}
-                                            className='p-1.5 rounded-md hover:bg-[#FF572214] text-[#667085] hover:text-[#FF5722] cursor-pointer disabled:opacity-50'
-                                            aria-label='Delete fee structure'
-                                            title='Delete'
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-2'>
-                <p className='text-sm text-[#667085]'>
-                    Showing {filteredStructures.length} of {feeStructures.length} structures
-                    {' · '}
-                    {quickStats.studentCount} finance student(s) · {quickStats.installmentCount} installment(s)
-                </p>
-            </div>
-        </div>
-
-        <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-    </div>
     )
 }
 
 const FeesManagement = () => {
     const [activeTab, setActiveTab] = useState('fee-structure')
-    const [exportModal, setExportModal] = useState(false)
     const [defineFeeModal, setDefineFeeModal] = useState(false)
-    const [editingStructure, setEditingStructure] = useState(null)
     const [configureFeeModal, setConfigureFeeModal] = useState(false)
-    const [deletingId, setDeletingId] = useState(null)
-    const fileInputRef = useRef(null)
-    const { defineFeeStructure, addFeeCategory, saveFeeCategories, deleteFeeStructure } = useFinance()
+    const [incrementSimulatorModal, setIncrementSimulatorModal] = useState(false)
+    const [chequeBounceModal, setChequeBounceModal] = useState(false)
+    const { addFeeStructure, addFeeCategory } = useFinance()
+    const activeTabLabel = activeTab === 'defaulters' ? 'Defaulters management' : FEE_TABS.find((tab) => tab.id === activeTab)?.label ?? 'Fee structure'
 
-    const openDefineModal = (structure = null) => {
-        setEditingStructure(structure)
-        setDefineFeeModal(true)
-    }
+    const exportUnavailable = <button type='button' disabled title='Export requires the connected fee reporting API.' className={unavailableButton}><Download aria-hidden='true' size={16} /> Export unavailable</button>
+    const reminderUnavailable = <button type='button' disabled title='Reminder delivery requires connected email or WhatsApp services.' className={unavailableButton}><Bell aria-hidden='true' size={16} /> Reminder unavailable</button>
 
-    const closeDefineModal = () => {
-        setDefineFeeModal(false)
-        setEditingStructure(null)
-    }
-
-    const handleDeleteStructure = async (row) => {
-        if (!row?.id) return
-        const label = `${row.className || 'Class'} · ${row.feeHead || 'Fee'} · ${formatCurrency(row.amount)}`
-        const confirmed = window.confirm(
-            `Delete this fee structure?\n\n${label}\n\nUnpaid installments for this structure will be removed. Paid installments are kept.`,
-        )
-        if (!confirmed) return
-        setDeletingId(row.id)
-        try {
-            const result = await deleteFeeStructure(row.id)
-            if (!result?.success) {
-                toast.error(result?.message || result?.persist?.message || 'Could not delete fee structure.')
-                return
-            }
-            toast.success(
-                result.persist?.api
-                    ? `Deleted ${label}. Removed ${result.removedInstallments || 0} unpaid installment(s).`
-                    : `Deleted ${label} (offline / pending sync).`,
-            )
-        } catch (error) {
-            toast.error(error?.message || 'Delete failed.')
-        } finally {
-            setDeletingId(null)
-        }
-    }
-
-    const handleImportFile = async (event) => {
-        const file = event.target.files?.[0]
-        event.target.value = ''
-        if (!file) return
-        const name = String(file.name || '').toLowerCase()
-        if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-            toast.error('Upload a CSV file (Excel → Save As → CSV). Binary .xlsx is not parsed yet.')
-            return
-        }
-        try {
-            const text = await file.text()
-            const parsed = parseFeeStructureUpload(text)
-            if (!parsed.success) {
-                toast.error(parsed.message || 'Could not parse file.')
-                return
-            }
-            const categoryNames = [...new Set(parsed.rows.map((row) => row.feeCategory).filter(Boolean))]
-            let latestCategories
-            if (categoryNames.length) {
-                const saved = await saveFeeCategories(categoryNames)
-                latestCategories = saved.feeCategories
-            }
-            let installments = 0
-            let latestStructures
-            let latestInstallments
-            for (const row of parsed.rows) {
-                const feeCategoryId = addFeeCategory(row.feeCategory)
-                const result = await defineFeeStructure({
-                    academicYear: row.academicYear,
-                    className: row.className,
-                    feeCategoryId,
-                    feeHead: row.feeHead,
-                    frequency: row.frequency,
-                    amount: row.amount,
-                    dueDayOfMonth: row.dueDayOfMonth,
-                    fineRuleId: null,
-                    concessionApplicable: row.concessionApplicable,
-                    mandatory: row.mandatory,
-                    status: row.status,
-                }, {
-                    feeCategories: latestCategories,
-                    feeStructures: latestStructures,
-                    installments: latestInstallments,
-                })
-                installments += result?.installmentsCreated || 0
-                latestStructures = result?.feeStructures
-                latestInstallments = result?.installments
-            }
-            toast.success(
-                `Imported ${parsed.rows.length} fee structure row(s) · ${installments} installment(s) via finance API.`,
-            )
-            if (parsed.errors?.length) {
-                toast.warn(`${parsed.errors.length} row(s) skipped.`)
-            }
-        } catch (error) {
-            toast.error(error?.message || 'Import failed.')
-        }
-    }
-
-    const activeTabLabel = activeTab === 'defaulters'
-        ? 'Defaulters Management'
-        : FEE_TABS.find((tab) => tab.id === activeTab)?.label ?? 'Fee Structure'
+    const actions = activeTab === 'fee-structure' ? (
+        <>
+            <button type='button' disabled title='Import requires a validated file contract and connected fee API.' className={unavailableButton}><Upload aria-hidden='true' size={16} /> Import unavailable</button>
+            <button type='button' onClick={() => setIncrementSimulatorModal(true)} className={secondaryButton}><Calculator aria-hidden='true' size={16} /> Increment Simulator</button>
+            <button type='button' onClick={() => setChequeBounceModal(true)} className={secondaryButton}><AlertCircle aria-hidden='true' size={16} /> Cheque Bounces</button>
+            <button type='button' onClick={() => setConfigureFeeModal(true)} className={secondaryButton}><Settings2 aria-hidden='true' size={16} /> Configure structure</button>
+            <button type='button' onClick={() => setDefineFeeModal(true)} className={primaryButton}><Plus aria-hidden='true' size={16} /> Define fee structure</button>
+        </>
+    ) : activeTab === 'fee-collection' ? <>{reminderUnavailable}{exportUnavailable}</>
+        : activeTab === 'concessions-waivers' ? <><button type='button' disabled title='Application import requires the connected fee API.' className={unavailableButton}><Upload aria-hidden='true' size={16} /> Import unavailable</button>{exportUnavailable}</>
+            : activeTab === 'defaulters' ? <>{reminderUnavailable}{exportUnavailable}</>
+                : activeTab === 'receipt-management' ? exportUnavailable
+                    : null
 
     return (
-        <section className='space-y-6'>
-            <input
-                ref={fileInputRef}
-                type='file'
-                accept='.csv,text/csv'
-                className='hidden'
-                onChange={handleImportFile}
+        <section className='space-y-5'>
+            <PageHeader
+                title={activeTabLabel}
+                description='Manage browser-stored fee configuration, collections, concessions, defaulters and receipts without implying connected banking or delivery services.'
+                context='Browser-stored finance workspace · production APIs disconnected'
+                actions={actions}
             />
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4'>
-                    <h2 className='text-xl font-semibold text-black'>{activeTabLabel}</h2>
-                    {activeTab === 'fee-structure' && (
-                        <div className='flex flex-wrap items-center gap-3'>
-                            <button
-                                type='button'
-                                onClick={() => fileInputRef.current?.click()}
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <FileSpreadsheet size={16} />
-                                Upload CSV
-                            </button>
-                            <button
-                                type='button'
-                                onClick={() => setConfigureFeeModal(true)}
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Settings2 size={16} />
-                                Configure Categories
-                            </button>
-                            <button
-                                type='button'
-                                onClick={() => openDefineModal(null)}
-                                className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
-                            >
-                                <Plus size={16} />
-                                Define Fee Structure
-                            </button>
-                        </div>
-                    )}
-                    {activeTab === 'fee-collection' && (
-                        <div className='flex flex-wrap items-center gap-3'>
-                            <button
-                                type='button'
-                                onClick={() => setExportModal(true)}
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Download size={16} />
-                                Export Collection Report
-                            </button>
-                            <button
-                                type='button'
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Bell size={16} />
-                                Send Reminder
-                            </button>
-                            <button
-                                type='button'
-                                onClick={() => toast.info('Search a student below, select unpaid instalments, then use Pay / Collect.')}
-                                className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
-                            >
-                                <Plus size={16} />
-                                Collect Fee
-                            </button>
-                        </div>
-                    )}
-                    {activeTab === 'concessions-waivers' && (
-                        <div className='flex flex-wrap items-center gap-3'>
-                            <button
-                                type='button'
-                                onClick={() => setExportModal(true)}
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Download size={16} />
-                                Export Report
-                            </button>
-                            <button
-                                type='button'
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Upload size={16} />
-                                Import Applications
-                            </button>
-                            <button
-                                type='button'
-                                className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
-                            >
-                                <Plus size={16} />
-                                Add Concession
-                            </button>
-                        </div>
-                    )}
-                    {activeTab === 'defaulters' && (
-                        <div className='flex flex-wrap items-center gap-3'>
-                            <button
-                                type='button'
-                                onClick={() => setExportModal(true)}
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Download size={16} />
-                                Export Report
-                            </button>
-                            <button
-                                type='button'
-                                className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
-                            >
-                                <Send size={16} />
-                                Bulk Reminder
-                            </button>
-                        </div>
-                    )}
-                    {activeTab === 'receipt-management' && (
-                        <div className='flex flex-wrap items-center gap-3'>
-                            <button
-                                type='button'
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Printer size={16} />
-                                Bulk Print
-                            </button>
-                            <button
-                                type='button'
-                                onClick={() => setExportModal(true)}
-                                className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                            >
-                                <Download size={16} />
-                                Export Register
-                            </button>
-                            <button
-                                type='button'
-                                className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
-                            >
-                                <Plus size={16} />
-                                Generate Receipt
-                            </button>
-                        </div>
-                    )}
-                </div>
+            <IntegrationNotice
+                state='demo'
+                title='Local fee-management workspace'
+                description='Fee records and decisions on this screen are demonstration data stored in this browser. Production requires server-side permissions, accounting locks, immutable audit history and connected payment services.'
+            />
 
-                <div className='flex gap-6 overflow-x-auto no-scrollbar mt-6 border-b border-[#F2F4F7]'>
-                    {FEE_TABS.map((tab) => (
-                        <button
-                            key={tab.id}
-                            type='button'
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`whitespace-nowrap px-1 pb-3 text-sm md:text-base font-medium cursor-pointer transition-all duration-200 ${
-                                activeTab === tab.id
-                                    ? 'text-[#515DEF] border-b-2 border-[#515DEF] font-semibold'
-                                    : 'text-[#808080]'
-                            }`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+            <div className='flex gap-2 overflow-x-auto border-b border-[var(--erp-line)]' role='tablist' aria-label='Fee management views'>
+                {FEE_TABS.map((tab) => (
+                    <button key={tab.id} type='button' role='tab' aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={`min-h-11 whitespace-nowrap border-b-2 px-3 text-sm font-semibold ${activeTab === tab.id ? 'border-[var(--erp-indigo)] text-[var(--erp-indigo)]' : 'border-transparent text-[var(--erp-slate)]'}`}>{tab.label}</button>
+                ))}
             </div>
 
-            {activeTab === 'fee-structure' && (
-                <FeeStructureTab
-                    exportModal={exportModal}
-                    setExportModal={setExportModal}
-                    onImportFile={handleImportFile}
-                    fileInputRef={fileInputRef}
-                    onEditStructure={openDefineModal}
-                    onDeleteStructure={handleDeleteStructure}
-                    deletingId={deletingId}
-                />
-            )}
-
+            {activeTab === 'fee-structure' && <FeeStructureTab />}
             {activeTab === 'fee-collection' && <FeeCollectionTab />}
-            {activeTab === 'concessions-waivers' && (
-                <ConcessionsWaiversTab exportModal={exportModal} setExportModal={setExportModal} />
-            )}
-            {activeTab === 'defaulters' && (
-                <DefaultersTab exportModal={exportModal} setExportModal={setExportModal} />
-            )}
-            {activeTab === 'receipt-management' && (
-                <ReceiptManagementTab exportModal={exportModal} setExportModal={setExportModal} />
-            )}
+            {activeTab === 'admission-clearances' && <AdmissionClearancesTab />}
+            {activeTab === 'concessions-waivers' && <ConcessionsWaiversTab />}
+            {activeTab === 'defaulters' && <DefaultersTab />}
+            {activeTab === 'receipt-management' && <ReceiptManagementTab />}
             {activeTab === 'activity-fees' && <ActivityFeesTab />}
+            {activeTab === 'refunds-adjustments' && <RefundsManagementTab />}
 
-            {defineFeeModal && (
-                <DefineFeeStructureModal
-                    isOpen
-                    editingStructure={editingStructure}
-                    onClose={closeDefineModal}
-                />
-            )}
-            <ConfigureFeeStructureModal
-                isOpen={configureFeeModal}
-                onClose={() => setConfigureFeeModal(false)}
-                onOpenDefine={() => openDefineModal(null)}
-            />
+            {defineFeeModal && <DefineFeeStructureModal isOpen onClose={() => setDefineFeeModal(false)} onSave={addFeeStructure} onAddCategory={addFeeCategory} />}
+            <ConfigureFeeStructureModal isOpen={configureFeeModal} onClose={() => setConfigureFeeModal(false)} />
+            <FeeIncrementSimulatorModal isOpen={incrementSimulatorModal} onClose={() => setIncrementSimulatorModal(false)} />
+            <ChequeBounceTrackerModal isOpen={chequeBounceModal} onClose={() => setChequeBounceModal(false)} />
         </section>
     )
 }

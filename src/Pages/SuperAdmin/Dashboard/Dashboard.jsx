@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
     GraduationCap,
@@ -39,11 +39,7 @@ import {
     RECENT_APPROVALS,
     findingSeverityBadgeColor,
 } from './dashboardData'
-import { hydrateEnrolledStudentsFromApi } from '../../../Common/StudentDatabase/enrolledStudentsData'
-import { getStudentsList } from '../../../Common/StudentDatabase/studentDatabaseData'
-import { canUseEmployeeDirectoryApi, loadEmployeeDirectory } from '../../../services/employeeDirectoryApi'
-import { isApiStudentsEnabled } from '../../../services/apiClient'
-import { getPendingApprovalCount, hydrateApprovalsFromApi } from '../Approvals/approvalsData'
+import { IntegrationNotice, RatingBadge } from '../../../Common/ui'
 
 const KPI_ICONS = {
     students: GraduationCap,
@@ -180,63 +176,6 @@ const thClass = 'px-3 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
 const tdClass = 'px-3 py-3 text-[#667085] text-sm'
 
 const Dashboard = () => {
-    const [liveCounts, setLiveCounts] = useState({
-        students: null,
-        employees: null,
-        approvals: null,
-    })
-
-    useEffect(() => {
-        let active = true
-        const load = async () => {
-            let students = null
-            let employees = null
-            let approvals = null
-            try {
-                if (isApiStudentsEnabled()) await hydrateEnrolledStudentsFromApi()
-                students = getStudentsList().length
-            } catch {
-                students = getStudentsList().length
-            }
-            try {
-                if (canUseEmployeeDirectoryApi()) {
-                    const directory = await loadEmployeeDirectory()
-                    employees = directory.records?.length ?? 0
-                }
-            } catch {
-                employees = null
-            }
-            try {
-                await hydrateApprovalsFromApi()
-                approvals = getPendingApprovalCount()
-            } catch {
-                approvals = getPendingApprovalCount()
-            }
-            if (active) setLiveCounts({ students, employees, approvals })
-        }
-        load()
-        return () => {
-            active = false
-        }
-    }, [])
-
-    const kpiCards = useMemo(
-        () =>
-            EXECUTIVE_KPI_CARDS.map((card) => {
-                if (card.key === 'students' && liveCounts.students != null) {
-                    return { ...card, value: String(liveCounts.students), comparison: 'from student database' }
-                }
-                if (card.key === 'employees' && liveCounts.employees != null) {
-                    return { ...card, value: String(liveCounts.employees), comparison: 'from HR directory' }
-                }
-                if (card.key === 'approvals' && liveCounts.approvals != null) {
-                    return { ...card, value: String(liveCounts.approvals), comparison: 'pending in Approvals' }
-                }
-                return card
-            }),
-        [liveCounts],
-    )
-
     const financialTrendOption = useMemo(() => ({
         tooltip: { trigger: 'axis' },
         legend: {
@@ -273,14 +212,14 @@ const Dashboard = () => {
                 type: 'bar',
                 data: GOVERNANCE_TREND.revenue,
                 barWidth: 18,
-                itemStyle: { color: CHART_COLORS.success, borderRadius: [4, 4, 0, 0] },
+                itemStyle: { color: '#515DEF', borderRadius: [4, 4, 0, 0] },
             },
             {
                 name: 'Expenses',
                 type: 'bar',
                 data: GOVERNANCE_TREND.expenses,
                 barWidth: 18,
-                itemStyle: { color: CHART_COLORS.danger, borderRadius: [4, 4, 0, 0] },
+                itemStyle: { color: '#64748B', borderRadius: [4, 4, 0, 0] },
             },
             {
                 name: 'Compliance',
@@ -288,8 +227,8 @@ const Dashboard = () => {
                 yAxisIndex: 1,
                 smooth: true,
                 data: GOVERNANCE_TREND.compliance,
-                lineStyle: { color: CHART_COLORS.primary, width: 3 },
-                itemStyle: { color: CHART_COLORS.primary },
+                lineStyle: { color: '#3B82F6', width: 3 },
+                itemStyle: { color: '#3B82F6' },
                 symbol: 'circle',
                 symbolSize: 8,
             },
@@ -368,6 +307,11 @@ const Dashboard = () => {
 
     return (
         <section className='space-y-6'>
+            <IntegrationNotice
+                state='demo'
+                title='Sample executive dataset'
+                description='Dashboard figures are a labelled design dataset, not live institutional totals. Provenance: demo snapshot · 27 Oct 2026, 09:00 IST.'
+            />
             <div className='relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0C1E5B] via-[#1A2F8F] to-[#515DEF] p-6 sm:p-8 text-white shadow-xl'>
                 <div className='absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl' />
                 <div className='absolute bottom-0 left-0 w-48 h-48 bg-[#4CAF50]/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl' />
@@ -379,7 +323,7 @@ const Dashboard = () => {
                         </div> */}
                         <h1 className='text-2xl sm:text-3xl font-bold mt-4'>Super Admin Dashboard</h1>
                         <p className='text-sm text-white/75 mt-2 max-w-2xl'>
-                            Real-time governance across academics, finance, operations, audit, and compliance — school-wide visibility at a glance.
+                            Executive governance across academics, finance, operations, audit, and compliance — with source context shown for every dataset.
                         </p>
                     </div>
                     <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
@@ -404,13 +348,13 @@ const Dashboard = () => {
             </div>
 
             <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4'>
-                {kpiCards.map((card) => (
+                {EXECUTIVE_KPI_CARDS.map((card) => (
                     <KpiCard key={card.key} card={card} />
                 ))}
             </div>
 
             <div className='grid grid-cols-1 xl:grid-cols-3 gap-6'>
-                <Panel title='Financial & Compliance Trend' className='xl:col-span-2'>
+                <Panel title='Budgeted vs Actuals' className='xl:col-span-2'>
                     <ReactECharts option={financialTrendOption} style={{ height: 340 }} opts={{ renderer: 'svg' }} />
                 </Panel>
                 <Panel title='Performance Targets'>
@@ -439,9 +383,12 @@ const Dashboard = () => {
                                         </div>
                                         <h4 className='text-sm font-semibold text-[#1E1E1E] truncate'>{dept.department}</h4>
                                     </div>
-                                    <span className={`inline-flex shrink-0 px-2 py-1 rounded-lg text-xs font-semibold ${DEPARTMENT_STATUS_COLORS[dept.status]}`}>
-                                        {dept.status}
-                                    </span>
+                                    <div className='flex items-center gap-1.5 flex-wrap justify-end'>
+                                        <RatingBadge score={dept.compliance} />
+                                        <span className={`inline-flex shrink-0 px-2 py-0.5 rounded-lg text-xs font-semibold ${DEPARTMENT_STATUS_COLORS[dept.status]}`}>
+                                            {dept.status}
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className='space-y-3'>
                                     <div>
@@ -478,7 +425,7 @@ const Dashboard = () => {
             </div>
 
             <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
-                <Panel title='Income Mix'>
+                <Panel title='Revenue Breakdown'>
                     <ReactECharts option={incomeMixOption} style={{ height: 280 }} opts={{ renderer: 'svg' }} />
                     <div className='grid grid-cols-2 gap-2 mt-2'>
                         {INCOME_MIX.map((item) => (

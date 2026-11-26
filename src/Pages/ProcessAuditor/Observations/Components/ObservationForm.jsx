@@ -12,15 +12,15 @@ import {
 const inputClass =
     'text-sm text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-3 py-2 w-full focus:border-[#515DEF] outline-none'
 
+const Field = ({ label, children }) => (
+    <div className='flex flex-col gap-y-2'>
+        <label className='text-sm font-medium text-[#808080]'>{label}</label>
+        {children}
+    </div>
+)
+
 const ObservationForm = ({ form, onChange, readOnly = false }) => {
     const update = (field, value) => onChange({ ...form, [field]: value })
-
-    const Field = ({ label, children }) => (
-        <div className='flex flex-col gap-y-2'>
-            <label className='text-sm font-medium text-[#808080]'>{label}</label>
-            {children}
-        </div>
-    )
 
     if (readOnly) {
         return (
@@ -125,8 +125,22 @@ const ObservationForm = ({ form, onChange, readOnly = false }) => {
                     ))}
                 </select>
             </Field>
-            <Field label='Evidence'>
-                <input type='text' value={form.evidence} onChange={(e) => update('evidence', e.target.value)} placeholder='File name or evidence reference' className={inputClass} />
+            <Field label='Evidence (Attachment / Screenshot)'>
+                <div className='flex items-center gap-2'>
+                    <label className='inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md border border-slate-300 cursor-pointer transition'>
+                        <span>Upload File</span>
+                        <input
+                            type='file'
+                            accept='.png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf'
+                            className='hidden'
+                            onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) update('evidence', file.name)
+                            }}
+                        />
+                    </label>
+                    <span className='text-xs text-slate-600 truncate flex-1'>{form.evidence || 'No file selected (.png, .jpg, .pdf)'}</span>
+                </div>
             </Field>
             <div className='sm:col-span-2 lg:col-span-3'>
                 <Field label='Observation Title'>

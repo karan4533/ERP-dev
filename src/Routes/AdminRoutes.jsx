@@ -1,9 +1,10 @@
-﻿import React from 'react'
+import React from 'react'
 import { Navigate, Route, Routes as ReactRoutes } from 'react-router-dom'
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import ReportCardGenerator from '../Common/Academic/ReportCardGenerator'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import AdmissionList from '../Pages/Admin/FrontOffice/AdminssionList/AdminssionList'
-import AddAdmission from '../Pages/Admin/FrontOffice/AdminssionList/AddAdmission'
 import AdmissionEnquiry from '../Pages/Admin/FrontOffice/AdmissionEnquiry/AdmissionEnquiry'
-import AddAdmissionEnquiry from '../Pages/Admin/FrontOffice/AdmissionEnquiry/AddAdmissionEnquiry'
 import ViewAdmissionEnquiry from '../Pages/Admin/FrontOffice/AdmissionEnquiry/ViewAdmissionEnquiry'
 import ViewAdmission from '../Pages/Admin/FrontOffice/AdminssionList/ViewAdmission'
 import TeachersList from '../Pages/Admin/FrontOffice/TeachersList/TeachersList'
@@ -46,16 +47,7 @@ import AssignedRouteList from '../Pages/Admin/Transport/AssignedRouteList/Assign
 import AssignRoute from '../Pages/Admin/Transport/AssignedRouteList/AssignRoute'
 import ExamDetailsList from '../Pages/Admin/ExamDetails/ExamDetailsList'
 import AddExamDetails from '../Pages/Admin/ExamDetails/AddExamDetails'
-import SalariesList from '../Pages/Admin/Expenses/Salaries/SalariesList'
-import AddSalariesList from '../Pages/Admin/Expenses/Salaries/AddSalariesList'
-import HostelExpensesList from '../Pages/Admin/Expenses/Hostel/HostelExpensesList'
-import AddHostelExpenses from '../Pages/Admin/Expenses/Hostel/AddHostelExpenses'
-import TransportExpensesList from '../Pages/Admin/Expenses/Transport/TransportExpensesList'
-import AddTransportExpenses from '../Pages/Admin/Expenses/Transport/AddTransportExpenses'
-import LibraryExpensesList from '../Pages/Admin/Expenses/Library/LibraryExpensesList'
-import AddLibraryExpenses from '../Pages/Admin/Expenses/Library/AddLibraryExpenses'
-import OtherExpensesList from '../Pages/Admin/Expenses/Others/OtherExpensesList'
-import AddOtherExpensesList from '../Pages/Admin/Expenses/Others/AddOtherExpensesList'
+import AdminExpensesWorkspace from '../Pages/Admin/Expenses/AdminExpensesWorkspace'
 import Notifications from '../Pages/Admin/Notification/Notifications'
 import AnnouncementList from '../Pages/Admin/Announcement/AnnouncementList'
 import AddAnnouncement from '../Pages/Admin/Announcement/AddAnnouncement'
@@ -74,39 +66,33 @@ import ViewEscalation from '../Pages/Admin/EscalationManagement/ViewEscalation'
 import CommunicationInbox from '../Pages/Admin/Communication/Inbox'
 import RedirectLegacyDirectMessages from '../Common/Communication/RedirectLegacyDirectMessages'
 import AcademicCalendar from '../Pages/Admin/AcademicCalendar/AcademicCalendar'
-import ActivityListView from '../Common/Activities/ActivityListView'
+import CentralActivitiesWorkspace from '../Common/Activities/CentralActivitiesWorkspace'
 import AddActivityForm from '../Common/Activities/AddActivityForm'
 import ViewActivityPage from '../Common/Activities/ViewActivityPage'
-import ChessResultPage from '../Common/Activities/ChessResultPage'
 import AdminStudentDatabaseList from '../Pages/Admin/UserManagement/StudentDatabase/StudentsList'
 import AdminViewStudentDatabase from '../Pages/Admin/UserManagement/StudentDatabase/ViewStudent'
 import AdminEmployeeDatabaseList from '../Pages/Admin/UserManagement/EmployeeDatabase/EmployeesList'
 import AdminViewEmployeeDatabase from '../Pages/Admin/UserManagement/EmployeeDatabase/ViewEmployee'
 import UserCreationPage from '../Pages/Admin/RBAC/UserCreationPage'
 import CreateUserPage from '../Pages/Admin/RBAC/CreateUserPage'
-import EditUserPage from '../Pages/Admin/RBAC/EditUserPage'
 import RolesPage from '../Pages/Admin/RBAC/RolesPage'
-
 import Dashboard from '../Pages/Admin/Dashboard/Dashboard'
+import TeacherAllocationList from '../Pages/Principal/TeacherAllocation/TeacherAllocationList'
+import AllocateTeacher from '../Pages/Principal/TeacherAllocation/AllocateTeacher'
+import ViewTeacherAllocation from '../Pages/Principal/TeacherAllocation/ViewTeacherAllocation'
+import EditTeacherAllocation from '../Pages/Principal/TeacherAllocation/EditTeacherAllocation'
+import StudentTransfer from '../Pages/FrontOffice/StudentTransfer/StudentTransfer'
+import AddStudentTransfer from '../Pages/FrontOffice/StudentTransfer/AddStudentTransfer'
 
 const AdminRoutes = () => {
     return (
         <ReactRoutes>
-
-            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin/dashboard" element={<Dashboard />} />
-            <Route path="*" element={<div>Admin Home</div>} />
 
             {/* Front Office */}
-
             <Route path="/admin/front-office/admission-list" element={<AdmissionList />} />
             <Route path="/admin/front-office/admission-list/view/:id" element={<ViewAdmission />} />
-            <Route path="/admin/front-office/admission-list/edit/:id" element={<AddAdmission />} />
-            <Route path="/admin/front-office/add-admission" element={<AddAdmission />} />
             <Route path="/admin/front-office/admission-enquiry" element={<AdmissionEnquiry />} />
-            <Route path="/admin/front-office/admission-enquiry/add" element={<AddAdmissionEnquiry />} />
-            <Route path="/admin/front-office/add-admission-enquiry" element={<AddAdmissionEnquiry />} />
-            <Route path="/admin/front-office/admission-enquiry/edit/:id" element={<AddAdmissionEnquiry />} />
             <Route path="/admin/front-office/admission-enquiry/view/:id" element={<ViewAdmissionEnquiry />} />
             <Route path="/admin/front-office/view-admission-enquiry/:id" element={<ViewAdmissionEnquiry />} />
             <Route path="/admin/front-office/teachers-list" element={<TeachersList />} />
@@ -117,14 +103,17 @@ const AdminRoutes = () => {
             <Route path="/admin/front-office/add-driver" element={<AddDriverList />} />
 
             {/* Attendance */}
-
             <Route path="/admin/attendance/students-list" element={<StudentsList />} />
-            <Route path="/admin/attendance/employees-list" element={<EmployeesList />} />
+            <Route path="/admin/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            <Route path="/admin/attendance/employees-list" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
             <Route path="/admin/attendance/leave-request-list" element={<Navigate to='/admin/leave-request/my-requests' replace />} />
             <Route path="/admin/attendance/leave-request" element={<Navigate to='/admin/leave-request/my-requests' replace />} />
 
             {/* Class */}
-
+            <Route path="/admin/academic/teacher-allocation" element={<TeacherAllocationList />} />
+            <Route path="/admin/academic/teacher-allocation/allocate/:employeeId" element={<AllocateTeacher />} />
+            <Route path="/admin/academic/teacher-allocation/view/:employeeId" element={<ViewTeacherAllocation />} />
+            <Route path="/admin/academic/teacher-allocation/edit/:employeeId" element={<EditTeacherAllocation />} />
             <Route path="/admin/class/class-details" element={<ClassDetails />} />
             <Route path="/admin/class/add-class-details" element={<AddClassDetails />} />
             <Route path="/admin/class/online-class" element={<OnlineClass />} />
@@ -135,16 +124,15 @@ const AdminRoutes = () => {
             <Route path="/admin/class/add-timetable" element={<AddTimeTable />} />
             <Route path="/admin/class/subjects" element={<Subjects />} />
             <Route path="/admin/class/add-subjects" element={<AddSubjects />} />
+            <Route path="/admin/student-evaluation/report-cards" element={<ReportCardGenerator />} />
 
             {/* Library Details */}
-
             <Route path="/admin/library-details/book-list" element={<BookList />} />
             <Route path="/admin/library-details/add-book" element={<AddBooks />} />
             <Route path="/admin/library-details/issued-book" element={<IssuedBooks />} />
             <Route path="/admin/library-details/add-issued-book" element={<AddIssueBook />} />
 
-            {/* Student */}
-
+            {/* Student & User Management */}
             <Route path="/admin/user-management/student-database" element={<AdminStudentDatabaseList />} />
             <Route path="/admin/user-management/student-database/view/:id" element={<AdminViewStudentDatabase />} />
             <Route path="/admin/user-management/employee-database" element={<AdminEmployeeDatabaseList />} />
@@ -153,21 +141,21 @@ const AdminRoutes = () => {
             <Route path="/admin/student/class-fee-details" element={<ClassFeeDetails />} />
             <Route path="/admin/student/add-class-fee-details" element={<AddClassFeeDetails />} />
             <Route path="/admin/student/parent-details" element={<Navigate to="/admin/user-management/student-database" replace />} />
-            <Route path="/admin/student/student-transfer" element={<Navigate to='/front-office/student-transfer' replace />} />
-            <Route path="/admin/student/add-student-transfer" element={<Navigate to='/front-office/student-transfer/add' replace />} />
-            {/* <Route path="/admin/student/leave-request" element={< />} /> */}
+            <Route path="/admin/student/student-transfer" element={<StudentTransfer />} />
+            <Route path="/admin/student/add-student-transfer" element={<AddStudentTransfer />} />
 
             {/* Activities */}
-            <Route path="/admin/activities/cultural-list" element={<ActivityListView roleKey="admin" activityType="cultural" />} />
+            <Route path="/admin/activities" element={<CentralActivitiesWorkspace defaultCategory="all" roleKey="admin" />} />
+            <Route path="/admin/activities/cultural-list" element={<CentralActivitiesWorkspace defaultCategory="cultural" roleKey="admin" />} />
             <Route path="/admin/activities/add-cultural" element={<AddActivityForm roleKey="admin" activityType="cultural" />} />
             <Route path="/admin/activities/view-cultural/:id" element={<ViewActivityPage roleKey="admin" activityType="cultural" />} />
             <Route path="/admin/activities/edit-cultural/:id" element={<AddActivityForm roleKey="admin" activityType="cultural" mode="edit" />} />
-            <Route path="/admin/activities/sports-list" element={<ActivityListView roleKey="admin" activityType="sports" />} />
+            <Route path="/admin/activities/sports-list" element={<CentralActivitiesWorkspace defaultCategory="sports" roleKey="admin" />} />
             <Route path="/admin/activities/add-sports" element={<AddActivityForm roleKey="admin" activityType="sports" />} />
             <Route path="/admin/activities/view-sports/:id" element={<ViewActivityPage roleKey="admin" activityType="sports" />} />
             <Route path="/admin/activities/edit-sports/:id" element={<AddActivityForm roleKey="admin" activityType="sports" mode="edit" />} />
-            <Route path="/admin/activities/chess-result" element={<ChessResultPage />} />
-            <Route path="/admin/activities/competitions-list" element={<ActivityListView roleKey="admin" activityType="competition" />} />
+            <Route path="/admin/activities/chess-result" element={<CentralActivitiesWorkspace defaultCategory="chess" roleKey="admin" />} />
+            <Route path="/admin/activities/competitions-list" element={<CentralActivitiesWorkspace defaultCategory="competition" roleKey="admin" />} />
             <Route path="/admin/activities/add-competition" element={<AddActivityForm roleKey="admin" activityType="competition" />} />
             <Route path="/admin/activities/view-competition/:id" element={<ViewActivityPage roleKey="admin" activityType="competition" />} />
             <Route path="/admin/activities/edit-competition/:id" element={<AddActivityForm roleKey="admin" activityType="competition" mode="edit" />} />
@@ -194,40 +182,46 @@ const AdminRoutes = () => {
             <Route path='/admin/exam-details/exam-details-list' element={<ExamDetailsList />} />
             <Route path='/admin/exam-details/add-exam-details' element={<AddExamDetails />} />
 
-            {/* Expenses */}
-            <Route path='/admin/expenses/salaries-list' element={<SalariesList />} />
-            <Route path='/admin/expenses/add-salaries-exp' element={<AddSalariesList />} />
-            <Route path='/admin/expenses/hostel-list' element={<HostelExpensesList />} />
-            <Route path='/admin/expenses/add-hostel-exp' element={<AddHostelExpenses />} />
-            <Route path='/admin/expenses/transport-list' element={<TransportExpensesList />} />
-            <Route path='/admin/expenses/add-transport-exp' element={<AddTransportExpenses />} />
-            <Route path='/admin/expenses/library-list' element={<LibraryExpensesList />} />
-            <Route path='/admin/expenses/add-library-exp' element={<AddLibraryExpenses />} />
-            <Route path='/admin/expenses/others-list' element={<OtherExpensesList />} />
-            <Route path='/admin/expenses/add-others-exp' element={<AddOtherExpensesList />} />
+            {/* Centralized Finance & Expenses Integration (Document 7: Finance owns ledgers, Admin owns governance) */}
+            <Route path='/admin/expenses' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/approvals' element={<AdminExpensesWorkspace view='approvals' />} />
+            <Route path='/admin/expenses/accounting' element={<Navigate to='/admin/expenses/accounting/day-book' replace />} />
+            <Route path='/admin/expenses/accounting/:section' element={<AdminExpensesWorkspace view='accounting' />} />
+            <Route path='/admin/expenses/payment-vouchers' element={<AdminExpensesWorkspace view='vouchers' />} />
+            <Route path='/admin/expenses/salaries-list' element={<AdminExpensesWorkspace view='approvals' />} />
+            <Route path='/admin/expenses/add-salaries-exp' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/hostel-list' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/add-hostel-exp' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/transport-list' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/add-transport-exp' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/library-list' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/add-library-exp' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/others-list' element={<Navigate to='/admin/expenses/approvals' replace />} />
+            <Route path='/admin/expenses/add-others-exp' element={<Navigate to='/admin/expenses/approvals' replace />} />
 
-            {/* Notifications */}
+            {/* Notifications & Announcements */}
             <Route path='/admin/notifications' element={<Notifications />} />
             <Route path='/admin/notification/exam-list' element={<Navigate to='/admin/notifications' replace />} />
             <Route path='/admin/notification/event-list' element={<Navigate to='/admin/notifications' replace />} />
-
-            {/* Announcement */}
             <Route path='/admin/announcement' element={<AnnouncementList />} />
             <Route path='/admin/announcement/add' element={<AddAnnouncement />} />
             <Route path='/admin/announcement/view/:id' element={<ViewAnnouncement />} />
 
-            {/* TC Request Approval (Super Admin) */}
+            {/* TC Request Approval */}
             <Route path='/admin/tc-request-approval' element={<TcRequestApprovalList />} />
             <Route path='/admin/tc-request-approval/view/:id' element={<ViewTcRequestApproval />} />
 
             {/* Task Management */}
             {TaskManagementRoutes({ basePath: '/admin' })}
 
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/admin', role: 'admin' })}
+
             {/* Leave Request */}
-            <Route path='/admin/leave-request/my-requests' element={<MyLeaveRequests />} />
+            <Route path='/admin/leave-request/my-requests' element={<AttendanceAndLeaveWorkspace defaultTab="my-leaves" />} />
             <Route path='/admin/leave-request/my-requests/add' element={<AddLeaveRequest />} />
             <Route path='/admin/leave-request/my-requests/view/:id' element={<ViewMyLeaveRequest />} />
-            <Route path='/admin/leave-request/received' element={<ReceivedLeaveRequests />} />
+            <Route path='/admin/leave-request/received' element={<AttendanceAndLeaveWorkspace defaultTab="received-leaves" />} />
             <Route path='/admin/leave-request/received/view/:id' element={<ViewReceivedLeaveRequest />} />
 
             {/* Academic Calendar */}
@@ -248,8 +242,8 @@ const AdminRoutes = () => {
             {/* RBAC */}
             <Route path='/admin/rbac/user-creation' element={<UserCreationPage />} />
             <Route path='/admin/rbac/user-creation/add' element={<CreateUserPage />} />
-            <Route path='/admin/rbac/user-creation/edit/:id' element={<EditUserPage />} />
             <Route path='/admin/rbac/roles' element={<RolesPage />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
         </ReactRoutes>
     )
 }

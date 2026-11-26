@@ -1,4 +1,6 @@
-﻿import {
+import {
+    CheckCircle2,
+    UserCheck,
     LayoutDashboard,
     Users,
     BookOpen,
@@ -61,8 +63,18 @@
     Landmark,
     Receipt,
     HeartPulse,
-    Fuel,
+    Archive,
+    Camera,
+    Building2,
     Wrench,
+    Truck,
+    Plus,
+    Fuel,
+    Video,
+    Clock,
+    Volume2,
+    Navigation,
+    FileCheck,
 } from "lucide-react";
 
 export const superAdminSidebarLinks = [
@@ -74,13 +86,9 @@ export const superAdminSidebarLinks = [
     },
     {
         id: 2,
-        title: "Attendance",
-        to: "#0",
+        title: "Attendance & Leave Management",
+        to: "/super-admin/attendance-and-leave",
         icon: CalendarCheck,
-        subLinks: [
-            { icon: GraduationCap, title: "Student Attendance", to: "/super-admin/attendance/students/list" },
-            { icon: Briefcase, title: "Employee Attendance", to: "/super-admin/attendance/employees" },
-        ],
     },
     {
         id: 3,
@@ -88,8 +96,8 @@ export const superAdminSidebarLinks = [
         to: "#0",
         icon: UserRound,
         subLinks: [
-            { icon: GraduationCap, title: "Students List", to: "/super-admin/user-database/students" },
-            { icon: UserRoundCog, title: "Employee List", to: "/super-admin/user-database/employees" },
+            { icon: GraduationCap, title: "Student Database", to: "/super-admin/user-database/students" },
+            { icon: UserRoundCog, title: "Teacher Database", to: "/super-admin/user-database/employees" },
         ],
     },
     {
@@ -152,15 +160,10 @@ export const superAdminSidebarLinks = [
     {
         id: 10,
         title: "Task Management",
-        to: "/super-admin/task-management/assign-tasks",
+        to: "/super-admin/task-management",
         icon: ClipboardList,
     },
-    {
-        id: 11,
-        title: "Leave Request",
-        to: "/super-admin/leave-request/received",
-        icon: FileX,
-    },
+    
     {
         id: 12,
         title: "Approvals",
@@ -169,47 +172,30 @@ export const superAdminSidebarLinks = [
     },
     {
         id: 13,
-        title: "Activities",
-        to: "#0",
-        icon: Trophy,
-        subLinks: [
-            { icon: Palette, title: "Cultural", to: "/super-admin/activities/cultural-list" },
-            { icon: Dumbbell, title: "Sports", to: "/super-admin/activities/sports-list" },
-            { icon: Award, title: "Competitions", to: "/super-admin/activities/competitions-list" },
-        ],
-    },
-    {
-        id: 14,
         title: "Announcement",
         to: "/super-admin/announcement",
         icon: Rss,
     },
     {
-        id: 15,
+        id: 14,
         title: "Communication",
         to: "/super-admin/communication/inbox",
         icon: MessageCircle,
     },
     {
-        id: 16,
+        id: 15,
         title: "Calendar",
         to: "/super-admin/academic-calendar",
         icon: CalendarDays,
     },
     {
         id: 17,
-        title: "Notifications",
-        to: "/super-admin/notifications",
-        icon: BellDot,
-    },
-    {
-        id: 18,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/super-admin/escalation-management",
         icon: ShieldAlert,
     },
     {
-        id: 19,
+        id: 18,
         title: "Activity Logs",
         to: "#0",
         icon: History,
@@ -224,16 +210,58 @@ export const superAdminSidebarLinks = [
         ],
     },
     {
-        id: 20,
+        id: 19,
         title: "Re-entry Approvals",
         to: "/super-admin/reentry",
         icon: ClipboardCheck,
     },
     {
-        id: 21,
+        id: 20,
         title: "Module Health",
         to: "/super-admin/module-health",
         icon: HeartPulse,
+    },
+    {
+        id: 21,
+        title: "Stores & Procurement",
+        to: "/super-admin/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 22,
+        title: "Physical File Room",
+        to: "/super-admin/file-room",
+        icon: Archive,
+    },
+    {
+        id: 23,
+        title: "Department Helpdesk",
+        to: "/super-admin/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 24,
+        title: "Activity Monitoring",
+        to: "/super-admin/activity-monitoring",
+        icon: BarChart3,
+    },
+    {
+        id: 25,
+        title: "Lost & Found",
+        to: "/super-admin/lost-and-found",
+        icon: Sparkles,
+    },
+    {
+        id: 26,
+        title: "Audit Observations",
+        to: "/super-admin/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 27,
+        title: "Staff Relieving & NOC",
+        to: "/super-admin/relieving-request",
+        icon: FileText,
     },
 ];
 
@@ -241,7 +269,7 @@ export const adminSidebarLinks = [
     {
         id: 1,
         title: "Dashboard",
-        to: "/dashboard",
+        to: "/admin/dashboard",
         icon: LayoutDashboard,
     },
     {
@@ -261,7 +289,7 @@ export const adminSidebarLinks = [
         icon: UserRound,
         subLinks: [
             { icon: UserRound, title: "Student Database", to: "/admin/user-management/student-database" },
-            { icon: UserRoundCog, title: "Employee Database", to: "/admin/user-management/employee-database" },
+            { icon: UserRoundCog, title: "Teacher Database", to: "/admin/user-management/employee-database" },
         ],
     },
     {
@@ -272,20 +300,17 @@ export const adminSidebarLinks = [
     },
     {
         id: 5,
-        title: "Attendance",
-        to: "#0",
+        title: "Attendance & Leave Management",
+        to: "/admin/attendance-and-leave",
         icon: CalendarCheck,
-        subLinks: [
-            { icon: GraduationCap, title: "Students", to: "/admin/attendance/students-list" },
-            { icon: Briefcase, title: "Employees", to: "/admin/attendance/employees-list" },
-        ],
     },
     {
         id: 6,
-        title: "Activities",
+        title: "Activities & Monitoring",
         to: "#0",
         icon: Trophy,
         subLinks: [
+            { icon: BarChart3, title: "Activity Monitoring", to: "/admin/activity-monitoring" },
             { icon: Palette, title: "Cultural", to: "/admin/activities/cultural-list" },
             { icon: Dumbbell, title: "Sports", to: "/admin/activities/sports-list" },
             { icon: Trophy, title: "Chess Result", to: "/admin/activities/chess-result" },
@@ -300,28 +325,16 @@ export const adminSidebarLinks = [
         subLinks: [
             { icon: FileText, title: "Student Documents", to: "/admin/documents/student-documents" },
             { icon: FileText, title: "Employee Documents", to: "/admin/documents/employee-documents" },
+            { icon: FileText, title: "Progress Report Cards", to: "/admin/student-evaluation/report-cards" },
         ],
     },
     {
         id: 8,
         title: "Task Management",
-        to: "#0",
+        to: "/admin/task-management",
         icon: ClipboardList,
-        subLinks: [
-            { icon: UserPlus, title: "Assign Tasks", to: "/admin/task-management/assign-tasks" },
-            { icon: ListChecks, title: "Assigned Tasks", to: "/admin/task-management/assigned-tasks" },
-        ],
     },
-    {
-        id: 9,
-        title: "Leave Request",
-        to: "#0",
-        icon: FileX,
-        subLinks: [
-            { icon: FileText, title: "My Leave Requests", to: "/admin/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/admin/leave-request/received" },
-        ],
-    },
+    
     {
         id: 10,
         title: "Announcement",
@@ -347,14 +360,8 @@ export const adminSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 14,
-        title: "Notifications",
-        to: "/admin/notifications",
-        icon: BellDot,
-    },
-    {
         id: 15,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/admin/escalation-management",
         icon: ShieldAlert,
     },
@@ -368,9 +375,80 @@ export const adminSidebarLinks = [
             { icon: UsersRound, title: "Roles", to: "/admin/rbac/roles" },
         ],
     },
+    {
+        id: 17,
+        title: "Stores & Procurement",
+        to: "/admin/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 18,
+        title: "Gate Pass & Security",
+        to: "/admin/gate-pass",
+        icon: DoorOpen,
+    },
+    {
+        id: 19,
+        title: "Physical File Room",
+        to: "/admin/file-room",
+        icon: Archive,
+    },
+    {
+        id: 20,
+        title: "Department Helpdesk",
+        to: "/admin/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 22,
+        title: "Lost & Found",
+        to: "/admin/lost-and-found",
+        icon: Sparkles,
+    },
+    {
+        id: 23,
+        title: "Audit Observations",
+        to: "/admin/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 24,
+        title: "Staff Relieving & NOC",
+        to: "/admin/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "admin-hostel",
+        title: "Hostel Management",
+        to: "/admin/hostel",
+        icon: Bed,
+    },
+    {
+        id: "admin-finance",
+        title: "Finance & Expenses",
+        to: "#0",
+        icon: BadgeDollarSign,
+        subLinks: [
+            { icon: ClipboardCheck, title: "Expense & Salary Approvals", to: "/admin/expenses/approvals" },
+            { icon: BookOpen, title: "Day Book & Ledger", to: "/admin/expenses/accounting/day-book" },
+            { icon: Receipt, title: "Payment Vouchers", to: "/admin/expenses/payment-vouchers" },
+        ],
+    },
+    {
+        id: "admin-reports",
+        title: "Reports & Analytics",
+        to: "/admin/reports-analytics",
+        icon: BarChart3,
+    },
 ];
 
 export const studentSidebarLinks = [
+    {
+        id: 0,
+        title: "Dashboard",
+        to: "/student/dashboard",
+        icon: LayoutDashboard,
+    },
     {
         id: 1,
         title: "Class",
@@ -391,6 +469,7 @@ export const studentSidebarLinks = [
         subLinks: [
             { icon: ClipboardCheck, title: "Exam Result", to: "/student/student-evaluation/exam-result" },
             { icon: CalendarDays, title: "Exam Schedule", to: "/student/student-evaluation/exam-schedule" },
+            { icon: FileText, title: "Report Card", to: "/student/student-evaluation/report-cards" },
         ],
     },
     {
@@ -447,16 +526,16 @@ export const studentSidebarLinks = [
         ],
     },
     {
-        id: 9,
-        title: "Announcement",
-        to: "/student/announcement",
-        icon: Rss,
-    },
-    {
         id: 10,
         title: "TC Request",
         to: "/student/tc-request",
         icon: FileText,
+    },
+    {
+        id: 9,
+        title: "Announcement",
+        to: "/student/announcement",
+        icon: Rss,
     },
     {
         id: 11,
@@ -471,16 +550,22 @@ export const studentSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 13,
-        title: "Notifications",
-        to: "/student/notifications",
-        icon: BellDot,
-    },
-    {
         id: 14,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/student/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 15,
+        title: "Lost & Found",
+        to: "/student/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: "student-profile",
+        title: "Student Profile",
+        to: "/student/profile",
+        icon: UserRound,
     },
 ];
 
@@ -511,6 +596,7 @@ export const parentSidebarLinks = [
         subLinks: [
             { icon: ClipboardCheck, title: "Exam Result", to: "/parent/student-evaluation/exam-result" },
             { icon: CalendarDays, title: "Exam Schedule", to: "/parent/student-evaluation/exam-schedule" },
+            { icon: FileText, title: "Report Card", to: "/parent/student-evaluation/report-cards" },
             { icon: BarChart3, title: "Performance Analytics", to: "/parent/student-evaluation/analytics" },
         ],
     },
@@ -561,16 +647,16 @@ export const parentSidebarLinks = [
         ],
     },
     {
-        id: 9,
-        title: "Announcement",
-        to: "/parent/announcement",
-        icon: Rss,
-    },
-    {
         id: 10,
         title: "TC Request",
         to: "/parent/tc-request",
         icon: FileText,
+    },
+    {
+        id: 9,
+        title: "Announcement",
+        to: "/parent/announcement",
+        icon: Rss,
     },
     {
         id: 11,
@@ -585,25 +671,43 @@ export const parentSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 13,
-        title: "Notifications",
-        to: "/parent/notifications",
-        icon: BellDot,
-    },
-    {
         id: 14,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/parent/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 15,
+        title: "Lost & Found",
+        to: "/parent/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: "parent-student-profile",
+        title: "Student Profile",
+        to: "/parent/profile",
+        icon: UserRound,
     },
 ];
 
 export const prmSidebarLinks = [
     {
+        id: 0,
+        title: "Dashboard",
+        to: "/front-office/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
         id: 1,
         title: "Admission Enquiry",
         to: "/front-office/admission-enquiry",
         icon: FileText,
+    },
+    {
+        id: "prm-visitors",
+        title: "Visitors",
+        to: "/front-office/visitors",
+        icon: UserCheck,
     },
     {
         id: 2,
@@ -654,27 +758,14 @@ export const prmSidebarLinks = [
     {
         id: 8,
         title: "Task Management",
-        to: "#0",
+        to: "/front-office/task-management",
         icon: ClipboardList,
-        subLinks: [
-            { icon: UserPlus, title: "Assign Tasks", to: "/front-office/task-management/assign-tasks" },
-            { icon: ListChecks, title: "My Tasks", to: "/front-office/task-management/my-tasks" },
-        ],
     },
-    {
-        id: 9,
-        title: "Leave Request",
-        to: "#0",
-        icon: FileX,
-        subLinks: [
-            { icon: FileText, title: "My Leave Requests", to: "/front-office/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/front-office/leave-request/received" },
-        ],
-    },
+    
     {
         id: 10,
-        title: "My Attendance",
-        to: "/front-office/attendance/my-attendance",
+        title: "Attendance & Leave Management",
+        to: "/front-office/attendance-and-leave",
         icon: CalendarCheck,
     },
     {
@@ -696,34 +787,80 @@ export const prmSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 14,
-        title: "Notifications",
-        to: "/front-office/notifications",
-        icon: BellDot,
-    },
-    {
         id: 15,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/front-office/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 16,
+        title: "Stores & Procurement",
+        to: "/front-office/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 17,
+        title: "Physical File Room",
+        to: "/front-office/file-room",
+        icon: Archive,
+    },
+    {
+        id: 18,
+        title: "Department Helpdesk",
+        to: "/front-office/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 19,
+        title: "Activity Monitoring",
+        to: "/front-office/activity-monitoring",
+        icon: BarChart3,
+    },
+    {
+        id: 20,
+        title: "Lost & Found",
+        to: "/front-office/lost-and-found",
+        icon: Sparkles,
+    },
+    {
+        id: 21,
+        title: "Audit Observations",
+        to: "/front-office/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 22,
+        title: "Staff Relieving & NOC",
+        to: "/front-office/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "front-office-reports",
+        title: "Reports & Analytics",
+        to: "/front-office/reports-analytics",
+        icon: BarChart3,
     },
 ];
 
 export const librarianSidebarLinks = [
+    {
+        id: 0,
+        title: "Dashboard",
+        to: "/librarian/dashboard",
+        icon: LayoutDashboard,
+    },
     {
         id: 1,
         title: "Book Management",
         to: "#0",
         icon: Library,
         subLinks: [
-            { icon: BookOpenCheck, title: "Book List", to: "/librarian/book-management/book-list" },
+            { icon: BookOpenCheck, title: "Book Catalog", to: "/librarian/book-management/book-list" },
+            { icon: Plus, title: "Add New Book", to: "/librarian/book-management/add-book" },
+            { icon: BookMarked, title: "Issued Books Register", to: "/librarian/issued-books/issued-book-list" },
+            { icon: Plus, title: "Issue New Book", to: "/librarian/issued-books/add-issued-book" },
+            { icon: BookOpen, title: "Book Requests & Requisitions", to: "/librarian/book-requests" },
         ],
-    },
-    {
-        id: 2,
-        title: "Issued Books",
-        to: "/librarian/issued-books/issued-book-list",
-        icon: BookMarked,
     },
     {
         id: 3,
@@ -734,13 +871,13 @@ export const librarianSidebarLinks = [
     {
         id: 4,
         title: "Task Management",
-        to: "/librarian/task-management/my-tasks",
+        to: "/librarian/task-management",
         icon: ClipboardList,
     },
     {
         id: 5,
-        title: "My Attendance",
-        to: "/librarian/attendance/my-attendance",
+        title: "Attendance & Leave Management",
+        to: "/librarian/attendance-and-leave",
         icon: CalendarCheck,
     },
     {
@@ -762,20 +899,62 @@ export const librarianSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 9,
-        title: "Notifications",
-        to: "/librarian/notifications",
-        icon: BellDot,
-    },
-    {
         id: 10,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/librarian/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 11,
+        title: "Request Product from Store",
+        to: "/librarian/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 12,
+        title: "Audit Observations",
+        to: "/librarian/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 13,
+        title: "Staff Relieving & NOC",
+        to: "/librarian/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "librarian-reports",
+        title: "Reports & Analytics",
+        to: "/librarian/reports-analytics",
+        icon: BarChart3,
+    },
+    {
+        id: 14,
+        title: "Lost & Found",
+        to: "/librarian/lost-and-found",
+        icon: Archive,
     },
 ];
 
 export const gateKeeperSidebarLinks = [
+    {
+        id: "gk-dashboard",
+        title: "Dashboard",
+        to: "/gate-keeper/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: "gk-gate-pass",
+        title: "Gate Pass",
+        to: "/gate-keeper/gate-pass-list",
+        icon: ArrowRightLeft,
+    },
+    {
+        id: "gk-visitors",
+        title: "Visitors",
+        to: "/gate-keeper/visitors",
+        icon: UserCheck,
+    },
     {
         id: 1,
         title: "Hostel Gate Pass",
@@ -795,27 +974,15 @@ export const gateKeeperSidebarLinks = [
         icon: ShieldAlert,
     },
     {
-        id: 4,
-        title: "Gate Pass",
-        to: "/gate-keeper/gate-pass-list",
-        icon: ArrowRightLeft,
-    },
-    {
         id: 5,
         title: "Task Management",
-        to: "/gate-keeper/task-management/my-tasks",
+        to: "/gate-keeper/task-management",
         icon: ClipboardList,
     },
     {
-        id: 6,
-        title: "Leave Request",
-        to: "/gate-keeper/leave-request/my-requests",
-        icon: FileX,
-    },
-    {
         id: 7,
-        title: "My Attendance",
-        to: "/gate-keeper/attendance/my-attendance",
+        title: "Attendance & Leave Management",
+        to: "/gate-keeper/attendance-and-leave",
         icon: CalendarCheck,
     },
     {
@@ -837,22 +1004,10 @@ export const gateKeeperSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 11,
-        title: "Notifications",
-        to: "/gate-keeper/notifications",
-        icon: BellDot,
-    },
-    {
         id: 12,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/gate-keeper/escalation-management",
         icon: ShieldAlert,
-    },
-    {
-        id: 13,
-        title: "Visitors",
-        to: "/gate-keeper/visitors",
-        icon: UserRound,
     },
     {
         id: 14,
@@ -872,9 +1027,57 @@ export const gateKeeperSidebarLinks = [
         to: "/gate-keeper/vendors",
         icon: Briefcase,
     },
+    {
+        id: 17,
+        title: "Request Product from Store",
+        to: "/gate-keeper/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 18,
+        title: "Staff Relieving & NOC",
+        to: "/gate-keeper/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "gatekeeper-reports",
+        title: "Reports & Analytics",
+        to: "/gate-keeper/reports-analytics",
+        icon: BarChart3,
+    },
+    {
+        id: 19,
+        title: "Lost & Found",
+        to: "/gate-keeper/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: 20,
+        title: "Audit Observations",
+        to: "/gate-keeper/audit-observations",
+        icon: ShieldCheck,
+    },
 ];
 
 export const gateKeeperManagerSidebarLinks = [
+    {
+        id: "gkm-dashboard",
+        title: "Dashboard",
+        to: "/gatekeeper-manager/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: "gkm-gate-pass",
+        title: "Gate Pass & Movement",
+        to: "/gatekeeper-manager/gate-pass",
+        icon: ArrowRightLeft,
+    },
+    {
+        id: "gkm-visitors",
+        title: "Visitors",
+        to: "/gatekeeper-manager/visitors",
+        icon: UserCheck,
+    },
     {
         id: 1,
         title: "Assign Duty List",
@@ -889,33 +1092,15 @@ export const gateKeeperManagerSidebarLinks = [
     },
     {
         id: 3,
-        title: "Attendance",
-        to: "#0",
+        title: "Attendance & Leave Management",
+        to: "/gatekeeper-manager/attendance-and-leave",
         icon: CalendarCheck,
-        subLinks: [
-            { icon: UserRound, title: "My Attendance", to: "/gatekeeper-manager/attendance/my-attendance" },
-            { icon: ClipboardList, title: "Gatekeepers Attendance", to: "/gatekeeper-manager/attendance/gatekeepers-attendance" },
-        ],
     },
     {
         id: 4,
         title: "Task Management",
-        to: "#0",
+        to: "/gatekeeper-manager/task-management",
         icon: ClipboardList,
-        subLinks: [
-            { icon: UserPlus, title: "Assign Tasks", to: "/gatekeeper-manager/task-management/assign-tasks" },
-            { icon: ListChecks, title: "My Tasks", to: "/gatekeeper-manager/task-management/my-tasks" },
-        ],
-    },
-    {
-        id: 5,
-        title: "Leave Request",
-        to: "#0",
-        icon: FileX,
-        subLinks: [
-            { icon: FileText, title: "My Leave Requests", to: "/gatekeeper-manager/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/gatekeeper-manager/leave-request/received" },
-        ],
     },
     {
         id: 6,
@@ -936,16 +1121,40 @@ export const gateKeeperManagerSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 9,
-        title: "Notifications",
-        to: "/gatekeeper-manager/notifications",
-        icon: BellDot,
-    },
-    {
         id: 10,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/gatekeeper-manager/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 11,
+        title: "Request Product from Store",
+        to: "/gatekeeper-manager/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 12,
+        title: "Audit Observations",
+        to: "/gatekeeper-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 13,
+        title: "Staff Relieving & NOC",
+        to: "/gatekeeper-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "gk-manager-reports",
+        title: "Reports & Analytics",
+        to: "/gatekeeper-manager/reports-analytics",
+        icon: BarChart3,
+    },
+    {
+        id: 14,
+        title: "Lost & Found",
+        to: "/gatekeeper-manager/lost-and-found",
+        icon: Archive,
     },
 ];
 
@@ -955,6 +1164,12 @@ export const canteenManagerSidebarLinks = [
         title: "Café",
         to: "/canteen-manager/dashboard",
         icon: LayoutDashboard,
+    },
+    {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/canteen-manager/attendance-and-leave",
+        icon: CalendarCheck,
     },
     {
         id: 2,
@@ -992,6 +1207,36 @@ export const canteenManagerSidebarLinks = [
         to: "/canteen-manager/broadcast",
         icon: Rss,
     },
+    {
+        id: 8,
+        title: "Request Product from Store",
+        to: "/canteen-manager/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 9,
+        title: "Audit Observations",
+        to: "/canteen-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 10,
+        title: "Staff Relieving & NOC",
+        to: "/canteen-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 11,
+        title: "Lost & Found",
+        to: "/canteen-manager/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: 12,
+        title: "Report Issue / Escalation",
+        to: "/canteen-manager/escalation-management",
+        icon: ShieldAlert,
+    },
 ];
 
 export const itSupportManagerSidebarLinks = [
@@ -1000,6 +1245,12 @@ export const itSupportManagerSidebarLinks = [
         title: "Dashboard",
         to: "/it-support-manager/dashboard",
         icon: LayoutDashboard,
+    },
+    {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/it-support-manager/attendance-and-leave",
+        icon: CalendarCheck,
     },
     {
         id: 2,
@@ -1049,6 +1300,36 @@ export const itSupportManagerSidebarLinks = [
         to: "/it-support-manager/purchase-workflow",
         icon: ClipboardCheck,
     },
+    {
+        id: 9,
+        title: "Request Product from Store",
+        to: "/it-support-manager/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 10,
+        title: "Audit Observations",
+        to: "/it-support-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 11,
+        title: "Staff Relieving & NOC",
+        to: "/it-support-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 12,
+        title: "Lost & Found",
+        to: "/it-support-manager/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: 13,
+        title: "Report Issue / Escalation",
+        to: "/it-support-manager/escalation-management",
+        icon: ShieldAlert,
+    },
 ];
 
 export const stationeryStoreManagerSidebarLinks = [
@@ -1057,6 +1338,12 @@ export const stationeryStoreManagerSidebarLinks = [
         title: "Dashboard",
         to: "/stationery-store-manager/dashboard",
         icon: LayoutDashboard,
+    },
+    {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/stationery-store-manager/attendance-and-leave",
+        icon: CalendarCheck,
     },
     {
         id: 2,
@@ -1112,6 +1399,48 @@ export const stationeryStoreManagerSidebarLinks = [
         to: "/stationery-store-manager/purchase-workflow",
         icon: ClipboardCheck,
     },
+    {
+        id: 11,
+        title: "Stock Operations",
+        to: "/stationery-store-manager/stock-operations",
+        icon: ShoppingCart,
+    },
+    {
+        id: "store-goods-receive",
+        title: "Goods Received Pass",
+        to: "/stationery-store-manager/goods-received-pass-list",
+        icon: Truck,
+    },
+    {
+        id: "store-gate-pass",
+        title: "Material Gate Pass",
+        to: "/stationery-store-manager/material-gate-pass-list",
+        icon: DoorOpen,
+    },
+    {
+        id: 12,
+        title: "Audit Observations",
+        to: "/stationery-store-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 13,
+        title: "Staff Relieving & NOC",
+        to: "/stationery-store-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 14,
+        title: "Lost & Found",
+        to: "/stationery-store-manager/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: 15,
+        title: "Report Issue / Escalation",
+        to: "/stationery-store-manager/escalation-management",
+        icon: ShieldAlert,
+    },
 ];
 
 export const housekeepingManagerSidebarLinks = [
@@ -1122,9 +1451,15 @@ export const housekeepingManagerSidebarLinks = [
         icon: LayoutDashboard,
     },
     {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/housekeeping-manager/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
         id: 2,
         title: "Task Management",
-        to: "/housekeeping-manager/task-management/my-tasks",
+        to: "/housekeeping-manager/task-management",
         icon: ClipboardList,
     },
     {
@@ -1178,7 +1513,7 @@ export const housekeepingManagerSidebarLinks = [
     {
         id: 11,
         title: "Lost & Found",
-        to: "/housekeeping-manager/lost-found",
+        to: "/housekeeping-manager/lost-and-found",
         icon: Package,
     },
     {
@@ -1193,6 +1528,153 @@ export const housekeepingManagerSidebarLinks = [
         to: "/housekeeping-manager/purchase-workflow",
         icon: ClipboardCheck,
     },
+    {
+        id: 14,
+        title: "Request Product from Store",
+        to: "/housekeeping-manager/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 15,
+        title: "Audit Observations",
+        to: "/housekeeping-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 16,
+        title: "Staff Relieving & NOC",
+        to: "/housekeeping-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 17,
+        title: "Report Issue / Escalation",
+        to: "/housekeeping-manager/escalation-management",
+        icon: ShieldAlert,
+    },
+];
+
+export const maintenanceManagerSidebarLinks = [
+    {
+        id: 1,
+        title: "Dashboard",
+        to: "/maintenance-manager/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/maintenance-manager/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
+        id: 2,
+        title: "Task Management",
+        to: "/maintenance-manager/task-management",
+        icon: ClipboardList,
+    },
+    {
+        id: 5,
+        title: "Requests & Approvals",
+        to: "/maintenance-manager/requests-approvals",
+        icon: ClipboardCheck,
+    },
+    {
+        id: 6,
+        title: "Duty Allotment",
+        to: "/maintenance-manager/duty-allotment",
+        icon: ClipboardList,
+    },
+    {
+        id: 7,
+        title: "Preventive Maintenance Schedules",
+        to: "/maintenance-manager/schedules",
+        icon: CalendarDays,
+    },
+    {
+        id: 8,
+        title: "Equipment & Safety Inspections",
+        to: "/maintenance-manager/equipment-inspections",
+        icon: ShieldCheck,
+    },
+    {
+        id: 9,
+        title: "Building Maintenance Register",
+        to: "/maintenance-manager/building-maintenance",
+        icon: Building2,
+    },
+    {
+        id: 10,
+        title: "Star of the Month",
+        to: "/maintenance-manager/star-of-the-month",
+        icon: Star,
+    },
+    {
+        id: 11,
+        title: "Reports & Metrics",
+        to: "/maintenance-manager/reports",
+        icon: BarChart3,
+    },
+    {
+        id: 12,
+        title: "Announcement",
+        to: "/maintenance-manager/broadcast",
+        icon: Rss,
+    },
+    {
+        id: 13,
+        title: "Spares Requirement",
+        to: "/maintenance-manager/inventory-requirement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 14,
+        title: "Purchase Workflow",
+        to: "/maintenance-manager/purchase-workflow",
+        icon: ClipboardCheck,
+    },
+    {
+        id: 15,
+        title: "Request Product from Store",
+        to: "/maintenance-manager/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 16,
+        title: "Department Helpdesk",
+        to: "/maintenance-manager/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 17,
+        title: "Physical File Room",
+        to: "/maintenance-manager/file-room",
+        icon: FolderOpen,
+    },
+    {
+        id: 18,
+        title: "Lost & Found",
+        to: "/maintenance-manager/lost-and-found",
+        icon: Package,
+    },
+    {
+        id: 19,
+        title: "Audit Observations",
+        to: "/maintenance-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 20,
+        title: "Staff Relieving & NOC",
+        to: "/maintenance-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 21,
+        title: "Report Issue / Escalation",
+        to: "/maintenance-manager/escalation-management",
+        icon: ShieldAlert,
+    },
 ];
 
 export const teacherSidebarLinks = [
@@ -1201,16 +1683,6 @@ export const teacherSidebarLinks = [
         title: "Dashboard",
         to: "/teacher/dashboard",
         icon: LayoutDashboard,
-    },
-    {
-        id: 2,
-        title: "Attendance",
-        to: "#0",
-        icon: CalendarCheck,
-        subLinks: [
-            { icon: ClipboardList, title: "Class Attendance", to: "/teacher/attendance/class-attendance" },
-            { icon: HeartPulse, title: "Biometric Attendance", to: "/teacher/attendance/biometric" },
-        ],
     },
     {
         id: 3,
@@ -1226,42 +1698,58 @@ export const teacherSidebarLinks = [
         ],
     },
     {
-        id: 5,
-        title: "Task Management",
-        to: "/teacher/task-management/my-tasks",
-        icon: ClipboardList,
-    },
-    {
         id: 7,
         title: "Student",
         to: "#0",
         icon: GraduationCap,
         subLinks: [
             { icon: GraduationCap, title: "Students List", to: "/teacher/user-management/students-list" },
-            { icon: UsersRound, title: "Parents List", to: "/teacher/user-management/parents-list" },
-            { icon: FileText, title: "CA / RCT", to: "/teacher/unit-tests" },
+            { icon: FileText, title: "CA / PCA", to: "/teacher/unit-tests" },
             { icon: CalendarCheck, title: "Exam", to: "/teacher/student-evaluation/exam" },
             { icon: CircleHelp, title: "Question Bank", to: "/teacher/student-deliverables/sample-questions" },
             { icon: ClipboardPen, title: "Mark Entry", to: "/teacher/student-evaluation/mark-entry" },
+            { icon: FileText, title: "Report Card", to: "/teacher/student-evaluation/report-cards" },
             { icon: BarChart3, title: "Performance Analytics", to: "/teacher/student-evaluation/analytics" },
             { icon: Sparkles, title: "Home Fun", to: "/teacher/student-deliverables/home-fun" },
             { icon: BookOpenCheck, title: "Study Materials", to: "/teacher/student-deliverables/study-materials" },
-            { icon: Star, title: "Star of the Month", to: "/teacher/star-ratings/som-matrix" },
-            { icon: Trophy, title: "Star of the Year", to: "/teacher/star-ratings/star-of-year" },
+            { icon: Star, title: "Star Ratings", to: "/teacher/star-ratings" },
         ],
     },
     {
+        id: 2,
+        title: "Attendance & Leave Management",
+        to: "/teacher/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
         id: 19,
-        title: "My Profile",
-        to: "#0",
-        icon: UserRound,
-        subLinks: [
-            { icon: UserRound, title: "My Profile", to: "/teacher/my-profile" },
-            { icon: CalendarCheck, title: "My Attendance", to: "/teacher/attendance/my-attendance" },
-            { icon: FileText, title: "My Leave Requests", to: "/teacher/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/teacher/leave-request/received" },
-            { icon: BookMarked, title: "Books Borrowed", to: "/teacher/library/books-borrowed" },
-        ],
+        title: "Book Borrowed",
+        to: "/teacher/library/books-borrowed",
+        icon: BookMarked,
+    },
+    {
+        id: 5,
+        title: "Task Management",
+        to: "/teacher/task-management",
+        icon: ClipboardList,
+    },
+    {
+        id: 22,
+        title: "Request Product from Store",
+        to: "/teacher/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 20,
+        title: "Department Helpdesk",
+        to: "/teacher/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 21,
+        title: "Lost & Found",
+        to: "/teacher/lost-and-found",
+        icon: Sparkles,
     },
     {
         id: 14,
@@ -1282,16 +1770,28 @@ export const teacherSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 17,
-        title: "Notifications",
-        to: "/teacher/notifications",
-        icon: BellDot,
-    },
-    {
         id: 18,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/teacher/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 23,
+        title: "Audit Observations",
+        to: "/teacher/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 24,
+        title: "Staff Relieving & NOC",
+        to: "/teacher/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "teacher-reports",
+        title: "Reports & Analytics",
+        to: "/teacher/reports-analytics",
+        icon: BarChart3,
     },
 ];
 
@@ -1301,15 +1801,6 @@ export const coordinatorSidebarLinks = [
         title: "Dashboard",
         to: "/coordinator/dashboard",
         icon: LayoutDashboard,
-    },
-    {
-        id: 2,
-        title: "Attendance",
-        to: "#0",
-        icon: CalendarCheck,
-        subLinks: [
-            { icon: ClipboardList, title: "Class Attendance", to: "/coordinator/attendance/class-attendance" },
-        ],
     },
     {
         id: 3,
@@ -1325,43 +1816,41 @@ export const coordinatorSidebarLinks = [
         ],
     },
     {
-        id: 5,
-        title: "Task Management",
-        to: "/coordinator/task-management/my-tasks",
-        icon: ClipboardList,
-    },
-    {
         id: 7,
         title: "Student",
         to: "#0",
         icon: GraduationCap,
         subLinks: [
             { icon: GraduationCap, title: "Students List", to: "/coordinator/user-management/students-list" },
-            { icon: UsersRound, title: "Parents List", to: "/coordinator/user-management/parents-list" },
-            { icon: FileText, title: "CA / RCT", to: "/coordinator/unit-tests" },
+            { icon: FileText, title: "CA / PCA", to: "/coordinator/unit-tests" },
             { icon: CalendarCheck, title: "Exam", to: "/coordinator/student-evaluation/exam" },
             { icon: CircleHelp, title: "Question Bank", to: "/coordinator/student-deliverables/sample-questions" },
             { icon: ClipboardPen, title: "Mark Entry", to: "/coordinator/student-evaluation/mark-entry" },
+            { icon: CheckCircle2, title: "Marks Verification", to: "/coordinator/student-evaluation/mark-entry-approval" },
+            { icon: FileText, title: "Report Card", to: "/coordinator/student-evaluation/report-cards" },
             { icon: BarChart3, title: "Performance Analytics", to: "/coordinator/student-evaluation/analytics" },
-            { icon: HeartPulse, title: "Biometric Attendance", to: "/coordinator/attendance/biometric" },
             { icon: Sparkles, title: "Home Fun", to: "/coordinator/student-deliverables/home-fun" },
             { icon: BookOpenCheck, title: "Study Materials", to: "/coordinator/student-deliverables/study-materials" },
-            { icon: Star, title: "Star of the Month", to: "/coordinator/star-ratings/som-matrix" },
-            { icon: Trophy, title: "Star of the Year", to: "/coordinator/star-ratings/star-of-year" },
+            { icon: Star, title: "Star Ratings", to: "/coordinator/star-ratings" },
         ],
     },
     {
+        id: 2,
+        title: "Attendance & Leave Management",
+        to: "/coordinator/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
         id: 19,
-        title: "My Profile",
-        to: "#0",
-        icon: UserRound,
-        subLinks: [
-            { icon: UserRound, title: "My Profile", to: "/coordinator/my-profile" },
-            { icon: CalendarCheck, title: "My Attendance", to: "/coordinator/attendance/my-attendance" },
-            { icon: FileText, title: "My Leave Requests", to: "/coordinator/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/coordinator/leave-request/received" },
-            { icon: BookMarked, title: "Books Borrowed", to: "/coordinator/library/books-borrowed" },
-        ],
+        title: "Book Borrowed",
+        to: "/coordinator/library/books-borrowed",
+        icon: BookMarked,
+    },
+    {
+        id: 5,
+        title: "Task Management",
+        to: "/coordinator/task-management",
+        icon: ClipboardList,
     },
     {
         id: 14,
@@ -1382,16 +1871,46 @@ export const coordinatorSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 17,
-        title: "Notifications",
-        to: "/coordinator/notifications",
-        icon: BellDot,
-    },
-    {
         id: 18,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/coordinator/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 20,
+        title: "Department Helpdesk",
+        to: "/coordinator/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 21,
+        title: "Request Product from Store",
+        to: "/coordinator/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 22,
+        title: "Audit Observations",
+        to: "/coordinator/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 23,
+        title: "Staff Relieving & NOC",
+        to: "/coordinator/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 24,
+        title: "Lost & Found",
+        to: "/coordinator/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: "coordinator-reports",
+        title: "Reports & Analytics",
+        to: "/coordinator/reports-analytics",
+        icon: BarChart3,
     },
 ];
 
@@ -1445,12 +1964,6 @@ export const transportManagerSidebarLinks = [
         icon: Monitor,
     },
     {
-        id: 14,
-        title: "Service Centers",
-        to: "/transport-manager/service-centers",
-        icon: Landmark,
-    },
-    {
         id: 9,
         title: "Request Approvals",
         to: "/transport-manager/request-approvals",
@@ -1464,15 +1977,69 @@ export const transportManagerSidebarLinks = [
     },
     {
         id: 11,
-        title: "Leave Request",
-        to: "/transport-manager/leave-request",
-        icon: FileX,
+        title: "Attendance & Leave Management",
+        to: "/transport-manager/attendance-and-leave",
+        icon: CalendarCheck,
     },
     {
-        id: 13,
-        title: "Building Maintenance",
-        to: "/transport-manager/building-maintenance",
-        icon: Landmark,
+        id: "tm-communication",
+        title: "Communication",
+        to: "/transport-manager/communication/inbox",
+        icon: MessageCircle,
+    },
+    {
+        id: 14,
+        title: "Announcement",
+        to: "/transport-manager/announcement",
+        icon: Rss,
+    },
+    {
+        id: 15,
+        title: "Calendar",
+        to: "/transport-manager/academic-calendar",
+        icon: CalendarDays,
+    },
+    {
+        id: 16,
+        title: "Report Issue / Escalation",
+        to: "/transport-manager/escalation-management",
+        icon: ShieldAlert,
+    },
+    {
+        id: 17,
+        title: "Request Product from Store",
+        to: "/transport-manager/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 18,
+        title: "Audit Observations",
+        to: "/transport-manager/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 19,
+        title: "Staff Relieving & NOC",
+        to: "/transport-manager/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "tm-driver-conductor-noc",
+        title: "Driver & Conductor NOC",
+        to: "/transport-manager/driver-conductor-noc",
+        icon: FileCheck,
+    },
+    {
+        id: "transport-reports",
+        title: "Reports & Analytics",
+        to: "/transport-manager/reports-analytics",
+        icon: BarChart3,
+    },
+    {
+        id: 20,
+        title: "Lost & Found",
+        to: "/transport-manager/lost-and-found",
+        icon: Archive,
     },
 ];
 
@@ -1484,9 +2051,15 @@ export const jointDirectorSidebarLinks = [
         icon: LayoutDashboard,
     },
     {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/joint-director/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
         id: 2,
         title: "Task Management",
-        to: "/joint-director/task-management/my-tasks",
+        to: "/joint-director/task-management",
         icon: ClipboardList,
     },
     {
@@ -1496,11 +2069,12 @@ export const jointDirectorSidebarLinks = [
         icon: UsersRound,
         subLinks: [
             { icon: UserRoundCog, title: "JD Assistant", to: "/joint-director/employee-management/jd-assistant" },
-            { icon: UtensilsCrossed, title: "Canteen Manager", to: "/joint-director/employee-management/canteen-manager" },
+            { icon: UtensilsCrossed, title: "Café Manager", to: "/joint-director/employee-management/canteen-manager" },
             { icon: ShoppingCart, title: "Store Manager", to: "/joint-director/employee-management/store-manager" },
             { icon: Monitor, title: "IT Team Manager", to: "/joint-director/employee-management/it-team-manager" },
             { icon: Bus, title: "Transport Manager", to: "/joint-director/employee-management/transport-manager" },
             { icon: Sparkles, title: "House Keeping Manager", to: "/joint-director/employee-management/housekeeping-manager" },
+            { icon: Wrench, title: "Maintenance Manager", to: "/joint-director/employee-management/maintenance-manager" },
             { icon: Car, title: "Drivers List", to: "/joint-director/employee-management/drivers" },
         ],
     },
@@ -1534,6 +2108,72 @@ export const jointDirectorSidebarLinks = [
         to: "/joint-director/broadcast",
         icon: Rss,
     },
+    {
+        id: 9,
+        title: "File Room",
+        to: "/joint-director/file-room",
+        icon: Archive,
+    },
+    {
+        id: 10,
+        title: "CCTV Surveillance",
+        to: "/joint-director/cctv-surveillance",
+        icon: Camera,
+    },
+    {
+        id: 11,
+        title: "Public Relations (PRO)",
+        to: "/joint-director/public-relations",
+        icon: Building2,
+    },
+    {
+        id: 12,
+        title: "Campus Maintenance",
+        to: "/joint-director/campus-maintenance",
+        icon: Wrench,
+    },
+    {
+        id: 13,
+        title: "Planned Capabilities",
+        to: "/joint-director/operations-capabilities",
+        icon: FileText,
+    },
+    {
+        id: 14,
+        title: "Request Product from Store",
+        to: "/joint-director/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 15,
+        title: "Audit Observations",
+        to: "/joint-director/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 16,
+        title: "Staff Relieving & NOC",
+        to: "/joint-director/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "jd-reports",
+        title: "Reports & Analytics",
+        to: "/joint-director/reports-analytics",
+        icon: BarChart3,
+    },
+    {
+        id: 17,
+        title: "Lost & Found",
+        to: "/joint-director/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: 18,
+        title: "Gate Pass & Security",
+        to: "/joint-director/gate-pass",
+        icon: DoorOpen,
+    },
 ];
 
 export const jointDirectorAssistantSidebarLinks = [
@@ -1544,9 +2184,15 @@ export const jointDirectorAssistantSidebarLinks = [
         icon: LayoutDashboard,
     },
     {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/joint-director-assistant/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
         id: 2,
         title: "Task Management",
-        to: "/joint-director-assistant/task-management/my-tasks",
+        to: "/joint-director-assistant/task-management",
         icon: ClipboardList,
     },
     {
@@ -1555,11 +2201,12 @@ export const jointDirectorAssistantSidebarLinks = [
         to: "#0",
         icon: UsersRound,
         subLinks: [
-            { icon: UtensilsCrossed, title: "Canteen Manager", to: "/joint-director-assistant/employee-management/canteen-manager" },
+            { icon: UtensilsCrossed, title: "Café Manager", to: "/joint-director-assistant/employee-management/canteen-manager" },
             { icon: ShoppingCart, title: "Store Manager", to: "/joint-director-assistant/employee-management/store-manager" },
             { icon: Monitor, title: "IT Team Manager", to: "/joint-director-assistant/employee-management/it-team-manager" },
             { icon: Bus, title: "Transport Manager", to: "/joint-director-assistant/employee-management/transport-manager" },
             { icon: Sparkles, title: "House Keeping Manager", to: "/joint-director-assistant/employee-management/housekeeping-manager" },
+            { icon: Wrench, title: "Maintenance Manager", to: "/joint-director-assistant/employee-management/maintenance-manager" },
             { icon: Car, title: "Drivers List", to: "/joint-director-assistant/employee-management/drivers" },
         ],
     },
@@ -1593,9 +2240,80 @@ export const jointDirectorAssistantSidebarLinks = [
         to: "/joint-director-assistant/broadcast",
         icon: Rss,
     },
+    {
+        id: 9,
+        title: "File Room",
+        to: "/joint-director-assistant/file-room",
+        icon: Archive,
+    },
+    {
+        id: 10,
+        title: "CCTV Surveillance",
+        to: "/joint-director-assistant/cctv-surveillance",
+        icon: Camera,
+    },
+    {
+        id: 11,
+        title: "Public Relations (PRO)",
+        to: "/joint-director-assistant/public-relations",
+        icon: Building2,
+    },
+    {
+        id: 12,
+        title: "Campus Maintenance",
+        to: "/joint-director-assistant/campus-maintenance",
+        icon: Wrench,
+    },
+    {
+        id: "jda-gate-pass",
+        title: "Gate Pass & Security",
+        to: "#0",
+        icon: DoorOpen,
+        subLinks: [
+            { icon: DoorOpen, title: "Gate Pass Console", to: "/joint-director-assistant/gate-pass" },
+            { icon: ShieldCheck, title: "Student Passes & Approvals", to: "/joint-director-assistant/gate-pass/student-passes" },
+            { icon: FileText, title: "Material Gate Passes", to: "/joint-director-assistant/material-gate-pass-list" },
+        ],
+    },
+    {
+        id: 13,
+        title: "Request Product from Store",
+        to: "/joint-director-assistant/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 14,
+        title: "Audit Observations",
+        to: "/joint-director-assistant/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 15,
+        title: "Staff Relieving & NOC",
+        to: "/joint-director-assistant/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "jda-reports",
+        title: "Reports & Analytics",
+        to: "/joint-director-assistant/reports-analytics",
+        icon: BarChart3,
+    },
+    {
+        id: 16,
+        title: "Lost & Found",
+        to: "/joint-director-assistant/lost-and-found",
+        icon: Archive,
+    },
 ];
 
 export const jointDirectorAuditSidebarLinks = [
+    {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/joint-director-audit/attendance-and-leave",
+        icon: CalendarCheck,
+    },
     {
         id: 1,
         title: "Dashboard",
@@ -1658,7 +2376,7 @@ export const jointDirectorAuditSidebarLinks = [
     {
         id: 8,
         title: "Task Management",
-        to: "/joint-director-audit/task-management/my-tasks",
+        to: "/joint-director-audit/task-management",
         icon: ClipboardList,
     },
     {
@@ -1698,6 +2416,18 @@ export const jointDirectorAuditSidebarLinks = [
         title: "Announcement",
         to: "/joint-director-audit/broadcast",
         icon: Rss,
+    },
+    {
+        id: "jda-store",
+        title: "Request Product from Store",
+        to: "/joint-director-audit/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: "jda-relieving",
+        title: "Staff Relieving & NOC",
+        to: "/joint-director-audit/relieving-request",
+        icon: FileText,
     },
 ];
 
@@ -1771,6 +2501,36 @@ export const processAuditorSidebarLinks = [
         to: "/process-auditor/shared-deviations",
         icon: ShieldAlert,
     },
+    {
+        id: 9,
+        title: "Task Management",
+        to: "/process-auditor/task-management",
+        icon: ClipboardList,
+    },
+    {
+        id: 10,
+        title: "Attendance & Leave Management",
+        to: "/process-auditor/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
+        id: 11,
+        title: "Department Helpdesk",
+        to: "/process-auditor/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: "pa-store",
+        title: "Request Product from Store",
+        to: "/process-auditor/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: "pa-relieving",
+        title: "Staff Relieving & NOC",
+        to: "/process-auditor/relieving-request",
+        icon: FileText,
+    },
 ];
 
 export const qualityAuditorSidebarLinks = [
@@ -1843,6 +2603,36 @@ export const qualityAuditorSidebarLinks = [
         to: "/quality-auditor/shared-deviations",
         icon: ShieldAlert,
     },
+    {
+        id: 9,
+        title: "Task Management",
+        to: "/quality-auditor/task-management",
+        icon: ClipboardList,
+    },
+    {
+        id: 10,
+        title: "Attendance & Leave Management",
+        to: "/quality-auditor/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
+        id: 11,
+        title: "Department Helpdesk",
+        to: "/quality-auditor/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: "qa-store",
+        title: "Request Product from Store",
+        to: "/quality-auditor/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: "qa-relieving",
+        title: "Staff Relieving & NOC",
+        to: "/quality-auditor/relieving-request",
+        icon: FileText,
+    },
 ];
 
 export const hrSidebarLinks = [
@@ -1866,8 +2656,7 @@ export const hrSidebarLinks = [
     {
         id: 4, title: "Onboarding", to: "#0", icon: UserPlus,
         subLinks: [
-            { icon: FileText, title: "Offer Letters", to: "/hr/onboarding/offers" },
-            { icon: ClipboardPen, title: "Appointment Letters", to: "/hr/onboarding/appointment" },
+            { icon: FileText, title: "Offer / Appointment", to: "/hr/onboarding/offers" },
             { icon: UserRound, title: "New Joiner Details", to: "/hr/onboarding/joiners" },
             { icon: ClipboardCheck, title: "New Joinee Observation", to: "/hr/onboarding/observations" },
             { icon: Users, title: "Shadow Mentor", to: "/hr/onboarding/shadow-mentor" },
@@ -1875,13 +2664,10 @@ export const hrSidebarLinks = [
         ],
     },
     {
-        id: 5, title: "Attendance & Leave", to: "#0", icon: CalendarCheck,
-        subLinks: [
-            { icon: CalendarCheck, title: "Attendance", to: "/hr/attendance" },
-            { icon: CalendarOff, title: "Leave Management", to: "/hr/leave-management" },
-            { icon: ListChecks, title: "Staff Leave Requests", to: "/hr/leave-request/received" },
-            { icon: FileText, title: "Leave Policies", to: "/hr/leave-management/policies" },
-        ],
+        id: 5,
+        title: "Attendance & Leave Management",
+        to: "/hr/attendance-and-leave",
+        icon: CalendarCheck,
     },
     {
         id: 6, title: "Training", to: "#0", icon: GraduationCap,
@@ -1915,13 +2701,12 @@ export const hrSidebarLinks = [
     { id: 9, title: "Disciplinary Action", to: "/hr/disciplinary", icon: ShieldAlert },
     { id: 10, title: "Exit Formalities", to: "/hr/exit", icon: DoorOpen },
     { id: 11, title: "Reports", to: "/hr/reports", icon: BarChart3 },
-    {
-        id: 12, title: "Notifications / Announcements", to: "#0", icon: BellDot,
-        subLinks: [
-            { icon: BellDot, title: "Notifications", to: "/hr/notifications" },
-            { icon: Rss, title: "Announcements", to: "/hr/announcements" },
-        ],
-    },
+    { id: 12, title: "Announcements", to: "/hr/announcements", icon: Rss },
+    { id: 13, title: "Request Product from Store", to: "/hr/stores-procurement", icon: ShoppingCart },
+    { id: 14, title: "Audit Observations", to: "/hr/audit-observations", icon: ShieldCheck },
+    { id: 15, title: "Staff Relieving & NOC", to: "/hr/relieving-request", icon: FileText },
+    { id: 16, title: "Lost & Found", to: "/hr/lost-and-found", icon: Archive },
+    { id: 17, title: "Report Issue / Escalation", to: "/hr/escalation-management", icon: ShieldAlert },
 ];
 
 export const accountHeadSidebarLinks = [
@@ -1930,6 +2715,12 @@ export const accountHeadSidebarLinks = [
         title: "Dashboard",
         to: "/account-head/dashboard",
         icon: LayoutDashboard,
+    },
+    {
+        id: "att-leave",
+        title: "Attendance & Leave Management",
+        to: "/account-head/attendance-and-leave",
+        icon: CalendarCheck,
     },
     {
         id: 2,
@@ -1987,7 +2778,7 @@ export const accountHeadSidebarLinks = [
     {
         id: 9,
         title: "Task Management",
-        to: "/account-head/task-management/my-tasks",
+        to: "/account-head/task-management",
         icon: ClipboardList,
     },
     {
@@ -2003,6 +2794,12 @@ export const accountHeadSidebarLinks = [
         icon: Receipt,
     },
     {
+        id: 15,
+        title: "Book Fee",
+        to: "/account-head/book-fee",
+        icon: BookOpen,
+    },
+    {
         id: 12,
         title: "Annual Budget",
         to: "/account-head/annual-budget",
@@ -2014,51 +2811,74 @@ export const accountHeadSidebarLinks = [
         to: "/account-head/mfp",
         icon: FileText,
     },
+    {
+        id: 16,
+        title: "Request Product from Store",
+        to: "/account-head/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 17,
+        title: "Audit Observations",
+        to: "/account-head/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 18,
+        title: "Staff Relieving & NOC",
+        to: "/account-head/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: 19,
+        title: "Lost & Found",
+        to: "/account-head/lost-and-found",
+        icon: Archive,
+    },
+    {
+        id: 20,
+        title: "Report Issue / Escalation",
+        to: "/account-head/escalation-management",
+        icon: ShieldAlert,
+    },
 ];
 
 export const driverSidebarLinks = [
     {
-        id: 1,
+        id: 0,
         title: "Dashboard",
         to: "/driver/dashboard",
         icon: LayoutDashboard,
     },
     {
-        id: 2,
+        id: 1,
         title: "My Duty",
         to: "/driver/my-duty",
-        icon: ClipboardList,
+        icon: Briefcase,
+    },
+    {
+        id: 2,
+        title: "Route Details & Stops",
+        to: "/driver/my-route/route-details",
+        icon: Route,
     },
     {
         id: 3,
-        title: "Vehicle Management",
-        to: "#0",
-        icon: Bus,
-        subLinks: [
-            { icon: Car, title: "Vehicle Details", to: "/driver/vehicle-management/vehicle-details" },
-            { icon: FileText, title: "Vehicle Documents", to: "/driver/vehicle-management/vehicle-documents" },
-            { icon: HeartPulse, title: "Vehicle Health Status", to: "/driver/vehicle-management/vehicle-health-status" },
-        ],
+        title: "Student Passenger Manifest & Boarding",
+        to: "/driver/attendance-management/student-attendance",
+        icon: Users,
     },
     {
         id: 4,
-        title: "My Route",
-        to: "#0",
-        icon: Route,
-        subLinks: [
-            { icon: MapPin, title: "Route Details", to: "/driver/my-route/route-details" },
-            { icon: ListChecks, title: "Route Stops", to: "/driver/my-route/route-stops" },
-        ],
+        title: "Attendance History",
+        to: "/driver/attendance-management/attendance-history",
+        icon: History,
     },
     {
         id: 5,
-        title: "Attendance Management",
-        to: "#0",
-        icon: ClipboardCheck,
-        subLinks: [
-            { icon: ClipboardCheck, title: "Student Attendance", to: "/driver/attendance-management/student-attendance" },
-            { icon: History, title: "Attendance History", to: "/driver/attendance-management/attendance-history" },
-        ],
+        title: "Vehicle Management",
+        to: "/driver/vehicle-management",
+        icon: Bus,
     },
     {
         id: 6,
@@ -2072,24 +2892,20 @@ export const driverSidebarLinks = [
         to: "/driver/maintenance-request",
         icon: Wrench,
     },
-    {
-        id: 8,
-        title: "Leave Request",
-        to: "/driver/leave-request",
-        icon: CalendarOff,
-    },
 ];
 
 export const directorSidebarLinks = [
     {
+        id: 0,
+        title: "Dashboard",
+        to: "/director/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
         id: 1,
         title: "Task Management",
-        to: "#0",
+        to: "/director/task-management",
         icon: ClipboardList,
-        subLinks: [
-            { icon: UserPlus, title: "Assign Tasks", to: "/director/task-management/assign-tasks" },
-            { icon: ListChecks, title: "My Tasks", to: "/director/task-management/my-tasks" },
-        ],
     },
     {
         id: 2,
@@ -2117,15 +2933,16 @@ export const directorSidebarLinks = [
         icon: Users,
         subLinks: [
             { icon: UserRound, title: "Student Database", to: "/director/user-management/student-database" },
-            { icon: UserRoundCog, title: "Employee Database", to: "/director/user-management/employee-database" },
+            { icon: UserRoundCog, title: "Teacher Database", to: "/director/user-management/employee-database" },
         ],
     },
     {
         id: 6,
-        title: "Activities",
+        title: "Activities & Monitoring",
         to: "#0",
         icon: Trophy,
         subLinks: [
+            { icon: BarChart3, title: "Activity Monitoring", to: "/director/activity-monitoring" },
             { icon: Palette, title: "Cultural", to: "/director/activities/cultural-list" },
             { icon: Dumbbell, title: "Sports", to: "/director/activities/sports-list" },
             { icon: Trophy, title: "Chess Result", to: "/director/activities/chess-result" },
@@ -2145,6 +2962,12 @@ export const directorSidebarLinks = [
         icon: ClipboardPen,
     },
     {
+        id: 81,
+        title: "Progress Report Cards",
+        to: "/director/student-evaluation/report-cards",
+        icon: FileText,
+    },
+    {
         id: 9,
         title: "Home Fun",
         to: "#0",
@@ -2160,20 +2983,11 @@ export const directorSidebarLinks = [
         to: "/director/request-approvals",
         icon: ClipboardList,
     },
-    {
-        id: 11,
-        title: "Leave Request",
-        to: "#0",
-        icon: FileX,
-        subLinks: [
-            { icon: FileText, title: "My Leave Requests", to: "/director/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/director/leave-request/received" },
-        ],
-    },
+    
     {
         id: 12,
-        title: "My Attendance",
-        to: "/director/attendance/my-attendance",
+        title: "Attendance & Leave Management",
+        to: "/director/attendance-and-leave",
         icon: CalendarCheck,
     },
     {
@@ -2195,29 +3009,73 @@ export const directorSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 16,
-        title: "Notifications",
-        to: "/director/notifications",
-        icon: BellDot,
-    },
-    {
         id: 17,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/director/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 18,
+        title: "Request Product from Store",
+        to: "/director/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 19,
+        title: "Gate Pass & Security",
+        to: "/director/gate-pass",
+        icon: DoorOpen,
+    },
+    {
+        id: 20,
+        title: "Physical File Room",
+        to: "/director/file-room",
+        icon: Archive,
+    },
+    {
+        id: 21,
+        title: "Department Helpdesk",
+        to: "/director/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 23,
+        title: "Lost & Found",
+        to: "/director/lost-and-found",
+        icon: Sparkles,
+    },
+    {
+        id: 24,
+        title: "Audit Observations",
+        to: "/director/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 25,
+        title: "Staff Relieving & NOC",
+        to: "/director/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "director-reports",
+        title: "Reports & Analytics",
+        to: "/director/reports-analytics",
+        icon: BarChart3,
     },
 ];
 
 export const principalSidebarLinks = [
     {
+        id: 0,
+        title: "Dashboard",
+        to: "/principal/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
         id: 1,
         title: "Task Management",
-        to: "#0",
+        to: "/principal/task-management",
         icon: ClipboardList,
-        subLinks: [
-            { icon: UserPlus, title: "Assign Tasks", to: "/principal/task-management/assign-tasks" },
-            { icon: ListChecks, title: "My Tasks", to: "/principal/task-management/my-tasks" },
-        ],
     },
     {
         id: 2,
@@ -2231,9 +3089,16 @@ export const principalSidebarLinks = [
     },
     {
         id: 3,
-        title: "Examination Timetable",
-        to: "/principal/examination-timetable",
-        icon: CalendarCheck,
+        title: "Examinations & Marks",
+        to: "#0",
+        icon: Award,
+        subLinks: [
+            { icon: ClipboardPen, title: "Mark Entry & Evaluation", to: "/principal/student-evaluation/mark-entry" },
+            { icon: CheckCircle2, title: "Marks Approval", to: "/principal/mark-entry-approval" },
+            { icon: CalendarCheck, title: "Examination Timetable", to: "/principal/examination-timetable" },
+            { icon: FileText, title: "Progress Report Cards", to: "/principal/student-evaluation/report-cards" },
+            { icon: BarChart3, title: "Performance Analytics", to: "/principal/student-evaluation/analytics" },
+        ],
     },
     {
         id: 4,
@@ -2248,7 +3113,7 @@ export const principalSidebarLinks = [
         icon: Users,
         subLinks: [
             { icon: UserRound, title: "Student Database", to: "/principal/user-management/student-database" },
-            { icon: UserRoundCog, title: "Employee Database", to: "/principal/user-management/employee-database" },
+            { icon: UserRoundCog, title: "Teacher Database", to: "/principal/user-management/employee-database" },
         ],
     },
     {
@@ -2262,18 +3127,6 @@ export const principalSidebarLinks = [
         title: "Student Allocation",
         to: "/principal/student-allocation-approval",
         icon: UserPlus,
-    },
-    {
-        id: 18,
-        title: "Transport Approvals",
-        to: "/principal/transport-approvals",
-        icon: Bus,
-    },
-    {
-        id: 17,
-        title: "Coordinator Grade Bands",
-        to: "/principal/coordinator-grade-bands",
-        icon: UserRoundCog,
     },
     {
         id: 16,
@@ -2291,20 +3144,11 @@ export const principalSidebarLinks = [
             { icon: BookOpenCheck, title: "Teacher Home Fun", to: "/principal/lms/teacher-lms" },
         ],
     },
-    {
-        id: 9,
-        title: "Leave Request",
-        to: "#0",
-        icon: FileX,
-        subLinks: [
-            { icon: FileText, title: "My Leave Requests", to: "/principal/leave-request/my-requests" },
-            { icon: ListChecks, title: "Received Leave Requests", to: "/principal/leave-request/received" },
-        ],
-    },
+    
     {
         id: 10,
-        title: "My Attendance",
-        to: "/principal/attendance/my-attendance",
+        title: "Attendance & Leave Management",
+        to: "/principal/attendance-and-leave",
         icon: CalendarCheck,
     },
     {
@@ -2326,16 +3170,282 @@ export const principalSidebarLinks = [
         icon: CalendarDays,
     },
     {
-        id: 14,
-        title: "Notifications",
-        to: "/principal/notifications",
-        icon: BellDot,
-    },
-    {
         id: 15,
-        title: "Escalation Management",
+        title: "Report Issue / Escalation",
         to: "/principal/escalation-management",
         icon: ShieldAlert,
+    },
+    {
+        id: 16,
+        title: "Request Product from Store",
+        to: "/principal/stores-procurement",
+        icon: ShoppingCart,
+    },
+    {
+        id: 17,
+        title: "Gate Pass & Security",
+        to: "#0",
+        icon: DoorOpen,
+        subLinks: [
+            { icon: DoorOpen, title: "Gate Pass Overview", to: "/principal/gate-pass" },
+            { icon: ShieldCheck, title: "Student Gate Pass Approvals", to: "/principal/gate-pass/student-passes" },
+            { icon: FileText, title: "Material Gate Passes", to: "/principal/material-gate-pass-list" },
+        ],
+    },
+    {
+        id: 18,
+        title: "Physical File Room",
+        to: "/principal/file-room",
+        icon: Archive,
+    },
+    {
+        id: 19,
+        title: "Department Helpdesk",
+        to: "/principal/department-ticketing",
+        icon: Ticket,
+    },
+    {
+        id: 20,
+        title: "Activity Monitoring",
+        to: "/principal/activity-monitoring",
+        icon: BarChart3,
+    },
+    {
+        id: 21,
+        title: "Lost & Found",
+        to: "/principal/lost-and-found",
+        icon: Sparkles,
+    },
+    {
+        id: 22,
+        title: "Audit Observations",
+        to: "/principal/audit-observations",
+        icon: ShieldCheck,
+    },
+    {
+        id: 23,
+        title: "Staff Relieving & NOC",
+        to: "/principal/relieving-request",
+        icon: FileText,
+    },
+    {
+        id: "principal-reports",
+        title: "Reports & Analytics",
+        to: "/principal/reports-analytics",
+        icon: BarChart3,
+    },
+];
+
+export const proSidebarLinks = [
+    {
+        id: 1,
+        title: "Dashboard",
+        to: "/pro/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: 2,
+        title: "Statutory Compliance Calendar",
+        to: "/pro/statutory-calendar",
+        icon: CalendarDays,
+    },
+    {
+        id: 3,
+        title: "Government Correspondence",
+        to: "/pro/correspondence",
+        icon: FileText,
+    },
+    {
+        id: 4,
+        title: "Affiliations & Recognitions",
+        to: "/pro/affiliations",
+        icon: Award,
+    },
+    {
+        id: 5,
+        title: "Permits, NOCs & Licenses",
+        to: "/pro/permits",
+        icon: ShieldCheck,
+    },
+    {
+        id: 6,
+        title: "Regulatory Inspection Logs",
+        to: "/pro/inspections",
+        icon: CheckCircle2,
+    },
+    {
+        id: 7,
+        title: "File Room Custody Linkages",
+        to: "/pro/file-room",
+        icon: Archive,
+    },
+    {
+        id: 8,
+        title: "Finance Challan Verification",
+        to: "/pro/challans",
+        icon: Receipt,
+    },
+    {
+        id: 9,
+        title: "Attendance & Leave Management",
+        to: "/pro/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
+        id: "pro-reports",
+        title: "Reports & Analytics",
+        to: "/pro/reports-analytics",
+        icon: BarChart3,
+    },
+];
+
+export const fileRoomSidebarLinks = [
+    {
+        id: 1,
+        title: "Dashboard",
+        to: "/file-room/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: 2,
+        title: "Document Repository & Register",
+        to: "/file-room/documents",
+        icon: FolderOpen,
+    },
+    {
+        id: 3,
+        title: "Physical Storage Mapping (Cupboard/Rack/Shelf)",
+        to: "/file-room/storage-mapping",
+        icon: MapPin,
+    },
+    {
+        id: 4,
+        title: "Issue & Return Checkout Registry",
+        to: "/file-room/checkout-register",
+        icon: ArrowRightLeft,
+    },
+    {
+        id: 5,
+        title: "Access Requisitions & Approvals",
+        to: "/file-room/access-approvals",
+        icon: ClipboardCheck,
+    },
+    {
+        id: 6,
+        title: "Chain of Custody & Movement Logs",
+        to: "/file-room/movement-logs",
+        icon: History,
+    },
+    {
+        id: 7,
+        title: "Retention Rules & Archival Disposal",
+        to: "/file-room/retention-audit",
+        icon: ShieldAlert,
+    },
+    {
+        id: 8,
+        title: "Attendance & Leave Management",
+        to: "/file-room/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
+        id: "fileroom-reports",
+        title: "Reports & Analytics",
+        to: "/file-room/reports-analytics",
+        icon: BarChart3,
+    },
+];
+
+export const cctvSidebarLinks = [
+    {
+        id: 1,
+        title: "Dashboard",
+        to: "/cctv/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: 2,
+        title: "Camera Inventory & Physical Locations",
+        to: "/cctv/cameras",
+        icon: Camera,
+    },
+    {
+        id: 3,
+        title: "Daily Operational Status Monitoring",
+        to: "/cctv/operational-status",
+        icon: ShieldCheck,
+    },
+    {
+        id: 4,
+        title: "Footage Requisitions & Approval Workflows",
+        to: "/cctv/footage-requests",
+        icon: Video,
+    },
+    {
+        id: 5,
+        title: "Incident Marked Footage Vault",
+        to: "/cctv/incident-vault",
+        icon: Archive,
+    },
+    {
+        id: 6,
+        title: "Footage Delivery & Download Access Logs",
+        to: "/cctv/delivery-logs",
+        icon: History,
+    },
+    {
+        id: 7,
+        title: "Retention Policies & Purge Logs",
+        to: "/cctv/retention-logs",
+        icon: CalendarOff,
+    },
+    {
+        id: "cctv-teachers-late",
+        title: "Teachers Late Report",
+        to: "/cctv/teachers-late-report",
+        icon: Clock,
+    },
+    {
+        id: "cctv-issue-register",
+        title: "Surveillance Issue Register",
+        to: "/cctv/issue-register",
+        icon: AlertTriangle,
+    },
+    {
+        id: "cctv-pa-announcements",
+        title: "PA System Announcements",
+        to: "/cctv/pa-announcements",
+        icon: Volume2,
+    },
+    {
+        id: "cctv-gps-halt",
+        title: "GPS & Halt Telemetry",
+        to: "/cctv/gps-halt",
+        icon: Navigation,
+    },
+    {
+        id: "cctv-bus-last-drop",
+        title: "Bus Last Drop Report",
+        to: "/cctv/bus-last-drop",
+        icon: Bus,
+    },
+    {
+        id: "cctv-bus-camera-monitoring",
+        title: "Bus Camera Monitoring",
+        to: "/cctv/bus-camera-monitoring",
+        icon: Camera,
+    },
+    {
+        id: 8,
+        title: "Attendance & Leave Management",
+        to: "/cctv/attendance-and-leave",
+        icon: CalendarCheck,
+    },
+    {
+        id: "cctv-reports",
+        title: "Reports & Analytics",
+        to: "/cctv/reports-analytics",
+        icon: BarChart3,
     },
 ];
 
@@ -2354,6 +3464,8 @@ export const roleBasedSidebarLinks = {
     ITSupportManager: itSupportManagerSidebarLinks,
     StationeryStoreManager: stationeryStoreManagerSidebarLinks,
     HousekeepingManager: housekeepingManagerSidebarLinks,
+    MaintenanceManager: maintenanceManagerSidebarLinks,
+    maintenancemanager: maintenanceManagerSidebarLinks,
     TransportManager: transportManagerSidebarLinks,
     JointDirector: jointDirectorSidebarLinks,
     JointDirectorAssistant: jointDirectorAssistantSidebarLinks,
@@ -2365,4 +3477,24 @@ export const roleBasedSidebarLinks = {
     Driver: driverSidebarLinks,
     Director: directorSidebarLinks,
     Principal: principalSidebarLinks,
+};
+
+Object.defineProperties(roleBasedSidebarLinks, {
+    PRO: { value: proSidebarLinks, enumerable: false, writable: true, configurable: true },
+    FileRoom: { value: fileRoomSidebarLinks, enumerable: false, writable: true, configurable: true },
+    CCTV: { value: cctvSidebarLinks, enumerable: false, writable: true, configurable: true },
+    pro: { value: proSidebarLinks, enumerable: false, writable: true, configurable: true },
+    fileroom: { value: fileRoomSidebarLinks, enumerable: false, writable: true, configurable: true },
+    cctv: { value: cctvSidebarLinks, enumerable: false, writable: true, configurable: true },
+});
+
+export const ROLE_SIDEBAR_CONFIGS = {
+    ...roleBasedSidebarLinks,
+    PRO: proSidebarLinks,
+    FileRoom: fileRoomSidebarLinks,
+    CCTV: cctvSidebarLinks,
+    pro: proSidebarLinks,
+    fileroom: fileRoomSidebarLinks,
+    'file-room': fileRoomSidebarLinks,
+    cctv: cctvSidebarLinks,
 };

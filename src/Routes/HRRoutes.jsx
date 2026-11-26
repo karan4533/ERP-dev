@@ -1,3 +1,5 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/HR/Dashboard/Dashboard'
@@ -11,8 +13,6 @@ import Onboarding from '../Pages/HR/Onboarding/Onboarding'
 import Offers from '../Pages/HR/Onboarding/Offers'
 import Attendance from '../Pages/HR/Attendance/Attendance'
 import LeaveManagement from '../Pages/HR/LeaveManagement/LeaveManagement'
-import ReceivedLeaveRequestsList from '../Common/LeaveRequest/ReceivedLeaveRequestsList'
-import ViewReceivedLeaveRequestPage from '../Common/LeaveRequest/ViewReceivedLeaveRequestPage'
 import Training from '../Pages/HR/Training/Training'
 import Performance from '../Pages/HR/Performance/Performance'
 import Payroll from '../Pages/HR/Payroll/Payroll'
@@ -24,15 +24,9 @@ import Notifications from '../Pages/HR/Notifications/Notifications'
 import Announcements from '../Pages/HR/Announcements/Announcements'
 import AddAnnouncement from '../Pages/HR/Announcements/AddAnnouncement'
 import ViewAnnouncement from '../Pages/HR/Announcements/ViewAnnouncement'
-import { getEmployees, isHrRemoteReady } from '../Pages/HR/domain/hrStore'
+import { EMPLOYEES } from '../Pages/HR/EmployeeManagement/employeeData'
 
-const FALLBACK_EMPLOYEE_ID = 'EMP-2026-001'
-
-/** Resolve after HR hydrate — never touch the store at module load (eager App import). */
-const DefaultEmployeeProfileRedirect = () => {
-    const firstId = isHrRemoteReady() ? getEmployees()[0]?.id : null
-    return <Navigate to={`/hr/employee-management/employee-profile/${firstId || FALLBACK_EMPLOYEE_ID}`} replace />
-}
+const defaultEmployeeId = EMPLOYEES[0]?.id ?? 'EMP-2026-001'
 
 const HRRoutes = () => {
     return (
@@ -40,7 +34,7 @@ const HRRoutes = () => {
             <Route path="/hr/dashboard" element={<Dashboard />} />
             <Route path="/hr/employee-management/employees" element={<EmployeesList />} />
             <Route path="/hr/employee-management/employee-profile/:id" element={<EmployeeProfile />} />
-            <Route path="/hr/employee-management/employee-profile" element={<DefaultEmployeeProfileRedirect />} />
+            <Route path="/hr/employee-management/employee-profile" element={<Navigate to={`/hr/employee-management/employee-profile/${defaultEmployeeId}`} replace />} />
             <Route path="/hr/employee-management/documents" element={<EmployeeDocuments />} />
             <Route path="/hr/employee-management" element={<Navigate to="/hr/employee-management/employees" replace />} />
             <Route path="/hr/recruitment/job-openings" element={<JobOpenings />} />
@@ -54,14 +48,10 @@ const HRRoutes = () => {
             <Route path="/hr/onboarding/observations" element={<Onboarding />} />
             <Route path="/hr/onboarding/shadow-mentor" element={<Onboarding />} />
             <Route path="/hr/onboarding-checklist" element={<Onboarding />} />
+            <Route path="/hr/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
             <Route path="/hr/attendance" element={<Attendance />} />
             <Route path="/hr/leave-management/policies" element={<LeaveManagement />} />
             <Route path="/hr/leave-management" element={<LeaveManagement />} />
-            <Route
-                path="/hr/leave-request/received"
-                element={<ReceivedLeaveRequestsList roleKey="hr" description="Staff leave requests that reached HR after the department head." />}
-            />
-            <Route path="/hr/leave-request/received/view/:id" element={<ViewReceivedLeaveRequestPage roleKey="hr" />} />
             <Route path="/hr/training-records" element={<Training />} />
             <Route path="/hr/training-feedback" element={<Training />} />
             <Route path="/hr/training" element={<Training />} />
@@ -84,6 +74,9 @@ const HRRoutes = () => {
             <Route path="/hr/announcements/add" element={<AddAnnouncement />} />
             <Route path="/hr/announcements/view/:id" element={<ViewAnnouncement />} />
             <Route path="/hr/announcements" element={<Announcements />} />
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/hr', role: 'hr' })}
+
             <Route path="*" element={<Navigate to="/hr/dashboard" replace />} />
         </ReactRoutes>
     )

@@ -18,6 +18,9 @@ class EventIn(BaseModel):
     startDate: date
     endDate: date | None = None
     description: str = ""
+    allDay: bool = True
+    startTime: str | None = None
+    endTime: str | None = None
 
 
 class EventPatch(BaseModel):
@@ -26,6 +29,9 @@ class EventPatch(BaseModel):
     startDate: date | None = None
     endDate: date | None = None
     description: str | None = None
+    allDay: bool | None = None
+    startTime: str | None = None
+    endTime: str | None = None
 
 
 @router.get("")
@@ -38,8 +44,16 @@ def create_route(
     body: EventIn, db: Session = Depends(get_db), user: User = Depends(require_permission("calendar.write"))
 ) -> dict:
     return svc.create(
-        db, user, event_type=body.type, title=body.title, start=body.startDate, end=body.endDate,
+        db,
+        user,
+        event_type=body.type,
+        title=body.title,
+        start=body.startDate,
+        end=body.endDate,
         description=body.description,
+        all_day=body.allDay,
+        start_time=body.startTime,
+        end_time=body.endTime,
     )
 
 
@@ -48,8 +62,17 @@ def update_route(
     ref: str, body: EventPatch, db: Session = Depends(get_db), user: User = Depends(require_permission("calendar.write"))
 ) -> dict:
     return svc.update(
-        db, user, ref, event_type=body.type, title=body.title, start=body.startDate, end=body.endDate,
+        db,
+        user,
+        ref,
+        event_type=body.type,
+        title=body.title,
+        start=body.startDate,
+        end=body.endDate,
         description=body.description,
+        all_day=body.allDay,
+        start_time=body.startTime,
+        end_time=body.endTime,
     )
 
 

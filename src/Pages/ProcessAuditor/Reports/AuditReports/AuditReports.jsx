@@ -49,15 +49,7 @@ const AuditReports = () => {
                             ))}
                         </select>
                     </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='campus-filter' className='text-base font-medium text-[#808080]'>Campus</label>
-                        <select id='campus-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value=''>All</option>
-                            {CAMPUSES.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                    </div>
+                    
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='status-filter' className='text-base font-medium text-[#808080]'>Status</label>
                         <select id='status-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>

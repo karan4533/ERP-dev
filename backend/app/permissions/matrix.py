@@ -1,4 +1,9 @@
-"""25 frontend roles plus Managing Director and Finance Assistant."""
+"""Frontend portal roles plus Managing Director and Finance Assistant.
+
+W1 alignment: FE portals `maintenancemanager`, `pro`, `fileroom`, and `cctv` are
+registered here with conservative grants (no silent privilege expansion).
+`managing_director` / `finance_assistant` remain backend-capable without dedicated FE ROLES entries.
+"""
 
 FRONTEND_ROLES: list[tuple[str, str]] = [
     ("superadmin", "Super Admin"),
@@ -6,6 +11,7 @@ FRONTEND_ROLES: list[tuple[str, str]] = [
     ("student", "Student"),
     ("parent", "Parent"),
     ("librarian", "Librarian"),
+    ("hostelwarden", "Hostel Warden"),
     ("prm", "PRM"),
     ("gatekeeper", "Gate Keeper"),
     ("gatekeepermanager", "Gate Keeper Manager"),
@@ -15,6 +21,7 @@ FRONTEND_ROLES: list[tuple[str, str]] = [
     ("itsupportmanager", "IT Support Manager"),
     ("stationerystoremanager", "Stationery Store Manager"),
     ("housekeepingmanager", "Housekeeping Manager"),
+    ("maintenancemanager", "Maintenance Manager"),
     ("transportmanager", "Transport Manager"),
     ("teacher", "Teacher"),
     ("coordinator", "Coordinator"),
@@ -26,6 +33,9 @@ FRONTEND_ROLES: list[tuple[str, str]] = [
     ("hr", "HR"),
     ("accounthead", "Account Head"),
     ("driver", "Driver"),
+    ("pro", "PRO"),
+    ("fileroom", "File Room"),
+    ("cctv", "CCTV"),
 ]
 
 MD_EXTRA_ROLES: list[tuple[str, str]] = [
@@ -34,6 +44,35 @@ MD_EXTRA_ROLES: list[tuple[str, str]] = [
 ]
 
 ALL_ROLES = FRONTEND_ROLES + MD_EXTRA_ROLES
+
+# Legacy / alternate codes → canonical matrix codes (no privilege upgrade).
+ROLE_ALIASES: dict[str, str] = {
+    "vandriver": "driver",
+    "van_driver": "driver",
+    "van-driver": "driver",
+    "md": "managing_director",
+    "managingdirector": "managing_director",
+    "financeassistant": "finance_assistant",
+    "account_head": "accounthead",
+    "front_office": "prm",
+    "frontoffice": "prm",
+}
+
+
+def normalize_role_code(code: str | None) -> str:
+    raw = (code or "").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    if not raw:
+        return ""
+    # Try direct, then alias keys normalized the same way.
+    for alias, canonical in ROLE_ALIASES.items():
+        if raw == alias.replace("-", "").replace("_", ""):
+            return canonical
+    # Pass-through when already a known role code (keep hyphens stripped only for alias match).
+    cleaned = (code or "").strip().lower().replace(" ", "")
+    for alias, canonical in ROLE_ALIASES.items():
+        if cleaned == alias:
+            return canonical
+    return (code or "").strip().lower()
 
 PERMISSIONS: list[tuple[str, str]] = [
     ("auth.me", "Read own session"),
@@ -349,14 +388,17 @@ for _code, _perms in ROLE_PERMISSIONS.items():
 # Ops campus collections (library / gate / transport / stores / JD / biometric).
 _OPS_ROLES = {
     "librarian",
+    "hostelwarden",
     "gatekeeper",
     "gatekeepermanager",
+    "prm",  # W1: PRM visitors via /ops/gate-visitors
     "transportmanager",
     "driver",
     "canteenmanager",
     "itsupportmanager",
     "stationerystoremanager",
     "housekeepingmanager",
+    "maintenancemanager",
     "jointdirector",
     "jointdirectorassistant",
     "teacher",
@@ -372,9 +414,37 @@ for _code, _perms in ROLE_PERMISSIONS.items():
             if _p not in _perms:
                 _perms.append(_p)
 
+# W1 institutional portals: core + announcements/calendar read only (no invented domain APIs).
+_INSTITUTIONAL_READ = list(
+    dict.fromkeys(
+        [
+            *_CORE,
+            "announcements.read",
+            "calendar.read",
+            "notifications.read",
+            "communication.read",
+        ]
+    )
+)
+for _code in ("pro", "fileroom", "cctv"):
+    if _code in ROLE_PERMISSIONS:
+        for _p in _INSTITUTIONAL_READ:
+            if _p not in ROLE_PERMISSIONS[_code]:
+                ROLE_PERMISSIONS[_code].append(_p)
+# Maintenance manager: same ops grants as other facility managers (via _OPS_ROLES) + approvals submit.
+if "maintenancemanager" in ROLE_PERMISSIONS:
+    for _p in ("approvals.submit", "approvals.read", "notifications.read"):
+        if _p not in ROLE_PERMISSIONS["maintenancemanager"]:
+            ROLE_PERMISSIONS["maintenancemanager"].append(_p)
+
 # Transport Manager assigns students to bus routes — needs campus student roster (read-only).
 for _code, _perms in ROLE_PERMISSIONS.items():
     if _code == "transportmanager" and "students.read" not in _perms:
+        _perms.append("students.read")
+
+# Hostel Warden allocates beds against the campus student roster (read-only).
+for _code, _perms in ROLE_PERMISSIONS.items():
+    if _code == "hostelwarden" and "students.read" not in _perms:
         _perms.append("students.read")
 
 # Campus audit collections (JD Audit + Process/Quality auditors).

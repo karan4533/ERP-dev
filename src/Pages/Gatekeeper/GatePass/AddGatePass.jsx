@@ -47,8 +47,8 @@ const AddGatePass = () => {
                             <label htmlFor="" className='text-base font-medium text-[#1E1E1E]'>Approved By:</label>
                             <select name="" id="" className='text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'>
                                 <option value="">Principal</option>
+                                <option value="">Director of Academics (DA)</option>
                                 <option value="">Admin</option>
-                                <option value="">Warden</option>
                                 <option value="">Other</option>
                             </select>
                         </div>

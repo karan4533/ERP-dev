@@ -1,53 +1,42 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download, Trophy, Star } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { useAuth } from '../../../context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import StarRatingDisplay from './Components/StarRatingDisplay'
 import {
     ACADEMIC_YEARS,
     EMPLOYEE_TYPE_OPTIONS,
+    MOCK_SOM_RATINGS,
     RATING_CATEGORY,
     ROUTE_BASE,
     SOY_MONTH_COUNT,
-    STORAGE_KEY,
     getAvailableSomMonths,
     getConsolidatedSoyRatings,
     getEmployeeTypeLabel,
-    getSomRatings,
     getStarOfMonth,
     getStarOfYear,
 } from './starRatingsData'
 
 const StarRatings = ({ view = 'som' }) => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const isSom = view === 'som'
-    const [revision, setRevision] = useState(0)
-    const allRatings = useMemo(() => getSomRatings(), [revision])
-    const months = useMemo(() => getAvailableSomMonths(), [allRatings])
+    const months = useMemo(() => getAvailableSomMonths(), [])
     const [search, setSearch] = useState('')
     const [employeeType, setEmployeeType] = useState('')
-    const [selectedMonth, setSelectedMonth] = useState('')
+    const [selectedMonth, setSelectedMonth] = useState(months[months.length - 1] ?? '')
     const [academicYear, setAcademicYear] = useState(ACADEMIC_YEARS[0])
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
 
-    useEffect(() => {
-        const onStorage = (event) => {
-            if (event.key === STORAGE_KEY) setRevision((n) => n + 1)
-        }
-        window.addEventListener('storage', onStorage)
-        return () => window.removeEventListener('storage', onStorage)
-    }, [])
-
-    useEffect(() => {
-        if (!selectedMonth && months.length) setSelectedMonth(months[months.length - 1])
-    }, [months, selectedMonth])
-
     const somRatings = useMemo(() => {
-        return allRatings.filter((item) => {
+        return MOCK_SOM_RATINGS.filter((item) => {
             const matchesMonth = !selectedMonth || item.month === selectedMonth
             const matchesType = !employeeType || item.employeeType === employeeType
             const query = search.trim().toLowerCase()
@@ -58,11 +47,11 @@ const StarRatings = ({ view = 'som' }) => {
                 || item.ratingId.toLowerCase().includes(query)
             return matchesMonth && matchesType && matchesSearch
         })
-    }, [allRatings, selectedMonth, employeeType, search])
+    }, [selectedMonth, employeeType, search])
 
     const soyRatings = useMemo(
         () => getConsolidatedSoyRatings(academicYear),
-        [academicYear, revision],
+        [academicYear],
     )
 
     const filteredSoyRatings = useMemo(() => {
@@ -306,13 +295,15 @@ const StarRatings = ({ view = 'som' }) => {
                                                     >
                                                         Edit
                                                     </button>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => setDeleteRequestModal(true)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Delete
-                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => setDeleteRequestModal(true)}
+                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
                                                 </Dropdown>
                                             </td>
                                         </tr>
@@ -387,15 +378,9 @@ const StarRatings = ({ view = 'som' }) => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='star-ratings'
-                rows={Array.isArray(isSom ? somRatings : filteredSoyRatings) ? (isSom ? somRatings : filteredSoyRatings) : []}
-                exportDescription={<>You are exporting {Array.isArray(isSom ? somRatings : filteredSoyRatings) ? (isSom ? somRatings : filteredSoyRatings).length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </section>
     )
 }

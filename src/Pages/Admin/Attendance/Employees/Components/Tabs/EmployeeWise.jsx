@@ -2,10 +2,6 @@ import React, { useState } from 'react'
 import { Download } from 'lucide-react'
 import ExportModal from '../../../../../../Common/CommonComponents/ExportModal';
 
-const EXPORT_ROWS = [
-    {employee_name: 'Sandy', employee_role: 'Teacher'},
-]
-
 const EmployeeWise = () => {
 
     const [exportModal, setExportModal] = useState(false)
@@ -54,13 +50,7 @@ const EmployeeWise = () => {
                 </table>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='employee-wise'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
         </div>
     )

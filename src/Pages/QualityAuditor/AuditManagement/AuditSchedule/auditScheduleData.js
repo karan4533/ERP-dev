@@ -2,7 +2,6 @@ import { addDays } from 'date-fns'
 import { generateId, toDateKey } from '../../../../Common/MeetingsCalendar/utils/dateHelpers'
 import { DEPARTMENTS, FREQUENCIES, getMyAudits } from '../MyAudits/myAuditsData'
 
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, FREQUENCIES }
 
 export const SCHEDULE_STATUSES = ['Scheduled', 'Pending', 'In Progress', 'Completed', 'Overdue']
@@ -274,7 +273,7 @@ export const migrateSchedules = (records) => {
 }
 
 export const saveAuditSchedules = (records) => {
-    saveCampusJson(STORAGE_KEY, records)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
 export const addAuditSchedule = (payload) => {
@@ -308,7 +307,7 @@ export const addAuditSchedule = (payload) => {
 export const getAuditSchedules = () => {
     let records = DEFAULT_AUDIT_SCHEDULES
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
+        const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) records = JSON.parse(stored)
     } catch {
         records = DEFAULT_AUDIT_SCHEDULES
@@ -363,6 +362,3 @@ export const buildSeedCalendarEvents = () => {
 
     return events
 }
-
-export const hydrateFromApi = (seed = DEFAULT_AUDIT_SCHEDULES) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

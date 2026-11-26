@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -14,7 +14,7 @@ import VisibilityRuleFormModal from './VisibilityRuleFormModal'
 import {
     VISIBILITY_MODULES,
     VISIBILITY_ROLES,
-    getAuditVisibilityRules, hydrateAuditVisibilityRulesFromApi,
+    VISIBILITY_RULES,
     buildVisibilityPayload,
     createVisibilityRuleId,
     formatPermissionSummary,
@@ -27,11 +27,6 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const VisibilityRulesList = () => {
-    const [visibilityRules, setVisibilityRules] = useState(() => getAuditVisibilityRules())
-    useEffect(() => {
-        hydrateAuditVisibilityRulesFromApi().finally(() => setVisibilityRules(getAuditVisibilityRules()))
-    }, [])
-
     const [rules, setRules] = useState(VISIBILITY_RULES)
     const [search, setSearch] = useState('')
     const [moduleFilter, setModuleFilter] = useState('')

@@ -147,13 +147,7 @@ const ExamHallDuty = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='exam-hall-duty'
-                rows={Array.isArray(EXAM_HALL_DUTY_LIST) ? EXAM_HALL_DUTY_LIST : []}
-                exportDescription={<>You are exporting {Array.isArray(EXAM_HALL_DUTY_LIST) ? EXAM_HALL_DUTY_LIST.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

@@ -1,7 +1,6 @@
-import { getAuditById } from '../MyAudits/myAuditsData'
+import { getAuditById } from '../MyAudits/myAuditsData.js'
 
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
-export const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
+export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Observation', 'Positive Practice']
 
 export const OBSERVATION_PRIORITIES = ['Critical', 'High', 'Medium', 'Low']
 
@@ -96,8 +95,13 @@ export const QUALITY_RATING_LABELS = {
 export const CHECKLIST_RESPONSE_OPTIONS = ['Yes', 'No', 'Error']
 
 export const parseRating = (value) => {
+    if (value === null || value === undefined || value === '') return null
+    if (value === 'Yes' || value === 'Pass' || value === '1' || value === 1) return 5
+    if (value === '0.5' || value === 0.5 || value === 'Partial') return 3
+    if (value === 'No' || value === 'Fail' || value === 'Error' || value === '0' || value === 0) return 1
+
     const rating = Number(value)
-    return Number.isInteger(rating) && rating >= QUALITY_RATING_MIN && rating <= QUALITY_RATING_MAX
+    return !Number.isNaN(rating) && rating >= QUALITY_RATING_MIN && rating <= QUALITY_RATING_MAX
         ? rating
         : null
 }
@@ -497,7 +501,7 @@ export const getUnansweredQuestions = (sections, responses) => {
     return unanswered
 }
 
-export const getParameterVisualStatus = (parameter, value, observation) => {
+export const getParameterVisualStatus = (parameter, value) => {
     const rating = parseRating(value?.response)
     if (rating === null) return 'pending'
     if (rating >= 4) return 'passed'
@@ -612,6 +616,7 @@ export const emptyObservation = (parameter, sectionTitle, auditReference = '') =
     priority: 'Medium',
     assignTo: '',
     reportTo: '',
+    dueDate: '',
     observationNumber: '',
     auditReference,
     assignedDate: '',
@@ -661,7 +666,7 @@ export const loadExecuteAuditDraft = (auditId) => {
     const sections = loadChecklistSections(audit)
 
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
+        const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
             const parsed = JSON.parse(stored)
             const sameAudit = !auditId || parsed.header?.auditId === auditId || parsed.header?.auditNumber === audit?.auditId
@@ -699,11 +704,17 @@ export const loadExecuteAuditDraft = (auditId) => {
 
 export const saveExecuteAuditDraft = (draft) => {
     const payload = { ...draft, lastSavedAt: new Date().toISOString() }
-    saveCampusJson(STORAGE_KEY, payload)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     return payload
 }
 
 export const getScoreResult = (_responseType, value) => {
+    if (value === null || value === undefined || value === '') return 'na'
+    const str = String(value).trim().toLowerCase()
+    if (str === 'yes' || str === 'pass' || str === '1') return 'pass'
+    if (str === '0.5' || str === 'partial') return 'partial'
+    if (str === 'no' || str === 'fail' || str === 'error' || str === '0') return 'fail'
+
     const rating = parseRating(value)
     if (rating === null) return 'na'
     if (rating >= 4) return 'pass'
@@ -712,8 +723,7 @@ export const getScoreResult = (_responseType, value) => {
 }
 
 export const isNonCompliant = (_responseType, value) => {
-    const rating = parseRating(value)
-    return rating !== null && rating <= 2
+    return getScoreResult(_responseType, value) === 'fail'
 }
 
 export const computeScores = (sections, responses) => {
@@ -807,6 +817,3 @@ export const getSopDetails = (code) =>
         reference: 'Quality Audit SOP Library',
         expectedResult: 'Alignment with institutional quality standards.',
     }
-
-export const hydrateFromApi = (seed = DEFAULT_CHECKLIST_SECTIONS) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

@@ -213,6 +213,64 @@ def test_hr_cannot_raise_and_box_validation(client):
     assert client.get("/api/v1/escalations", headers={}).status_code in (401, 403)
 
 
+def _mine_level(client, headers, esc_id):
+    return next(e for e in client.get("/api/v1/escalations?box=mine", headers=headers).json() if e["id"] == esc_id)["level"]
+
+
+def test_not_satisfied_is_raiser_only_moves_one_level_up_and_stops_at_the_top(client):
+    teacher = _h(client, "teacher")
+    esc = _raise(client, text="Not Satisfied: lamp still flickering").json()
+    url = f"/api/v1/escalations/{esc['id']}/not-satisfied"
+    assert esc["escalatedToRoleKey"] == "coordinator" and esc["level"] == 0
+
+    # access rules: signed-in, may see it, and must be the person who raised it
+    assert client.post(url, headers={}).status_code in (401, 403)
+    assert client.post(url, json={"note": "x"}, headers=_h(client, "coordinator")).status_code == 403  # receiver, not raiser
+    assert client.post(url, json={"note": "x"}, headers=_h(client, "principal")).status_code == 404  # cannot see it yet
+    assert client.post(url, json={"note": "x"}, headers=_h(client, "hr")).status_code in (403, 404)
+    assert client.post("/api/v1/escalations/00000000-0000-4000-8000-000000000000/not-satisfied", headers=teacher).status_code == 404
+    assert _mine_level(client, teacher, esc["id"]) == 0  # refusals changed nothing
+
+    # raiser marks Not Satisfied: next level up, level+1, back to Pending, SLA clock restarted
+    moved = client.post(url, json={"note": "Still broken after the fix"}, headers=teacher)
+    assert moved.status_code == 200, moved.text
+    body = moved.json()
+    assert body["escalatedToRoleKey"] == "principal" and body["level"] == 1 and body["status"] == "Pending"
+    assert body["escalatedToUserId"] is None and not body["overdue"]
+    assert datetime.fromisoformat(body["resolveBy"]) > datetime.fromisoformat(esc["resolveBy"])
+    last = body["trail"][-1]
+    assert last["action"] == "not_satisfied" and last["fromRole"] == "coordinator" and last["toRole"] == "principal"
+    assert last["note"] == "Still broken after the fix" and last["byRole"] == "teacher"
+    assert any(n["title"].startswith("Not Satisfied") for n in _notes(client, "principal"))
+    assert esc["id"] in [e["id"] for e in client.get("/api/v1/escalations?box=received", headers=_h(client, "principal")).json()]
+    # the previous owner keeps read access but still cannot mark it
+    assert client.post(url, headers=_h(client, "coordinator")).status_code == 403
+
+    # the note is optional and gets a default; the chain climbs one role at a time
+    climbed = []
+    for _ in range(3):
+        r = client.post(url, headers=teacher)
+        assert r.status_code == 200, r.text
+        climbed.append((r.json()["escalatedToRoleKey"], r.json()["level"]))
+    assert climbed == [("director", 2), ("admin", 3), ("superadmin", 4)]
+    assert r.json()["trail"][-1]["note"].startswith("Not Satisfied")
+
+    # nothing above the top level: a conflict, and the escalation stays where it was
+    top = client.post(url, headers=teacher)
+    assert top.status_code == 409 and top.json()["detail"]["code"] == "conflict"
+    assert _mine_level(client, teacher, esc["id"]) == 4
+
+
+def test_not_satisfied_is_refused_once_the_escalation_is_closed(client):
+    teacher = _h(client, "teacher")
+    esc = _raise(client, text="Not Satisfied: closed ticket").json()
+    status_url = f"/api/v1/escalations/{esc['id']}/status"
+    assert client.post(status_url, json={"status": "Resolved", "note": "Fixed"}, headers=_h(client, "coordinator")).status_code == 200
+    assert client.post(status_url, json={"status": "Closed"}, headers=teacher).json()["status"] == "Closed"
+    refused = client.post(f"/api/v1/escalations/{esc['id']}/not-satisfied", headers=teacher)
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "conflict"
+
+
 # ------------------------------------------------------------------- tasks
 
 

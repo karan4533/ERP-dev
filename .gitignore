@@ -27,12 +27,23 @@ dist-ssr
 
 # miscellaneous
 /scripts
+scratch/
+output/
+.playwright-mcp/
+.superpowers/
+eslint_src_report.json
+
+# Local probe / PDF-extraction scratch (not for version control)
+probe_snippets.py
+scratch_probe.py
+extracted_*.txt
 
 # Keep project READMEs + manager reports + backend docs; ignore other local notes
 *.md
 !README.md
 !backend/README.md
 !backend/docs/**/*.md
+!docs/**/*.md
 !reports/daily-work-report.md
 !reports/testing-report.md
 !reports/QMIS-ERP-Full-Panel-Test-Guide.md
@@ -78,3 +89,32 @@ erp complete documentation/*.docx.tmp
 
 backend/_audit_results.json
 
+# Local FE junction for static tests / dev — never commit partner UI tree into root repo
+ERP_QMIS/
+
+# Local staging secrets
+.env.staging
+backend/.env.staging
+
+# Local integration workspaces, backups and evidence
+/_integration/
+/_sync_backups/
+
+# Nested repositories (they have their own remotes)
+/school-erp-demo2/
+
+# Local databases and backups
+*.db
+*.db.bak*
+*.sqlite
+*.sqlite3
+
+# Env files of any name (templates still allowed)
+*.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Shell probe output and personal files
+shell-check*.txt
+Timesheet_*.xlsx

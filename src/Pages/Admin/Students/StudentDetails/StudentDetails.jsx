@@ -6,10 +6,6 @@ import mo_user from "../../../../assets/images/no-profile.png"
 import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 
-const EXPORT_ROWS = [
-    {profile: '', admission_number: 'ADM-NO1845', name: 'Sandy Selva', gender: 'Male', email: 'san@gmail.com', mobile_number: '9944076993', date_of_birth: '20-12-1996', country: 'India', state: 'TamilNadu', city: 'Trichy'},
-]
-
 const StudentDetails = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -167,13 +163,7 @@ const StudentDetails = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='student-details'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
         </section>
     )

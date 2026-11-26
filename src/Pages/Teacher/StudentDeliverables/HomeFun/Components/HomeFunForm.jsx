@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, Upload } from 'lucide-react'
-import { useAssignedClassSectionSubject } from '../../../../../Common/Teacher/useAssignedClassSectionSubject'
 import { CLASSES, SECTIONS, SUBJECTS } from '../../../AssignedClass/assignedClassData'
 
 const inputClass =
@@ -24,36 +23,9 @@ const formatDate = (date) => {
 
 const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
     const [assessmentType, setAssessmentType] = useState('')
-    const [className, setClassName] = useState('')
-    const [section, setSection] = useState('')
-    const [subject, setSubject] = useState('')
     const [assignedDate, setAssignedDate] = useState(new Date())
     const [dueDate, setDueDate] = useState(new Date())
     const [attachmentName, setAttachmentName] = useState('')
-
-    const {
-        assignments,
-        classOptions,
-        sectionOptions,
-        subjectOptions,
-        applyClassChange,
-        applySectionChange,
-    } = useAssignedClassSectionSubject({
-        className,
-        section,
-        fallbackClasses: CLASSES,
-        fallbackSections: SECTIONS,
-        fallbackSubjects: SUBJECTS,
-    })
-
-    useEffect(() => {
-        if (!assignments.ready || !assessmentType) return
-        if (className || !classOptions[0]) return
-        const next = applyClassChange(classOptions[0], { section, subject })
-        setClassName(next.className)
-        setSection(next.section)
-        setSubject(next.subject)
-    }, [assignments.ready, assessmentType, classOptions, className, section, subject, applyClassChange])
 
     const isHomework = assessmentType === 'Homework'
     const isAssignment = assessmentType === 'Assignment'
@@ -65,9 +37,9 @@ const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
 
         onSubmit({
             assessmentType: formData.get('assessmentType'),
-            className,
-            section,
-            subject,
+            className: formData.get('className'),
+            section: formData.get('section'),
+            subject: formData.get('subject'),
             assignmentTitle: formData.get('title'),
             assignmentDescription: formData.get('description'),
             totalMarks: isAssignment ? formData.get('totalMarks') : undefined,
@@ -98,69 +70,30 @@ const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
 
                 {assessmentType && (
                     <>
-                        {!assignments.ready ? (
-                            <p className='text-sm text-[#667085] sm:col-span-2 lg:col-span-3'>Loading your assigned classes…</p>
-                        ) : null}
-                        {assignments.emptyReason && assignments.ready ? (
-                            <p className='text-sm text-[#E65100] sm:col-span-2 lg:col-span-3'>{assignments.emptyReason}</p>
-                        ) : null}
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor='class-name' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
-                            <select
-                                id='class-name'
-                                name='className'
-                                required
-                                value={className}
-                                disabled={!classOptions.length}
-                                onChange={(event) => {
-                                    const next = applyClassChange(event.target.value, { section, subject })
-                                    setClassName(next.className)
-                                    setSection(next.section)
-                                    setSubject(next.subject)
-                                }}
-                                className={selectClass}
-                            >
-                                <option value=''>{classOptions.length ? '--Select--' : 'No assigned classes'}</option>
-                                {classOptions.map((item) => (
+                            <select id='class-name' name='className' required className={selectClass}>
+                                <option value=''>--Select--</option>
+                                {CLASSES.map((item) => (
                                     <option key={item} value={item}>{item}</option>
                                 ))}
                             </select>
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor='section' className='text-base font-medium text-[#1E1E1E]'>Section:</label>
-                            <select
-                                id='section'
-                                name='section'
-                                required
-                                value={section}
-                                disabled={!sectionOptions.length}
-                                onChange={(event) => {
-                                    const next = applySectionChange(event.target.value, { className, subject })
-                                    setSection(next.section)
-                                    setSubject(next.subject)
-                                }}
-                                className={selectClass}
-                            >
-                                <option value=''>{sectionOptions.length ? '--Select--' : 'Select class first'}</option>
-                                {sectionOptions.map((item) => (
+                            <select id='section' name='section' required className={selectClass}>
+                                <option value=''>--Select--</option>
+                                {SECTIONS.map((item) => (
                                     <option key={item} value={item}>{item}</option>
                                 ))}
                             </select>
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor='subject' className='text-base font-medium text-[#1E1E1E]'>Subject:</label>
-                            <select
-                                id='subject'
-                                name='subject'
-                                required
-                                value={subject}
-                                disabled={!subjectOptions.length}
-                                onChange={(event) => setSubject(event.target.value)}
-                                className={selectClass}
-                            >
-                                <option value=''>{subjectOptions.length ? '--Select--' : 'No assigned subjects'}</option>
-                                {subjectOptions.map((item) => (
-                                    <option key={item} value={item}>{item}</option>
+                            <select id='subject' name='subject' required className={selectClass}>
+                                <option value=''>--Select--</option>
+                                {SUBJECTS.map((subject) => (
+                                    <option key={subject} value={subject}>{subject}</option>
                                 ))}
                             </select>
                         </div>

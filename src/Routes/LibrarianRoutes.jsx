@@ -1,10 +1,13 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
 import { Navigate, Route, Routes as ReactRoutes } from 'react-router-dom'
-import BookList from '../Pages/Librarian/BookManagement/BookList/BookList'
+// Unified Library Workspace replaces separate legacy list views
 import AddBooks from '../Pages/Librarian/BookManagement/BookList/AddBooks'
-import IssuedBooks from '../Pages/Librarian/IssuedBooks/IssuedBooks'
+// import IssuedBooks from '../Pages/Librarian/IssuedBooks/IssuedBooks'
 import AddIssueBook from '../Pages/Librarian/IssuedBooks/AddIssueBook'
 import MembersList from '../Pages/Librarian/Members/MembersList'
+import BookRequestsList from '../Pages/Librarian/BookRequests/BookRequestsList'
 import ReminderList from '../Pages/Librarian/Notification/ReminderList'
 import EscalationList from '../Pages/Librarian/EscalationManagement/EscalationList'
 import AddEscalation from '../Pages/Librarian/EscalationManagement/AddEscalation'
@@ -16,24 +19,29 @@ import AnnouncementList from '../Pages/Librarian/Announcement/AnnouncementList'
 import ViewAnnouncement from '../Pages/Librarian/Announcement/ViewAnnouncement'
 import MyAttendance from '../Pages/Librarian/Attendance/MyAttendance'
 import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
+import Dashboard from '../Pages/Librarian/Dashboard/Dashboard'
+import LibraryManagementWorkspace from '../Pages/Librarian/LibraryManagementWorkspace'
 
 const LibrarianRoutes = () => {
     return (
         <ReactRoutes>
-            <Route path="/librarian/dashboard" element={<div>Librarian Dashboard</div>} />
+            <Route path="/librarian/dashboard" element={<Dashboard />} />
 
             {/* Book Management */}
-            <Route path="/librarian/book-management/book-list" element={<BookList />} />
+            <Route path="/librarian/library-workspace" element={<LibraryManagementWorkspace />} />
+            <Route path="/librarian/book-management" element={<LibraryManagementWorkspace defaultTab="catalog" />} />
+            <Route path="/librarian/book-management/book-list" element={<LibraryManagementWorkspace defaultTab="catalog" />} />
             <Route path="/librarian/book-management/add-book" element={<AddBooks />} />
-            <Route path="/librarian/book-management/add-books" element={<AddBooks />} />
 
             {/* Issued Books */}
-            <Route path="/librarian/issued-books/issued-book-list" element={<IssuedBooks />} />
+            <Route path="/librarian/book-issue" element={<LibraryManagementWorkspace defaultTab="circulation" />} />
+            <Route path="/librarian/issued-books" element={<LibraryManagementWorkspace defaultTab="circulation" />} />
+            <Route path="/librarian/issued-books/issued-book-list" element={<LibraryManagementWorkspace defaultTab="circulation" />} />
             <Route path="/librarian/issued-books/add-issued-book" element={<AddIssueBook />} />
-            <Route path="/librarian/issued-books/add-issue-book" element={<AddIssueBook />} />
 
             {/* Members */}
             <Route path="/librarian/members/member-list" element={<MembersList />} />
+            <Route path="/librarian/book-requests" element={<BookRequestsList />} />
 
             {/* Notification */}
             <Route path="/librarian/notifications" element={<ReminderList />} />
@@ -48,7 +56,8 @@ const LibrarianRoutes = () => {
 
             {/* Attendance */}
             <Route path="/librarian/attendance" element={<Navigate to="/librarian/attendance/my-attendance" replace />} />
-            <Route path="/librarian/attendance/my-attendance" element={<MyAttendance />} />
+            <Route path="/librarian/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            <Route path="/librarian/attendance/my-attendance" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
 
             {/* Communication */}
             <Route path="/librarian/communication" element={<Navigate to="/librarian/communication/inbox" replace />} />
@@ -64,7 +73,10 @@ const LibrarianRoutes = () => {
             <Route path="/librarian/escalation-management/add-escalation" element={<AddEscalation />} />
             <Route path="/librarian/escalation-management/view/:id" element={<ViewEscalation />} />
 
-            <Route path="*" element={<div>Librarian Dashboard</div>} />
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/librarian', role: 'librarian' })}
+
+            <Route path="*" element={<Navigate to="/librarian/dashboard" replace />} />
         </ReactRoutes>
     )
 }

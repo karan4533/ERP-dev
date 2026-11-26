@@ -1,15 +1,7 @@
+import { SUBMISSIONS_LIST } from '../../Teacher/StudentDeliverables/HomeFun/homeFunSubmissionsData'
 import { CURRENT_STUDENT_ID } from './studentDeliverablesConfig'
 
 const STORAGE_KEY = 'student-home-fun-submissions'
-export const HOME_FUN_SUBMISSIONS_UPDATED_EVENT = 'schoolerp-home-fun-submissions-updated'
-
-const emitSubmissionsUpdated = () => {
-    try {
-        window.dispatchEvent(new CustomEvent(HOME_FUN_SUBMISSIONS_UPDATED_EVENT))
-    } catch {
-        /* ignore */
-    }
-}
 
 const parseDueDate = (value) => {
     if (!value) return null
@@ -42,7 +34,27 @@ export const getStoredSubmissions = () => {
 
 const saveStoredSubmissions = (items) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-    emitSubmissionsUpdated()
+}
+
+const findInMockData = (assignmentId, assignmentTitle, studentId) => {
+    const matched = SUBMISSIONS_LIST.find(
+        (item) => item.assignmentId === assignmentId || item.assignmentTitle === assignmentTitle,
+    )
+    if (!matched) return null
+
+    const submitted = matched.studentDetails.submitted.find((entry) => entry.id === studentId)
+    if (!submitted) return null
+
+    return {
+        studentId,
+        assignmentId: matched.assignmentId,
+        assignmentTitle: matched.assignmentTitle,
+        submittedAt: submitted.submittedAt,
+        isLate: submitted.isLate ?? false,
+        fileName: submitted.submission?.fileName ?? '',
+        fileSize: submitted.submission?.fileSize ?? '',
+        additionalNote: submitted.submission?.additionalNote ?? '',
+    }
 }
 
 export const getStudentSubmission = (
@@ -50,9 +62,11 @@ export const getStudentSubmission = (
     assignmentTitle,
     studentId = CURRENT_STUDENT_ID,
 ) => {
-    return getStoredSubmissions().find(
+    const stored = getStoredSubmissions().find(
         (entry) => entry.assignmentId === assignmentId && entry.studentId === studentId,
-    ) || null
+    )
+    if (stored) return stored
+    return findInMockData(assignmentId, assignmentTitle, studentId)
 }
 
 export const getStudentSubmissionStatus = (record, studentId = CURRENT_STUDENT_ID) => {
@@ -62,23 +76,14 @@ export const getStudentSubmissionStatus = (record, studentId = CURRENT_STUDENT_I
 }
 
 export const saveStudentSubmission = (
-    {
-        assignmentId,
-        assignmentTitle,
-        fileName,
-        fileSize,
-        additionalNote,
-        dueDate,
-        studentName = '',
-    },
+    { assignmentId, assignmentTitle, fileName, fileSize, additionalNote, dueDate },
     studentId = CURRENT_STUDENT_ID,
 ) => {
     const due = parseDueDate(dueDate)
     const isLate = due ? new Date() > due : false
 
     const submission = {
-        studentId: String(studentId || ''),
-        studentName: String(studentName || '').trim(),
+        studentId,
         assignmentId,
         assignmentTitle,
         submittedAt: formatSubmittedAt(),

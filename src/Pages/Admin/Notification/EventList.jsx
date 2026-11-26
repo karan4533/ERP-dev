@@ -8,10 +8,6 @@ import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 
-const EXPORT_ROWS = [
-    {event_name: 'Classical Dance', event_type: 'Annual Day', class: 'All Students', event_date: '15-08-2025', start_time: '09:00 AM', end_time: '12:00 PM', venue: 'School Auditorium', coordinator: 'Ms. Priya'},
-]
-
 const EventList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -174,13 +170,7 @@ const EventList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='event-list'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
 

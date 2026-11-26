@@ -12,6 +12,8 @@ import {
     statusBadgeColor,
     updateAdminUser,
 } from './adminUsersData'
+import { ConfirmAction, IntegrationNotice } from '../../../Common/ui'
+import { summarizePermissionChanges } from '../../../Common/ui/governance'
 
 const Field = ({ label, value }) => (
     <div className='flex flex-col gap-y-1'>
@@ -31,6 +33,7 @@ const ViewAdminUser = () => {
     }))
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
+    const [confirmOpen, setConfirmOpen] = useState(false)
 
     const togglePermission = (key) => {
         setForm((prev) => ({
@@ -67,6 +70,7 @@ const ViewAdminUser = () => {
 
         setUser(result.user)
         setIsEditing(false)
+        setConfirmOpen(false)
         setMessage('Administrator permissions updated successfully.')
         setError('')
     }
@@ -90,6 +94,12 @@ const ViewAdminUser = () => {
     }
 
     const permissionLabels = getPermissionLabels(isEditing ? form.permissions : user.permissions)
+    const permissionChanges = summarizePermissionChanges(
+        user.permissions,
+        form.permissions,
+        ADMIN_PERMISSION_MODULES,
+    )
+    const statusChanged = form.status !== user.status
 
     return (
         <section className='space-y-6'>
@@ -163,6 +173,12 @@ const ViewAdminUser = () => {
 
                 {isEditing ? (
                     <>
+                        <IntegrationNotice
+                            state='demo'
+                            title='Local permission preview'
+                            description='This prototype updates the current browser session only. The production RBAC API must enforce the same permissions on every protected endpoint.'
+                            className='mb-5'
+                        />
                         <div className='mb-6 max-w-xs'>
                             <label htmlFor='status' className='text-sm font-medium text-[#808080] block mb-2'>Status</label>
                             <select
@@ -181,6 +197,20 @@ const ViewAdminUser = () => {
                             onToggle={togglePermission}
                             onToggleAll={toggleAllPermissions}
                         />
+                        <div className='mt-5 grid gap-3 sm:grid-cols-2' aria-live='polite'>
+                            <div className='rounded-xl border border-[#4CAF5033] bg-[#4CAF500D] p-3'>
+                                <p className='text-sm font-semibold text-[#257A29]'>Access to grant</p>
+                                <p className='mt-1 text-sm text-[#667085]'>
+                                    {permissionChanges.granted.length ? permissionChanges.granted.join(', ') : 'No new module access.'}
+                                </p>
+                            </div>
+                            <div className='rounded-xl border border-[#F4433633] bg-[#F443360D] p-3'>
+                                <p className='text-sm font-semibold text-[#B42318]'>Access to remove</p>
+                                <p className='mt-1 text-sm text-[#667085]'>
+                                    {permissionChanges.revoked.length ? permissionChanges.revoked.join(', ') : 'No module access removed.'}
+                                </p>
+                            </div>
+                        </div>
                     </>
                 ) : (
                     <div className='flex flex-wrap gap-2'>
@@ -216,7 +246,8 @@ const ViewAdminUser = () => {
                 <div className='flex sm:justify-end justify-center'>
                     <button
                         type='button'
-                        onClick={handleSave}
+                        onClick={() => setConfirmOpen(true)}
+                        disabled={!permissionChanges.changedCount && !statusChanged}
                         className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2'
                     >
                         <Save size={16} />
@@ -224,6 +255,23 @@ const ViewAdminUser = () => {
                     </button>
                 </div>
             )}
+
+            <ConfirmAction
+                open={confirmOpen}
+                onClose={() => setConfirmOpen(false)}
+                onConfirm={handleSave}
+                title='Apply access changes?'
+                description='These changes alter what this administrator can see and operate.'
+                confirmLabel='Apply changes'
+                tone={permissionChanges.revoked.length || form.status === 'Inactive' ? 'danger' : 'primary'}
+            >
+                <div className='space-y-2'>
+                    <p><strong>{permissionChanges.granted.length}</strong> module(s) granted and <strong>{permissionChanges.revoked.length}</strong> revoked.</p>
+                    {statusChanged && <p>Account status will change from <strong>{user.status}</strong> to <strong>{form.status}</strong>.</p>}
+                    {form.status === 'Inactive' && <p>The user will be blocked at the next sign-in check.</p>}
+                    <p>Dashboard access remains enabled. Backend authorization must independently enforce every module permission.</p>
+                </div>
+            </ConfirmAction>
         </section>
     )
 }

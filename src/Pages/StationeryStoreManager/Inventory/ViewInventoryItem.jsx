@@ -1,93 +1,56 @@
-import React from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { getInventoryItemById, statusBadgeColor } from './inventoryData'
-
-const Section = ({ title, children }) => (
-    <div className='bg-white rounded-2xl shadow-md p-4'>
-        <h2 className='text-xl font-semibold text-black mb-6'>{title}</h2>
-        {children}
-    </div>
-)
-
-const Field = ({ label, value }) => (
-    <div className='flex flex-col gap-y-1'>
-        <span className='text-base font-medium text-[#808080]'>{label}</span>
-        <span className='text-sm text-[#1E1E1E] whitespace-pre-wrap wrap-break-word'>{value}</span>
-    </div>
-)
+import { useParams } from 'react-router-dom'
+import OperationsInventoryDetail from '../../../Common/operations/OperationsInventoryDetail'
+import { getInventoryItemById } from './inventoryData'
+import { getInventoryCatalog } from '../../../Common/StoresProcurement/storesProcurementData'
 
 const ViewInventoryItem = () => {
-    const navigate = useNavigate()
     const { id } = useParams()
-    const item = getInventoryItemById(id)
+    let source = getInventoryItemById(id)
+    if (!source) {
+        try {
+            const catalog = getInventoryCatalog()
+            const found = catalog.find((c) => c.itemCode === id || c.id === id)
+            if (found) {
+                source = {
+                    itemId: found.itemCode || found.id,
+                    itemName: found.itemName,
+                    itemCode: found.itemCode || found.id,
+                    category: found.category,
+                    description: found.description || found.itemName,
+                    availableQuantity: found.currentStock ?? found.quantity,
+                    reorderLevel: found.minimumStock ?? 10,
+                    unit: found.unitOfMeasure || 'Pieces',
+                    unitCost: `₹${found.unitPrice || 0}`,
+                    stockValue: `₹${(found.currentStock || 0) * (found.unitPrice || 0)}`,
+                    supplier: found.supplierName || 'Empanelled Vendor',
+                    supplierContact: '+91 98401 23456',
+                    purchaseDate: new Date().toLocaleDateString('en-GB'),
+                    invoiceNumber: 'INV-CAT-DIRECT',
+                }
+            }
+        } catch (e) {
+            console.warn('Error resolving inventory catalog fallback:', e)
+        }
+    }
 
-    return (
-        <section className='space-y-6'>
-            <div className='flex flex-wrap items-center gap-3'>
-                <button type='button' onClick={() => navigate('/stationery-store-manager/inventory')} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
-                    <ArrowLeft size={18} />
-                    Back to list
-                </button>
-            </div>
+    const item = source && {
+        id: source.itemId,
+        name: source.itemName,
+        code: source.itemCode,
+        category: source.category,
+        description: source.description,
+        availableQuantity: source.availableQuantity,
+        reorderLevel: source.reorderLevel,
+        unit: source.unit,
+        unitCost: source.unitCost,
+        stockValue: source.stockValue,
+        supplier: source.supplier,
+        supplierContact: source.supplierContact,
+        purchaseDate: source.purchaseDate,
+        invoiceNumber: source.invoiceNumber,
+    }
 
-            {!item ? (
-                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                    Inventory item not found or could not be loaded.
-                </div>
-            ) : (
-                <>
-                    <div className='bg-white rounded-2xl shadow-md p-4'>
-                        <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
-                            <div>
-                                <h1 className='text-2xl font-semibold text-black'>{item.itemName}</h1>
-                                <p className='text-sm text-[#667085] mt-1'>{item.itemId} · {item.category}</p>
-                            </div>
-                            <span className={`px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap w-fit ${statusBadgeColor[item.status]}`}>
-                                {item.status}
-                            </span>
-                        </div>
-                    </div>
-
-                    <Section title='Item Information'>
-                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                            <Field label='Item ID' value={item.itemId} />
-                            <Field label='Item Name' value={item.itemName} />
-                            <Field label='Item Code' value={item.itemCode} />
-                            <Field label='Category' value={item.category} />
-                            <div className='lg:col-span-3'>
-                                <Field label='Description' value={item.description} />
-                            </div>
-                        </div>
-                    </Section>
-
-                    <Section title='Stock Information'>
-                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'>
-                            <Field label='Available Quantity' value={item.availableQuantity} />
-                            <Field label='Unit' value={item.unit} />
-                            <Field label='Reorder Level' value={item.reorderLevel} />
-                            <Field label='Unit Cost' value={item.unitCost} />
-                            <Field label='Stock Value' value={item.stockValue} />
-                        </div>
-                    </Section>
-
-                    <Section title='Supplier Information'>
-                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                            <Field label='Supplier Name' value={item.supplier} />
-                            <Field label='Supplier Contact' value={item.supplierContact} />
-                        </div>
-                    </Section>
-
-                    <Section title='Purchase Information'>
-                        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                            <Field label='Purchase Date' value={item.purchaseDate} />
-                            <Field label='Invoice Number' value={item.invoiceNumber} />
-                        </div>
-                    </Section>
-                </>
-            )}
-        </section>
-    )
+    return <OperationsInventoryDetail item={item} backPath='/stationery-store-manager/inventory' itemLabel='Item' showCost />
 }
 
 export default ViewInventoryItem

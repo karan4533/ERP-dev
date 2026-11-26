@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import MaterialGatePassForm, {
     createInitialFormData,
     validateMaterialGatePassForm,
@@ -11,23 +10,14 @@ const AddMaterialGatePass = () => {
     const navigate = useNavigate()
     const [formData, setFormData] = useState(createInitialFormData)
     const [errors, setErrors] = useState({})
-    const [saving, setSaving] = useState(false)
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         const validationErrors = validateMaterialGatePassForm(formData)
         setErrors(validationErrors)
         if (Object.keys(validationErrors).length > 0) return
 
-        setSaving(true)
-        try {
-            await addMaterialGatePass(formData)
-            toast.success('Material gate pass saved successfully.')
-            navigate('/front-office/material-gate-pass-list')
-        } catch (error) {
-            toast.error(error?.message || 'Could not save material gate pass.')
-        } finally {
-            setSaving(false)
-        }
+        addMaterialGatePass(formData)
+        navigate('/front-office/material-gate-pass-list')
     }
 
     return (
@@ -49,11 +39,10 @@ const AddMaterialGatePass = () => {
                 </button>
                 <button
                     type='button'
-                    disabled={saving}
                     onClick={handleSubmit}
-                    className='bg-[#515DEF] text-white text-sm px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'
+                    className='bg-[#515DEF] text-white text-sm px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
-                    {saving ? 'Saving…' : 'Save Gate Pass'}
+                    Save Gate Pass
                 </button>
             </div>
         </section>

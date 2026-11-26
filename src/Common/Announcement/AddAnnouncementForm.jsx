@@ -1,187 +1,167 @@
-import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar } from 'lucide-react'
-import { toast } from 'react-toastify'
-import DocumentFileUpload from '../../Pages/Admin/Documents/EmployeeDocuments/Components/DocumentFileUpload'
+import { useMemo, useState } from 'react'
+import { ClipboardCheck, Save, Send } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
-    addAnnouncement,
-    addAnnouncementViaApi,
-    canCreateAnnouncements,
-    CATEGORY_OPTIONS,
-    usesAnnouncementsApi,
-} from './announcementData'
+    Dialog,
+    FileDropzone,
+    FormField,
+    IntegrationNotice,
+    PageHeader,
+    Surface,
+    UnavailableWorkflowPage,
+} from '../ui'
+import { addAnnouncement, canCreateAnnouncements, CATEGORY_OPTIONS } from './announcementData'
 import { getAnnouncementRoutes } from './announcementConfigs'
+import {
+    ANNOUNCEMENT_AUDIENCE_GROUPS,
+    createEmptyAnnouncementDraft,
+    getAnnouncementReadiness,
+    resolveAnnouncementAudience,
+    validateAnnouncementDraft,
+} from './announcementComposerState.js'
 
-const inputClass = 'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
-const readOnlyInputClass = `${inputClass} bg-[#F9F9F9] cursor-not-allowed`
+const controlClass = 'min-h-11 w-full rounded-lg border border-[var(--erp-line)] bg-white px-3 py-2.5 text-sm text-[var(--erp-ink)] outline-none transition focus:border-[var(--erp-primary)] focus:ring-2 focus:ring-[color:var(--erp-primary-soft)]'
+
+const today = () => {
+    const date = new Date()
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+const loadDraft = (storageKey, emptyDraft) => {
+    try {
+        const stored = window.localStorage.getItem(storageKey)
+        if (!stored) return { draft: emptyDraft, message: '' }
+        return { draft: { ...emptyDraft, ...JSON.parse(stored) }, message: 'A browser announcement draft was restored.' }
+    } catch {
+        return { draft: emptyDraft, message: 'The previous announcement draft could not be restored.' }
+    }
+}
+
+const ReviewField = ({ label, value }) => (
+    <div className='rounded-lg border border-[var(--erp-line)] bg-[var(--erp-canvas)] p-3'>
+        <dt className='text-xs font-medium text-[var(--erp-muted)]'>{label}</dt>
+        <dd className='mt-1 break-words text-sm font-semibold text-[var(--erp-ink)]'>{value === false ? 'No' : value || 'Not provided'}</dd>
+    </div>
+)
 
 export default function AddAnnouncementForm({ roleKey }) {
     const navigate = useNavigate()
     const routes = getAnnouncementRoutes(roleKey)
     const sentBy = routes.sentByDefault || ''
-    const [title, setTitle] = useState('')
-    const [category, setCategory] = useState('')
-    const [message, setMessage] = useState('')
-    const [announcementDate, setAnnouncementDate] = useState(new Date())
-    const [attachmentName, setAttachmentName] = useState('')
-    const [attachmentFile, setAttachmentFile] = useState(null)
-    const [saving, setSaving] = useState(false)
+    const storageKey = `schoolerp:announcement-draft:${roleKey}`
+    const emptyDraft = useMemo(() => createEmptyAnnouncementDraft({ sentBy, announcementDate: today() }), [sentBy])
+    const [initialState] = useState(() => loadDraft(storageKey, emptyDraft))
+    const [draft, setDraft] = useState(initialState.draft)
+    const [errors, setErrors] = useState({})
+    const [message, setMessage] = useState(initialState.message)
+    const [reviewOpen, setReviewOpen] = useState(false)
 
     if (!canCreateAnnouncements(roleKey)) {
-        return <Navigate to={routes.list} replace />
+        return <UnavailableWorkflowPage title='Announcement publishing is restricted' description='Your role can read announcements but cannot publish to the school audience.' alternateHref={routes.list} alternateLabel='Open announcements' />
     }
 
-    const handleSave = async () => {
-        if (saving) return
-        if (!title.trim()) {
-            toast.error('Announcement title is required.')
-            return
-        }
-        if (!category) {
-            toast.error('Please select an announcement category.')
-            return
-        }
-        if (!message.trim()) {
-            toast.error('Announcement message is required.')
-            return
-        }
+    const readiness = getAnnouncementReadiness(draft)
+    const audienceGroup = ANNOUNCEMENT_AUDIENCE_GROUPS.find((group) => group.id === draft.audienceGroup)
 
-        if (usesAnnouncementsApi(roleKey)) {
-            setSaving(true)
-            try {
-                await addAnnouncementViaApi({
-                    title,
-                    category,
-                    message,
-                    announcementDate,
-                    file: attachmentFile,
-                })
-            } catch (error) {
-                toast.error(
-                    error?.status === 403
-                        ? 'You do not have permission to send announcements.'
-                        : error?.message || 'The announcement could not be saved. Please try again.',
-                )
-                setSaving(false)
-                return
-            }
-            setSaving(false)
-            toast.success('Announcement created successfully.')
-            navigate(routes.list)
+    const updateField = (field, value) => {
+        setDraft((current) => ({ ...current, [field]: value }))
+        setErrors((current) => {
+            if (!current[field]) return current
+            const next = { ...current }
+            delete next[field]
+            return next
+        })
+        setMessage('')
+    }
+
+    const saveDraft = () => {
+        try {
+            window.localStorage.setItem(storageKey, JSON.stringify(draft))
+            setMessage('Draft saved in this browser. Nothing has been published or delivered.')
+        } catch {
+            setMessage('This browser could not save the draft. Copy important information before leaving.')
+        }
+    }
+
+    const reviewAnnouncement = (event) => {
+        event.preventDefault()
+        const nextErrors = validateAnnouncementDraft(draft)
+        setErrors(nextErrors)
+        if (Object.keys(nextErrors).length) {
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => document.querySelector('[aria-invalid="true"]')?.focus())
+            })
             return
         }
+        setReviewOpen(true)
+    }
 
-        addAnnouncement(
-            {
-                title,
-                category,
-                message,
-                sentBy,
-                announcementDate,
-                attachmentName,
-            },
-            roleKey,
-        )
-
-        toast.success('Announcement created successfully.')
+    const publishLocalDemo = () => {
+        addAnnouncement({
+            ...draft,
+            audience: resolveAnnouncementAudience(draft.audienceGroup),
+            audienceLabel: audienceGroup?.label || '',
+        }, roleKey)
+        try {
+            window.localStorage.removeItem(storageKey)
+        } catch {
+            /* Browser draft cleanup is best effort. */
+        }
         navigate(routes.list)
     }
 
     return (
-        <section>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <h2 className='text-xl font-semibold text-black'>Add Announcement Information</h2>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:mt-8 mt-2'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='announcement-title' className='text-base font-medium text-[#1E1E1E]'>Announcement Title:</label>
-                        <input
-                            type='text'
-                            id='announcement-title'
-                            value={title}
-                            onChange={(event) => setTitle(event.target.value)}
-                            className={inputClass}
-                        />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='announcement-category' className='text-base font-medium text-[#1E1E1E]'>Announcement Category:</label>
-                        <select
-                            id='announcement-category'
-                            value={category}
-                            onChange={(event) => setCategory(event.target.value)}
-                            className={inputClass}
-                        >
-                            <option value=''>Select Category</option>
-                            {CATEGORY_OPTIONS.map((cat) => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2 lg:col-span-3'>
-                        <label htmlFor='announcement-message' className='text-base font-medium text-[#1E1E1E]'>Announcement Message:</label>
-                        <textarea
-                            id='announcement-message'
-                            rows={3}
-                            value={message}
-                            onChange={(event) => setMessage(event.target.value)}
-                            className={inputClass}
-                        />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='sent-by' className='text-base font-medium text-[#1E1E1E]'>Sent By:</label>
-                        <input
-                            type='text'
-                            id='sent-by'
-                            value={sentBy}
-                            readOnly
-                            disabled
-                            className={readOnlyInputClass}
-                        />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='announcement-date' className='text-base font-medium text-[#1E1E1E]'>Announcement Date:</label>
-                        <div className='relative'>
-                            <DatePicker
-                                id='announcement-date'
-                                selected={announcementDate}
-                                onChange={(date) => setAnnouncementDate(date || new Date())}
-                                dateFormat='dd/MM/yyyy'
-                                isClearable
-                                className='w-full text-sm text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-3 py-3 pr-10 focus:outline-none'
-                            />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                    <div className='col-span-full flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#1E1E1E]'>Upload Attachment:</label>
-                        <DocumentFileUpload
-                            fileName={attachmentName}
-                            onChange={(name, file) => {
-                                setAttachmentName(name)
-                                setAttachmentFile(file || null)
-                            }}
-                        />
-                    </div>
-                </div>
-            </div>
+        <section className='space-y-5'>
+            <PageHeader title='Compose announcement' description='Define the intended audience, publication context and acknowledgement policy before review.' status={readiness} actions={<Link to={routes.list} className='inline-flex min-h-10 items-center rounded-lg border border-[var(--erp-line)] bg-white px-3 text-sm font-semibold text-[var(--erp-primary)] hover:bg-[var(--erp-primary-soft)]'>Back to announcements</Link>} />
+            <IntegrationNotice state='demo' title='Browser publication only' description='Saving the reviewed notice adds it to this browser’s demonstration register. Files, recipient delivery, push/email/SMS notifications, read receipts and audit evidence require the communication backend.' />
+            {message && <p role='status' className='rounded-lg border border-[var(--erp-line)] bg-white px-4 py-3 text-sm text-[var(--erp-slate)]'>{message}</p>}
 
-            <div className='flex sm:justify-end justify-center gap-x-4 mt-6'>
-                <button
-                    type='button'
-                    onClick={() => navigate(routes.list)}
-                    className='bg-white text-[#515DEF] text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-all duration-200 cursor-pointer md:w-auto w-full'
-                >
-                    Discard Changes
-                </button>
-                <button
-                    type='button'
-                    onClick={handleSave}
-                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
-                >
-                    Save Changes
-                </button>
-            </div>
+            <form className='space-y-5' onSubmit={reviewAnnouncement} noValidate>
+                <Surface className='space-y-5 p-4 sm:p-6'>
+                    <div><h2 className='text-base font-semibold text-[var(--erp-ink)]'>Notice content</h2><p className='mt-1 text-sm text-[var(--erp-muted)]'>Write a concise title and enough context for recipients to act.</p></div>
+                    <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+                        <FormField label='Announcement title' error={errors.title} required className='md:col-span-2'><input className={controlClass} value={draft.title} onChange={(event) => updateField('title', event.target.value)} placeholder='e.g. Water interruption in Block B' /></FormField>
+                        <FormField label='Category' error={errors.category} required><select className={controlClass} value={draft.category} onChange={(event) => updateField('category', event.target.value)}><option value=''>Select category</option>{CATEGORY_OPTIONS.map((category) => <option key={category} value={category}>{category}</option>)}</select></FormField>
+                        <FormField label='Message' error={errors.message} hint='Include timing, location, impact and the action recipients should take.' required className='md:col-span-2 xl:col-span-3'><textarea rows='5' className={`${controlClass} min-h-32 resize-y`} value={draft.message} onChange={(event) => updateField('message', event.target.value)} placeholder='Explain what is changing and what recipients should do.' /></FormField>
+                    </div>
+                </Surface>
+
+                <Surface className='space-y-5 p-4 sm:p-6'>
+                    <div><h2 className='text-base font-semibold text-[var(--erp-ink)]'>Publication controls</h2><p className='mt-1 text-sm text-[var(--erp-muted)]'>Make the audience explicit; no hidden global broadcast is assumed.</p></div>
+                    <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+                        <FormField label='Publication date' error={errors.announcementDate} required><input type='date' className={controlClass} value={draft.announcementDate} onChange={(event) => updateField('announcementDate', event.target.value)} /></FormField>
+                        <FormField label='Priority'><select className={controlClass} value={draft.priority} onChange={(event) => updateField('priority', event.target.value)}><option value='Normal'>Normal</option><option value='Important'>Important</option><option value='Urgent'>Urgent</option></select></FormField>
+                        <ReviewField label='Publisher identity' value={sentBy} />
+                    </div>
+                    <fieldset aria-describedby={errors.audienceGroup ? 'announcement-audience-error' : undefined} className='space-y-3'>
+                        <legend className='text-sm font-medium text-[var(--erp-ink)]'>Intended audience <span className='text-[var(--erp-red)]' aria-hidden='true'>*</span></legend>
+                        <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+                            {ANNOUNCEMENT_AUDIENCE_GROUPS.map((group) => <label key={group.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${draft.audienceGroup === group.id ? 'border-[var(--erp-primary)] bg-[var(--erp-primary-soft)]' : 'border-[var(--erp-line)] bg-white'}`}><input type='radio' name='announcement-audience' value={group.id} checked={draft.audienceGroup === group.id} onChange={() => updateField('audienceGroup', group.id)} className='mt-1 accent-[var(--erp-primary)]' /><span><span className='block text-sm font-semibold text-[var(--erp-ink)]'>{group.label}</span><span className='mt-1 block text-sm text-[var(--erp-slate)]'>{group.description}</span></span></label>)}
+                        </div>
+                        {errors.audienceGroup && <p id='announcement-audience-error' role='alert' className='text-xs font-medium text-[var(--erp-red)]'>{errors.audienceGroup}</p>}
+                    </fieldset>
+                    <label className='flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--erp-line)] bg-[var(--erp-canvas)] p-4'><input type='checkbox' checked={draft.requireAcknowledgement} onChange={(event) => updateField('requireAcknowledgement', event.target.checked)} className='mt-1 accent-[var(--erp-primary)]' /><span><span className='block text-sm font-semibold text-[var(--erp-ink)]'>Request acknowledgement</span><span className='mt-1 block text-sm text-[var(--erp-slate)]'>The frontend will show an acknowledgement control. Authoritative receipts still require the backend.</span></span></label>
+                </Surface>
+
+                <Surface className='space-y-4 p-4 sm:p-6'>
+                    <div><h2 className='text-base font-semibold text-[var(--erp-ink)]'>Attachment metadata</h2><p className='mt-1 text-sm text-[var(--erp-muted)]'>Only the filename is retained for this demonstration; the file is not uploaded.</p></div>
+                    <FileDropzone value={draft.attachmentName} onChange={(value) => updateField('attachmentName', value)} valueMode='name' label='Attach notice evidence' acceptDocuments />
+                </Surface>
+
+                <div className='sticky bottom-3 z-10 flex flex-col-reverse gap-2 rounded-xl border border-[var(--erp-line)] bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:justify-end'>
+                    <Link to={routes.list} className='inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--erp-line)] px-4 text-sm font-semibold text-[var(--erp-slate)] hover:bg-[var(--erp-canvas)]'>Cancel</Link>
+                    <button type='button' onClick={saveDraft} className='inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--erp-primary)] px-4 text-sm font-semibold text-[var(--erp-primary)] hover:bg-[var(--erp-primary-soft)]'><Save aria-hidden='true' size={17} /> Save browser draft</button>
+                    <button type='submit' className='inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--erp-primary)] px-4 text-sm font-semibold text-white hover:opacity-90'><ClipboardCheck aria-hidden='true' size={17} /> Review announcement</button>
+                </div>
+            </form>
+
+            <Dialog open={reviewOpen} onClose={() => setReviewOpen(false)} title='Review announcement' description='Confirm content, audience and acknowledgement policy before adding this notice to the browser demo register.' size='lg' footer={<><button type='button' onClick={() => setReviewOpen(false)} className='min-h-10 rounded-lg border border-[var(--erp-line)] px-4 text-sm font-semibold text-[var(--erp-slate)]'>Return to form</button><button type='button' onClick={publishLocalDemo} className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-primary)] px-4 text-sm font-semibold text-white'><Send aria-hidden='true' size={16} /> Add to browser demo</button></>}>
+                <IntegrationNotice state='demo' title='No recipient delivery' description='This action updates only the browser demonstration register. It does not send the notice or create authoritative delivery receipts.' />
+                <dl className='mt-4 grid gap-3 sm:grid-cols-2'><ReviewField label='Title' value={draft.title} /><ReviewField label='Category' value={draft.category} /><ReviewField label='Audience' value={`${audienceGroup?.label} · ${resolveAnnouncementAudience(draft.audienceGroup).length} role portals`} /><ReviewField label='Priority' value={draft.priority} /><ReviewField label='Publication date' value={draft.announcementDate} /><ReviewField label='Acknowledgement requested' value={draft.requireAcknowledgement ? 'Yes' : 'No'} /><ReviewField label='Message' value={draft.message} /><ReviewField label='Attachment' value={draft.attachmentName || 'No attachment'} /></dl>
+            </Dialog>
         </section>
     )
 }

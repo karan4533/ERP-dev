@@ -1,7 +1,6 @@
-import { getVehicleOptions, VEHICLE_TYPES } from '../VehicleManagement/vehicleManagementData'
-import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
+import { VEHICLES, VEHICLE_TYPES } from '../VehicleManagement/vehicleManagementData'
 
-export const MAINTENANCE_STATUSES = ['Scheduled', 'Pending', 'Completed', 'Cancelled']
+export const MAINTENANCE_STATUSES = ['Scheduled', 'Pending']
 
 export const SERVICE_TYPES = [
     'Periodic Maintenance',
@@ -13,20 +12,6 @@ export const SERVICE_TYPES = [
     'Battery Replacement',
 ]
 
-export {
-    DEFAULT_SERVICE_CENTERS,
-    SERVICE_CENTER_STATUSES,
-    getServiceCenters,
-    getServiceCenterRows,
-    getServiceCenterById,
-    addServiceCenter,
-    upsertServiceCenter,
-    deleteServiceCenter,
-    hydrateServiceCentersFromApi,
-    SERVICE_CENTERS_STORAGE_KEY,
-} from './serviceCentersData'
-
-/** @deprecated Use getServiceCenters() — kept for static imports */
 export const SERVICE_CENTERS = [
     'Chennai Automotive Service — Velachery',
     'TN Transport Works — Guindy',
@@ -38,22 +23,15 @@ export const SERVICE_CENTERS = [
 export const statusBadgeColor = {
     Scheduled: 'bg-[#2196F333] text-[#2196F3]',
     Pending: 'bg-[#FF980033] text-[#FF9800]',
-    Completed: 'bg-[#4CAF5033] text-[#4CAF50]',
-    Cancelled: 'bg-[#F4433633] text-[#F44336]',
 }
 
-/** @deprecated Use getMaintenanceVehicleOptions() */
-export const VEHICLE_OPTIONS = []
+export const VEHICLE_OPTIONS = VEHICLES.map((vehicle) => ({
+    id: vehicle.id,
+    label: vehicle.vehicleNumber,
+    vehicleType: vehicle.vehicleType,
+}))
 
-export function getMaintenanceVehicleOptions() {
-    return getVehicleOptions().map((vehicle) => ({
-        id: vehicle.id,
-        label: vehicle.vehicleNumber,
-        vehicleType: vehicle.vehicleType,
-    }))
-}
-
-const DEFAULT_MAINTENANCE_RECORDS = [
+export const MAINTENANCE_RECORDS = [
     {
         id: 'SRV-1001',
         serviceId: 'SRV-1001',
@@ -117,54 +95,6 @@ const DEFAULT_MAINTENANCE_RECORDS = [
 ]
 
 export const getMaintenanceById = (id) =>
-    getMaintenanceRecords().find((record) => record.id === id) ?? null
+    MAINTENANCE_RECORDS.find((record) => record.id === id) ?? null
 
 export { VEHICLE_TYPES }
-
-export const MAINTENANCE_RECORDS_STORAGE_KEY = 'schoolerp-transport-maintenance-v1'
-
-export function getMaintenanceRecords() {
-    return getTransportRows(MAINTENANCE_RECORDS_STORAGE_KEY, DEFAULT_MAINTENANCE_RECORDS)
-}
-
-export function saveMaintenanceRecords(rows) {
-    return saveTransportRows(MAINTENANCE_RECORDS_STORAGE_KEY, rows)
-}
-
-export function hydrateMaintenanceRecordsFromApi() {
-    return hydrateTransportRows(MAINTENANCE_RECORDS_STORAGE_KEY)
-}
-
-export async function upsertMaintenanceRecord(record, options = {}) {
-    const { syncApproval = true } = options
-    const rows = getMaintenanceRecords()
-    const nextId = record.id || nextPrefixedId(rows, 'SRV-')
-    const nextRecord = {
-        ...record,
-        id: nextId,
-        serviceId: record.serviceId || nextId,
-        createdBy: record.createdBy || 'Transport Manager',
-    }
-    const idx = rows.findIndex((row) => row.id === nextId)
-    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? nextRecord : row)) : [...rows, nextRecord]
-    const result = await saveMaintenanceRecords(next)
-
-    if (syncApproval) {
-        const { syncApprovalFromVehicleMaintenance } = await import('../RequestApprovals/requestApprovalsData')
-        await syncApprovalFromVehicleMaintenance(nextRecord)
-    }
-
-    return { ...result, record: nextRecord }
-}
-
-export async function deleteMaintenanceRecord(id) {
-    const rows = getMaintenanceRecords()
-    const next = rows.filter((row) => row.id !== id)
-    if (next.length === rows.length) {
-        return { success: false, message: 'Record not found.' }
-    }
-    return saveMaintenanceRecords(next)
-}
-
-export const MAINTENANCE_RECORDS = DEFAULT_MAINTENANCE_RECORDS
-

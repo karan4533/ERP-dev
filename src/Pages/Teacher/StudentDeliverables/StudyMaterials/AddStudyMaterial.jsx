@@ -6,8 +6,8 @@ import { addStudyMaterial, DEFAULT_ROUTE_BASE } from './studyMaterialsData'
 const AddStudyMaterial = ({ routeBase = DEFAULT_ROUTE_BASE }) => {
     const navigate = useNavigate()
 
-    const handleSave = async (values) => {
-        await addStudyMaterial(values)
+    const handleSave = (values) => {
+        addStudyMaterial(values)
         navigate(routeBase)
     }
 

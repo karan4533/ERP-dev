@@ -5,6 +5,7 @@ from app.models.ops_record import OpsRecord
 from app.models.admission import (
     Admission,
     AdmissionEnquiry,
+    AdmissionReferral,
     CoordinatorGradeBand,
     Guardian,
     Student,
@@ -13,14 +14,15 @@ from app.models.activities import Activity, ActivityPlayer
 from app.models.announcements import Announcement, AnnouncementReply, AnnouncementResponse
 from app.models.calendar import CalendarEvent
 from app.models.communication import Conversation, ConversationParticipant, Message
-from app.models.tc_requests import TcRequest
-from app.models.approval import ApprovalEvent, ApprovalRequest, Notification
+from app.models.tc_requests import TcRequest, TcRequestNoc
+from app.models.approval import ApprovalEvent, ApprovalRequest, Notification, NotificationRead
 from app.models.escalation import Escalation, Task, TaskEvent
 from app.models.exams import Exam, ExamType, ExamWeightage, MarkEntry, MarksBatch
 from app.models.leave import LeaveRequest
 from app.models.lesson_plan import LessonPlan
 from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
+from app.models.substitute_duty import SubstituteDuty
 from app.models.base import Base
 from app.models.campus import Campus
 from app.models.documents import DocumentItem, DocumentRecord
@@ -43,6 +45,7 @@ __all__ = [
     "OpsRecord",
     "FinancialYear",
     "Admission",
+    "AdmissionReferral",
     "AdmissionEnquiry",
     "Announcement",
     "AnnouncementReply",
@@ -74,6 +77,7 @@ __all__ = [
     "MarkEntry",
     "MarksBatch",
     "Notification",
+    "NotificationRead",
     "OtpChallenge",
     "Permission",
     "Role",
@@ -83,9 +87,11 @@ __all__ = [
     "Student",
     "StudentAttendance",
     "Subject",
+    "SubstituteDuty",
     "Task",
     "TaskEvent",
     "TcRequest",
+    "TcRequestNoc",
     "User",
     "UserProfile",
 ]

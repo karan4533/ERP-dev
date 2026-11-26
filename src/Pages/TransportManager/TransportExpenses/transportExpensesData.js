@@ -1,18 +1,12 @@
-import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
-import { getVehicleOptions } from '../VehicleManagement/vehicleManagementData'
+import { VEHICLES } from '../VehicleManagement/vehicleManagementData'
 
 export const PAYMENT_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque']
 
-/** @deprecated Use getExpenseVehicleOptions() */
-export const VEHICLE_OPTIONS = []
-
-export function getExpenseVehicleOptions() {
-    return getVehicleOptions().map((vehicle) => ({
-        id: vehicle.id,
-        label: vehicle.vehicleNumber,
-        driverName: vehicle.driverName,
-    }))
-}
+export const VEHICLE_OPTIONS = VEHICLES.map((vehicle) => ({
+    id: vehicle.id,
+    label: vehicle.vehicleNumber,
+    driverName: vehicle.driverName,
+}))
 
 export const FUEL_STATIONS = [
     'Indian Oil — Anna Nagar',
@@ -32,9 +26,6 @@ export const SERVICE_TYPES = [
     'Battery Replacement',
 ]
 
-export { getServiceCenters as getExpenseServiceCenters } from '../VehicleMaintenance/serviceCentersData'
-
-/** @deprecated Use getExpenseServiceCenters() */
 export const SERVICE_CENTERS = [
     'Chennai Automotive Service — Velachery',
     'TN Transport Works — Guindy',
@@ -53,7 +44,7 @@ export const OTHER_EXPENSE_TYPES = [
     'Accessories',
 ]
 
-const DEFAULT_FUEL_EXPENSES = [
+export const FUEL_EXPENSES = [
     {
         id: 'FE-1001',
         expenseId: 'FE-1001',
@@ -111,7 +102,7 @@ const DEFAULT_FUEL_EXPENSES = [
     },
 ]
 
-const DEFAULT_SERVICE_EXPENSES = [
+export const SERVICE_EXPENSES = [
     {
         id: 'SE-1001',
         expenseId: 'SE-1001',
@@ -169,7 +160,7 @@ const DEFAULT_SERVICE_EXPENSES = [
     },
 ]
 
-const DEFAULT_OTHER_EXPENSES = [
+export const OTHER_EXPENSES = [
     {
         id: 'OE-1001',
         expenseId: 'OE-1001',
@@ -227,69 +218,8 @@ const DEFAULT_OTHER_EXPENSES = [
     },
 ]
 
-const DEFAULT_TRANSPORT_EXPENSES = [
-    ...DEFAULT_FUEL_EXPENSES,
-    ...DEFAULT_SERVICE_EXPENSES,
-    ...DEFAULT_OTHER_EXPENSES,
-]
+export const getFuelExpenseById = (id) => FUEL_EXPENSES.find((item) => item.id === id) ?? null
 
-const fuelRows = (rows) => rows.filter((item) => String(item.id ?? '').startsWith('FE-'))
-const serviceRows = (rows) => rows.filter((item) => String(item.id ?? '').startsWith('SE-'))
-const otherRows = (rows) => rows.filter((item) => String(item.id ?? '').startsWith('OE-'))
+export const getServiceExpenseById = (id) => SERVICE_EXPENSES.find((item) => item.id === id) ?? null
 
-export const TRANSPORT_EXPENSES_STORAGE_KEY = 'schoolerp-transport-expenses-v1'
-
-export function getTransportExpenses() {
-    return getTransportRows(TRANSPORT_EXPENSES_STORAGE_KEY, DEFAULT_TRANSPORT_EXPENSES)
-}
-
-export function getFuelExpenses() {
-    return fuelRows(getTransportExpenses())
-}
-
-export function getServiceExpenses() {
-    return serviceRows(getTransportExpenses())
-}
-
-export function getOtherExpenses() {
-    return otherRows(getTransportExpenses())
-}
-
-export function saveTransportExpenses(rows) {
-    return saveTransportRows(TRANSPORT_EXPENSES_STORAGE_KEY, rows)
-}
-
-export function hydrateTransportExpensesFromApi() {
-    return hydrateTransportRows(TRANSPORT_EXPENSES_STORAGE_KEY)
-}
-
-export async function upsertTransportExpense(expense, prefix = 'FE-') {
-    const rows = getTransportExpenses()
-    const nextId = expense.id || nextPrefixedId(rows.filter((row) => String(row.id ?? '').startsWith(prefix)), prefix)
-    const record = {
-        ...expense,
-        id: nextId,
-        expenseId: expense.expenseId || nextId,
-    }
-    const idx = rows.findIndex((row) => row.id === nextId)
-    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? record : row)) : [...rows, record]
-    const result = await saveTransportExpenses(next)
-    return { ...result, record }
-}
-
-export async function deleteTransportExpense(id) {
-    const rows = getTransportExpenses()
-    const next = rows.filter((row) => row.id !== id)
-    if (next.length === rows.length) {
-        return { success: false, message: 'Expense not found.' }
-    }
-    return saveTransportExpenses(next)
-}
-
-export const getFuelExpenseById = (id) => getFuelExpenses().find((item) => item.id === id) ?? null
-export const getServiceExpenseById = (id) => getServiceExpenses().find((item) => item.id === id) ?? null
-export const getOtherExpenseById = (id) => getOtherExpenses().find((item) => item.id === id) ?? null
-/** Static seed / fallback — list pages should call getters after hydrate */
-export const FUEL_EXPENSES = DEFAULT_FUEL_EXPENSES
-export const SERVICE_EXPENSES = DEFAULT_SERVICE_EXPENSES
-export const OTHER_EXPENSES = DEFAULT_OTHER_EXPENSES
+export const getOtherExpenseById = (id) => OTHER_EXPENSES.find((item) => item.id === id) ?? null

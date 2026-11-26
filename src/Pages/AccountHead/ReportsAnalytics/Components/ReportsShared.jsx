@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { createElement } from 'react'
 import {
     BarChart3,
     PieChart,
@@ -6,16 +6,7 @@ import {
     TrendingUp,
     Wallet,
 } from 'lucide-react'
-
-export const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
-export const tdClass = 'px-2 py-4 text-[#667085]'
-
-export const ICON_TONES = {
-    info: 'bg-[#515DEF1A] text-[#515DEF]',
-    success: 'bg-[#4CAF501A] text-[#4CAF50]',
-    warning: 'bg-[#FF98001A] text-[#FF9800]',
-    danger: 'bg-[#FF57221A] text-[#FF5722]',
-}
+import { ICON_TONES } from './reportStyles'
 
 const SUMMARY_ICON_MAP = {
     'Total Income (YTD)': TrendingUp,
@@ -46,7 +37,7 @@ export const SummaryCards = ({ cards }) => (
                 <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
                     <div className='flex items-start justify-between gap-2 mb-3'>
                         <div className={`p-2 rounded-xl ${ICON_TONES[card.iconTone]}`}>
-                            <Icon size={18} />
+                            {createElement(Icon, { 'aria-hidden': true, size: 18 })}
                         </div>
                     </div>
                     <p className='text-xs text-[#808080]'>{card.label}</p>
@@ -88,14 +79,12 @@ export const FlowBars = ({ items }) => (
 )
 
 export const ReportTile = ({ title, sub, icon: Icon }) => (
-    <button
-        type='button'
-        className='text-left border border-[#F2F4F7] rounded-xl p-4 hover:bg-[#F2F4F7] transition-colors cursor-pointer h-full'
-    >
-        <Icon size={20} className='text-[#515DEF] mb-2' />
+    <article className='h-full rounded-xl border border-[var(--erp-line)] p-4'>
+        {createElement(Icon, { 'aria-hidden': true, className: 'mb-2 text-[#515DEF]', size: 20 })}
         <p className='text-sm font-semibold text-[#1E1E1E]'>{title}</p>
         <p className='text-xs text-[#667085] mt-1'>{sub}</p>
-    </button>
+        <p className='mt-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--erp-muted)]'>Preview specification</p>
+    </article>
 )
 
 export const TableCard = ({ title, filters, children }) => (

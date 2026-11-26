@@ -1,10 +1,12 @@
 export const FEE_TABS = [
     { id: 'fee-structure', label: 'Fee Structure' },
     { id: 'fee-collection', label: 'Fee Collection' },
+    { id: 'admission-clearances', label: 'Admission Fee Clearances' },
     { id: 'concessions-waivers', label: 'Concessions & Waivers' },
     { id: 'defaulters', label: 'Defaulters' },
     { id: 'receipt-management', label: 'Receipt Management' },
     { id: 'activity-fees', label: 'Activity Fees' },
+    { id: 'refunds-adjustments', label: 'Refunds & Adjustments' },
 ]
 
 export const ACADEMIC_YEARS = ['2023-24', '2022-23', '2021-22']

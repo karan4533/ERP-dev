@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
 import { addDays, addWeeks, format, isToday, startOfWeek, subWeeks } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { WEEKLY_DAYS, TIME_SLOTS, WEEKLY_SCHEDULE, SUBJECT_COLORS, TEACHER_TIMETABLE_INFO } from '../classRoutineData'
+import { WEEKLY_DAYS, TIME_SLOTS, COORDINATOR_OWN_SCHEDULE, SUBJECT_COLORS, COORDINATOR_INFO } from '../classRoutineData'
 import TimetablePeriodCell from '../../../../Common/ClassTimetable/TimetablePeriodCell'
 
-const TeacherWeeklyTimetable = ({ weekDate = new Date() }) => {
+const TeacherWeeklyTimetable = ({
+    weekDate = new Date(),
+    schedule = COORDINATOR_OWN_SCHEDULE,
+    mode = 'coordinator',
+    coordinatorName = COORDINATOR_INFO.coordinatorName
+}) => {
     const [hoveredCell, setHoveredCell] = useState(null)
     const [currentWeekDate, setCurrentWeekDate] = useState(weekDate)
 
@@ -88,10 +93,14 @@ const TeacherWeeklyTimetable = ({ weekDate = new Date() }) => {
                                     </span>
                                 </td>
                                 {WEEKLY_DAYS.map((day, colIdx) => {
-                                    const entry = WEEKLY_SCHEDULE[slot.label]?.[day]
+                                    const entry = schedule[slot.label]?.[day]
                                     const cellDate = dayDates[colIdx]
                                     const cellKey = `${rowIdx}-${colIdx}`
                                     const isHovered = hoveredCell === cellKey
+
+                                    const secondaryLabel = mode === 'coordinator'
+                                        ? (entry?.className ? `Class ${entry.className}` : (entry?.location || entry?.type || coordinatorName))
+                                        : (entry?.teacher ? `${entry.teacher}${entry.room ? ` • Rm ${entry.room}` : ''}` : '—')
 
                                     return (
                                         <td
@@ -104,7 +113,7 @@ const TeacherWeeklyTimetable = ({ weekDate = new Date() }) => {
                                                 <TimetablePeriodCell
                                                     subject={entry.subject}
                                                     date={cellDate}
-                                                    teacher={entry.teacher || TEACHER_TIMETABLE_INFO.teacherName}
+                                                    teacher={secondaryLabel}
                                                     className={`transition-all duration-200 ${getSubjectStyle(entry.subject)} ${isHovered ? 'shadow-sm scale-[1.03]' : ''}`}
                                                 />
                                             ) : (
@@ -119,8 +128,8 @@ const TeacherWeeklyTimetable = ({ weekDate = new Date() }) => {
                 </table>
             </div>
 
-            <div className='flex items-center justify-center gap-6 pt-4 mt-4 border-t border-slate-100'>
-                {Object.entries(SUBJECT_COLORS).map(([subject, style]) => (
+            <div className='flex flex-wrap items-center justify-center gap-4 pt-4 mt-4 border-t border-slate-100'>
+                {Object.entries(SUBJECT_COLORS).slice(0, 10).map(([subject, style]) => (
                     <div key={subject} className='flex items-center gap-2'>
                         <span className={`px-2 py-1 rounded-md text-xs font-semibold ${style}`}>{subject}</span>
                     </div>

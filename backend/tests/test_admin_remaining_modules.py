@@ -108,6 +108,46 @@ def test_invalid_calendar_events_are_refused(client):
     assert len(client.get("/api/v1/calendar", headers=admin).json()) == before
 
 
+def test_calendar_timed_events_persist_and_reject_inverted_times(client):
+    """NUI-SA-128: all-day vs timed events; same-day end time before start is refused."""
+    admin = _login(client, ADMIN)
+    timed = client.post(
+        "/api/v1/calendar",
+        json={
+            "type": "event",
+            "title": "Timed staff briefing",
+            "startDate": "2026-11-21",
+            "endDate": "2026-11-21",
+            "allDay": False,
+            "startTime": "09:30",
+            "endTime": "10:15",
+            "description": "NUI-SA-128",
+        },
+        headers=admin,
+    )
+    assert timed.status_code == 201, timed.text
+    body = timed.json()
+    assert body["allDay"] is False and body["startTime"] == "09:30" and body["endTime"] == "10:15"
+    listed = client.get("/api/v1/calendar", headers=admin).json()
+    match = next(row for row in listed if row["id"] == body["id"])
+    assert match["startTime"] == "09:30" and match["endTime"] == "10:15"
+    bad = client.post(
+        "/api/v1/calendar",
+        json={
+            "type": "event",
+            "title": "Bad times",
+            "startDate": "2026-11-21",
+            "endDate": "2026-11-21",
+            "allDay": False,
+            "startTime": "14:00",
+            "endTime": "13:00",
+        },
+        headers=admin,
+    )
+    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "invalid_times"
+    assert client.delete(f"/api/v1/calendar/{body['id']}", headers=admin).status_code == 204
+
+
 # --- TC requests ---------------------------------------------------------------------------------
 
 

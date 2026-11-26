@@ -6,8 +6,8 @@ import { addSampleQuestion, ROUTE_BASE } from './sampleQuestionsData'
 const AddSampleQuestion = () => {
     const navigate = useNavigate()
 
-    const handleSave = async (values) => {
-        await addSampleQuestion(values)
+    const handleSave = (values) => {
+        addSampleQuestion(values)
         navigate(ROUTE_BASE)
     }
 

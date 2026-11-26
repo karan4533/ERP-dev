@@ -1,6 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-
-const DEFAULT_MENU_ITEMS = [
+export const MENU_ITEMS = [
     {
         menuId: 'MENU001',
         itemName: 'Veg Biryani',
@@ -101,18 +99,3 @@ export const comboBadgeColor = {
     Yes: 'bg-[#2196F333] text-[#2196F3]',
     No: 'bg-[#66708533] text-[#667085]',
 }
-
-export const MENU_ITEMS_STORAGE_KEY = 'schoolerp-canteen-menu-v1'
-export function getMenuItems() {
-    return ensureCampusSeed('schoolerp-canteen-menu-v1', DEFAULT_MENU_ITEMS)
-}
-export function saveMenuItems(rows) {
-    return saveCampusJson('schoolerp-canteen-menu-v1', rows)
-}
-export function hydrateMenuItemsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-canteen-menu-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-canteen-menu-v1', DEFAULT_MENU_ITEMS)
-}
-/** Static seed / fallback — list pages should call getMenuItems() after hydrate */
-export const MENU_ITEMS = DEFAULT_MENU_ITEMS
-

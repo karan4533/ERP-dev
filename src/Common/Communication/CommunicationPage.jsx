@@ -8,42 +8,33 @@ import {
     getConversationsForRole,
     saveConversationsForRole,
 } from './communicationData'
-import {
-    canUseCommunicationApi,
-    getConversationApi,
-    listConversationsApi,
-    listDirectoryApi,
-    patchConversationApi,
-    sendMessageApi,
-    startConversationApi,
-} from '../../services/communicationApi'
-import { apiMe } from '../../services/authApi'
 import InboxPanel from './Components/InboxPanel'
 import ChatPanel from './Components/ChatPanel'
 import NewMessageModal from './Components/NewMessageModal'
+import ConfirmAction from '../ui/ConfirmAction'
+import FeedbackState from '../ui/FeedbackState'
+import IntegrationNotice from '../ui/IntegrationNotice'
 
 const CommunicationPage = ({ roleKey }) => {
     const roleConfig = getCommunicationRoleConfig(roleKey)
     const navigate = useNavigate()
     const { conversationId } = useParams()
-    const [self, setSelf] = useState(roleConfig.currentUser)
-    const currentUser = self
+    const currentUser = roleConfig?.currentUser || { id: 'unconfigured', name: 'Unconfigured user' }
 
     const [conversations, setConversations] = useState([])
     const [loading, setLoading] = useState(true)
-    const [chatLoading, setChatLoading] = useState(false)
     const [error, setError] = useState('')
     const [search, setSearch] = useState('')
     const [filter, setFilter] = useState('all')
     const [showNewMessage, setShowNewMessage] = useState(false)
-    const [directory, setDirectory] = useState([])
+    const [pendingDeleteId, setPendingDeleteId] = useState('')
 
     const selectedId = conversationId || null
 
     const persist = useCallback(
         (next) => {
             setConversations(next)
-            if (!canUseCommunicationApi()) saveConversationsForRole(roleKey, next)
+            saveConversationsForRole(roleKey, next)
         },
         [roleKey]
     )
@@ -52,26 +43,6 @@ const CommunicationPage = ({ roleKey }) => {
         (withSkeleton = true) => {
             if (withSkeleton) setLoading(true)
             setError('')
-            if (canUseCommunicationApi()) {
-                Promise.all([apiMe(), listConversationsApi(), listDirectoryApi()])
-                    .then(([me, rows, people]) => {
-                        setSelf({
-                            id: String(me.id),
-                            name: me.full_name || me.email,
-                            role: me.role_name || me.role,
-                            department: '',
-                            avatarColor: roleConfig.currentUser.avatarColor,
-                        })
-                        setConversations(rows)
-                        setDirectory(people)
-                    })
-                    .catch(() => {
-                        setError('Failed to load conversations. Please try again.')
-                        toast.error('Failed to load conversations')
-                    })
-                    .finally(() => setLoading(false))
-                return
-            }
             try {
                 const data = getConversationsForRole(roleKey, currentUser.id)
                 setConversations(data)
@@ -82,38 +53,13 @@ const CommunicationPage = ({ roleKey }) => {
                 setLoading(false)
             }
         },
-        [roleKey, currentUser.id, roleConfig.currentUser.avatarColor]
+        [roleKey, currentUser.id]
     )
 
     useEffect(() => {
-        loadConversations(true)
-    }, [loadConversations])
-
-    // Keep the inbox fresh so the other person sees new messages without a full page reload.
-    useEffect(() => {
-        if (!canUseCommunicationApi()) return undefined
-        const timer = setInterval(() => loadConversations(false), 20000)
-        return () => clearInterval(timer)
-    }, [loadConversations])
-
-    useEffect(() => {
-        if (!selectedId) return
-        if (canUseCommunicationApi()) {
-            getConversationApi(selectedId)
-                .then((row) => {
-                    setConversations((current) =>
-                        current.some((conv) => conv.id === row.id)
-                            ? current.map((conv) => (conv.id === row.id ? row : conv))
-                            : [row, ...current],
-                    )
-                })
-                .catch(() => {})
-                .finally(() => setChatLoading(false))
-            return undefined
-        }
-        const timer = setTimeout(() => setChatLoading(false), 250)
+        const timer = setTimeout(() => loadConversations(true), 0)
         return () => clearTimeout(timer)
-    }, [selectedId])
+    }, [loadConversations])
 
     const selectedConversation = useMemo(
         () => conversations.find((conv) => conv.id === selectedId && !conv.deleted) || null,
@@ -121,19 +67,6 @@ const CommunicationPage = ({ roleKey }) => {
     )
 
     const openConversation = (id) => {
-        if (canUseCommunicationApi()) {
-            getConversationApi(id)
-                .then((row) => {
-                    setConversations((current) =>
-                        current.some((conv) => conv.id === row.id)
-                            ? current.map((conv) => (conv.id === row.id ? row : conv))
-                            : [row, ...current],
-                    )
-                    navigate(`${roleConfig.routeBase}/inbox/${id}`)
-                })
-                .catch(() => toast.error('This conversation could not be opened.'))
-            return
-        }
         persist(
             conversations.map((conv) =>
                 conv.id === id
@@ -152,38 +85,17 @@ const CommunicationPage = ({ roleKey }) => {
 
     const goToInbox = () => navigate(`${roleConfig.routeBase}/inbox`)
 
-    const deleteConversation = (id) => {
-        if (canUseCommunicationApi()) {
-            patchConversationApi(id, { deleted: true })
-                .then((row) => {
-                    setConversations((current) => current.map((conv) => (conv.id === row.id ? row : conv)))
-                    if (selectedId === id) goToInbox()
-                    toast.success('Conversation deleted')
-                })
-                .catch(() => toast.error('The conversation could not be deleted.'))
-            return
-        }
+    const deleteConversation = (id) => setPendingDeleteId(id)
+
+    const confirmDeleteConversation = () => {
+        const id = pendingDeleteId
         persist(conversations.map((conv) => (conv.id === id ? { ...conv, deleted: true } : conv)))
         if (selectedId === id) goToInbox()
-        toast.success('Conversation deleted')
+        setPendingDeleteId('')
+        toast.success('Conversation removed from this browser.')
     }
 
     const createOrOpenConversation = (contact) => {
-        if (canUseCommunicationApi()) {
-            setShowNewMessage(false)
-            startConversationApi(contact.id)
-                .then((row) => {
-                    setConversations((current) =>
-                        current.some((conv) => conv.id === row.id)
-                            ? current.map((conv) => (conv.id === row.id ? row : conv))
-                            : [row, ...current],
-                    )
-                    navigate(`${roleConfig.routeBase}/inbox/${row.id}`)
-                    toast.success(`Started conversation with ${contact.name}`)
-                })
-                .catch(() => toast.error('The conversation could not be started.'))
-            return
-        }
         const existing = conversations.find(
             (conv) => !conv.deleted && conv.participant.id === contact.id
         )
@@ -221,22 +133,6 @@ const CommunicationPage = ({ roleKey }) => {
 
     const sendMessage = async ({ text, files = [], replyTo }) => {
         if (!selectedConversation) return
-        if (canUseCommunicationApi()) {
-            try {
-                let latest = selectedConversation
-                if (text?.trim()) {
-                    latest = await sendMessageApi(selectedConversation.id, { body: text.trim(), file: files[0] })
-                    files = files.slice(1)
-                }
-                for (const file of files) {
-                    latest = await sendMessageApi(selectedConversation.id, { file })
-                }
-                setConversations((current) => current.map((conv) => (conv.id === latest.id ? latest : conv)))
-            } catch (error) {
-                toast.error(error?.message || 'The message could not be sent.')
-            }
-            return
-        }
 
         const now = new Date().toISOString()
         const baseMessages = []
@@ -341,15 +237,19 @@ const CommunicationPage = ({ roleKey }) => {
 
     if (!roleConfig) {
         return (
-            <div className="rounded-2xl bg-white p-6 shadow-md text-[#667085]">
-                Communication is not configured for this role.
-            </div>
+            <FeedbackState kind='permission' title='Communication unavailable' description='Messaging is not configured for this role.' />
         )
     }
 
     return (
-        <div className="overflow-hidden rounded-2xl bg-white shadow-md">
-            <div className="flex h-[calc(100vh-9.5rem)] min-h-140">
+        <div className='space-y-4'>
+            <IntegrationNotice
+                state='demo'
+                title='Browser-only conversations'
+                description='Messages and delivery/read transitions are simulated locally. No message, attachment or notification is sent to another user.'
+            />
+            <div className="overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white">
+            <div className="flex h-[calc(100vh-13rem)] min-h-140">
                 <div className={`${showChatOnMobile ? 'hidden' : 'flex'} w-full lg:flex lg:w-auto`}>
                     <InboxPanel
                         conversations={conversations}
@@ -370,7 +270,7 @@ const CommunicationPage = ({ roleKey }) => {
                     <ChatPanel
                         conversation={selectedConversation}
                         currentUser={currentUser}
-                        loading={chatLoading}
+                        loading={false}
                         error={
                             selectedId && !loading && !selectedConversation
                                 ? 'This conversation is unavailable or was deleted.'
@@ -391,8 +291,20 @@ const CommunicationPage = ({ roleKey }) => {
                     .filter((c) => !c.deleted)
                     .map((c) => c.participant.id)}
                 onSelect={createOrOpenConversation}
-                contacts={canUseCommunicationApi() ? directory : undefined}
             />
+            </div>
+
+            <ConfirmAction
+                open={Boolean(pendingDeleteId)}
+                onClose={() => setPendingDeleteId('')}
+                onConfirm={confirmDeleteConversation}
+                title='Remove conversation?'
+                description='This hides the conversation from the current browser profile.'
+                confirmLabel='Remove conversation'
+                tone='danger'
+            >
+                <p>The local conversation and its messages will no longer appear in the inbox. This prototype does not provide restore or server recovery.</p>
+            </ConfirmAction>
         </div>
     )
 }

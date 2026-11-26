@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import { toast } from 'react-toastify'
-import { Copy, Link2, Mail, MessageCircle, X } from 'lucide-react'
+import { Copy, Link2, Mail, MessageCircle } from 'lucide-react'
 import { formatCurrency } from '../../financeDomain/financeHelpers'
+import IntegrationNotice from '../../../../Common/ui/IntegrationNotice'
+import Dialog from '../../../../Common/ui/Dialog'
 
 const PaymentLinkModal = ({ isOpen, onClose, link, onSend }) => {
     const [sending, setSending] = useState(false)
@@ -19,24 +21,18 @@ const PaymentLinkModal = ({ isOpen, onClose, link, onSend }) => {
     const send = (channel) => {
         setSending(true)
         onSend?.(channel, link)
-        const label = channel === 'whatsapp' ? 'WhatsApp' : 'email'
-        toast.info(
-            `${label} for link ${link.reference} is NOT_CONFIGURED until school ${channel === 'whatsapp' ? 'WhatsApp API' : 'SMTP'} credentials are connected.`,
-        )
+        toast.success(`Mock ${channel === 'whatsapp' ? 'WhatsApp' : 'email'} sent with ${link.reference}.`)
         setSending(false)
     }
 
     return (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
-            <div className='absolute inset-0 bg-black/40' onClick={onClose} aria-hidden='true' />
-            <div className='relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-xl'>
-                <div className='flex items-center justify-between px-6 py-4 border-b border-[#F2F4F7]'>
-                    <h2 className='text-lg font-semibold'>Payment link</h2>
-                    <button type='button' onClick={onClose} className='text-[#667085] hover:text-[#FF5722] cursor-pointer' aria-label='Close'>
-                        <X size={20} />
-                    </button>
-                </div>
-                <div className='px-6 py-5 space-y-4'>
+        <Dialog open={isOpen} onClose={onClose} title='Payment link' description={`Secure reference ${link.reference}`} size='md'>
+                <div className='space-y-4'>
+                    <IntegrationNotice
+                        state='demo'
+                        title='Delivery channels are simulated'
+                        description='Copy works locally, but Email and WhatsApp do not contact a delivery provider.'
+                    />
                     <p className='text-sm text-[#667085]'>
                         Secure reference <span className='font-mono text-[#515DEF]'>{link.reference}</span> for {formatCurrency(link.amount)}.
                         Student IDs are not exposed in the link.
@@ -57,8 +53,7 @@ const PaymentLinkModal = ({ isOpen, onClose, link, onSend }) => {
                         <Link2 size={12} /> Gateway checkout is mocked until a payment API is connected.
                     </p>
                 </div>
-            </div>
-        </div>
+        </Dialog>
     )
 }
 

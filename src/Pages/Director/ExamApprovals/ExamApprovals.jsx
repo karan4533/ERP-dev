@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { toast } from 'react-toastify'
 import { Calendar, ChevronLeft, ChevronRight, Download, Eye } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import TimeTableModal from './Components/TimeTableModal'
@@ -9,43 +8,10 @@ import DenyTimetableModal from '../Components/DenyTimetableModal'
 import {
     APPROVAL_STATUSES,
     EXAM_TIMETABLE_APPROVALS,
-    SUBMITTED_BY,
     approvalStatusColor,
 } from '../timetableApprovalsData'
-import { decideApprovalApi } from '../../../services/approvalsApi'
-import { canUseExamsApi, listExamsApi, mapExamFromApi } from '../../../services/examsApi'
-
-const formatDisplayDate = (iso) => {
-    if (!iso) return '—'
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return String(iso)
-    return d.toLocaleDateString('en-GB').replace(/\//g, '-')
-}
-
-const mapExamToApprovalRow = (exam) => {
-    const status = String(exam.status || '').toLowerCase()
-    let approvalStatus = 'Pending'
-    if (status === 'approved') approvalStatus = 'Approved'
-    else if (status === 'denied' || status === 'rejected') approvalStatus = 'Denied'
-    else if (status === 'draft') approvalStatus = 'Pending'
-    return {
-        id: exam.id,
-        examName: exam.name || 'Exam',
-        classSection: exam.className ? `Grade ${exam.className}` : '—',
-        startDate: formatDisplayDate(exam.startDate),
-        endDate: formatDisplayDate(exam.endDate),
-        submittedBy: SUBMITTED_BY,
-        submittedDate: formatDisplayDate(exam.startDate),
-        approvalStatus,
-        approvalId: exam.approvalId || null,
-        rejectionReason: '',
-        modalTitle: `${exam.name || 'Exam'} — ${exam.className || ''}`,
-        source: 'api',
-    }
-}
 
 const ExamApprovals = () => {
-    const api = canUseExamsApi()
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
@@ -54,36 +20,7 @@ const ExamApprovals = () => {
     const [selectedEntry, setSelectedEntry] = useState(null)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [approvals, setApprovals] = useState(() => (api ? [] : [...EXAM_TIMETABLE_APPROVALS]))
-    const [loading, setLoading] = useState(api)
-
-    useEffect(() => {
-        if (!api) {
-            setApprovals([...EXAM_TIMETABLE_APPROVALS])
-            setLoading(false)
-            return undefined
-        }
-        let cancelled = false
-        setLoading(true)
-        listExamsApi({})
-            .then((rows) => {
-                if (cancelled) return
-                const mapped = (Array.isArray(rows) ? rows : [])
-                    .map(mapExamFromApi)
-                    .filter((exam) => exam.approvalId || String(exam.status).toLowerCase() !== 'draft')
-                    .map(mapExamToApprovalRow)
-                setApprovals(mapped)
-            })
-            .catch(() => {
-                if (!cancelled) setApprovals([])
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false)
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [api])
+    const [approvals, setApprovals] = useState(() => [...EXAM_TIMETABLE_APPROVALS])
 
     const filteredApprovals = useMemo(() => {
         const query = search.trim().toLowerCase()
@@ -97,22 +34,7 @@ const ExamApprovals = () => {
         })
     }, [approvals, search, statusFilter])
 
-    const handleApprove = async (id) => {
-        const entry = approvals.find((item) => item.id === id)
-        if (api && entry?.approvalId) {
-            try {
-                await decideApprovalApi(entry.approvalId, { decision: 'approve' })
-                setApprovals((prev) =>
-                    prev.map((item) =>
-                        item.id === id ? { ...item, approvalStatus: 'Approved', rejectionReason: '' } : item,
-                    ),
-                )
-                toast.success('Exam timetable approved.')
-            } catch (error) {
-                toast.error(error?.message || 'Approve failed.')
-            }
-            return
-        }
+    const handleApprove = (id) => {
         setApprovals((prev) =>
             prev.map((item) =>
                 item.id === id
@@ -127,26 +49,8 @@ const ExamApprovals = () => {
         setDenyModal(true)
     }
 
-    const handleDenyConfirm = async (reason) => {
+    const handleDenyConfirm = (reason) => {
         if (!selectedEntry) return
-        if (api && selectedEntry.approvalId) {
-            try {
-                await decideApprovalApi(selectedEntry.approvalId, { decision: 'deny', comment: reason })
-                setApprovals((prev) =>
-                    prev.map((item) =>
-                        item.id === selectedEntry.id
-                            ? { ...item, approvalStatus: 'Denied', rejectionReason: reason }
-                            : item,
-                    ),
-                )
-                toast.success('Exam timetable denied.')
-            } catch (error) {
-                toast.error(error?.message || 'Deny failed.')
-            }
-            setDenyModal(false)
-            setSelectedEntry(null)
-            return
-        }
         setApprovals((prev) =>
             prev.map((item) =>
                 item.id === selectedEntry.id
@@ -176,7 +80,6 @@ const ExamApprovals = () => {
                     </button>
                     <p className='text-sm text-[#667085]'>
                         Examination timetables submitted by the Principal for Director approval.
-                        {api ? ' Live exam schedules.' : ''}
                     </p>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-6 mt-2'>
@@ -266,13 +169,7 @@ const ExamApprovals = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>
-                                        Loading exam approvals…
-                                    </td>
-                                </tr>
-                            ) : filteredApprovals.length === 0 ? (
+                            {filteredApprovals.length === 0 ? (
                                 <tr>
                                     <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>
                                         No exam timetable approvals found.

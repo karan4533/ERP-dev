@@ -10,32 +10,18 @@ import {
     STATUS_OPTIONS,
     statusBadgeColor,
 } from './employeeAttendanceData'
-import { canUseAdminAttendanceApi, loadEmployeeAttendance, toIsoDate } from '../../../../services/adminAttendanceApi'
-import { useAttendanceQuery } from '../useAttendanceQuery'
 
 const emptyFilters = { search: '', role: '', status: '' }
-const noParams = {}
 
 const EmployeesList = () => {
     const [filters, setFilters] = useState(emptyFilters)
     const [selectedDate, setSelectedDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
 
-    // API mode: HR attendance records (all dates) come from the server and are narrowed to the chosen
-    // date here, because the server has no date filter. Local mode keeps the browser-only demo rows.
-    const apiMode = canUseAdminAttendanceApi()
-    const query = useAttendanceQuery(apiMode, loadEmployeeAttendance, noParams)
-    const apiRecords = query.data?.records
-    const selectedIso = selectedDate ? toIsoDate(selectedDate) : ''
-    const roleOptions = apiMode ? (query.options?.roleOptions ?? []) : ROLE_OPTIONS
-    const statusOptions = apiMode ? (query.options?.statusOptions ?? []) : STATUS_OPTIONS
-
-    const filteredRecords = useMemo(() => {
-        if (!apiMode) return filterEmployeeAttendance(EMPLOYEE_ATTENDANCE, filters)
-        const onDate = (apiRecords ?? []).filter((record) => !selectedIso || record.date === selectedIso)
-        return filterEmployeeAttendance(onDate, filters)
-    }, [apiMode, apiRecords, selectedIso, filters])
-    const totalOnServer = apiRecords?.length ?? 0
+    const filteredRecords = useMemo(
+        () => filterEmployeeAttendance(EMPLOYEE_ATTENDANCE, filters),
+        [filters],
+    )
 
     const clearFilters = () => {
         setFilters(emptyFilters)
@@ -75,7 +61,7 @@ const EmployeesList = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All Roles</option>
-                            {roleOptions.map((role) => (
+                            {ROLE_OPTIONS.map((role) => (
                                 <option key={role} value={role}>{role}</option>
                             ))}
                         </select>
@@ -102,7 +88,7 @@ const EmployeesList = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All Status</option>
-                            {statusOptions.map((status) => (
+                            {STATUS_OPTIONS.map((status) => (
                                 <option key={status} value={status}>{status}</option>
                             ))}
                         </select>
@@ -122,46 +108,6 @@ const EmployeesList = () => {
                         Export
                     </button>
                 </div>
-                {apiMode && query.status === 'loading' ? (
-                    <div role='status' className='py-16 text-center text-sm text-[#667085]'>Loading attendance…</div>
-                ) : apiMode && query.status === 'error' ? (
-                    <div role='alert' className='py-16 text-center'>
-                        <h3 className='text-lg font-semibold text-[#B42318]'>Could not load attendance</h3>
-                        <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>{query.error}</p>
-                        <button
-                            type='button'
-                            onClick={query.reload}
-                            className='mt-4 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer'
-                        >
-                            Retry
-                        </button>
-                    </div>
-                ) : (
-                <>
-                {apiMode && (query.data?.warnings ?? []).map((warning) => (
-                    <p key={warning} role='status' className='text-xs text-[#B54708] mb-2'>{warning}</p>
-                ))}
-                {apiMode && filteredRecords.length === 0 ? (
-                    <div className='py-16 text-center'>
-                        <h3 className='text-lg font-semibold text-[#0C1E5B]'>No attendance records found</h3>
-                        <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>
-                            {totalOnServer === 0
-                                ? 'No employee attendance has been recorded yet.'
-                                : selectedIso
-                                    ? `Nothing recorded for ${selectedIso}. The server holds ${totalOnServer} record${totalOnServer === 1 ? '' : 's'} on other dates; clear the date to see them.`
-                                    : 'No records match the selected filters.'}
-                        </p>
-                        {selectedIso && totalOnServer > 0 && (
-                            <button
-                                type='button'
-                                onClick={() => setSelectedDate(null)}
-                                className='mt-4 border border-[#515DEF] text-[#515DEF] text-sm px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white cursor-pointer'
-                            >
-                                Show all dates
-                            </button>
-                        )}
-                    </div>
-                ) : (
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -192,16 +138,11 @@ const EmployeesList = () => {
                         </tbody>
                     </table>
                 </div>
-                )}
-                </>
-                )}
             </div>
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    {apiMode && query.status !== 'ready'
-                        ? ''
-                        : `Showing 1 to ${filteredRecords.length} of ${filteredRecords.length} entries`}
+                    Showing 1 to {filteredRecords.length} of {filteredRecords.length} entries
                 </p>
                 <div className='flex gap-x-2'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
@@ -216,18 +157,7 @@ const EmployeesList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='employee-attendance'
-                rows={filteredRecords.map((r) => ({
-                    employeeId: r.employeeId || r.id,
-                    employeeName: r.employeeName || r.name,
-                    department: r.department,
-                    status: r.status || r.attendanceStatus,
-                }))}
-                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'}.</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

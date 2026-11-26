@@ -36,9 +36,12 @@ MIGRATIONS = {
         "(id, campus_id, code, title, category, message, sent_by, sender_role, announcement_date, audience, "
         "created_at) VALUES ('a', 'b', 'AN-0001', 't', 'Staff Notice', 'm', 'Admin', 'admin', '2026-10-14', '[]', "
         "CURRENT_TIMESTAMP)"),
+    # all_day is required on current CalendarEvent metadata (added in 0019). 0007 creates via
+    # create_missing_tables(Base.metadata), so today's empty-DB create includes all_day.
+    # Historical upgrades that ran 0007 before 0019 get the column from 0019 (tested below).
     "0007_calendar_events.py": ("calendar_events", "INSERT INTO calendar_events "
-        "(id, campus_id, code, event_type, title, start_date, end_date, description, created_at) "
-        "VALUES ('a', 'b', 'hol-1', 'holiday', 't', '2026-01-26', '2026-01-26', '', CURRENT_TIMESTAMP)"),
+        "(id, campus_id, code, event_type, title, start_date, end_date, all_day, description, created_at) "
+        "VALUES ('a', 'b', 'hol-1', 'holiday', 't', '2026-01-26', '2026-01-26', 1, '', CURRENT_TIMESTAMP)"),
     "0008_tc_requests.py": ("tc_requests", "INSERT INTO tc_requests "
         "(id, campus_id, code, student_id, reason, transfer_to, requested_by, requested_on, status, "
         "prm_remarks, admin_remarks, tc_number, created_at) VALUES "
@@ -94,3 +97,46 @@ def test_revisions_form_one_unbroken_chain():
     heads = set(chain) - set(chain.values())
     assert len(heads) == 1, f"expected one head, found {sorted(heads)}"
     assert all(parent is None or parent in chain for parent in chain.values())
+
+
+def test_calendar_events_upgrade_path_adds_all_day_without_rewriting_0007():
+    """Pre-0019 calendar_events (no all_day) must gain the column via 0019 only.
+
+    Does not rewrite historical 0007 DDL; verifies the additive upgrade path that
+    production DBs created before NUI-SA-128 would take.
+    """
+    migration_0019 = _load("0019_calendar_event_times.py")
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(sa.text(
+            "CREATE TABLE calendar_events ("
+            "id TEXT PRIMARY KEY, campus_id TEXT NOT NULL, code TEXT NOT NULL, "
+            "event_type TEXT NOT NULL, title TEXT NOT NULL, start_date TEXT NOT NULL, "
+            "end_date TEXT NOT NULL, description TEXT NOT NULL, created_at TIMESTAMP NOT NULL)"
+        ))
+        connection.execute(sa.text(
+            "INSERT INTO calendar_events "
+            "(id, campus_id, code, event_type, title, start_date, end_date, description, created_at) "
+            "VALUES ('a', 'b', 'hol-1', 'holiday', 't', '2026-01-26', '2026-01-26', '', CURRENT_TIMESTAMP)"
+        ))
+        cols_before = {c["name"] for c in sa.inspect(connection).get_columns("calendar_events")}
+        assert "all_day" not in cols_before
+
+        # Alembic op.* needs a MigrationContext bind; call upgrade body via connection
+        # by replaying the same inspect/add_column logic 0019 uses.
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+
+        ctx = MigrationContext.configure(connection)
+        with Operations.context(ctx):
+            migration_0019.upgrade()
+
+        cols_after = {c["name"] for c in sa.inspect(connection).get_columns("calendar_events")}
+        assert {"all_day", "start_time", "end_time"} <= cols_after
+        assert connection.execute(sa.text("SELECT count(*) FROM calendar_events")).scalar() == 1
+        assert connection.execute(sa.text("SELECT all_day FROM calendar_events WHERE id='a'")).scalar() in (1, True)
+
+        # Idempotent: second upgrade leaves data alone.
+        with Operations.context(MigrationContext.configure(connection)):
+            migration_0019.upgrade()
+        assert connection.execute(sa.text("SELECT count(*) FROM calendar_events")).scalar() == 1

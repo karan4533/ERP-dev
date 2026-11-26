@@ -1,11 +1,10 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const CATEGORIES = ['Pen', 'Paper', 'Notebook', 'Printer Supplies', 'Files & Folders', 'Art Supplies', 'Adhesive & Tape']
 
 export const UNITS = ['Pieces', 'Box', 'Pack']
 
 export const STATUS_OPTIONS = ['Available', 'Low Stock', 'Out of Stock']
 
-const DEFAULT_INVENTORY_ITEMS = [
+export const INVENTORY_ITEMS = [
     {
         itemId: 'STN-2026-0142',
         itemName: 'Blue Ballpoint Pen',
@@ -19,6 +18,8 @@ const DEFAULT_INVENTORY_ITEMS = [
         unitCost: '₹12',
         stockValue: '₹5,400',
         status: 'Available',
+        batchNo: 'BAT-2026-P01',
+        expiryDate: '31-12-2028',
         description: 'Smooth-writing blue ballpoint pens for daily office and classroom use.',
         purchaseDate: '15-03-2026',
         invoiceNumber: 'INV-OM-8821',
@@ -36,6 +37,8 @@ const DEFAULT_INVENTORY_ITEMS = [
         unitCost: '₹280',
         stockValue: '₹2,240',
         status: 'Low Stock',
+        batchNo: 'BAT-2026-R88',
+        expiryDate: '30-06-2029',
         description: '80 GSM A4 copier paper, 500 sheets per ream.',
         purchaseDate: '02-05-2026',
         invoiceNumber: 'INV-PP-4412',
@@ -53,6 +56,8 @@ const DEFAULT_INVENTORY_ITEMS = [
         unitCost: '₹65',
         stockValue: '₹0',
         status: 'Out of Stock',
+        batchNo: 'BAT-2026-NB1',
+        expiryDate: 'N/A (Non-perishable)',
         description: 'Single-subject spiral notebook, ruled, 200 pages.',
         purchaseDate: '20-04-2026',
         invoiceNumber: 'INV-CW-3301',
@@ -70,6 +75,8 @@ const DEFAULT_INVENTORY_ITEMS = [
         unitCost: '₹850',
         stockValue: '₹20,400',
         status: 'Available',
+        batchNo: 'BAT-2026-HP803',
+        expiryDate: '15-11-2027',
         description: 'Original HP 803 black ink cartridge for admin printers.',
         purchaseDate: '10-01-2026',
         invoiceNumber: 'INV-PT-1109',
@@ -87,6 +94,8 @@ const DEFAULT_INVENTORY_ITEMS = [
         unitCost: '₹45',
         stockValue: '₹225',
         status: 'Low Stock',
+        batchNo: 'BAT-2026-STP',
+        expiryDate: 'N/A (Non-perishable)',
         description: 'Standard 24/6 stapler pins, box of 1000.',
         purchaseDate: '28-05-2026',
         invoiceNumber: 'INV-OM-2290',
@@ -104,10 +113,27 @@ const DEFAULT_INVENTORY_ITEMS = [
         unitCost: '₹35',
         stockValue: '₹1,260',
         status: 'Available',
+        batchNo: 'BAT-2026-MK04',
+        expiryDate: '28-02-2027',
         description: 'Dry-erase whiteboard marker, black, chisel tip.',
         purchaseDate: '01-06-2026',
         invoiceNumber: 'INV-CS-7701',
     },
+]
+
+export const MONTHLY_CONSUMPTION_LOG = [
+    { id: 'LOG-2026-01', month: 'May 2026', itemName: 'A4 Paper Ream (500 sheets)', issuedQty: 45, unit: 'Pack', department: 'Academic Administration', recordedBy: 'Stationery Store Manager' },
+    { id: 'LOG-2026-02', month: 'May 2026', itemName: 'Blue Ballpoint Pen', issuedQty: 120, unit: 'Pieces', department: 'Examination Cell', recordedBy: 'Stationery Store Manager' },
+    { id: 'LOG-2026-03', month: 'June 2026', itemName: 'Whiteboard Marker — Black', issuedQty: 60, unit: 'Pieces', department: 'Senior School Faculty', recordedBy: 'Stationery Store Manager' },
+    { id: 'LOG-2026-04', month: 'June 2026', itemName: 'HP 803 Black Ink Cartridge', issuedQty: 6, unit: 'Pieces', department: 'Accounts & Principal Office', recordedBy: 'Stationery Store Manager' },
+]
+
+export const DEPARTMENT_DISTRIBUTION = [
+    { department: 'Primary Wing', itemsIssued: 140, totalCost: '₹14,250', topItem: 'Chart Paper & Art Supplies' },
+    { department: 'Middle School', itemsIssued: 210, totalCost: '₹18,900', topItem: 'Notebooks & Pens' },
+    { department: 'Senior School', itemsIssued: 320, totalCost: '₹34,600', topItem: 'A4 Paper & Register Files' },
+    { department: 'Examination Cell', itemsIssued: 500, totalCost: '₹62,000', topItem: 'Answer Booklets & Thread' },
+    { department: 'Administration', itemsIssued: 180, totalCost: '₹28,400', topItem: 'Printer Ink & Staples' },
 ]
 
 export const statusBadgeColor = {
@@ -117,18 +143,4 @@ export const statusBadgeColor = {
 }
 
 export const getInventoryItemById = (id) =>
-    getInventoryItems().find((entry) => entry.itemId === id)
-
-export const INVENTORY_ITEMS_STORAGE_KEY = 'schoolerp-stationery-inventory-v1'
-export function getInventoryItems() {
-    return ensureCampusSeed('schoolerp-stationery-inventory-v1', DEFAULT_INVENTORY_ITEMS)
-}
-export function saveInventoryItems(rows) {
-    return saveCampusJson('schoolerp-stationery-inventory-v1', rows)
-}
-export function hydrateInventoryItemsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-stationery-inventory-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-stationery-inventory-v1', DEFAULT_INVENTORY_ITEMS)
-}
-export const INVENTORY_ITEMS = DEFAULT_INVENTORY_ITEMS
-
+    INVENTORY_ITEMS.find((entry) => entry.itemId === id)

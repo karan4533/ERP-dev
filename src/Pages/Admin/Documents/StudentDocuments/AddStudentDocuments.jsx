@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { useNavigate } from 'react-router-dom'
@@ -13,12 +13,11 @@ import {
     getAdmissionNumberSelectOptions,
     getStudentDocumentProfileById,
     getStudentNameSelectOptions,
-    saveStudentDocumentsViaApi,
     STUDENT_DOCUMENT_TYPES,
 } from './studentDocumentsData'
-import { hydrateEnrolledStudentsFromApi } from '../../../../Common/StudentDatabase/enrolledStudentsData'
-import { isApiStudentsEnabled } from '../../../../services/apiClient'
-import { canUseDocumentsApi } from '../../../../services/documentsApi'
+
+const inputClass =
+    'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full bg-white'
 
 const readOnlyClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full bg-[#F9FAFB] cursor-not-allowed'
@@ -68,25 +67,9 @@ const AddStudentDocuments = () => {
     const [section, setSection] = useState('')
     const [submittedDate, setSubmittedDate] = useState(new Date())
     const [documentSlots, setDocumentSlots] = useState(buildInitialSlots)
-    const [saving, setSaving] = useState(false)
-    // bumped once the enrolled students have been loaded from the server, so the pickers refill
-    const [studentsLoaded, setStudentsLoaded] = useState(0)
 
-    useEffect(() => {
-        if (!isApiStudentsEnabled()) return undefined
-        let active = true
-        hydrateEnrolledStudentsFromApi().then(() => {
-            if (active) setStudentsLoaded((count) => count + 1)
-        })
-        return () => {
-            active = false
-        }
-    }, [])
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const admissionOptions = useMemo(() => getAdmissionNumberSelectOptions(), [studentsLoaded])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const nameOptions = useMemo(() => getStudentNameSelectOptions(), [studentsLoaded])
+    const admissionOptions = useMemo(() => getAdmissionNumberSelectOptions(), [])
+    const nameOptions = useMemo(() => getStudentNameSelectOptions(), [])
 
     const selectedAdmission = useMemo(
         () => admissionOptions.find((option) => option.value === studentId) ?? null,
@@ -140,7 +123,7 @@ const AddStudentDocuments = () => {
         className &&
         allDocumentsUploaded
 
-    const handleSave = async () => {
+    const handleSave = () => {
         if (!studentId) {
             toast.error('Select a student by admission number or name.')
             return
@@ -149,32 +132,8 @@ const AddStudentDocuments = () => {
             toast.error('Upload all four documents before submitting.')
             return
         }
-        if (saving) return
 
         const finalizedSlots = finalizeDocumentSlotsForSubmit(documentSlots)
-
-        if (canUseDocumentsApi()) {
-            setSaving(true)
-            try {
-                await saveStudentDocumentsViaApi({
-                    studentId,
-                    submittedDate: formatPlanDate(submittedDate),
-                    documentSlots: finalizedSlots,
-                })
-            } catch (error) {
-                toast.error(
-                    error?.status === 403
-                        ? 'You do not have permission to upload student documents.'
-                        : error?.message || 'The documents could not be saved. Please try again.',
-                )
-                setSaving(false)
-                return
-            }
-            setSaving(false)
-            toast.success('Student documents submitted successfully.')
-            navigate('/admin/documents/student-documents')
-            return
-        }
 
         addStudentDocumentRecord({
             studentId,
@@ -314,7 +273,7 @@ const AddStudentDocuments = () => {
                 <button
                     type='button'
                     onClick={handleSave}
-                    disabled={!isValid() || saving}
+                    disabled={!isValid()}
                     className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                     Save Changes

@@ -16,33 +16,33 @@ const AddStudentReEnrollment = () => {
     const [errors, setErrors] = useState([])
     const [savedId, setSavedId] = useState(null)
 
-    const handleSave = async () => {
+    const handleSave = () => {
         const payload = { ...form, status: form.status || 'Pending' }
-        const record = await (savedId ? updateReEnrollment(savedId, payload) : addReEnrollment(payload))
+        const record = savedId ? updateReEnrollment(savedId, payload) : addReEnrollment(payload)
         setSavedId(record.id)
         setErrors([])
     }
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         const nextErrors = validateReEnrollmentForm(form)
         setErrors(nextErrors)
         if (nextErrors.length > 0) return
 
         const payload = { ...form, status: 'Pending' }
         if (savedId) {
-            await updateReEnrollment(savedId, payload)
+            updateReEnrollment(savedId, payload)
         } else {
-            await addReEnrollment(payload)
+            addReEnrollment(payload)
         }
         navigate(ROUTE_BASE)
     }
 
-    const handlePrint = async () => {
+    const handlePrint = () => {
         const nextErrors = validateReEnrollmentForm(form)
         setErrors(nextErrors)
         if (nextErrors.length > 0) return
 
-        const record = await (savedId ? updateReEnrollment(savedId, form) : addReEnrollment(form))
+        const record = savedId ? updateReEnrollment(savedId, form) : addReEnrollment(form)
         navigate(`${ROUTE_BASE}/view/${record.id}?print=1`)
     }
 

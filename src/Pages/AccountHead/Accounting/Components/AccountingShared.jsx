@@ -68,8 +68,6 @@ const SUMMARY_ICON_MAP = {
     'Pending Reconciliation': Scale,
     'Difference Amount': Scale,
     'Opening Balance': Wallet,
-    'Cash Received': Wallet,
-    'Cash Paid': Wallet,
     'Closing Balance': Scale,
     'Deposits / Credits': Wallet,
     'Withdrawals / Debits': Wallet,

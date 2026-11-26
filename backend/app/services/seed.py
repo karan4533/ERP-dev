@@ -134,6 +134,7 @@ def _seed_demo_users(db: Session, campus: Campus, roles_by_code: dict[str, Role]
         ("processauditor", "processauditor@qmis.edu", "process123"),
         ("qualityauditor", "qualityauditor@qmis.edu", "quality123"),
         ("librarian", "librarian@qmis.edu", "librarian123"),
+        ("hostelwarden", "hostelwarden@qmis.edu", "hostelwarden123"),
         ("transportmanager", "transportmanager@qmis.edu", "transport123"),
         ("driver", "driver@qmis.edu", "driver123"),
         ("gatekeeper", "gatekeeper@qmis.edu", "gatekeeper123"),

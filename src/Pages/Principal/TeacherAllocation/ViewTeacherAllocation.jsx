@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import React, { useMemo } from 'react'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import TeacherAllocationForm from './Components/TeacherAllocationForm'
 import {
@@ -7,29 +7,15 @@ import {
     createEmptyMappingRow,
     getAllocationByEmployeeId,
     getTeacherById,
-    hydrateTeacherAllocationsFromApi,
-    hydrateTeachersFromDirectory,
 } from './teacherAllocationData'
 
 const ViewTeacherAllocation = () => {
     const { employeeId } = useParams()
     const navigate = useNavigate()
-    const [ready, setReady] = useState(false)
-    const [teacher, setTeacher] = useState(() => getTeacherById(employeeId))
-    const [allocation, setAllocation] = useState(() => getAllocationByEmployeeId(employeeId))
-
-    useEffect(() => {
-        let cancelled = false
-        Promise.all([hydrateTeacherAllocationsFromApi(), hydrateTeachersFromDirectory()]).finally(() => {
-            if (cancelled) return
-            setTeacher(getTeacherById(employeeId))
-            setAllocation(getAllocationByEmployeeId(employeeId))
-            setReady(true)
-        })
-        return () => {
-            cancelled = true
-        }
-    }, [employeeId])
+    const location = useLocation()
+    const routeBase = location.pathname.startsWith('/admin') ? '/admin/academic/teacher-allocation' : ROUTE_BASE
+    const teacher = getTeacherById(employeeId)
+    const allocation = getAllocationByEmployeeId(employeeId)
 
     const initialValues = useMemo(() => {
         if (!allocation) return null
@@ -42,16 +28,8 @@ const ViewTeacherAllocation = () => {
         }
     }, [allocation])
 
-    if (!ready) {
-        return (
-            <section className='bg-white rounded-2xl shadow-md p-6'>
-                <p className='text-sm text-[#667085]'>Loading allocation…</p>
-            </section>
-        )
-    }
-
     if (!teacher || !allocation || allocation.status === 'Not Allocated') {
-        return <Navigate to={ROUTE_BASE} replace />
+        return <Navigate to={routeBase} replace />
     }
 
     return (
@@ -59,7 +37,7 @@ const ViewTeacherAllocation = () => {
             <div className='flex flex-wrap items-center gap-3'>
                 <button
                     type='button'
-                    onClick={() => navigate(ROUTE_BASE)}
+                    onClick={() => navigate(routeBase)}
                     className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
                 >
                     <ArrowLeft size={18} />

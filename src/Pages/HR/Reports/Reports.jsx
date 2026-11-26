@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react'
 import { DEPARTMENTS } from '../domain/hrStatus'
 import { employeeName, getAdvances, getAttendance, getCandidates, getDisciplinary, getEmployees, getExits, getInterviews, getLeaveBundle, getPerformance, getReferrals, getTraining, salaryRows } from '../domain/hrStore'
 import { formatInr } from '../domain/payrollCalculations'
-import { HrExport, PageIntro, PrimaryButton, td, th, useHrTick } from '../components/HrUi'
+import { HrExport, PageIntro, PrimaryButton } from '../components/HrUi'
+import { useHrTick } from '../components/hrUiState'
+import { DataTable, IntegrationNotice } from '../../../Common/ui'
 
 const REPORTS = ['Headcount', 'New Joiners', 'Relieved', 'Recruitment', 'Interviews', 'Attendance', 'Leave', 'Training', 'Performance', 'Payroll', 'Salary Advance', 'Referral', 'Disciplinary', 'Exit']
 
@@ -12,6 +14,7 @@ const Reports = () => {
     const [department, setDepartment] = useState('')
     const [exportOpen, setExportOpen] = useState(false)
     const rows = useMemo(() => {
+        void tick
         const employees = getEmployees().filter((item) => !department || item.department === department)
         const map = {
             Headcount: employees.map((item) => ({ Employee: item.name, Department: item.department, Category: item.category, Status: item.status })),
@@ -32,18 +35,18 @@ const Reports = () => {
         return map[type] || []
     }, [tick, type, department])
     const headers = rows[0] ? Object.keys(rows[0]) : []
+    const columns = headers.map((header, index) => ({ key: header, label: header, required: index === 0 }))
 
     return (
         <section>
+            <IntegrationNotice state='demo' title='Browser-generated HR reports' description='Reports read local demonstration records. CSV and print output are generated in this browser and are not authoritative regulatory, payroll or personnel reports.' />
             <PageIntro text='Each report reads the same HR records. Filters apply where the report has a department column or employee list.'>
                 <div className='flex flex-wrap gap-2 mb-4'>{REPORTS.map((item) => <button key={item} type='button' onClick={() => setType(item)} className={`text-sm px-3 py-1.5 rounded-md cursor-pointer ${type === item ? 'bg-[#515DEF] text-white' : 'border border-[#515DEF] text-[#515DEF]'}`}>{item}</button>)}</div>
                 <select className='border rounded-md px-2 py-2 text-sm' value={department} onChange={(e) => setDepartment(e.target.value)}><option value=''>All departments</option>{DEPARTMENTS.map((item) => <option key={item}>{item}</option>)}</select>
             </PageIntro>
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-6 overflow-x-auto'>
+            <div className='mt-6 overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white'>
                 <div className='flex justify-between mb-3'><h2 className='text-xl'>{type}</h2><PrimaryButton onClick={() => setExportOpen(true)}>Export</PrimaryButton></div>
-                <table className='w-full text-left'><thead className='bg-[#EDEEF5]'><tr>{headers.map((header) => <th key={header} className={th}>{header}</th>)}</tr></thead>
-                    <tbody>{rows.map((row, index) => <tr key={index} className='border-b'>{headers.map((header) => <td key={header} className={td}>{row[header]}</td>)}</tr>)}</tbody>
-                </table>
+                <DataTable caption={`${type} HR report`} rows={rows} columns={columns} rowKey={(row, index) => `${type}-${index}-${row[headers[0]] || 'record'}`} emptyTitle={`No ${type.toLowerCase()} records`} emptyDescription='Change the report type or department filter to review other records.' />
             </div>
             <HrExport open={exportOpen} setOpen={setExportOpen} filename={`hr-${type}`} rows={rows} />
         </section>

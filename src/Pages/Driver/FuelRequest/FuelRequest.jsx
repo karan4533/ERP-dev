@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -6,9 +6,11 @@ import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } fro
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { useAuth } from '../../../context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import {
     APPROVAL_STATUSES,
-    getDriverFuelRequests, hydrateDriverFuelRequestsFromApi,
+    FUEL_REQUESTS,
     approvalStatusBadgeColor,
     filterFuelRequests,
 } from './fuelRequestData'
@@ -17,11 +19,8 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const FuelRequest = () => {
-    const [fuelRequests, setFuelRequests] = useState(() => getDriverFuelRequests())
-    useEffect(() => {
-        hydrateDriverFuelRequestsFromApi().finally(() => setFuelRequests(getDriverFuelRequests()))
-    }, [])
-
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const [search, setSearch] = useState('')
     const [approvalStatus, setApprovalStatus] = useState('')
     const [period, setPeriod] = useState('')
@@ -31,12 +30,12 @@ const FuelRequest = () => {
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
 
     const filteredRecords = useMemo(() => filterFuelRequests({
-        records: fuelRequests,
+        records: FUEL_REQUESTS,
         search,
         approvalStatus,
         fromDate,
         toDate,
-    }), [fuelRequests, search, approvalStatus, fromDate, toDate])
+    }), [search, approvalStatus, fromDate, toDate])
 
     const clearFilters = () => {
         setSearch('')
@@ -217,13 +216,15 @@ const FuelRequest = () => {
                                                 >
                                                     Edit
                                                 </NavLink>
-                                                <button
-                                                    type='button'
-                                                    onClick={() => setDeleteRequestModal(true)}
-                                                    className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                >
-                                                    Delete
-                                                </button>
+                                                {canDelete && (
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => setDeleteRequestModal(true)}
+                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                )}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -251,10 +252,12 @@ const FuelRequest = () => {
                 </div>
             </div>
 
-            <DeleteRequestModal
-                deleteRequestModal={deleteRequestModal}
-                setDeleteRequestModal={setDeleteRequestModal}
-            />
+            {canDelete && (
+                <DeleteRequestModal
+                    deleteRequestModal={deleteRequestModal}
+                    setDeleteRequestModal={setDeleteRequestModal}
+                />
+            )}
             <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )

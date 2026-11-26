@@ -1,12 +1,12 @@
-import StaffNotificationsPage from '../../../Common/Notifications/StaffNotificationsPage'
+import React from 'react'
+import NotificationsListView from '../../../Common/Notifications/NotificationsListView'
 import { LIBRARIAN_NOTIFICATIONS, NOTIFICATION_TYPES, typeBadgeColor } from './notificationsData'
 
 const ReminderList = () => (
-    <StaffNotificationsPage
-        fallback={LIBRARIAN_NOTIFICATIONS}
+    <NotificationsListView
+        notifications={LIBRARIAN_NOTIFICATIONS}
         notificationTypes={NOTIFICATION_TYPES}
         typeBadgeColor={typeBadgeColor}
-        title="Librarian Notifications"
     />
 )
 

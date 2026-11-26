@@ -1,120 +1,76 @@
-import React, { useMemo } from 'react'
-import { Search } from 'lucide-react'
-import { rechargeStatusBadgeColor } from '../walletManagementData'
+import { useMemo, useState } from 'react'
+import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
 import {
-    RoleChip,
-    SummaryCards,
-    TableCard,
-    TablePagination,
-    UserAvatar,
-    tdClass,
-    thClass,
-} from './WalletShared'
+    matchesWalletRole,
+    RECHARGE_RECORDS,
+    RECHARGE_SUMMARY,
+} from '../walletManagementData'
+import { RoleChip, SummaryCards, UserAvatar } from './WalletShared'
 
-const parseAmount = (value) => {
-    if (typeof value === 'number') return value
-    const digits = String(value ?? '').replace(/[^\d.-]/g, '')
-    return Number(digits) || 0
-}
+const MODE_FILTERS = ['All modes', 'UPI', 'Card', 'Net Banking', 'Offline']
+const STATUS_FILTERS = ['All statuses', 'Success', 'Failed', 'Refunded']
 
-const formatInr = (amount) => {
-    try {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0,
-        }).format(amount)
-    } catch {
-        return `₹${amount}`
+const RechargeRecordsTab = ({ rechargeRecords = RECHARGE_RECORDS, initialRole = 'All Roles' }) => {
+    const [query, setQuery] = useState('')
+    const [mode, setMode] = useState(MODE_FILTERS[0])
+    const [status, setStatus] = useState(STATUS_FILTERS[0])
+    const rows = useMemo(() => rechargeRecords.filter((row) => {
+        if (!matchesWalletRole(row.role, initialRole)) return false
+        if (mode !== MODE_FILTERS[0] && row.mode !== mode) return false
+        if (status !== STATUS_FILTERS[0] && row.status !== status) return false
+        const normalizedQuery = query.trim().toLowerCase()
+        if (!normalizedQuery) return true
+        return [row.id, row.user, row.role, row.mode, row.amount, row.dateTime, row.status]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedQuery)
+    }), [initialRole, mode, query, rechargeRecords, status])
+    const columns = [
+        { key: 'id', label: 'Transaction', required: true, render: (row) => <span className='font-mono text-xs'>{row.id}</span> },
+        { key: 'user', label: 'User', required: true, render: (row) => <UserAvatar initials={row.initials} name={row.user} /> },
+        { key: 'role', label: 'Role', render: (row) => <RoleChip role={row.role} /> },
+        { key: 'mode', label: 'Mode' },
+        { key: 'amount', label: 'Amount', render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{row.amount}</span> },
+        { key: 'dateTime', label: 'Date & time' },
+        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    ]
+    const resetFilters = () => {
+        setQuery('')
+        setMode(MODE_FILTERS[0])
+        setStatus(STATUS_FILTERS[0])
     }
-}
-
-const RechargeRecordsTab = ({ rechargeRecords }) => {
-    const rows = Array.isArray(rechargeRecords) ? rechargeRecords : []
-    const summaryCards = useMemo(() => {
-        const total = rows.reduce((sum, row) => sum + parseAmount(row.amount), 0)
-        const success = rows.filter((row) => String(row.status || '').toLowerCase() === 'success').length
-        return [
-            { label: 'Recharges on snapshot', value: String(rows.length), sub: 'Finance state', iconTone: 'success' },
-            { label: 'Success', value: String(success), sub: 'Status Success', iconTone: 'success' },
-            { label: 'Total amount', value: formatInr(total), sub: 'Sum of listed rows', iconTone: 'success' },
-            { label: 'Other status', value: String(Math.max(0, rows.length - success)), sub: 'Failed / refunded / other', iconTone: 'warning' },
-        ]
-    }, [rows])
 
     return (
-    <div className='space-y-6'>
-        <SummaryCards cards={summaryCards} />
-
-        <TableCard
-            title='Recharge transaction log'
-            filters={(
-                <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
-                    <div className='relative min-w-[180px]'>
-                        <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
-                        <input
-                            type='text'
-                            placeholder='Search user / txn ID...'
-                            className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
-                        />
-                    </div>
-                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'>
-                        <option>All Modes</option>
-                        <option>UPI</option>
-                        <option>Card</option>
-                        <option>Net Banking</option>
-                        <option>Cash (front desk)</option>
-                    </select>
-                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'>
-                        <option>All Status</option>
-                        <option>Success</option>
-                        <option>Failed</option>
-                        <option>Refunded</option>
-                    </select>
-                </div>
-            )}
-            footer={<TablePagination summary={`${rows.length} recharge${rows.length === 1 ? '' : 's'}`} />}
-        >
-            <table className='w-full text-sm text-left mt-4'>
-                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                    <tr>
-                        <th className={`${thClass} rounded-s-lg`}>Txn ID</th>
-                        <th className={thClass}>User</th>
-                        <th className={thClass}>Role</th>
-                        <th className={thClass}>Mode</th>
-                        <th className={thClass}>Amount</th>
-                        <th className={thClass}>Date & time</th>
-                        <th className={`${thClass} rounded-e-lg`}>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.length === 0 ? (
-                        <tr>
-                            <td colSpan={7} className={`${tdClass} text-[#667085]`}>
-                                No wallet recharges on the campus finance snapshot yet.
-                            </td>
-                        </tr>
-                    ) : rows.map((row) => (
-                        <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                            <td className={`${tdClass} rounded-s-lg font-mono text-xs text-[#1E1E1E]`}>{row.id}</td>
-                            <td className={tdClass}>
-                                <UserAvatar initials={row.initials || String(row.user || '?').slice(0, 2).toUpperCase()} name={row.user || '—'} />
-                            </td>
-                            <td className={tdClass}><RoleChip role={row.role || '—'} /></td>
-                            <td className={tdClass}>{row.mode || '—'}</td>
-                            <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amount ?? '—'}</td>
-                            <td className={tdClass}>{row.dateTime || '—'}</td>
-                            <td className={`${tdClass} rounded-e-lg`}>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${rechargeStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
-                                    {row.status || '—'}
-                                </span>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </TableCard>
-    </div>
+        <div className='space-y-5'>
+            <IntegrationNotice state='demo' title='Browser-stored recharge evidence' description='These records combine seeded examples with local cash credits created in this session. Online gateway status, settlement and refund state require the wallet ledger API.' />
+            <SummaryCards cards={RECHARGE_SUMMARY} />
+            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='wallet-recharge-register-title'>
+                <div className='px-4 pt-4 sm:px-5'><h3 id='wallet-recharge-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>Recharge transaction register</h3></div>
+                <DataToolbar
+                    query={query}
+                    onQueryChange={setQuery}
+                    searchLabel='Search recharge records'
+                    searchPlaceholder='Transaction, user, mode or amount…'
+                    resultCount={rows.length}
+                    onReset={resetFilters}
+                    filters={(
+                        <>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Mode
+                                <select value={mode} onChange={(event) => setMode(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
+                                    {MODE_FILTERS.map((item) => <option key={item}>{item}</option>)}
+                                </select>
+                            </label>
+                            <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status
+                                <select value={status} onChange={(event) => setStatus(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
+                                    {STATUS_FILTERS.map((item) => <option key={item}>{item}</option>)}
+                                </select>
+                            </label>
+                        </>
+                    )}
+                />
+                <DataTable caption='Wallet recharge transaction register' rows={rows} columns={columns} rowKey='id' emptyTitle='No recharge records found' emptyDescription='Reset the filters or choose another role to review available recharge evidence.' />
+            </section>
+        </div>
     )
 }
 

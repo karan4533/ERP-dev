@@ -1,4 +1,3 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export const RESPONSE_TYPE_STATUS_OPTIONS = ['Active', 'Inactive']
 
 export const responseTypeStatusBadgeColor = {
@@ -12,7 +11,7 @@ export const DEFAULT_RESPONSE_TYPE_FORM = {
     active: true,
 }
 
-const DEFAULT_RESPONSE_TYPES = [
+export const RESPONSE_TYPES_LIST = [
     {
         id: 'RT-001',
         type: 'Yes / No',
@@ -112,16 +111,3 @@ export const createResponseTypeId = (types) => {
     }, 0)
     return `RT-${String(max + 1).padStart(3, '0')}`
 }
-export const RESPONSE_TYPES_STORAGE_KEY = 'schoolerp-jd-audit-response-types-v1'
-export function getAuditResponseTypes() {
-    return ensureCampusSeed('schoolerp-jd-audit-response-types-v1', DEFAULT_RESPONSE_TYPES)
-}
-export function saveAuditResponseTypes(rows) {
-    return saveCampusJson('schoolerp-jd-audit-response-types-v1', rows)
-}
-export function hydrateAuditResponseTypesFromApi() {
-    if (!usesCampusApiForKey('schoolerp-jd-audit-response-types-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-jd-audit-response-types-v1', DEFAULT_RESPONSE_TYPES)
-}
-export const RESPONSE_TYPES = DEFAULT_RESPONSE_TYPES
-export const RESPONSE_TYPES_LIST = DEFAULT_RESPONSE_TYPES

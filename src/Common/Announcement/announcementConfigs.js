@@ -42,11 +42,6 @@ export const ANNOUNCEMENT_ROUTE_CONFIG = {
         view: '/student/announcement/view',
         sentByDefault: 'Student',
     },
-    parent: {
-        list: '/parent/announcement',
-        view: '/parent/announcement/view',
-        sentByDefault: 'Parent',
-    },
     gatekeeper: {
         list: '/gate-keeper/broadcast-list',
         view: '/gate-keeper/view-broadcast',
@@ -84,6 +79,12 @@ export const ANNOUNCEMENT_ROUTE_CONFIG = {
         view: '/housekeeping-manager/broadcast/view-broadcast',
         sentByDefault: 'Housekeeping Manager',
     },
+    maintenancemanager: {
+        list: '/maintenance-manager/broadcast',
+        add: '/maintenance-manager/broadcast/add-broadcast',
+        view: '/maintenance-manager/broadcast/view-broadcast',
+        sentByDefault: 'Maintenance Manager',
+    },
     jointdirector: {
         list: '/joint-director/broadcast',
         view: '/joint-director/broadcast/view-broadcast',
@@ -105,10 +106,75 @@ export const ANNOUNCEMENT_ROUTE_CONFIG = {
         view: '/joint-director-audit/broadcast/view-broadcast',
         sentByDefault: 'Joint Director Audit',
     },
+    transportmanager: {
+        list: '/transport-manager/announcement',
+        add: '/transport-manager/announcement/add',
+        view: '/transport-manager/announcement/view',
+        sentByDefault: 'Transport Manager',
+    },
+    processauditor: {
+        list: '/process-auditor/announcement',
+        add: '/process-auditor/announcement/add',
+        view: '/process-auditor/announcement/view',
+        sentByDefault: 'Process Auditor',
+    },
+    qualityauditor: {
+        list: '/quality-auditor/announcement',
+        add: '/quality-auditor/announcement/add',
+        view: '/quality-auditor/announcement/view',
+        sentByDefault: 'Quality Auditor',
+    },
+    accounthead: {
+        list: '/account-head/announcement',
+        add: '/account-head/announcement/add',
+        view: '/account-head/announcement/view',
+        sentByDefault: 'Account Head',
+    },
+    driver: {
+        list: '/driver/announcement',
+        add: '/driver/announcement/add',
+        view: '/driver/announcement/view',
+        sentByDefault: 'Driver',
+    },
+    pro: {
+        list: '/pro/announcement',
+        add: '/pro/announcement/add',
+        view: '/pro/announcement/view',
+        sentByDefault: 'Public Relations Officer',
+    },
+    fileroom: {
+        list: '/file-room/announcement',
+        add: '/file-room/announcement/add',
+        view: '/file-room/announcement/view',
+        sentByDefault: 'File Room Custodian',
+    },
+    'file-room': {
+        list: '/file-room/announcement',
+        add: '/file-room/announcement/add',
+        view: '/file-room/announcement/view',
+        sentByDefault: 'File Room Custodian',
+    },
+    cctv: {
+        list: '/cctv/announcement',
+        add: '/cctv/announcement/add',
+        view: '/cctv/announcement/view',
+        sentByDefault: 'CCTV In-charge',
+    },
+    parent: {
+        list: '/parent/announcement',
+        add: '/parent/announcement/add',
+        view: '/parent/announcement/view',
+        sentByDefault: 'Parent',
+    },
 }
 
-export const getAnnouncementRoutes = (roleKey) =>
-    ANNOUNCEMENT_ROUTE_CONFIG[roleKey] || ANNOUNCEMENT_ROUTE_CONFIG.admin
+export const getAnnouncementRoutes = (roleKey) => {
+    if (!roleKey) return ANNOUNCEMENT_ROUTE_CONFIG.admin
+    if (Object.prototype.hasOwnProperty.call(ANNOUNCEMENT_ROUTE_CONFIG, roleKey)) return ANNOUNCEMENT_ROUTE_CONFIG[roleKey]
+    const clean = String(roleKey).toLowerCase().replace(/[-_\s]/g, '')
+    if (Object.prototype.hasOwnProperty.call(ANNOUNCEMENT_ROUTE_CONFIG, clean)) return ANNOUNCEMENT_ROUTE_CONFIG[clean]
+    return ANNOUNCEMENT_ROUTE_CONFIG.admin
+}
 
 export const getAnnouncementViewPath = (roleKey, id) =>
     `${getAnnouncementRoutes(roleKey).view}/${id}`

@@ -226,7 +226,7 @@ export const getExamSchedules = () => {
     return seeded
 }
 
-export const addExamSchedule = (payload) => {
+export const addExamSchedule = (payload = {}) => {
     const list = getExamSchedules()
     const maxId = list.reduce((max, item) => {
         const num = parseInt(String(item.examId).replace('EXM-', ''), 10)
@@ -234,25 +234,25 @@ export const addExamSchedule = (payload) => {
     }, 1000)
     const id = `EXM-${maxId + 1}`
 
-    const subjects = payload.subjects.map(({ subject, examDate, startTime, endTime, day, duration }) => ({
-        subject,
-        examDate,
-        startTime,
-        endTime,
-        day,
-        duration,
+    const subjects = (payload.subjects || []).map(({ subject, examDate, startTime, endTime, day, duration }) => ({
+        subject: subject || '',
+        examDate: examDate || '',
+        startTime: startTime || '',
+        endTime: endTime || '',
+        day: day || '',
+        duration: duration || '',
     }))
 
     const record = withTimetable({
         id,
         examId: id,
-        examName: payload.examName,
-        className: payload.className,
-        section: payload.section,
-        classLabel: `${payload.className} - ${payload.section}`,
-        startDate: payload.examDate,
-        endDate: payload.endDate,
-        teacherName: payload.teacherName,
+        examName: payload.examName || 'Assessment',
+        className: payload.className || '',
+        section: payload.section || '',
+        classLabel: `${payload.className || ''} - ${payload.section || ''}`,
+        startDate: payload.examDate || payload.startDate || '',
+        endDate: payload.endDate || '',
+        teacherName: payload.teacherName || '',
         submittedDate: formatDate(new Date()),
         approvalStatus: 'Pending',
         subjects,

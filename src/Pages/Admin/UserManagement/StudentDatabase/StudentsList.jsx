@@ -1,41 +1,16 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
-import { hydrateEnrolledStudentsFromApi } from '../../../../Common/StudentDatabase/enrolledStudentsData'
-import { getStudentsList } from '../../../../Common/StudentDatabase/studentDatabaseData'
-import { isApiStudentsEnabled } from '../../../../services/apiClient'
-import { ROUTE_BASE, getStudentProfileImage } from './studentDatabaseData'
+import { ROUTE_BASE, STUDENTS_LIST, getStudentProfileImage } from './studentDatabaseData'
 
 const StudentsList = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [rows, setRows] = useState(() => getStudentsList())
-    const [loading, setLoading] = useState(isApiStudentsEnabled())
-
-    useEffect(() => {
-        let cancelled = false
-        if (!isApiStudentsEnabled()) {
-            setRows(getStudentsList())
-            setLoading(false)
-            return undefined
-        }
-        setLoading(true)
-        hydrateEnrolledStudentsFromApi()
-            .then(() => {
-                if (!cancelled) setRows(getStudentsList())
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false)
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [])
 
     return (
         <section>
@@ -100,21 +75,14 @@ const StudentsList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && (
-                                <tr>
-                                    <td colSpan={11} className='px-2 py-10 text-center text-[#667085]'>
-                                        Loading students…
-                                    </td>
-                                </tr>
-                            )}
-                            {!loading && rows.length === 0 && (
+                            {STUDENTS_LIST.length === 0 && (
                                 <tr>
                                     <td colSpan={11} className='px-2 py-10 text-center text-[#667085]'>
                                         No enrolled students yet. Enroll a student from the Admission List to see them here.
                                     </td>
                                 </tr>
                             )}
-                            {!loading && rows.map((student) => (
+                            {STUDENTS_LIST.map((student) => (
                                 <tr key={student.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className='px-2 py-4 flex justify-center rounded-s-lg'>
                                         <img src={getStudentProfileImage(student)} alt='' className='w-9 h-9 rounded-full object-cover' />
@@ -142,9 +110,9 @@ const StudentsList = () => {
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    {loading || rows.length === 0
+                    {STUDENTS_LIST.length === 0
                         ? 'Showing 0 entries'
-                        : `Showing 1 to ${rows.length} of ${rows.length} entries`}
+                        : `Showing 1 to ${STUDENTS_LIST.length} of ${STUDENTS_LIST.length} entries`}
                 </p>
                 <div className='flex gap-x-2'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronLeft size={16} /></button>
@@ -153,13 +121,7 @@ const StudentsList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='students-list'
-                rows={Array.isArray(rows) ? rows : []}
-                exportDescription={<>You are exporting {Array.isArray(rows) ? rows.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

@@ -171,15 +171,40 @@ const EnterMarksForm = ({ onSubmit }) => {
                     />
                 </div>
                 <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='obtained-marks' className='text-base font-medium text-[#1E1E1E]'>Obtained Marks:</label>
+                    <div className='flex items-center justify-between'>
+                        <label htmlFor='obtained-marks' className='text-base font-medium text-[#1E1E1E]'>Obtained Marks:</label>
+                        <div className='flex items-center gap-1.5'>
+                            <button
+                                type='button'
+                                onClick={() => {
+                                    setObtainedMarks('AB')
+                                    setGrade('AB')
+                                }}
+                                className={`px-2 py-0.5 rounded text-xs font-semibold cursor-pointer border ${obtainedMarks === 'AB' ? 'bg-[#FF0000] text-white border-[#FF0000]' : 'border-[#D9D9D9] text-[#666] hover:bg-gray-100'}`}
+                            >
+                                Absent (AB)
+                            </button>
+                            <button
+                                type='button'
+                                onClick={() => {
+                                    setObtainedMarks('ML')
+                                    setGrade('ML')
+                                }}
+                                className={`px-2 py-0.5 rounded text-xs font-semibold cursor-pointer border ${obtainedMarks === 'ML' ? 'bg-[#FF9800] text-white border-[#FF9800]' : 'border-[#D9D9D9] text-[#666] hover:bg-gray-100'}`}
+                            >
+                                Medical (ML)
+                            </button>
+                        </div>
+                    </div>
                     <input
-                        type='number'
+                        type={obtainedMarks === 'AB' || obtainedMarks === 'ML' ? 'text' : 'number'}
                         id='obtained-marks'
                         required
-                        min='0'
+                        min={obtainedMarks === 'AB' || obtainedMarks === 'ML' ? undefined : '0'}
+                        max={obtainedMarks === 'AB' || obtainedMarks === 'ML' ? undefined : (totalMarks || undefined)}
                         value={obtainedMarks}
                         onChange={(e) => handleMarksChange(totalMarks, e.target.value)}
-                        placeholder='e.g. 85'
+                        placeholder='e.g. 85 or AB / ML'
                         className={inputClass}
                     />
                 </div>

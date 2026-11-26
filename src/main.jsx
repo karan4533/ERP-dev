@@ -18,7 +18,7 @@ import { runDocumentsWipeIfNeeded } from './Common/Documents/documentsWipe.js'
 import {
     migrateLegacyLeaveRequestsIfNeeded,
     migrateSessionLeaveRequestsToLocalIfNeeded,
-} from './Common/LeaveRequest/leaveRequestData'
+} from './Common/LeaveRequest/leaveRequestData.js'
 import { bootstrapDemoStores } from './Common/demoDomain/bootstrap.js'
 
 runAcademicsWipeIfNeeded()

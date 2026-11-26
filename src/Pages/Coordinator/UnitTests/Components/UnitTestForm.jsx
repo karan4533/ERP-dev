@@ -1,7 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { Upload } from 'lucide-react'
-import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
-import { classKeysMatch, normalizeSectionKey } from '../../../../Common/Teacher/teacherAssignedClasses'
 import { CLASSES, SECTIONS, SUBJECTS } from '../unitTestsData'
 
 const inputClass =
@@ -22,134 +20,24 @@ const getFileType = (fileName) => {
 }
 
 const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = false }) => {
-    const assignments = useTeacherAssignments()
     const [fileName, setFileName] = useState(record?.fileName ?? '')
-    const [formState, setFormState] = useState(() => ({
-        title: record?.title ?? '',
-        description: record?.description ?? '',
-        subject: record?.subject ?? '',
-        className: record?.className ?? '',
-        section: record?.section ?? '',
-        testDate: record?.testDate ?? '',
-        totalMarks: record?.totalMarks ?? '',
-        duration: record?.duration ?? '',
-    }))
-
-    useEffect(() => {
-        if (!record) return
-        setFormState({
-            title: record.title ?? '',
-            description: record.description ?? '',
-            subject: record.subject ?? '',
-            className: record.className ?? '',
-            section: record.section ?? '',
-            testDate: record.testDate ?? '',
-            totalMarks: record.totalMarks ?? '',
-            duration: record.duration ?? '',
-        })
-        setFileName(record.fileName ?? '')
-    }, [record])
-
-    const classOptions = useMemo(() => {
-        if (assignments.classes?.length) return assignments.classes
-        return CLASSES
-    }, [assignments.classes])
-
-    const sectionOptions = useMemo(() => {
-        if (!formState.className) return []
-        const fromAssignments = assignments.sectionsFor?.(formState.className) || []
-        if (fromAssignments.length) return fromAssignments
-        return assignments.assignments?.length ? [] : SECTIONS
-    }, [assignments, formState.className])
-
-    const subjectOptions = useMemo(() => {
-        if (!assignments.assignments?.length) return SUBJECTS
-        const rows = assignments.assignments.filter((row) => {
-            if (formState.className && !classKeysMatch(row.className, formState.className)) return false
-            if (
-                formState.section
-                && row.section
-                && normalizeSectionKey(row.section) !== normalizeSectionKey(formState.section)
-            ) {
-                return false
-            }
-            return Boolean(row.subject)
-        })
-        const subjects = [...new Set(rows.map((row) => row.subject).filter(Boolean))]
-        if (subjects.length) return subjects.sort((a, b) => a.localeCompare(b))
-        return assignments.subjects?.length ? assignments.subjects : SUBJECTS
-    }, [assignments, formState.className, formState.section])
-
-    useEffect(() => {
-        if (readOnly || record || !assignments.ready) return
-        setFormState((current) => {
-            const next = { ...current }
-            let changed = false
-            if (!next.className && classOptions[0]) {
-                next.className = classOptions[0]
-                changed = true
-            }
-            const sections = next.className
-                ? (assignments.sectionsFor?.(next.className) || [])
-                : []
-            if (!next.section && sections[0]) {
-                next.section = sections[0]
-                changed = true
-            }
-            if (!next.subject && subjectOptions[0]) {
-                next.subject = subjectOptions[0]
-                changed = true
-            }
-            return changed ? next : current
-        })
-    }, [assignments.ready, assignments, classOptions, subjectOptions, readOnly, record])
-
-    const update = (key, value) => {
-        setFormState((current) => {
-            const next = { ...current, [key]: value }
-            if (key === 'className') {
-                const nextSections = assignments.sectionsFor?.(value) || []
-                next.section = nextSections.includes(current.section) ? current.section : (nextSections[0] || '')
-                const nextSubjects = (assignments.assignments || [])
-                    .filter((row) => classKeysMatch(row.className, value)
-                        && (!next.section || !row.section
-                            || normalizeSectionKey(row.section) === normalizeSectionKey(next.section)))
-                    .map((row) => row.subject)
-                    .filter(Boolean)
-                const uniqueSubjects = [...new Set(nextSubjects)]
-                if (uniqueSubjects.length && !uniqueSubjects.includes(next.subject)) {
-                    next.subject = uniqueSubjects[0]
-                }
-            }
-            if (key === 'section' && current.className) {
-                const nextSubjects = (assignments.assignments || [])
-                    .filter((row) => classKeysMatch(row.className, current.className)
-                        && (!value || !row.section
-                            || normalizeSectionKey(row.section) === normalizeSectionKey(value)))
-                    .map((row) => row.subject)
-                    .filter(Boolean)
-                const uniqueSubjects = [...new Set(nextSubjects)]
-                if (uniqueSubjects.length && !uniqueSubjects.includes(next.subject)) {
-                    next.subject = uniqueSubjects[0]
-                }
-            }
-            return next
-        })
-    }
 
     const handleSubmit = (event) => {
         event.preventDefault()
         if (readOnly) return
 
+        const form = event.currentTarget
+        const formData = new FormData(form)
+
         onSubmit({
-            title: formState.title.trim(),
-            description: formState.description.trim(),
-            subject: formState.subject,
-            className: formState.className,
-            section: formState.section,
-            testDate: formState.testDate,
-            totalMarks: formState.totalMarks,
-            duration: formState.duration,
+            title: formData.get('title'),
+            description: formData.get('description'),
+            subject: formData.get('subject'),
+            className: formData.get('className'),
+            section: formData.get('section'),
+            testDate: formData.get('testDate'),
+            totalMarks: formData.get('totalMarks'),
+            duration: formData.get('duration'),
             fileName: fileName || record?.fileName || '—',
             fileType: fileName ? getFileType(fileName) : record?.fileType || 'pdf',
         })
@@ -163,21 +51,15 @@ const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = 
     return (
         <form id={formId} onSubmit={handleSubmit}>
             <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 lg:mt-8 mt-2'>
-                {!assignments.ready && !readOnly ? (
-                    <p className='text-sm text-[#667085] sm:col-span-2 lg:col-span-3'>Loading your assigned classes…</p>
-                ) : null}
-                {assignments.emptyReason && assignments.ready && !readOnly ? (
-                    <p className='text-sm text-[#E65100] sm:col-span-2 lg:col-span-3'>{assignments.emptyReason}</p>
-                ) : null}
                 <div className='flex flex-col gap-y-2 sm:col-span-2 lg:col-span-3'>
                     <label htmlFor='title' className='text-base font-medium text-[#1E1E1E]'>Title:</label>
                     <input
                         type='text'
                         id='title'
+                        name='title'
                         required
                         readOnly={readOnly}
-                        value={formState.title}
-                        onChange={(event) => update('title', event.target.value)}
+                        defaultValue={record?.title ?? ''}
                         placeholder='e.g. Real Numbers — Unit Test I'
                         className={inputClass}
                     />
@@ -186,10 +68,10 @@ const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = 
                     <label htmlFor='description' className='text-base font-medium text-[#1E1E1E]'>Description:</label>
                     <textarea
                         id='description'
+                        name='description'
                         required
                         readOnly={readOnly}
-                        value={formState.description}
-                        onChange={(event) => update('description', event.target.value)}
+                        defaultValue={record?.description ?? ''}
                         placeholder='Brief description of the unit test syllabus and format...'
                         className={textareaClass}
                     />
@@ -198,63 +80,48 @@ const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = 
                     <label htmlFor='subject' className='text-base font-medium text-[#1E1E1E]'>Subject:</label>
                     <select
                         id='subject'
+                        name='subject'
                         required
-                        disabled={readOnly || !subjectOptions.length}
-                        value={formState.subject}
-                        onChange={(event) => update('subject', event.target.value)}
+                        disabled={readOnly}
+                        defaultValue={record?.subject ?? ''}
                         className={selectClass}
                     >
-                        <option value=''>{subjectOptions.length ? '--Select--' : 'No assigned subjects'}</option>
-                        {subjectOptions.map((subject) => (
+                        <option value=''>--Select--</option>
+                        {SUBJECTS.map((subject) => (
                             <option key={subject} value={subject}>{subject}</option>
                         ))}
-                        {formState.subject && !subjectOptions.includes(formState.subject) ? (
-                            <option value={formState.subject}>{formState.subject}</option>
-                        ) : null}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2'>
                     <label htmlFor='class-name' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
                     <select
                         id='class-name'
+                        name='className'
                         required
-                        disabled={readOnly || !classOptions.length}
-                        value={formState.className}
-                        onChange={(event) => update('className', event.target.value)}
+                        disabled={readOnly}
+                        defaultValue={record?.className ?? ''}
                         className={selectClass}
                     >
-                        <option value=''>{classOptions.length ? '--Select--' : 'No assigned classes'}</option>
-                        {classOptions.map((item) => (
+                        <option value=''>--Select--</option>
+                        {CLASSES.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
-                        {formState.className && !classOptions.includes(formState.className) ? (
-                            <option value={formState.className}>{formState.className}</option>
-                        ) : null}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2'>
                     <label htmlFor='section' className='text-base font-medium text-[#1E1E1E]'>Section:</label>
                     <select
                         id='section'
+                        name='section'
                         required
-                        disabled={readOnly || !sectionOptions.length}
-                        value={formState.section}
-                        onChange={(event) => update('section', event.target.value)}
+                        disabled={readOnly}
+                        defaultValue={record?.section ?? ''}
                         className={selectClass}
                     >
-                        <option value=''>
-                            {!formState.className
-                                ? 'Select class first'
-                                : sectionOptions.length
-                                    ? '--Select--'
-                                    : 'No assigned sections'}
-                        </option>
-                        {sectionOptions.map((item) => (
+                        <option value=''>--Select--</option>
+                        {SECTIONS.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
-                        {formState.section && !sectionOptions.includes(formState.section) ? (
-                            <option value={formState.section}>{formState.section}</option>
-                        ) : null}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2'>
@@ -262,10 +129,10 @@ const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = 
                     <input
                         type='date'
                         id='test-date'
+                        name='testDate'
                         required
                         readOnly={readOnly}
-                        value={formState.testDate}
-                        onChange={(event) => update('testDate', event.target.value)}
+                        defaultValue={record?.testDate ?? ''}
                         className={inputClass}
                     />
                 </div>
@@ -274,11 +141,11 @@ const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = 
                     <input
                         type='number'
                         id='total-marks'
+                        name='totalMarks'
                         required
                         min='1'
                         readOnly={readOnly}
-                        value={formState.totalMarks}
-                        onChange={(event) => update('totalMarks', event.target.value)}
+                        defaultValue={record?.totalMarks ?? ''}
                         placeholder='e.g. 25'
                         className={inputClass}
                     />
@@ -288,11 +155,11 @@ const UnitTestForm = ({ record, onSubmit, formId = 'unit-test-form', readOnly = 
                     <input
                         type='number'
                         id='duration'
+                        name='duration'
                         required
                         min='1'
                         readOnly={readOnly}
-                        value={formState.duration}
-                        onChange={(event) => update('duration', event.target.value)}
+                        defaultValue={record?.duration ?? ''}
                         placeholder='e.g. 45'
                         className={inputClass}
                     />

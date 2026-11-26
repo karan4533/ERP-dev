@@ -1,5 +1,8 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
 import React from 'react'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
+import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
 import Dashboard from '../Pages/CanteenManager/Dashboard/Dashboard'
 import MenuManagement from '../Pages/CanteenManager/MenuManagement/MenuManagement'
 import ViewMenuItem from '../Pages/CanteenManager/MenuManagement/ViewMenuItem'
@@ -34,6 +37,14 @@ const CanteenManagerRoutes = () => {
             <Route path="/canteen-manager/broadcast" element={<AnnouncementList />} />
             <Route path="/canteen-manager/broadcast/add-broadcast" element={<AddAnnouncement />} />
             <Route path="/canteen-manager/broadcast/view-broadcast/:id" element={<ViewAnnouncement />} />
+
+            {/* Universal Task Management */}
+            {TaskManagementRoutes({ basePath: '/canteen-manager' })}
+
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/canteen-manager', role: 'canteen-manager' })}
+
+                        <Route path="/canteen-manager/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
             <Route path="*" element={<Navigate to="/canteen-manager/dashboard" replace />} />
         </ReactRoutes>
     )

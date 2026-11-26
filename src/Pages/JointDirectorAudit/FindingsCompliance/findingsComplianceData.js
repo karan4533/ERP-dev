@@ -1,4 +1,3 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const SEVERITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical']
 
 export const FINDING_STATUSES = ['Open', 'In Progress', 'Closed']
@@ -17,7 +16,7 @@ export const DEPARTMENTS = [
     'Stationery Store',
 ]
 
-const DEFAULT_FINDINGS = [
+const FINDING_RECORDS = [
     {
         id: 'FND-2026-041',
         auditId: 'AUD-2026-021',
@@ -173,7 +172,21 @@ const DEFAULT_FINDINGS = [
     },
 ]
 
-export const getFindingById = (id) => getFindings().find((item) => item.id === id) ?? null
+export const FINDINGS = FINDING_RECORDS.map((finding) => ({
+    ...finding,
+    owner: finding.responsiblePerson,
+    findingStatus: 'Recorded',
+    rootCause: 'No root-cause statement is linked in the current reference dataset.',
+    rcaStatus: 'Not recorded',
+    capaStatus: finding.status === 'Closed' ? 'Completed' : (finding.actionTaken ? 'In progress' : 'Not started'),
+    verificationStatus: finding.status === 'Closed' ? 'Verified' : 'Pending',
+    verifiedBy: finding.status === 'Closed' ? 'Reviewer identity not recorded in reference data' : 'Not assigned',
+    verifiedOn: finding.status === 'Closed' ? finding.dueDate : '',
+    closureStatus: finding.status === 'Closed' ? 'Closed' : 'Open',
+    closureAuthority: finding.status === 'Closed' ? 'Closure authority not recorded in reference data' : 'Joint Director — Audit review required',
+}))
+
+export const getFindingById = (id) => FINDINGS.find((item) => item.id === id) ?? null
 
 export const severityBadgeColor = {
     Low: 'bg-[#66708533] text-[#667085]',
@@ -193,18 +206,3 @@ export const complianceBadgeColor = {
     Complied: 'bg-[#4CAF5033] text-[#4CAF50]',
     Overdue: 'bg-[#FF000033] text-[#FF0000]',
 }
-
-export const FINDINGS_STORAGE_KEY = 'schoolerp-jd-audit-findings-v1'
-export function getFindings() {
-    return ensureCampusSeed('schoolerp-jd-audit-findings-v1', DEFAULT_FINDINGS)
-}
-export function saveFindings(rows) {
-    return saveCampusJson('schoolerp-jd-audit-findings-v1', rows)
-}
-export function hydrateFindingsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-jd-audit-findings-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-jd-audit-findings-v1', DEFAULT_FINDINGS)
-}
-/** Static seed / fallback — list pages should call getFindings() after hydrate */
-export const FINDINGS = DEFAULT_FINDINGS
-

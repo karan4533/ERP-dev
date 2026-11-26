@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -14,7 +14,7 @@ import WorkflowBuilder from './WorkflowBuilder'
 import WorkflowRuleFormModal from './WorkflowRuleFormModal'
 import {
     WORKFLOW_DEPARTMENTS,
-    getAuditWorkflowRules, hydrateAuditWorkflowRulesFromApi,
+    WORKFLOW_RULES,
     WORKFLOW_STATUS_OPTIONS,
     buildWorkflowPayload,
     createWorkflowId,
@@ -29,11 +29,6 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const WorkflowRulesList = () => {
-    const [workflowRules, setWorkflowRules] = useState(() => getAuditWorkflowRules())
-    useEffect(() => {
-        hydrateAuditWorkflowRulesFromApi().finally(() => setWorkflowRules(getAuditWorkflowRules()))
-    }, [])
-
     const [workflows, setWorkflows] = useState(WORKFLOW_RULES)
     const [search, setSearch] = useState('')
     const [departmentFilter, setDepartmentFilter] = useState('')

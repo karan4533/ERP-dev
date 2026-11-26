@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import GoodsReceivedPassForm, {
     recordToFormData,
     validateGoodsReceivedPassForm,
@@ -13,7 +12,6 @@ const EditGoodsReceivedPass = () => {
     const existingRecord = getGoodsReceivedPassById(id)
     const [formData, setFormData] = useState(() => (existingRecord ? recordToFormData(existingRecord) : null))
     const [errors, setErrors] = useState({})
-    const [saving, setSaving] = useState(false)
 
     if (!existingRecord || !formData) {
         return (
@@ -25,25 +23,13 @@ const EditGoodsReceivedPass = () => {
         )
     }
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         const validationErrors = validateGoodsReceivedPassForm(formData)
         setErrors(validationErrors)
         if (Object.keys(validationErrors).length > 0) return
 
-        setSaving(true)
-        try {
-            const updated = await updateGoodsReceivedPass(id, formData)
-            if (!updated) {
-                toast.error('Goods received pass not found.')
-                return
-            }
-            toast.success('Goods received pass updated successfully.')
-            navigate('/front-office/goods-received-pass-list')
-        } catch (error) {
-            toast.error(error?.message || 'Could not update goods received pass.')
-        } finally {
-            setSaving(false)
-        }
+        updateGoodsReceivedPass(id, formData)
+        navigate('/front-office/goods-received-pass-list')
     }
 
     return (
@@ -65,11 +51,10 @@ const EditGoodsReceivedPass = () => {
                 </button>
                 <button
                     type='button'
-                    disabled={saving}
                     onClick={handleSubmit}
-                    className='bg-[#515DEF] text-white text-sm px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'
+                    className='bg-[#515DEF] text-white text-sm px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
-                    {saving ? 'Saving…' : 'Update Goods Received Pass'}
+                    Update Goods Received Pass
                 </button>
             </div>
         </section>

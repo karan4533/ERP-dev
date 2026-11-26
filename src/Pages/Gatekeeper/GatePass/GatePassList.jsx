@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
-import { listFrontOfficeRecordsApi } from '../../../services/frontOfficeApi'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { Calendar, ChevronLeft, ChevronRight, Download, Plus } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Download, Plus, EllipsisIcon } from "lucide-react";
 import mo_user from "../../../assets/images/no-profile.png"
+import Dropdown from '../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
@@ -16,31 +16,6 @@ const GatePassList = () => {
     const [exportModal, setExportModal] = useState(false);
     const [editRequestModal, setEditRequestModal] = useState(false);
     const [deleteRequestModal, setDeleteRequestModal] = useState(false);
-    const [passes, setPasses] = useState([]);
-    const [loadError, setLoadError] = useState('');
-
-    useEffect(() => {
-        let active = true
-        Promise.all([
-            listFrontOfficeRecordsApi('student-gate-passes'),
-            listFrontOfficeRecordsApi('hostel-gate-passes'),
-            listFrontOfficeRecordsApi('material-gate-passes'),
-        ]).then(([students, hostel, material]) => {
-            if (!active) return
-            const withType = (rows, passType) => (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, passType }))
-            setPasses([
-                ...withType(students, 'Student'),
-                ...withType(hostel, 'Hostel'),
-                ...withType(material, 'Material'),
-            ])
-            setLoadError('')
-        }).catch(() => {
-            if (!active) return
-            setPasses([])
-            setLoadError('Gate passes could not be loaded.')
-        })
-        return () => { active = false }
-    }, [])
 
     return (
         <section>
@@ -147,29 +122,35 @@ const GatePassList = () => {
                         </thead>
 
                         <tbody>
-                            {passes.length === 0 && (
-                                <tr>
-                                    <td colSpan={10} className="px-2 py-6 text-center text-[#667085]">
-                                        {loadError || 'No gate passes have been issued.'}
-                                    </td>
-                                </tr>
-                            )}
-                            {passes.map((pass) => (
-                                <tr key={pass.id} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
-                                    <td className="px-2 py-4 object-cover flex justify-center rounded-s-lg">
-                                        <img src={mo_user} alt="" className='w-10 h-10 object-cover' />
-                                    </td>
-                                    <td className="px-2 py-4">{pass.gatePassId || pass.id}</td>
-                                    <td className="px-2 py-4">{pass.passType}</td>
-                                    <td className="px-2 py-4">{pass.studentName || pass.name || pass.visitorName || '—'}</td>
-                                    <td className="px-2 py-4">{pass.mobileNumber || pass.mobile || pass.phone || '—'}</td>
-                                    <td className="px-2 py-4">{pass.purpose || pass.reason || pass.leaveType || '—'}</td>
-                                    <td className="px-2 py-4">{pass.inTime || pass.outTime || '—'}</td>
-                                    <td className="px-2 py-4">{pass.outTime && pass.inTime ? pass.outTime : (pass.returnTime || '—')}</td>
-                                    <td className="px-2 py-4">{pass.approvedBy || pass.status || '—'}</td>
-                                    <td className="px-2 py-4 text-center rounded-e-lg">{pass.status || '—'}</td>
-                                </tr>
-                            ))}
+                            <tr className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
+                                <td className="px-2 py-4 object-cover flex justify-center rounded-s-lg">
+                                    <img src={mo_user} alt="profile" className='w-10 h-10 object-cover' />
+                                </td>
+                                <td className="px-2 py-4">GP001</td>
+                                <td className="px-2 py-4">Visitor</td>
+                                <td className="px-2 py-4">Ravi Kumar</td>
+                                <td className="px-2 py-4">9876543210</td>
+                                <td className="px-2 py-4">Parent Meeting</td>
+                                <td className="px-2 py-4">09:30 AM</td>
+                                <td className="px-2 py-4">10:15 AM</td>
+                                <td className="px-2 py-4">Principal</td>
+                                <td className="px-2 py-4 text-center rounded-e-lg">
+                                    <Dropdown
+                                        buttonContent={<EllipsisIcon size={16} className='text-black' />}
+                                    >
+                                        <button className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                            View
+                                        </button>
+                                        <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                            Edit
+                                        </button>
+                                        <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                            Delete
+                                        </button>
+                                    </Dropdown>
+
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -177,7 +158,7 @@ const GatePassList = () => {
 
             {/* Pagination */}
             <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing {passes.length === 0 ? 0 : 1} to {passes.length} of {passes.length} entries</p>
+                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to 10 of 20 entries</p>
 
                 <div className="flex justify-center gap-x-2 flex-wrap">
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">

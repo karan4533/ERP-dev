@@ -95,7 +95,7 @@ export const getRoleConfigForPath = (pathname) => {
     }
 
     // Admin also owns legacy `/dashboard`
-    if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    if (pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')) {
         return {
             prefix: '/admin',
             role: ROLES.ADMIN,

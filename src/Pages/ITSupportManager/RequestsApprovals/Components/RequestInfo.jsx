@@ -80,7 +80,7 @@ const RequestInfo = () => {
             <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>Attachments</h3>
             <div className='grid grid-cols-1 sm:grid-cols-3 gap-6'>
                 <div className='flex flex-col gap-y-2'>
-                    <span className='text-base font-medium text-[#1E1E1E]'>Comparative Quotation Upload</span>
+                    <span className='text-base font-medium text-[#1E1E1E]'>Comparative Comparative Comparative Quotation Upload</span>
                     <button type='button' onClick={downloadQuotationTemplate} className='text-sm text-[#515DEF] underline text-left cursor-pointer'>Download demo comparative quotation template (CSV, not an official QMIS form)</button>
                     <label className='flex flex-col items-center justify-center gap-2 border border-dashed border-[#D9D9D9] rounded-md px-4 py-6 cursor-pointer hover:border-[#515DEF] transition-colors'>
                         <Upload size={20} className='text-[#808080]' />

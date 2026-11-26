@@ -10,6 +10,13 @@ import { getOpenObservations } from '../../../Observations/observationsData'
 const inputClass =
     'text-sm text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-3 py-2 w-full focus:border-[#515DEF] outline-none'
 
+const Field = ({ label, children }) => (
+    <div className='flex flex-col gap-y-2'>
+        <label className='text-sm font-medium text-[#808080]'>{label}</label>
+        {children}
+    </div>
+)
+
 const EscalationForm = ({ form, onChange, readOnly = false }) => {
     const openObservations = useMemo(() => getOpenObservations(), [])
 
@@ -25,13 +32,6 @@ const EscalationForm = ({ form, onChange, readOnly = false }) => {
             priority: selected?.priority ?? form.priority,
         })
     }
-
-    const Field = ({ label, children }) => (
-        <div className='flex flex-col gap-y-2'>
-            <label className='text-sm font-medium text-[#808080]'>{label}</label>
-            {children}
-        </div>
-    )
 
     if (readOnly) {
         return (

@@ -1,4 +1,5 @@
-import { getStudentsList } from '../StudentDatabase/studentDatabaseData'
+import { STUDENT_ATTENDANCE } from '../../Pages/Admin/Attendance/Students/studentAttendanceData'
+import { getStudentsList } from '../RBAC/createdUsersData'
 
 const CHECKLIST_KEY = 'schoolerp-som-checklist-v1'
 const DISABLED_KEY = 'schoolerp-som-checklist-disabled-v1'
@@ -130,26 +131,29 @@ export const visibleSubs = (categories, context) => {
     return flattenSubs(categories).filter((item) => !disabled.has(item.id))
 }
 
-/** Roster from enrolled campus students (optional pre-filtered rows). Never falls back to demo attendance. */
-export const getSomRoster = (rows) => {
-    const source = Array.isArray(rows) ? rows : getStudentsList()
-    return source
-        .filter((student) => student.className || student.class)
-        .map((student) => {
-            const grade = student.className || student.class || ''
-            const section = student.section
-                || (student.classSection && student.classSection !== grade ? student.classSection : '')
-                || 'A'
-            return {
-                id: String(student.id),
-                name: student.name || '',
-                grade,
-                section,
-            }
-        })
+export const getSomRoster = () => {
+    const created = getStudentsList().filter((student) => student.className && student.section).map((student) => ({
+        id: student.id,
+        name: student.name,
+        grade: student.className,
+        section: student.section,
+    }))
+    if (created.length) return created
+    const seen = new Set()
+    return STUDENT_ATTENDANCE.filter((student) => {
+        const key = student.admissionNo || student.id
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+    }).map((student) => ({
+        id: student.admissionNo || student.id,
+        name: student.studentName,
+        grade: student.className,
+        section: student.section,
+    }))
 }
 
-export const rosterFor = (grade, section, rows) => getSomRoster(rows).filter((student) => student.grade === grade && student.section === section)
+export const rosterFor = (grade, section) => getSomRoster().filter((student) => student.grade === grade && student.section === section)
 
 export const ratingFor = (ratings, context, studentId, subId) => ratings.find((item) => (
     item.month === context.month

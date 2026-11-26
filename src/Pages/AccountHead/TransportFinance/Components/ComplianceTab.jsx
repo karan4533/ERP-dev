@@ -1,195 +1,38 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Download, Plus } from 'lucide-react'
-import { toast } from 'react-toastify'
-import {
-    COMPLIANCE_DOCS,
-    COMPLIANCE_SUMMARY,
-    complianceStatusBadgeColor,
-} from '../transportFinanceData'
-import {
-    SummaryCards,
-    TableCard,
-    TablePagination,
-    tdClass,
-    thClass,
-} from './TransportShared'
-import { useFinance } from '../../financeDomain/FinanceContext'
-import { getCampusMemory, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
+import { useMemo, useState } from 'react'
+import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
+import { COMPLIANCE_DOCS, COMPLIANCE_SUMMARY } from '../transportFinanceData'
+import { SummaryCards } from './TransportShared'
 
-const VEHICLES_KEY = 'schoolerp-transport-vehicles-v1'
+const TYPE_FILTERS = ['All types', 'Insurance', 'Fitness Certificate', 'Route Permit', 'Pollution Certificate', 'Driving License']
+const STATUS_FILTERS = ['All statuses', 'Valid', 'Expiring Soon', 'Expired']
 
-const ComplianceTab = () => {
-    const {
-        financePersistence,
-        transportCompliance,
-        setTransportCompliance,
-        transportFleet,
-        flushFinanceToApi,
-    } = useFinance()
-    const apiLive = Boolean(financePersistence?.apiEnabled)
-    const [docType, setDocType] = useState('Insurance')
-    const [vehicle, setVehicle] = useState('')
-    const [validTill, setValidTill] = useState('')
-    const [saving, setSaving] = useState(false)
-    const [opsRegNos, setOpsRegNos] = useState([])
-
-    useEffect(() => {
-        let cancelled = false
-        ;(async () => {
-            if (usesCampusApiForKey(VEHICLES_KEY)) {
-                await hydrateCampusKey(VEHICLES_KEY, [])
-            }
-            if (cancelled) return
-            const rows = getCampusMemory(VEHICLES_KEY) || []
-            setOpsRegNos(
-                rows
-                    .map((row) => row.vehicleNumber || row.regNo || '')
-                    .map((value) => String(value).trim())
-                    .filter(Boolean),
-            )
-        })()
-        return () => { cancelled = true }
-    }, [])
-
-    const fleetOptions = useMemo(() => {
-        const fromFinance = (transportFleet || []).map((row) => row.regNo).filter(Boolean)
-        const merged = [...new Set([...fromFinance, ...opsRegNos])]
-        return merged.length ? merged : ['Unassigned']
-    }, [opsRegNos, transportFleet])
-    const docs = useMemo(() => {
-        if (apiLive) return transportCompliance || []
-        return transportCompliance?.length ? transportCompliance : COMPLIANCE_DOCS
-    }, [apiLive, transportCompliance])
-
-    const summary = useMemo(() => {
-        const expiring = docs.filter((row) => /expir|due|soon/i.test(row.status || '')).length
-        return [
-            { label: 'Documents on snapshot', value: String(docs.length), sub: apiLive ? 'transportCompliance' : 'Local + snapshot', iconTone: 'info' },
-            { label: 'Expiring / attention', value: String(expiring), sub: 'Status keywords', iconTone: 'warning' },
-            { label: 'Fleet vehicles', value: String(transportFleet?.length || 0), sub: 'Linked register', iconTone: 'success' },
-            { label: 'Mode', value: apiLive ? 'API' : 'Offline', sub: 'Finance snapshot', iconTone: 'success' },
-        ]
-    }, [apiLive, docs, transportFleet])
-
-    const handleAdd = async () => {
-        const reg = vehicle || fleetOptions[0]
-        if (!validTill) {
-            toast.error('Valid-till date is required.')
-            return
-        }
-        const row = {
-            id: `TC-${Date.now().toString().slice(-8)}`,
-            vehicle: reg,
-            type: docType,
-            validTill,
-            status: 'Valid',
-            documentNo: `${docType.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-5)}`,
-        }
-        const next = [row, ...(transportCompliance || [])]
-        setSaving(true)
-        setTransportCompliance(next)
-        const persist = await flushFinanceToApi({ transportCompliance: next })
-        setSaving(false)
-        if (persist?.success === false) {
-            toast.error(persist.message || 'Saved locally — API push failed.')
-        } else {
-            toast.success(persist?.api ? 'Compliance doc saved to finance API.' : 'Compliance document added.')
-        }
-        setValidTill('')
-    }
-
+const ComplianceTab = ({ complianceDocs = COMPLIANCE_DOCS }) => {
+    const [query, setQuery] = useState('')
+    const [type, setType] = useState(TYPE_FILTERS[0])
+    const [status, setStatus] = useState(STATUS_FILTERS[0])
+    const rows = useMemo(() => complianceDocs.filter((row) => {
+        if (type !== TYPE_FILTERS[0] && row.docType !== type) return false
+        if (status !== STATUS_FILTERS[0] && row.status !== status) return false
+        const normalizedQuery = query.trim().toLowerCase()
+        return !normalizedQuery || [row.entity, row.docType, row.validTill, row.status].join(' ').toLowerCase().includes(normalizedQuery)
+    }), [complianceDocs, query, status, type])
+    const columns = [
+        { key: 'entity', label: 'Vehicle / staff', required: true },
+        { key: 'docType', label: 'Document', required: true },
+        { key: 'issuedOn', label: 'Issued on' },
+        { key: 'validTill', label: 'Valid till' },
+        { key: 'daysLeft', label: 'Remaining' },
+        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    ]
     return (
-        <div className='space-y-6'>
-            {apiLive ? (
-                <p className='text-sm text-[#667085] bg-[#F8FAFC] border border-[#E4E7EC] rounded-xl px-4 py-3'>
-                    Compliance documents persist on campus finance snapshot (`transportCompliance`) via PUT /finance/state.
-                </p>
-            ) : (
-                <p className='text-sm text-[#B8860B] bg-[#FFF8E7] border border-[#F5E6B8] rounded-xl px-4 py-3'>
-                    OFFLINE DEMO — seed compliance rows show until you add live documents.
-                </p>
-            )}
-            <SummaryCards cards={apiLive || docs.length ? summary : COMPLIANCE_SUMMARY} />
-
-            <TableCard
-                title='Compliance & documentation register'
-                filters={(
-                    <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-end gap-3'>
-                        <select
-                            value={vehicle || fleetOptions[0]}
-                            onChange={(event) => setVehicle(event.target.value)}
-                            className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[140px]'
-                        >
-                            {fleetOptions.map((reg) => (
-                                <option key={reg} value={reg}>{reg}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={docType}
-                            onChange={(event) => setDocType(event.target.value)}
-                            className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'
-                        >
-                            <option>Insurance</option>
-                            <option>Fitness</option>
-                            <option>Permit</option>
-                            <option>Pollution</option>
-                        </select>
-                        <input
-                            type='date'
-                            value={validTill}
-                            onChange={(event) => setValidTill(event.target.value)}
-                            className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2'
-                        />
-                        <button
-                            type='button'
-                            disabled={saving}
-                            onClick={handleAdd}
-                            className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-60'
-                        >
-                            <Plus size={16} />
-                            {saving ? 'Saving…' : 'Add document'}
-                        </button>
-                        <button type='button' className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md cursor-pointer'>
-                            <Download size={16} />
-                            Export
-                        </button>
-                    </div>
-                )}
-                footer={<TablePagination summary={`${docs.length} documents`} />}
-            >
-                <table className='w-full text-sm text-left mt-4'>
-                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                        <tr>
-                            <th className={`${thClass} rounded-s-lg`}>Vehicle</th>
-                            <th className={thClass}>Type</th>
-                            <th className={thClass}>Valid till</th>
-                            <th className={thClass}>Doc no.</th>
-                            <th className={`${thClass} rounded-e-lg`}>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {docs.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} className={`${tdClass} text-[#667085]`}>
-                                    No compliance documents on the snapshot yet.
-                                </td>
-                            </tr>
-                        ) : docs.map((row) => (
-                            <tr key={row.id} className='border-b border-[#f2f4f7]'>
-                                <td className={`${tdClass} rounded-s-lg`}>{row.vehicle || row.regNo}</td>
-                                <td className={tdClass}>{row.type}</td>
-                                <td className={tdClass}>{row.validTill || row.expiry || '—'}</td>
-                                <td className={tdClass}>{row.documentNo || '—'}</td>
-                                <td className={`${tdClass} rounded-e-lg`}>
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${complianceStatusBadgeColor[row.status] || 'bg-[#4CAF5033] text-[#4CAF50]'}`}>
-                                        {row.status}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </TableCard>
+        <div className='space-y-5'>
+            <IntegrationNotice state='demo' title='Sample compliance register' description='Dates and statuses are reference records. Production renewal, file viewing, reminders and validation require document storage plus transport compliance APIs.' />
+            <SummaryCards cards={COMPLIANCE_SUMMARY} />
+            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='compliance-register-title'>
+                <div className='px-4 pt-4 sm:px-5'><h3 id='compliance-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>Compliance & documentation register</h3></div>
+                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search compliance documents' searchPlaceholder='Vehicle, staff or document…' resultCount={rows.length} onReset={() => { setQuery(''); setType(TYPE_FILTERS[0]); setStatus(STATUS_FILTERS[0]) }} filters={<><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Document type<select value={type} onChange={(event) => setType(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{TYPE_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status<select value={status} onChange={(event) => setStatus(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{STATUS_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label></>} />
+                <DataTable caption='Transport compliance document register' rows={rows} columns={columns} rowKey='id' emptyTitle='No compliance documents found' emptyDescription='Reset the filters to review available sample documents.' renderActions={(row) => <button type='button' disabled title='Document viewing and renewal require the connected compliance API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>{row.status === 'Valid' ? 'View unavailable' : 'Renew unavailable'}</button>} />
+            </section>
         </div>
     )
 }

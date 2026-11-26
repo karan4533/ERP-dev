@@ -35,6 +35,7 @@ STAFF_ROLES: list[tuple[str, str, str]] = [
     ("teacher", "Teacher", "TEA"),
     ("coordinator", "Coordinator", "CRD"),
     ("librarian", "Librarian", "LIB"),
+    ("hostelwarden", "Hostel Warden", "HSW"),
     ("gatekeepermanager", "Gate Keeper Manager", "GKM"),
     ("gatekeeper", "Gate Keeper", "GKP"),
     ("transportmanager", "Transport Manager", "TRM"),

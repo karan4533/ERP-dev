@@ -8,10 +8,6 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 
-const EXPORT_ROWS = [
-    {profile: '', driver_name: 'Sandy Selva', driver_s_id: 'VAN-1001', email_id: 'san@gmail.com', gender: 'Male', mobile_number: '9944076993', license_number: 'AG7586NG78', experience: '8 Years', city: 'Trichy', state: 'Tamil Nadu'},
-]
-
 const DriverList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -183,13 +179,7 @@ const DriverList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='driver-list'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

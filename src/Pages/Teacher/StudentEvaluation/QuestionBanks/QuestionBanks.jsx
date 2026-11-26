@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -8,30 +8,20 @@ import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal'
 import pdf_icon from '../../../../assets/images/pdf-icon.png'
-import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
 import { getQuestionBanks, EXAM_TYPES, SUBJECTS, CLASSES, SECTIONS } from './questionBanksData'
+import { useAuth } from '../../../../context/AuthContext'
+import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
 
 const QuestionBanks = () => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const location = useLocation()
-    const assignments = useTeacherAssignments()
     const [records, setRecords] = useState(() => getQuestionBanks())
-    const [classFilter, setClassFilter] = useState('')
-    const [sectionFilter, setSectionFilter] = useState('')
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
-
-    const staffFilterOptions = useMemo(() => ({
-        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
-        classes: assignments.classes?.length ? assignments.classes : CLASSES,
-        sections: classFilter
-            ? (assignments.sectionsFor?.(classFilter) || [])
-            : (assignments.assignments?.length
-                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
-                : SECTIONS),
-    }), [assignments, classFilter])
 
     useEffect(() => {
         setRecords(getQuestionBanks())
@@ -41,14 +31,7 @@ const QuestionBanks = () => {
         <section>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button
-                        type='button'
-                        onClick={() => {
-                            setClassFilter('')
-                            setSectionFilter('')
-                        }}
-                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
-                    >
+                    <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
                         Clear Filters
                     </button>
                     <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
@@ -64,7 +47,7 @@ const QuestionBanks = () => {
                         <label htmlFor='subject-filter' className='text-base font-medium text-[#808080]'>Subject</label>
                         <select id='subject-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
-                            {staffFilterOptions.subjects.map((subject) => (
+                            {SUBJECTS.map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -80,31 +63,18 @@ const QuestionBanks = () => {
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='class-filter' className='text-base font-medium text-[#808080]'>Class</label>
-                        <select
-                            id='class-filter'
-                            value={classFilter}
-                            onChange={(event) => {
-                                setClassFilter(event.target.value)
-                                setSectionFilter('')
-                            }}
-                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
+                        <select id='class-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
-                            {staffFilterOptions.classes.map((item) => (
+                            {CLASSES.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='section-filter' className='text-base font-medium text-[#808080]'>Section</label>
-                        <select
-                            id='section-filter'
-                            value={sectionFilter}
-                            onChange={(event) => setSectionFilter(event.target.value)}
-                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
+                        <select id='section-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
-                            {staffFilterOptions.sections.map((item) => (
+                            {SECTIONS.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -217,9 +187,11 @@ const QuestionBanks = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                Delete
-                                            </button>
+                                            {canDelete && (
+                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                    Delete
+                                                </button>
+                                            )}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -246,15 +218,9 @@ const QuestionBanks = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='question-banks'
-                rows={Array.isArray(records) ? records : []}
-                exportDescription={<>You are exporting {Array.isArray(records) ? records.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </section>
     )
 }

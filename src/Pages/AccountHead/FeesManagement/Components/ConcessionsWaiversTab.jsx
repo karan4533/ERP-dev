@@ -12,7 +12,6 @@ import {
     Users,
     Wallet,
 } from 'lucide-react'
-import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import ConcessionDetailsOffcanvas from './ConcessionDetailsOffcanvas'
 import {
     CONCESSION_DISTRIBUTION,
@@ -55,7 +54,7 @@ const Panel = ({ title, subtitle, children, action, className = '' }) => (
     </div>
 )
 
-const ConcessionsWaiversTab = ({ exportModal, setExportModal }) => {
+const ConcessionsWaiversTab = () => {
     const [selectedConcession, setSelectedConcession] = useState(null)
     const [detailsOpen, setDetailsOpen] = useState(false)
     const { concessions, students, feeCategories, getStudentSummary } = useFinance()
@@ -349,7 +348,6 @@ const ConcessionsWaiversTab = ({ exportModal, setExportModal }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <ConcessionDetailsOffcanvas
                 isOpen={detailsOpen}
