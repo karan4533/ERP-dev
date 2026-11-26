@@ -12,14 +12,11 @@ import {
     DEFAULT_ROUTE_BASE,
     filterSampleQuestions,
     getSampleQuestions,
-    hydrateSampleQuestionsFromApi,
-    SAMPLE_QUESTIONS_UPDATED_EVENT,
     SECTIONS,
     SUBJECTS,
 } from './sampleQuestionsData'
-import { useActiveStudent } from '../../../../context/ActiveStudentContext'
-import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
-import { matchesStudentClass } from '../../../Student/Class/studentClassMatch'
+import { useAuth } from '../../../../context/AuthContext'
+import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
 
 const emptyFilters = {
     search: '',
@@ -58,37 +55,16 @@ const SampleQuestionsEmpty = ({ routeBase, viewMode }) => {
 }
 
 const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const isStudent = viewMode === 'student'
-    const { activeStudent } = useActiveStudent()
-    const assignments = useTeacherAssignments()
     const [filters, setFilters] = useState(emptyFilters)
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
     const [entriesPerPage, setEntriesPerPage] = useState(10)
 
-    const scopedItems = useMemo(() => {
-        if (!isStudent || !activeStudent) return items
-        return items.filter((row) => matchesStudentClass(row, activeStudent))
-    }, [items, isStudent, activeStudent])
-
-    const filterOptions = useMemo(() => ({
-        subjects: [...new Set(scopedItems.map((r) => r.subject).filter(Boolean))],
-        classes: [...new Set(scopedItems.map((r) => r.className).filter(Boolean))],
-        sections: [...new Set(scopedItems.map((r) => r.section).filter(Boolean))],
-    }), [scopedItems])
-
-    const staffFilterOptions = useMemo(() => ({
-        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
-        classes: assignments.classes?.length ? assignments.classes : CLASSES,
-        sections: filters.className
-            ? (assignments.sectionsFor?.(filters.className) || [])
-            : (assignments.assignments?.length
-                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
-                : SECTIONS),
-    }), [assignments, filters.className])
-
-    const filteredItems = useMemo(() => filterSampleQuestions(scopedItems, filters), [scopedItems, filters])
+    const filteredItems = useMemo(() => filterSampleQuestions(items, filters), [items, filters])
 
     const updateFilter = (key, value) => {
         setFilters((current) => ({ ...current, [key]: value }))
@@ -132,7 +108,7 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {(isStudent ? filterOptions.subjects : staffFilterOptions.subjects).map((subject) => (
+                            {SUBJECTS.map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -142,15 +118,11 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                         <select
                             id='class-filter'
                             value={filters.className}
-                            onChange={(event) => setFilters((current) => ({
-                                ...current,
-                                className: event.target.value,
-                                section: '',
-                            }))}
+                            onChange={(event) => updateFilter('className', event.target.value)}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {(isStudent ? filterOptions.classes : staffFilterOptions.classes).map((item) => (
+                            {CLASSES.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -164,7 +136,7 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {(isStudent ? filterOptions.sections : staffFilterOptions.sections).map((item) => (
+                            {SECTIONS.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -255,13 +227,15 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                                                     >
                                                         Edit
                                                     </button>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => setDeleteRequestModal(true)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Delete
-                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => setDeleteRequestModal(true)}
+                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                         </Dropdown>
@@ -290,43 +264,22 @@ const SampleQuestionsList = ({ items, routeBase, viewMode }) => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='sample-questions'
-                rows={Array.isArray(filteredItems) ? filteredItems : []}
-                exportDescription={<>You are exporting {Array.isArray(filteredItems) ? filteredItems.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </>
     )
 }
 
 const SampleQuestions = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }) => {
     const location = useLocation()
-    const { activeStudent } = useActiveStudent()
     const [items, setItems] = useState(() => getSampleQuestions())
 
     useEffect(() => {
-        let cancelled = false
-        hydrateSampleQuestionsFromApi().finally(() => {
-            if (!cancelled) setItems(getSampleQuestions())
-        })
-        const onUpdate = () => setItems(getSampleQuestions())
-        window.addEventListener(SAMPLE_QUESTIONS_UPDATED_EVENT, onUpdate)
-        return () => {
-            cancelled = true
-            window.removeEventListener(SAMPLE_QUESTIONS_UPDATED_EVENT, onUpdate)
-        }
+        setItems(getSampleQuestions())
     }, [location.key])
 
-    const visibleCount = useMemo(() => {
-        if (viewMode !== 'student' || !activeStudent) return items.length
-        return items.filter((row) => matchesStudentClass(row, activeStudent)).length
-    }, [items, viewMode, activeStudent])
-
-    if (visibleCount === 0) {
+    if (items.length === 0) {
         return (
             <section>
                 <SampleQuestionsEmpty routeBase={routeBase} viewMode={viewMode} />

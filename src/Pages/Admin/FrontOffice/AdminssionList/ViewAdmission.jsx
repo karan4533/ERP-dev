@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useMemo } from 'react'
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
@@ -20,39 +20,9 @@ const ViewAdmission = () => {
     const navigate = useNavigate()
     const { pathname } = useLocation()
     const listPath = getAdmissionListBase(pathname)
-    const [record, setRecord] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [notFound, setNotFound] = useState(false)
+    const record = useMemo(() => getAdmissionById(id), [id])
 
-    useEffect(() => {
-        let cancelled = false
-        ;(async () => {
-            setLoading(true)
-            const row = await getAdmissionById(id)
-            if (cancelled) return
-            if (!row) {
-                setNotFound(true)
-                setRecord(null)
-            } else {
-                setNotFound(false)
-                setRecord(row)
-            }
-            setLoading(false)
-        })()
-        return () => {
-            cancelled = true
-        }
-    }, [id])
-
-    if (loading) {
-        return (
-            <section className='bg-white rounded-2xl shadow-md p-8 text-center'>
-                <p className='text-sm text-[#667085]'>Loading admission…</p>
-            </section>
-        )
-    }
-
-    if (notFound || !record) {
+    if (!record) {
         return (
             <section className='bg-white rounded-2xl shadow-md p-8 text-center'>
                 <h2 className='text-xl font-semibold text-[#0C1E5B]'>Admission not found</h2>
@@ -156,19 +126,25 @@ const ViewAdmission = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8'>
                     <Field label='Parent Username / Email ID' value={record.parentAccountEmail} />
                     <Field
-                        label='Parent Password'
+                        label='Password'
                         value={record.parentAccountPassword ? '••••••••' : '—'}
-                    />
-                    <Field label='Student Username / Email ID' value={record.studentAccountEmail} />
-                    <Field
-                        label='Student Password'
-                        value={record.studentAccountPassword ? '••••••••' : '—'}
                     />
                 </div>
 
                 <h3 className='text-lg font-semibold text-black mb-4'>Fees</h3>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8'>
                     <Field label='Fees Group' value={record.feesGroup} />
+                    <Field label='Registration Fees' value={record.registrationFees ? `₹${record.registrationFees}` : '₹5,000'} />
+                </div>
+
+                <h3 className='text-lg font-semibold text-black mb-4'>Finance Clearance &amp; Enrollment Status</h3>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50'>
+                    <Field label='Finance Status' value={record.status === 'Enrolled' ? 'Fee Paid & Approved by Finance' : 'Pending Finance Clearance & Payment'} />
+                    {record.financeReceiptNumber && <Field label='Receipt Number' value={record.financeReceiptNumber} />}
+                    {record.financePaymentMode && <Field label='Payment Mode' value={record.financePaymentMode} />}
+                    {record.financeApprovedBy && <Field label='Approved By' value={record.financeApprovedBy} />}
+                    {record.financeApprovedAt && <Field label='Approval Date' value={new Date(record.financeApprovedAt).toLocaleDateString('en-GB')} />}
+                    {record.enrolledStudentId && <Field label='Enrolled Student ID' value={record.enrolledStudentId} />}
                 </div>
             </div>
         </section>

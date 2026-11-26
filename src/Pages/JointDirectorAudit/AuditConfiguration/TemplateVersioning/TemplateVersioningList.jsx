@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -14,7 +14,7 @@ import TemplateVersionCompareModal from './TemplateVersionCompareModal'
 import TemplateVersionViewModal from './TemplateVersionViewModal'
 import {
     TEMPLATE_FILTER_OPTIONS,
-    getAuditTemplateVersions, hydrateAuditTemplateVersionsFromApi,
+    TEMPLATE_VERSIONS,
     VERSION_STATUS_OPTIONS,
     formatPublishedDate,
     versionStatusBadgeColor,
@@ -24,11 +24,6 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const formatToday = () => {
-    const [templateVersions, setTemplateVersions] = useState(() => getAuditTemplateVersions())
-    useEffect(() => {
-        hydrateAuditTemplateVersionsFromApi().finally(() => setTemplateVersions(getAuditTemplateVersions()))
-    }, [])
-
     const today = new Date()
     const day = String(today.getDate()).padStart(2, '0')
     const month = String(today.getMonth() + 1).padStart(2, '0')

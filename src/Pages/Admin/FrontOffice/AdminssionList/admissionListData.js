@@ -2,24 +2,14 @@ import noProfile from '../../../../assets/images/no-profile.png'
 import {
     ensureParentForEnrolledStudent,
     validateAdmissionAccountFields,
-} from '../../../../Common/ParentAccounts/parentAccountsData'
+} from '../../../../Common/ParentAccounts/parentAccountsData.js'
 import {
     createEnrolledStudentFromAdmission,
     updateEnrolledStudentRecord,
-} from '../../../../Common/StudentDatabase/enrolledStudentsData'
-import { ensureStudentAllocationRecord } from '../../../../Common/StudentAllocation/studentAllocationData'
-import { isApiAdmissionsEnabled } from '../../../../services/apiClient'
-import {
-    createAdmissionApi,
-    enrollAdmissionApi,
-    getAdmissionApi,
-    listAdmissionsApi,
-    mapAdmissionFromApi,
-    updateAdmissionApi,
-} from '../../../../services/admissionsApi'
+} from '../../../../Common/StudentDatabase/enrolledStudentsData.js'
+import { ensureStudentAllocationRecord } from '../../../../Common/StudentAllocation/studentAllocationData.js'
 
 const STORAGE_KEY = 'schoolerp-admin-admissions'
-const apiAdmissionsEnabled = () => isApiAdmissionsEnabled()
 
 export const FEES_GROUP_OPTIONS = [
     'Annual Fees',
@@ -28,7 +18,12 @@ export const FEES_GROUP_OPTIONS = [
     'Activity Fees',
 ]
 
-export const ADMISSION_STATUS_OPTIONS = ['Active', 'Enrolled', 'In Active']
+export const ADMISSION_STATUS_OPTIONS = [
+    'Pending Finance Approval',
+    'Enrolled',
+    'Active',
+    'Rejected',
+]
 
 export const DEFAULT_ADMISSION_FORM = {
     fromEnquiryId: '',
@@ -58,7 +53,6 @@ export const DEFAULT_ADMISSION_FORM = {
     weight: '',
     medicalHistory: '',
     profileImage: '',
-    profileImageFileId: null,
     modeOfTransport: '',
     route: '',
     busStop: '',
@@ -80,7 +74,7 @@ export const DEFAULT_ADMISSION_FORM = {
     parentAccountEmail: '',
     parentAccountPassword: '',
     feesGroup: '',
-    status: 'Active',
+    status: 'Pending Finance Approval',
     enrolledStudentId: '',
 }
 
@@ -97,12 +91,7 @@ const formatDate = (date) => {
 const parseStoredDate = (value) => {
     if (!value) return null
     if (value instanceof Date) return value
-    const raw = String(value)
-    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-        const date = new Date(raw)
-        return Number.isNaN(date.getTime()) ? null : date
-    }
-    const [day, month, year] = raw.split('-').map(Number)
+    const [day, month, year] = String(value).split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
@@ -131,24 +120,10 @@ const saveAdmissions = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
-export const getAllAdmissions = async () => {
-    if (apiAdmissionsEnabled()) {
-        try {
-            return await listAdmissionsApi()
-        } catch (error) {
-            console.error(error)
-            return []
-        }
-    }
-    return loadAdmissions()
-}
+export const getAllAdmissions = () => loadAdmissions()
 
-export const getAdmissionById = (id) => {
-    if (apiAdmissionsEnabled()) {
-        return getAdmissionApi(id).catch(() => null)
-    }
-    return loadAdmissions().find((item) => String(item.id) === String(id)) ?? null
-}
+export const getAdmissionById = (id) =>
+    loadAdmissions().find((item) => item.id === id) ?? null
 
 export const generateAdmissionId = () => {
     const records = loadAdmissions()
@@ -260,7 +235,7 @@ const buildAdmissionRecord = (payload, existing = null) => {
                 || existing?.parentAccountPassword
                 || '',
             feesGroup: payload.feesGroup || '',
-            status: existing?.status || 'Active',
+            status: existing?.status || 'Pending Finance Approval',
             enrolledStudentId: existing?.enrolledStudentId || '',
             createdDate: existing?.createdDate || formatDate(new Date()),
             createdAt: existing?.createdAt || new Date().toISOString(),
@@ -269,16 +244,7 @@ const buildAdmissionRecord = (payload, existing = null) => {
     }
 }
 
-export const createAdmission = async (payload) => {
-    if (apiAdmissionsEnabled()) {
-        try {
-            const record = await createAdmissionApi(payload)
-            return { success: true, record }
-        } catch (error) {
-            return { success: false, message: error.message || 'Failed to save admission.' }
-        }
-    }
-
+export const createAdmission = (payload) => {
     const built = buildAdmissionRecord(payload)
     if (!built.success) return built
 
@@ -287,81 +253,26 @@ export const createAdmission = async (payload) => {
     return { success: true, record: built.record }
 }
 
-export const updateAdmission = async (id, payload) => {
-    if (apiAdmissionsEnabled()) {
-        try {
-            const record = await updateAdmissionApi(id, payload)
-            return { success: true, record }
-        } catch (error) {
-            return { success: false, message: error.message || 'Failed to update admission.' }
-        }
-    }
-
+export const updateAdmission = (id, payload) => {
     const records = loadAdmissions()
-    const existing = records.find((item) => String(item.id) === String(id))
+    const existing = records.find((item) => item.id === id)
     if (!existing) return { success: false, message: 'Admission not found.' }
 
     const built = buildAdmissionRecord(payload, existing)
     if (!built.success) return built
 
-    const nextRecords = records.map((item) => (String(item.id) === String(id) ? built.record : item))
+    const nextRecords = records.map((item) => (item.id === id ? built.record : item))
     saveAdmissions(nextRecords)
     return { success: true, record: built.record }
 }
 
-export const deleteAdmission = async (id) => {
-    if (apiAdmissionsEnabled()) {
-        // Backend has no hard-delete — soft-close as In Active (same pattern as enquiries).
-        try {
-            const current = await getAdmissionApi(id)
-            if (current?.status === 'Enrolled') {
-                return { success: false, message: 'Enrolled admissions cannot be deleted. Unenroll is not supported here.' }
-            }
-            if (current?.status === 'In Active') {
-                return { success: true }
-            }
-            await updateAdmissionApi(id, { ...current, status: 'In Active' })
-            return { success: true }
-        } catch (error) {
-            return { success: false, message: error.message || 'Failed to delete admission.' }
-        }
-    }
-    saveAdmissions(loadAdmissions().filter((item) => String(item.id) !== String(id)))
+export const deleteAdmission = (id) => {
+    saveAdmissions(loadAdmissions().filter((item) => item.id !== id))
     return { success: true }
 }
-
-export const enrollAdmissionAsStudent = async (id, extra = {}) => {
-    if (apiAdmissionsEnabled()) {
-        try {
-            const current = await getAdmissionApi(id)
-            const parentEmail = extra.parentAccountEmail || current.parentAccountEmail
-            const parentPassword = extra.parentAccountPassword
-            if (parentEmail && (!parentPassword || String(parentPassword).trim().length < 10)) {
-                return {
-                    success: false,
-                    message: 'Parent password is required (min 10 characters, with a letter and a number) when creating the parent login.',
-                }
-            }
-            const result = await enrollAdmissionApi(id, {
-                parentAccountEmail: parentEmail,
-                parentAccountPassword: parentPassword,
-                skipParentAccount: !parentEmail,
-            })
-            return {
-                success: true,
-                record: result.admission ? mapAdmissionFromApi(result.admission) : current,
-                student: { id: result.student_id, studentCode: result.student_code },
-                parentCreated: Boolean(result.parent_created),
-                parentMapped: Boolean(result.parent_user_id && !result.parent_created),
-                parentSkipped: !result.parent_user_id,
-            }
-        } catch (error) {
-            return { success: false, message: error.message || 'Enrollment failed.' }
-        }
-    }
-
+export const enrollAdmissionAsStudent = (id) => {
     const records = loadAdmissions()
-    const index = records.findIndex((item) => String(item.id) === String(id))
+    const index = records.findIndex((item) => item.id === id)
     if (index < 0) return { success: false, message: 'Admission not found.' }
     if (records[index].status === 'Enrolled') {
         return { success: false, message: 'Student is already enrolled.' }
@@ -396,6 +307,50 @@ export const enrollAdmissionAsStudent = async (id, extra = {}) => {
     }
 }
 
+export const getPendingFinanceAdmissions = () => {
+    return loadAdmissions().filter(
+        (a) => a.status === 'Pending Finance Approval' || a.status === 'Pending Fee Payment' || (!a.enrolledStudentId && a.status !== 'Enrolled')
+    )
+}
+
+export const approveAdmissionAndCollectFee = (id, paymentDetails = {}) => {
+    const records = loadAdmissions()
+    const index = records.findIndex((item) => item.id === id)
+    if (index < 0) return { success: false, message: 'Admission not found.' }
+
+    // First enroll the student
+    const enrollResult = enrollAdmissionAsStudent(id)
+    if (!enrollResult.success) return enrollResult
+
+    // Update with payment and finance approval details
+    const updatedRecords = loadAdmissions()
+    const updatedIndex = updatedRecords.findIndex((item) => item.id === id)
+    if (updatedIndex >= 0) {
+        updatedRecords[updatedIndex] = {
+            ...updatedRecords[updatedIndex],
+            status: 'Enrolled',
+            financeApproved: true,
+            financeApprovedBy: paymentDetails.collectedBy || 'Account Head',
+            financeApprovedAt: new Date().toISOString(),
+            financeReceiptNumber: paymentDetails.receiptNumber || `RCP-ADM-${Date.now().toString().slice(-6)}`,
+            financePaymentMode: paymentDetails.paymentMode || 'Cash',
+            financePaidAmount: paymentDetails.amount || updatedRecords[updatedIndex].registrationFees || '5000',
+            financeRemarks: paymentDetails.remarks || 'Admission fee collected and verified by Finance.',
+        }
+        saveAdmissions(updatedRecords)
+    }
+
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('schoolerp-admission-finance-sync', { detail: { admissionId: id } }))
+    }
+
+    return {
+        ...enrollResult,
+        success: true,
+        message: 'Admission fee recorded and student enrolled successfully.'
+    }
+}
+
 export const toAdmissionFormState = (record) => ({
     ...DEFAULT_ADMISSION_FORM,
     ...record,
@@ -405,12 +360,12 @@ export const toAdmissionFormState = (record) => ({
     batchEndYear: parseStoredYear(record?.batchEndYear) || new Date(),
 })
 
-export const filterAdmissions = (records, { search = '', includeInactive = false } = {}) => {
+export const filterAdmissions = (records, { search = '' } = {}) => {
     const query = search.trim().toLowerCase()
-    return records.filter((item) => {
-        if (!includeInactive && item.status === 'In Active') return false
-        if (!query) return true
-        return [
+    if (!query) return records
+
+    return records.filter((item) =>
+        [
             getStudentDisplayName(item),
             item.rollNumber,
             item.admissionNumber,
@@ -420,9 +375,8 @@ export const filterAdmissions = (records, { search = '', includeInactive = false
             item.country,
             item.city,
             item.id,
-            item.status,
-        ].some((value) => String(value || '').toLowerCase().includes(query))
-    })
+        ].some((value) => String(value || '').toLowerCase().includes(query)),
+    )
 }
 
 export const buildInitialAdmissionForm = (enquiryPrefill = null, fromEnquiryId = '') => {

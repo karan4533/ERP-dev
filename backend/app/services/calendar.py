@@ -48,7 +48,35 @@ def _can_write(db: Session, actor: User) -> bool:
     return "calendar.write" in permission_codes_for(db, actor)
 
 
+def _normalize_time(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        fail(422, "invalid_time", "Times must use HH:MM (24-hour).")
+    hour, minute = int(parts[0]), int(parts[1])
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        fail(422, "invalid_time", "Times must use HH:MM (24-hour).")
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _times(*, all_day: bool, start: date, end: date, start_time: str | None, end_time: str | None) -> tuple[bool, str | None, str | None]:
+    if all_day:
+        return True, None, None
+    start_hhmm = _normalize_time(start_time)
+    end_hhmm = _normalize_time(end_time)
+    if not start_hhmm or not end_hhmm:
+        fail(422, "time_required", "Start time and end time are required for timed events.")
+    if start == end and end_hhmm < start_hhmm:
+        fail(422, "invalid_times", "The end time cannot be earlier than the start time on the same day.")
+    return False, start_hhmm, end_hhmm
+
+
 def _out(row: CalendarEvent) -> dict:
+    all_day = bool(getattr(row, "all_day", True))
     return {
         "id": row.code,
         "uuid": str(row.id),
@@ -56,6 +84,9 @@ def _out(row: CalendarEvent) -> dict:
         "title": row.title,
         "startDate": row.start_date.isoformat(),
         "endDate": row.end_date.isoformat(),
+        "allDay": all_day,
+        "startTime": None if all_day else getattr(row, "start_time", None),
+        "endTime": None if all_day else getattr(row, "end_time", None),
         "description": row.description or "",
     }
 
@@ -121,7 +152,19 @@ def _dates(start: date, end: date | None) -> tuple[date, date]:
     return start, finish
 
 
-def create(db: Session, actor: User, *, event_type: str, title: str, start: date, end: date | None, description: str) -> dict:
+def create(
+    db: Session,
+    actor: User,
+    *,
+    event_type: str,
+    title: str,
+    start: date,
+    end: date | None,
+    description: str,
+    all_day: bool = True,
+    start_time: str | None = None,
+    end_time: str | None = None,
+) -> dict:
     if not _can_write(db, actor):
         fail(403, "forbidden", "You are not allowed to change the calendar.")
     if event_type not in EVENT_TYPES:
@@ -135,6 +178,13 @@ def create(db: Session, actor: User, *, event_type: str, title: str, start: date
     if len(description) > DESCRIPTION_MAX:
         fail(422, "description_too_long", f"Description can be at most {DESCRIPTION_MAX} characters.")
     start, finish = _dates(start, end)
+    all_day_flag, start_hhmm, end_hhmm = _times(
+        all_day=bool(all_day),
+        start=start,
+        end=finish,
+        start_time=start_time,
+        end_time=end_time,
+    )
     codes = db.scalars(select(CalendarEvent.code).where(CalendarEvent.campus_id == actor.campus_id)).all()
     n = max((int(c.split("-")[1]) for c in codes if c.startswith("cal-") and c[4:].isdigit()), default=0) + 1
     row = CalendarEvent(
@@ -144,6 +194,9 @@ def create(db: Session, actor: User, *, event_type: str, title: str, start: date
         title=title,
         start_date=start,
         end_date=finish,
+        all_day=all_day_flag,
+        start_time=start_hhmm,
+        end_time=end_hhmm,
         description=description,
         created_by=actor.id,
     )
@@ -186,6 +239,21 @@ def update(db: Session, actor: User, ref: str, **fields) -> dict:
     if start is None:
         start = row.start_date
     row.start_date, row.end_date = _dates(start, end)
+    touch_times = any(key in fields for key in ("all_day", "start_time", "end_time"))
+    if touch_times:
+        next_all_day = bool(fields["all_day"]) if fields.get("all_day") is not None else bool(getattr(row, "all_day", True))
+        next_start = fields["start_time"] if "start_time" in fields else getattr(row, "start_time", None)
+        next_end = fields["end_time"] if "end_time" in fields else getattr(row, "end_time", None)
+        all_day_flag, start_hhmm, end_hhmm = _times(
+            all_day=next_all_day,
+            start=row.start_date,
+            end=row.end_date,
+            start_time=next_start,
+            end_time=next_end,
+        )
+        row.all_day = all_day_flag
+        row.start_time = start_hhmm
+        row.end_time = end_hhmm
     row.updated_at = utcnow()
     write_audit(
         db, action="CALENDAR_EVENT_UPDATED", entity_type="calendar_event", entity_id=str(row.id),

@@ -1,23 +1,14 @@
 import { CLASSES, SECTIONS, SUBJECTS } from '../../AssignedClass/assignedClassData'
-import {
-    createAcademicsCollectionStore,
-    nextPrefixedId,
-} from '../../../../services/academicsCollectionStore'
-import { getStudentsList } from '../../../../Common/StudentDatabase/studentDatabaseData'
-import {
-    classKeysMatch,
-    normalizeSectionKey,
-} from '../../../../Common/Teacher/teacherAssignedClasses'
-import { getStoredSubmissions } from '../../../Student/StudentDeliverables/studentHomeFunSubmissions'
-import noProfile from '../../../../assets/images/no-profile.png'
+import { SUBMISSIONS_LIST } from './homeFunSubmissionsData'
 
-export { CLASSES, SECTIONS, SUBJECTS }
+const STORAGE_KEY = 'teacher-home-fun-deliverables'
 
 export const DEFAULT_ROUTE_BASE = '/teacher/student-deliverables/home-fun'
-export const HOME_FUN_UPDATED_EVENT = 'schoolerp-home-fun-updated'
 
 export const ASSESSMENT_TYPES = ['Assignment', 'Homework']
+
 export const DELIVERABLE_TYPES = ASSESSMENT_TYPES
+
 export const ASSIGNMENT_STATUSES = ['Active', 'In-Process', 'Completed']
 
 export const statusBadgeColor = {
@@ -33,185 +24,51 @@ export const typeBadgeColor = {
 
 const parseListDate = (value) => {
     if (!value) return null
-    const [day, month, year] = String(value).split('-').map(Number)
+    const [day, month, year] = value.split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
 
-const normalizeRecord = (raw) => {
-    const id = String(raw?.id || raw?.assignmentId || '').trim()
-    return {
-        id,
-        assignmentId: String(raw?.assignmentId || id).trim() || id,
-        assignmentTitle: String(raw?.assignmentTitle || raw?.title || '').trim(),
-        assignmentDescription: String(raw?.assignmentDescription || raw?.description || '').trim(),
-        assessmentType: String(raw?.assessmentType || raw?.deliverableType || 'Assignment').trim() || 'Assignment',
-        deliverableType: String(raw?.deliverableType || raw?.assessmentType || 'Assignment').trim() || 'Assignment',
-        subject: String(raw?.subject || '').trim(),
-        className: String(raw?.className || '').trim(),
-        section: String(raw?.section || '').trim(),
-        status: String(raw?.status || 'Active').trim() || 'Active',
-        assignedDate: String(raw?.assignedDate || '').trim(),
-        dueDate: String(raw?.dueDate || '').trim(),
-        totalMarks: raw?.totalMarks != null && raw?.totalMarks !== '' ? String(raw.totalMarks) : '',
-        attachment: String(raw?.attachment || raw?.fileName || '').trim() || '—',
-        totalStudents: Number(raw?.totalStudents) || 0,
-        submittedStudents: Number(raw?.submittedStudents) || 0,
-        pendingStudents: Number(raw?.pendingStudents) || 0,
-        lateSubmissions: Number(raw?.lateSubmissions) || 0,
-        studentDetails: raw?.studentDetails || { submitted: [], pending: [], late: [] },
-        createdBy: String(raw?.createdBy || '').trim(),
-        createdAt: String(raw?.createdAt || '').trim(),
+export const getHomeFunItems = () => {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) return JSON.parse(stored)
+    } catch {
+        /* ignore */
     }
+    return []
 }
 
-const store = createAcademicsCollectionStore({
-    collection: 'home-fun',
-    storageKey: 'teacher-home-fun-deliverables',
-    eventName: HOME_FUN_UPDATED_EVENT,
-    normalize: normalizeRecord,
-    offlineFallback: () => [],
-})
-
-export const hydrateHomeFunFromApi = store.hydrate
-export const clearHomeFunMemory = store.clearMemory
-
-export const getHomeFunItems = () => store.getAll()
-
-export const saveHomeFunItems = (items) => store.saveAll(items)
+export const saveHomeFunItems = (items) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+}
 
 export const getRecordAssessmentType = (record) =>
     record.assessmentType ?? record.deliverableType ?? 'Assignment'
 
-export const getHomeFunItemById = (id) => {
-    const key = decodeURIComponent(String(id || '').trim())
-    if (!key) return null
-    const keyLower = key.toLowerCase()
-    return (
-        getHomeFunItems().find((item) => {
-            const itemId = String(item.id || '').trim()
-            const assignmentId = String(item.assignmentId || '').trim()
-            return (
-                itemId === key
-                || assignmentId === key
-                || itemId.toLowerCase() === keyLower
-                || assignmentId.toLowerCase() === keyLower
-            )
-        }) ?? null
-    )
-}
+export const getHomeFunItemById = (id) =>
+    getHomeFunItems().find((item) => item.id === id) ?? null
 
-const toSubmissionStudent = (student, extra = {}) => ({
-    id: String(student.id),
-    name: student.name || 'Student',
-    rollNumber: student.rollNumber || '—',
-    admissionNumber: student.admissionNumber || '—',
-    profile: student.profile || student.profileImage || noProfile,
-    email: student.email && student.email !== '—' ? student.email : '',
-    ...extra,
-})
-
-/** Students placed in the assignment's class + section. */
-export const getHomeFunClassRoster = (record, students = null) => {
-    if (!record) return []
-    const roster = Array.isArray(students) ? students : getStudentsList()
-    const targetClass = record.className
-    const targetSection = normalizeSectionKey(record.section)
-    return roster.filter((student) => {
-        const className = student.className || student.class || ''
-        if (!classKeysMatch(className, targetClass)) return false
-        if (!targetSection) return true
-        const section = normalizeSectionKey(
-            student.section && student.section !== '—' ? student.section : '',
-        )
-        return section === targetSection
-    })
-}
-
-/**
- * Live submission stats from class roster + student portal uploads (localStorage).
- * Stored totalStudents/submittedStudents on the assignment row are ignored when a roster exists.
- */
-export const getHomeFunSubmissionRecord = (record, students = null) => {
+export const getHomeFunSubmissionRecord = (record) => {
     if (!record) return null
-    const classSection = `${record.className || ''}-${record.section || ''}`
-    try {
-        const roster = getHomeFunClassRoster(record, students)
-        const submissions = getStoredSubmissions().filter(
-            (entry) => String(entry.assignmentId) === String(record.assignmentId || record.id),
-        )
-        const byStudentId = new Map(
-            submissions.map((entry) => [String(entry.studentId), entry]),
-        )
 
-        const submitted = []
-        const late = []
-        const pending = []
+    const classSection = `${record.className}-${record.section}`
+    const matched = SUBMISSIONS_LIST.find(
+        (item) =>
+            item.assignmentId === record.assignmentId
+            || item.assignmentTitle === record.assignmentTitle,
+    )
 
-        roster.forEach((student) => {
-            const submission = byStudentId.get(String(student.id))
-            if (!submission) {
-                pending.push(toSubmissionStudent(student))
-                return
-            }
-            const detail = toSubmissionStudent(student, {
-                submittedAt: submission.submittedAt,
-                isLate: Boolean(submission.isLate),
-                submission: {
-                    fileName: submission.fileName || '—',
-                    fileSize: submission.fileSize || '',
-                    additionalNote: submission.additionalNote || '',
-                },
-            })
-            if (submission.isLate) late.push(detail)
-            else submitted.push(detail)
-        })
+    const emptyDetails = { submitted: [], pending: [], late: [] }
 
-        // Include uploads whose studentId is not on the current roster (still visible to staff).
-        const rosterIds = new Set(roster.map((row) => String(row.id)))
-        submissions.forEach((submission) => {
-            if (rosterIds.has(String(submission.studentId))) return
-            const orphan = toSubmissionStudent(
-                {
-                    id: submission.studentId,
-                    name: submission.studentName || `Student ${submission.studentId}`,
-                    rollNumber: '—',
-                    admissionNumber: '—',
-                    email: '',
-                },
-                {
-                    submittedAt: submission.submittedAt,
-                    isLate: Boolean(submission.isLate),
-                    submission: {
-                        fileName: submission.fileName || '—',
-                        fileSize: submission.fileSize || '',
-                        additionalNote: submission.additionalNote || '',
-                    },
-                },
-            )
-            if (submission.isLate) late.push(orphan)
-            else submitted.push(orphan)
-        })
-
-        return {
-            ...record,
-            classSection,
-            totalStudents: roster.length,
-            submittedStudents: submitted.length,
-            pendingStudents: pending.length,
-            lateSubmissions: late.length,
-            studentDetails: { submitted, pending, late },
-        }
-    } catch {
-        return {
-            ...record,
-            classSection,
-            totalStudents: 0,
-            submittedStudents: 0,
-            pendingStudents: 0,
-            lateSubmissions: 0,
-            studentDetails: { submitted: [], pending: [], late: [] },
-        }
+    return {
+        ...record,
+        classSection,
+        totalStudents: record.totalStudents ?? matched?.totalStudents ?? 0,
+        submittedStudents: record.submittedStudents ?? matched?.submittedStudents ?? 0,
+        pendingStudents: record.pendingStudents ?? matched?.pendingStudents ?? 0,
+        lateSubmissions: record.lateSubmissions ?? matched?.lateSubmissions ?? 0,
+        studentDetails: record.studentDetails ?? matched?.studentDetails ?? emptyDetails,
     }
 }
 
@@ -221,19 +78,17 @@ export const formatTotalSubmissions = (record) => {
     return `${submission.submittedStudents}/${submission.totalStudents}`
 }
 
-export const addHomeFunItem = async (item, meta = {}) => {
-    await store.ensureHydrated()
+export const addHomeFunItem = (item) => {
     const list = getHomeFunItems()
-    const id = nextPrefixedId(list, 'HF', 1001)
-    const record = normalizeRecord({
+    const nextId = list.length + 1
+    const record = {
+        id: `HF-${1000 + nextId}`,
+        assignmentId: `HF-${1000 + nextId}`,
         status: 'Active',
         ...item,
-        id,
-        assignmentId: id,
-        createdBy: meta.createdBy || '',
-        createdAt: new Date().toISOString(),
-    })
-    await saveHomeFunItems([record, ...list])
+    }
+    const next = [...list, record]
+    saveHomeFunItems(next)
     return record
 }
 
@@ -271,3 +126,5 @@ export const filterHomeFunItems = (items, filters) => {
         return true
     })
 }
+
+export { CLASSES, SECTIONS, SUBJECTS }

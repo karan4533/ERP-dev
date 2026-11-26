@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import {
     ACADEMIC_YEARS,
+    GRADES,
+    SECTIONS,
+    SUBJECTS,
     ALLOCATION_STATUSES,
     createEmptyMappingRow,
     defaultAllocationForm,
-    getGrades,
-    getSections,
-    getSubjects,
 } from '../teacherAllocationData'
 
 const inputClass =
@@ -37,9 +37,6 @@ const TeacherAllocationForm = ({
     showStatus = true,
 }) => {
     const [formState, setFormState] = useState(() => initialValues ?? defaultAllocationForm())
-    const grades = getGrades()
-    const sections = getSections()
-    const subjects = getSubjects()
 
     useEffect(() => {
         setFormState(initialValues ?? defaultAllocationForm())
@@ -58,36 +55,12 @@ const TeacherAllocationForm = ({
 
     const toggleArrayValue = (key, value) => {
         setFormState((current) => {
-            const removing = current[key].includes(value)
-            const list = removing
+            const list = current[key].includes(value)
                 ? current[key].filter((item) => item !== value)
                 : [...current[key], value]
-
-            // Mapping Class/Subject options follow Teaching Class / Subject Allocation.
-            // Clear mapping cells that no longer match the checked sets.
-            let mappings = current.mappings
-            if (key === 'teachingClasses' && removing) {
-                mappings = mappings.map((row) =>
-                    row.className === value ? { ...row, className: '' } : row,
-                )
-            }
-            if (key === 'subjects' && removing) {
-                mappings = mappings.map((row) =>
-                    row.subject === value ? { ...row, subject: '' } : row,
-                )
-            }
-
-            return { ...current, [key]: list, mappings }
+            return { ...current, [key]: list }
         })
     }
-
-    const mappingClassOptions = formState.teachingClasses.length
-        ? grades.filter((grade) => formState.teachingClasses.includes(grade))
-        : []
-
-    const mappingSubjectOptions = formState.subjects.length
-        ? subjects.filter((subject) => formState.subjects.includes(subject))
-        : []
 
     const updateMapping = (index, key, value) => {
         setFormState((current) => ({
@@ -177,7 +150,7 @@ const TeacherAllocationForm = ({
                                 className={selectClass}
                             >
                                 <option value=''>--Select--</option>
-                                {grades.map((grade) => (
+                                {GRADES.map((grade) => (
                                     <option key={grade} value={grade}>{grade}</option>
                                 ))}
                             </select>
@@ -194,7 +167,7 @@ const TeacherAllocationForm = ({
                                 className={selectClass}
                             >
                                 <option value=''>--Select--</option>
-                                {sections.map((section) => (
+                                {SECTIONS.map((section) => (
                                     <option key={section} value={section}>{section}</option>
                                 ))}
                             </select>
@@ -206,7 +179,7 @@ const TeacherAllocationForm = ({
             <div>
                 <h3 className='text-lg font-semibold text-black mb-4'>Teaching Class Allocation</h3>
                 <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3'>
-                    {grades.map((grade) => (
+                    {GRADES.map((grade) => (
                         <label
                             key={grade}
                             className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
@@ -231,7 +204,7 @@ const TeacherAllocationForm = ({
             <div>
                 <h3 className='text-lg font-semibold text-black mb-4'>Subject Allocation</h3>
                 <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3'>
-                    {subjects.map((subject) => (
+                    {SUBJECTS.map((subject) => (
                         <label
                             key={subject}
                             className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
@@ -260,19 +233,13 @@ const TeacherAllocationForm = ({
                         <button
                             type='button'
                             onClick={addMappingRow}
-                            disabled={!formState.teachingClasses.length}
-                            className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-3 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#515DEF]'
+                            className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-3 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
                         >
                             <Plus size={16} />
                             Add More
                         </button>
                     )}
                 </div>
-                {!readOnly && !formState.teachingClasses.length ? (
-                    <p className='text-sm text-[#667085] mb-3'>
-                        Select one or more grades under Teaching Class Allocation first — those grades appear in the Class dropdown below.
-                    </p>
-                ) : null}
                 <div className='overflow-x-auto'>
                     <table className='w-full text-sm text-left'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -296,12 +263,9 @@ const TeacherAllocationForm = ({
                                                 value={row.className}
                                                 onChange={(e) => updateMapping(index, 'className', e.target.value)}
                                                 className={selectClass}
-                                                disabled={!mappingClassOptions.length}
                                             >
-                                                <option value=''>
-                                                    {mappingClassOptions.length ? '--Select--' : 'Select teaching classes first'}
-                                                </option>
-                                                {mappingClassOptions.map((grade) => (
+                                                <option value=''>--Select--</option>
+                                                {GRADES.map((grade) => (
                                                     <option key={grade} value={grade}>{grade}</option>
                                                 ))}
                                             </select>
@@ -317,7 +281,7 @@ const TeacherAllocationForm = ({
                                                 className={selectClass}
                                             >
                                                 <option value=''>--Select--</option>
-                                                {sections.map((section) => (
+                                                {SECTIONS.map((section) => (
                                                     <option key={section} value={section}>{section}</option>
                                                 ))}
                                             </select>
@@ -331,12 +295,9 @@ const TeacherAllocationForm = ({
                                                 value={row.subject}
                                                 onChange={(e) => updateMapping(index, 'subject', e.target.value)}
                                                 className={selectClass}
-                                                disabled={!mappingSubjectOptions.length}
                                             >
-                                                <option value=''>
-                                                    {mappingSubjectOptions.length ? '--Select--' : 'Select subjects first'}
-                                                </option>
-                                                {mappingSubjectOptions.map((subject) => (
+                                                <option value=''>--Select--</option>
+                                                {SUBJECTS.map((subject) => (
                                                     <option key={subject} value={subject}>{subject}</option>
                                                 ))}
                                             </select>

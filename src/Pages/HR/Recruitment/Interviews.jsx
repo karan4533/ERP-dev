@@ -2,26 +2,37 @@ import React, { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { getCandidates, getInterviews, nextId, pushNotification, queueCommunication, saveCandidates, saveInterviews } from '../domain/hrStore'
-import { Badge, FormField, KeyFields, Modal, PageIntro, PrimaryButton, SearchBox, Select, TableWrap, inputClass, td, th, useFilters, useHrTick, matches } from '../components/HrUi'
+import { Badge, Modal, PageIntro, PrimaryButton, SearchBox, Select, TableWrap, inputClass } from '../components/HrUi'
+import { matches, useFilters, useHrTick } from '../components/hrUiState'
+import { DataTable } from '../../../Common/ui'
 
 const LEVELS = ['Screening', 'Level 1', 'Level 2', 'Technical', 'HR', 'Management', 'Final']
 const STATUSES = ['Scheduled', 'Completed', 'Selected', 'Rejected', 'On Hold', 'Next Round', 'No Show']
 const empty = { candidateId: '', level: 'Screening', interviewer: '', date: '2026-09-25', time: '10:00', mode: 'In Person', status: 'Scheduled', score: 0, remarks: '', strengths: '', concerns: '', recommendation: '', nextStep: '', technical: 0, communication: 0, experienceMatch: 0, roleFit: 0, finalDecision: '' }
 
 const Rating = ({ label, value, onChange }) => (
-    <FormField label={label}>
-        <select className={inputClass} value={value} onChange={(e) => onChange(Number(e.target.value))}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select>
-    </FormField>
+    <label className='text-sm text-[#808080]'>{label}
+        <select className={`${inputClass} mt-1`} value={value} onChange={(e) => onChange(Number(e.target.value))}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+    </label>
 )
 
 const Interviews = () => {
     const feedbackMode = useLocation().pathname.includes('interview-feedback')
     const tick = useHrTick()
-    const rows = useMemo(() => getInterviews(), [tick])
-    const candidates = useMemo(() => getCandidates(), [tick])
+    const rows = useMemo(() => { void tick; return getInterviews() }, [tick])
+    const candidates = useMemo(() => { void tick; return getCandidates() }, [tick])
     const { filters, set } = useFilters({ search: '', level: '', status: '' })
     const [form, setForm] = useState(null)
     const filtered = rows.filter((row) => (!filters.level || row.level === filters.level) && (!filters.status || row.status === filters.status) && matches(`${row.id} ${row.position} ${row.interviewer}`, filters.search))
+    const columns = [
+        { key: 'id', label: 'Interview ID', required: true },
+        { key: 'candidateId', label: 'Candidate', required: true, render: (row) => candidates.find((item) => item.id === row.candidateId)?.name || row.candidateId },
+        { key: 'level', label: 'Level' },
+        { key: 'date', label: 'Schedule', render: (row) => `${row.date} ${row.time || ''}`.trim() },
+        { key: 'interviewer', label: 'Interviewer' },
+        { key: 'score', label: 'Score', render: (row) => row.score || '—' },
+        { key: 'status', label: 'Status', render: (row) => <Badge value={row.status} /> },
+    ]
 
     const save = (event) => {
         event.preventDefault()
@@ -51,21 +62,14 @@ const Interviews = () => {
                 </div>
             </PageIntro>
             <TableWrap title={feedbackMode ? 'Interview Feedback' : 'Interviews'} action={<PrimaryButton onClick={() => setForm({ ...empty, candidateId: candidates[0]?.id || '' })}>{feedbackMode ? 'Add Feedback' : 'Schedule Interview'}</PrimaryButton>}>
-                <table className='w-full text-left'><thead className='bg-[#EDEEF5]'><tr>{['ID', 'Candidate', 'Level', 'Date', 'Interviewer', 'Score', 'Status', ''].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-                    <tbody>{filtered.map((row) => <tr key={row.id} className='border-b border-[#f2f4f7]'><td className={td}>{row.id}</td><td className={td}>{candidates.find((item) => item.id === row.candidateId)?.name}</td><td className={td}>{row.level}</td><td className={td}>{row.date} {row.time}</td><td className={td}>{row.interviewer}</td><td className={td}>{row.score || '—'}</td><td className={td}><Badge value={row.status} /></td><td className={td}><button type='button' className='text-[#515DEF]' onClick={() => setForm(row)}>Feedback</button></td></tr>)}</tbody>
-                </table>
+                <DataTable caption='HR interview register' rows={filtered} columns={columns} rowKey='id' emptyTitle='No interviews found' emptyDescription='Change level, status or search to review other interviews.' renderActions={(row) => <button type='button' className='min-h-9 rounded-md border border-[var(--erp-indigo)] px-3 text-sm font-semibold text-[var(--erp-indigo)]' onClick={() => setForm(row)}>Feedback</button>} />
             </TableWrap>
             {form && <Modal title='Interview' onClose={() => setForm(null)} wide>
                 <form onSubmit={save} className='grid md:grid-cols-2 gap-3'>
-                    <Select label='Candidate' value={form.candidateId} onChange={(e) => setForm({ ...form, candidateId: e.target.value })} options={candidates.map((item) => ({ value: item.id, label: `${item.name} · ${item.position}` }))} allLabel='Select candidate' />
+                    <Select label='Candidate' value={form.candidateId} onChange={(e) => setForm({ ...form, candidateId: e.target.value })} options={candidates.map((item) => item.id)} allLabel='Select' />
                     <Select label='Level' value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} options={LEVELS} allLabel='Select' />
                     <Select label='Status' value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} options={STATUSES} allLabel='Select' />
-                    <KeyFields
-                        keys={['interviewer', 'date', 'time', 'mode', 'strengths', 'concerns', 'remarks', 'recommendation', 'nextStep', 'finalDecision']}
-                        form={form}
-                        setForm={setForm}
-                        bounds={{ date: 'future' }}
-                    />
+                    {['interviewer', 'date', 'time', 'mode', 'strengths', 'concerns', 'remarks', 'recommendation', 'nextStep', 'finalDecision'].map((key) => <input key={key} className={inputClass} placeholder={key} value={form[key] || ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />)}
                     <Rating label='Technical / Functional' value={form.technical || 1} onChange={(value) => setForm({ ...form, technical: value })} />
                     <Rating label='Communication' value={form.communication || 1} onChange={(value) => setForm({ ...form, communication: value })} />
                     <Rating label='Experience Match' value={form.experienceMatch || 1} onChange={(value) => setForm({ ...form, experienceMatch: value })} />

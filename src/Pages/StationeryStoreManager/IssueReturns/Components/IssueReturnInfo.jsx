@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar } from 'lucide-react'
 import {
     ACTIVITY_TYPES,
     DEPARTMENTS,
+    ITEM_OPTIONS,
     PURPOSE_OPTIONS,
     CONDITION_OPTIONS,
+    getAvailableStock,
 } from '../issueReturnsData'
-import { getInventoryItems, hydrateInventoryItemsFromApi } from '../../Inventory/inventoryData'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
@@ -24,26 +25,14 @@ const IssueReturnInfo = () => {
     const [selectedItem, setSelectedItem] = useState('')
     const [issueDate, setIssueDate] = useState(null)
     const [returnDate, setReturnDate] = useState(null)
-    const [items, setItems] = useState([])
 
-    useEffect(() => {
-        let active = true
-        hydrateInventoryItemsFromApi().finally(() => {
-            if (!active) return
-            setItems(getInventoryItems().filter((item) => item.itemName))
-        })
-        return () => { active = false }
-    }, [])
-
-    const selected = items.find((item) => item.itemName === selectedItem)
-    const availableStock = selected ? (selected.availableQuantity ?? '—') : '—'
+    const availableStock = selectedItem ? getAvailableStock(selectedItem) : '—'
 
     return (
         <div className='space-y-8 lg:mt-8 mt-2'>
             <div>
                 <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>Activity Type</h3>
                 <select
-                    id="activity-type"
                     className={`${selectClass} max-w-xs`}
                     value={activityType}
                     onChange={(e) => setActivityType(e.target.value)}
@@ -83,9 +72,8 @@ const IssueReturnInfo = () => {
                             onChange={(e) => setSelectedItem(e.target.value)}
                         >
                             <option value="" disabled>Select item</option>
-                            {items.length === 0 && <option value="" disabled>No saved items</option>}
-                            {items.map((item) => (
-                                <option key={item.id || item.itemName} value={item.itemName}>{item.itemName}</option>
+                            {ITEM_OPTIONS.map((item) => (
+                                <option key={item.name} value={item.name}>{item.name}</option>
                             ))}
                         </select>
                     </div>

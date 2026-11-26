@@ -1,17 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { toast } from 'react-toastify'
+import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import {
     forwardTcRequestToSuperAdmin,
-    forwardTcRequestViaApi,
     getTcRequestById,
-    hydrateTcRequestFromApi,
     rejectTcRequest,
-    rejectTcRequestAtPrmViaApi,
     statusBadgeColor,
 } from '../../../Common/TcRequest/tcRequestData'
-import { canUseTcApi } from '../../../services/tcApi'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -32,69 +27,15 @@ const ViewTcRequest = () => {
     const navigate = useNavigate()
     const [request, setRequest] = useState(() => getTcRequestById(id))
     const [prmRemarks, setPrmRemarks] = useState(request?.prmRemarks ?? '')
-    const [busy, setBusy] = useState(false)
 
-    useEffect(() => {
-        if (!canUseTcApi()) return undefined
-        let active = true
-        hydrateTcRequestFromApi(id)
-            .then((row) => {
-                if (!active) return
-                setRequest(row)
-                setPrmRemarks(row.prmRemarks || '')
-            })
-            .catch(() => {
-                if (active) setRequest(null)
-            })
-        return () => {
-            active = false
-        }
-    }, [id])
-
-    const handleForward = async () => {
-        if (canUseTcApi()) {
-            if (busy) return
-            setBusy(true)
-            try {
-                setRequest(await forwardTcRequestViaApi(id, prmRemarks))
-                toast.success('Forwarded to Super Admin.')
-            } catch (error) {
-                toast.error(error?.message || 'Could not forward the request.')
-            } finally {
-                setBusy(false)
-            }
-            return
-        }
+    const handleForward = () => {
         const updated = forwardTcRequestToSuperAdmin(id, prmRemarks)
-        if (updated) {
-            setRequest(updated)
-            toast.success('Forwarded to Super Admin.')
-        } else {
-            toast.error('Could not forward the request.')
-        }
+        if (updated) setRequest(updated)
     }
 
-    const handleReject = async () => {
-        if (canUseTcApi()) {
-            if (busy) return
-            setBusy(true)
-            try {
-                setRequest(await rejectTcRequestAtPrmViaApi(id, prmRemarks))
-                toast.success('TC request rejected.')
-            } catch (error) {
-                toast.error(error?.message || 'Could not reject the request.')
-            } finally {
-                setBusy(false)
-            }
-            return
-        }
+    const handleReject = () => {
         const updated = rejectTcRequest(id, prmRemarks, 'prm')
-        if (updated) {
-            setRequest(updated)
-            toast.success('TC request rejected.')
-        } else {
-            toast.error('Could not reject the request.')
-        }
+        if (updated) setRequest(updated)
     }
 
     return (
@@ -132,6 +73,42 @@ const ViewTcRequest = () => {
                         </div>
                     </Section>
 
+                    <Section title='Manager-Level NOC Clearance (Mandatory Departmental Sign-offs)'>
+                        <div className='overflow-x-auto'>
+                            <table className='w-full text-left text-xs'>
+                                <thead>
+                                    <tr className='border-b border-slate-100 bg-[#EDEEF5] text-[#0C1E5B] font-semibold uppercase'>
+                                        <th className='py-3 px-4 rounded-s-lg'>Department</th>
+                                        <th className='py-3 px-4'>Approving Manager</th>
+                                        <th className='py-3 px-4'>Clearance Status</th>
+                                        <th className='py-3 px-4'>Remarks & Audit Notes</th>
+                                        <th className='py-3 px-4 rounded-e-lg'>Date Cleared</th>
+                                    </tr>
+                                </thead>
+                                <tbody className='divide-y divide-slate-100'>
+                                    {(request.nocClearances || []).map((noc) => (
+                                        <tr key={noc.departmentKey} className='hover:bg-slate-50/70 transition-colors'>
+                                            <td className='py-3 px-4 font-bold text-slate-900'>{noc.department}</td>
+                                            <td className='py-3 px-4 font-medium text-slate-700'>{noc.manager}</td>
+                                            <td className='py-3 px-4'>
+                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                                    noc.status === 'Cleared'
+                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                                }`}>
+                                                    <CheckCircle2 size={12} />
+                                                    {noc.status}
+                                                </span>
+                                            </td>
+                                            <td className='py-3 px-4 text-slate-600 max-w-xs'>{noc.remarks}</td>
+                                            <td className='py-3 px-4 font-mono text-slate-500'>{noc.date}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Section>
+
                     {request.status === 'Pending PRM Review' ? (
                         <Section title='PRM Action'>
                             <div className='space-y-4'>
@@ -147,10 +124,10 @@ const ViewTcRequest = () => {
                                     />
                                 </div>
                                 <div className='flex sm:justify-end justify-center gap-x-4'>
-                                    <button type='button' onClick={handleReject} disabled={busy} className='bg-white text-[#FF0000] text-sm px-8 py-2 rounded-md border border-[#FF0000] hover:bg-[#FF0000] hover:text-white transition-all duration-200 cursor-pointer md:w-auto w-full'>
+                                    <button type='button' onClick={handleReject} className='bg-white text-[#FF0000] text-sm px-8 py-2 rounded-md border border-[#FF0000] hover:bg-[#FF0000] hover:text-white transition-all duration-200 cursor-pointer md:w-auto w-full'>
                                         Reject
                                     </button>
-                                    <button type='button' onClick={handleForward} disabled={busy} className='bg-[#515DEF] text-white text-sm px-8 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'>
+                                    <button type='button' onClick={handleForward} className='bg-[#515DEF] text-white text-sm px-8 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'>
                                         Forward to Super Admin
                                     </button>
                                 </div>
@@ -158,9 +135,10 @@ const ViewTcRequest = () => {
                         </Section>
                     ) : null}
 
-                    {request.prmRemarks && request.status !== 'Pending PRM Review' ? (
+                    {request.status !== 'Pending PRM Review' && request.prmRemarks ? (
                         <Section title='PRM Remarks'>
                             <Field label='Remarks' value={request.prmRemarks} />
+                            {request.forwardedOn ? <Field label='Forwarded On' value={request.forwardedOn} /> : null}
                         </Section>
                     ) : null}
                 </>

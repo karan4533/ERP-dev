@@ -1,12 +1,3 @@
-/**
- * Timetable change request form — hidden for now on every panel.
- * Uncomment the block below (and Teacher/Coordinator ClassRoutine usages) when implementing.
- */
-export default function TimetableChangePanel() {
-    return null
-}
-
-/*
 import { useState } from 'react'
 import { toast } from 'react-toastify'
 import { DAYS, SUBJECTS, TEACHERS, addTimetableChangeRequest, getTimetableChangeRequests } from '../../Pages/Principal/ClassTimetable/classTimetableData'
@@ -65,4 +56,3 @@ export default function TimetableChangePanel({ requestedBy, requestedByRole }) {
         </section>
     )
 }
-*/

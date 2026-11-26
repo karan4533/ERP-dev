@@ -1,44 +1,27 @@
 import { NavLink } from 'react-router-dom'
-import { CircleCheck, X } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
+import Dialog from '../ui/Dialog'
 
 const MdApprovalSubmitModal = ({ open, onClose, listPath }) => {
-    if (!open) return null
-
     return (
-        <div className='fixed inset-0 z-50 flex items-center justify-center'>
-            <div className='absolute inset-0 bg-black/40' onClick={onClose} />
-            <div className='relative z-10 w-full max-w-lg rounded-xl bg-white shadow-lg p-5 py-4'>
-                <div className='flex justify-end items-center'>
-                    <button type='button' onClick={onClose} className='hover:text-red-500 cursor-pointer'>
-                        <X />
-                    </button>
-                </div>
-                <div className='pt-4 text-center'>
-                    <div className='flex justify-center items-center mb-4'>
-                        <CircleCheck size={70} strokeWidth={1.5} className='text-[#4CAF50]' />
-                    </div>
-                    <h3 className='text-xl font-medium text-[#77767A]'>Request Submitted</h3>
-                    <p className='text-base text-[#77767A] font-medium mt-2'>
-                        Your activity has been sent to the Managing Director (MD) for approval.
-                    </p>
-                    <div className='flex gap-x-4 mt-10'>
-                        <button
-                            type='button'
-                            onClick={onClose}
-                            className='bg-white text-[#77767A] text-sm text-center px-4 py-2.5 rounded-md border border-[#77767A] hover:bg-[#515DEF] hover:text-white hover:border-[#515DEF] transition-all duration-200 cursor-pointer w-full'
-                        >
-                            Add Another
-                        </button>
-                        <NavLink
-                            to={listPath}
-                            className='bg-[#515DEF] text-white text-sm text-center px-4 py-2.5 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer w-full'
-                        >
-                            Back to List
-                        </NavLink>
-                    </div>
-                </div>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            title='Request submitted'
+            description='The activity is now in the Managing Director approval queue.'
+            size='sm'
+            footer={(
+                <>
+                    <button type='button' onClick={onClose} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold'>Add another</button>
+                    <NavLink to={listPath} className='inline-flex min-h-10 items-center rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>Back to list</NavLink>
+                </>
+            )}
+        >
+            <div className='flex items-center gap-3 rounded-lg border border-[#BFE3D2] bg-[#EFFAF4] p-4 text-sm text-[#165B3D]'>
+                <CircleCheck aria-hidden='true' className='shrink-0' size={24} />
+                <p>No further action is required until the request is reviewed.</p>
             </div>
-        </div>
+        </Dialog>
     )
 }
 

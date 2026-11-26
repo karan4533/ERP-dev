@@ -9,10 +9,36 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 //   → month is 1-indexed (1 = January … 12 = December)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Fallback when no API fetcher is provided — never invent attendance marks. */
-async function defaultFetchAttendance() {
-  return {};
+// ─── Mock API (replace with your real fetch) ──────────────────────────────────
+// month is 1-indexed (1 = January … 12 = December)
+async function defaultFetchAttendance(year, month) {
+  // Simulate network delay
+  await new Promise((r) => setTimeout(r, 600));
+
+  // Swap this block with a real API call:
+  // const res = await fetch(`/api/attendance?year=${year}&month=${month}`);
+  // if (!res.ok) throw new Error("Failed to load attendance");
+  // return res.json();
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const data = {};
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day);
+    const weekday = date.getDay(); // 0 = Sunday, 6 = Saturday
+    const key = `${year}-${pad(month)}-${pad(day)}`;
+
+    if (weekday === 0 || weekday === 6) {
+      data[key] = "H"; // Weekends are always holidays
+    } else {
+      // Roughly 1 in 6 weekdays absent, rest present
+      data[key] = day % 6 === 0 ? "A" : "P";
+    }
+  }
+
+  return data;
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [

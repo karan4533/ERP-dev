@@ -13,7 +13,6 @@ const StudentRoutes = () => (
         studyMaterialsRoute={STUDENT_STUDY_MATERIALS_ROUTE}
         sampleQuestionsRoute={STUDENT_SAMPLE_QUESTIONS_ROUTE}
         communicationInboxBase="/student/communication/inbox"
-        trackBusWithRouteDetails
     />
 )
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -7,8 +7,7 @@ import mo_user from '../../../assets/images/no-profile.png'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
-    getDrivers,
-    hydrateDriversFromApi,
+    DRIVERS,
     DRIVER_STATUSES,
     getDriverDisplayName,
 } from './driverManagementData'
@@ -17,11 +16,6 @@ const DriverManagement = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [DRIVERS, setDrivers] = useState(() => getDrivers())
-
-    useEffect(() => {
-        hydrateDriversFromApi().finally(() => setDrivers(getDrivers()))
-    }, [])
 
     return (
         <section>

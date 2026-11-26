@@ -4,7 +4,7 @@ import teacher_profile from '../../assets/images/teacher-icon.png'
 import driver_profile from '../../assets/images/van-driver-icon.png'
 import librarian_profile from '../../assets/images/librarian-icon.png'
 import prm_profile from '../../assets/images/prm-icon.jpg'
-import { ROLES } from '../../context/AuthContext'
+import { ROLES } from '../../constants/roles.js'
 
 /** Single source of truth for login profile metadata (labels, images). */
 export const PROFILE_OPTIONS = [
@@ -30,6 +30,7 @@ export const PROFILE_OPTIONS = [
     { role: ROLES.IT_SUPPORT_MANAGER, label: 'IT Support Team Manager', image: admin_profile, alt: 'it_support_manager_profile' },
     { role: ROLES.STATIONERY_STORE_MANAGER, label: 'Stores Manager', image: librarian_profile, alt: 'stationery_store_manager_profile' },
     { role: ROLES.HOUSEKEEPING_MANAGER, label: 'Housekeeping Manager', image: admin_profile, alt: 'housekeeping_manager_profile' },
+    { role: ROLES.MAINTENANCE_MANAGER, label: 'Maintenance Manager', image: admin_profile, alt: 'maintenance_manager_profile' },
     { role: ROLES.TRANSPORT_MANAGER, label: 'Transport Manager', image: driver_profile, alt: 'transport_manager_profile' },
     { role: ROLES.JOINT_DIRECTOR, label: 'Joint Director', image: admin_profile, alt: 'joint_director_profile' },
     { role: ROLES.JOINT_DIRECTOR_ASSISTANT, label: 'Joint Director Assistant', image: admin_profile, alt: 'joint_director_assistant_profile' },
@@ -38,6 +39,9 @@ export const PROFILE_OPTIONS = [
     { role: ROLES.QUALITY_AUDITOR, label: 'Quality Auditor', image: admin_profile, alt: 'quality_auditor_profile' },
     { role: ROLES.HR, label: 'HR', image: admin_profile, alt: 'hr_profile' },
     { role: ROLES.ACCOUNT_HEAD, label: 'Account Head', image: admin_profile, alt: 'account_head_profile' },
+    { role: ROLES.PRO, label: 'Public Relations Officer', image: prm_profile, alt: 'pro_profile' },
+    { role: ROLES.FILE_ROOM, label: 'File Room Custodian', image: librarian_profile, alt: 'file_room_profile' },
+    { role: ROLES.CCTV, label: 'CCTV In-charge', image: admin_profile, alt: 'cctv_profile' },
 ]
 
 export const PROFILE_BY_ROLE = Object.fromEntries(

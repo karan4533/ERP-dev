@@ -1,20 +1,107 @@
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useMemo, useState } from 'react'
-import {
-    SCHOOL_CAMPUS,
-    isSchoolPlaceName,
-    parseMapLatLng,
-    resolveDestinationPosition,
-} from '../../../../Common/Transport/schoolCampusLocation'
+import { useEffect, useMemo } from 'react'
 
-/** Demo path only — never used as live pickup/destination when GPS is on. */
 const DEFAULT_ROUTE_COORDS = [
     [9.91143, 78.11755],
+    [9.91140, 78.11714],
+    [9.91154, 78.11606],
+    [9.91156, 78.11583],
+    [9.91163, 78.11530],
+    [9.91183, 78.11376],
+    [9.91195, 78.11278],
+    [9.91200, 78.11249],
+    [9.91214, 78.11241],
+    [9.91224, 78.11236],
+    [9.91234, 78.11227],
+    [9.91241, 78.11180],
+    [9.91249, 78.11162],
+    [9.91302, 78.11147],
+    [9.91346, 78.11148],
+    [9.91394, 78.11152],
+    [9.91471, 78.11157],
+    [9.91492, 78.11158],
+    [9.91511, 78.11159],
+    [9.91516, 78.11152],
+    [9.91524, 78.11085],
+    [9.91543, 78.11059],
+    [9.91569, 78.11041],
+    [9.91610, 78.11042],
+    [9.91632, 78.11039],
+    [9.91649, 78.11022],
+    [9.91658, 78.10996],
+    [9.91686, 78.10899],
+    [9.91696, 78.10890],
+    [9.91715, 78.10882],
+    [9.91788, 78.10880],
+    [9.91854, 78.10879],
+    [9.91871, 78.10875],
+    [9.91883, 78.10865],
+    [9.91925, 78.10815],
+    [9.91935, 78.10796],
+    [9.91984, 78.10739],
+    [9.92093, 78.10619],
+    [9.92139, 78.10570],
+    [9.92205, 78.10496],
+    [9.92254, 78.10455],
+    [9.92347, 78.10388],
+    [9.92425, 78.10318],
     [9.92517, 78.10197],
+    [9.92540, 78.10160],
+    [9.92599, 78.10086],
+    [9.92637, 78.10038],
+    [9.92684, 78.09984],
+    [9.92705, 78.09967],
+    [9.92749, 78.09941],
+    [9.92767, 78.09913],
+    [9.92788, 78.09868],
+    [9.92801, 78.09837],
+    [9.92815, 78.09807],
+    [9.92838, 78.09765],
+    [9.92863, 78.09731],
+    [9.92918, 78.09667],
+    [9.92987, 78.09587],
+    [9.93019, 78.09555],
+    [9.93068, 78.09508],
+    [9.93139, 78.09432],
+    [9.93232, 78.09324],
+    [9.93274, 78.09270],
+    [9.93286, 78.09250],
+    [9.93336, 78.09179],
+    [9.93385, 78.09095],
+    [9.93413, 78.09025],
+    [9.93442, 78.08973],
+    [9.93480, 78.08931],
     [9.93607, 78.08788],
+    [9.93678, 78.08707],
+    [9.93764, 78.08604],
+    [9.93784, 78.08585],
+    [9.93835, 78.08512],
+    [9.93854, 78.08495],
+    [9.93866, 78.08485],
+    [9.93904, 78.08463],
+    [9.93936, 78.08447],
+    [9.93971, 78.08430],
+    [9.94016, 78.08406],
+    [9.94049, 78.08375],
+    [9.94097, 78.08331],
+    [9.94197, 78.08242],
+    [9.94235, 78.08205],
     [9.94273, 78.08150],
+    [9.94284, 78.08129],
+    [9.94319, 78.08040],
+    [9.94371, 78.07918],
+    [9.94433, 78.07725],
+    [9.94444, 78.07684],
+    [9.94483, 78.07536],
+    [9.94504, 78.07487],
+    [9.94555, 78.07402],
+    [9.94638, 78.07281],
+    [9.94708, 78.07181],
+    [9.94777, 78.07092],
+    [9.94814, 78.07027],
+    [9.94879, 78.06941],
     [9.94908, 78.06969],
 ]
 
@@ -25,68 +112,7 @@ const DEFAULT_STATS = {
     speed: '32 km/h',
 }
 
-/** Esri street tiles — geography like Google Maps, no API key required. */
-const STREET_TILE_URL =
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
-const STREET_TILE_ATTR =
-    'Tiles &copy; Esri &mdash; Source: Esri, OpenStreetMap contributors'
-
-const GENERIC_PLACE = new Set([
-    '',
-    '-',
-    '—',
-    'pickup',
-    'pickup point',
-    'drop',
-    'drop point',
-    'drop-off',
-    'destination',
-    'school',
-    'school campus',
-    'campus',
-    'start',
-    'end',
-    'n/a',
-    'na',
-    'tbd',
-])
-
-const isGenericPlace = (value) => GENERIC_PLACE.has(String(value || '').trim().toLowerCase())
-
-const geocodeCache = new Map()
-
-async function geocodePlace(query) {
-    const q = String(query || '').trim()
-    if (!q || q.length < 3) return null
-    if (isSchoolPlaceName(q)) return SCHOOL_CAMPUS.position
-    if (isGenericPlace(q)) return null
-    if (geocodeCache.has(q)) return geocodeCache.get(q)
-
-    const url = new URL('https://nominatim.openstreetmap.org/search')
-    url.searchParams.set('format', 'json')
-    url.searchParams.set('limit', '1')
-    url.searchParams.set('q', `${q}, Tamil Nadu, India`)
-
-    try {
-        const response = await fetch(url.toString(), {
-            headers: { Accept: 'application/json' },
-        })
-        if (!response.ok) {
-            geocodeCache.set(q, null)
-            return null
-        }
-        const rows = await response.json()
-        const hit = Array.isArray(rows) ? rows[0] : null
-        const point = hit ? parseMapLatLng(hit.lat, hit.lon) : null
-        geocodeCache.set(q, point)
-        return point
-    } catch {
-        geocodeCache.set(q, null)
-        return null
-    }
-}
-
-const makeStopIcon = (color, label, { done = false, active = false, student = false } = {}) =>
+const makeStopIcon = (color, label) =>
     L.divIcon({
         className: '',
         html: `
@@ -95,16 +121,14 @@ const makeStopIcon = (color, label, { done = false, active = false, student = fa
         filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
       ">
         <div style="
-          background:${done ? '#16a34a' : color};
-          width:${student || active ? 22 : 16}px; height:${student || active ? 22 : 16}px;
+          background:${color};
+          width:16px; height:16px;
           border-radius:50%;
           border:3px solid white;
-          box-shadow: 0 0 0 ${student ? 3 : 2}px ${done ? '#16a34a' : (active ? '#f59e0b' : color)};
-          display:flex; align-items:center; justify-content:center;
-          color:white; font-size:11px; font-weight:800; line-height:1;
-        ">${done ? '✓' : (active ? '●' : '')}</div>
+          box-shadow: 0 0 0 2px ${color};
+        "></div>
         <div style="
-          background:${done ? '#15803d' : (active ? '#b45309' : '#0C1E5B')};
+          background:#0C1E5B;
           color:white;
           font-size:11px;
           font-weight:600;
@@ -115,7 +139,7 @@ const makeStopIcon = (color, label, { done = false, active = false, student = fa
         ">${label}</div>
       </div>`,
         iconSize: [0, 0],
-        iconAnchor: [student || active ? 11 : 8, student || active ? 11 : 8],
+        iconAnchor: [8, 8],
     })
 
 const makeBusIcon = (busLabel) =>
@@ -148,33 +172,13 @@ const makeBusIcon = (busLabel) =>
         iconAnchor: [22, 22],
     })
 
-function FitBounds({ coords, fallbackCenter, fallbackZoom = 15 }) {
+function FitBounds({ coords }) {
     const map = useMap()
     useEffect(() => {
-        const points = (coords || []).filter(
-            (row) => Array.isArray(row) && row.length === 2 && Number.isFinite(row[0]) && Number.isFinite(row[1]),
-        )
-        if (points.length >= 2) {
-            map.fitBounds(points, { padding: [48, 48], maxZoom: 16 })
-            return
+        if (coords.length > 0) {
+            map.fitBounds(coords, { padding: [50, 50] })
         }
-        if (points.length === 1) {
-            map.setView(points[0], fallbackZoom)
-            return
-        }
-        if (fallbackCenter) {
-            map.setView(fallbackCenter, fallbackZoom)
-        }
-    }, [coords, fallbackCenter, fallbackZoom, map])
-    return null
-}
-
-function FollowLiveBus({ position, enabled }) {
-    const map = useMap()
-    useEffect(() => {
-        if (!enabled || !position) return
-        map.panTo(position, { animate: true, duration: 0.6 })
-    }, [enabled, position, map])
+    }, [coords, map])
     return null
 }
 
@@ -190,129 +194,22 @@ export default function BusTrackingMap({
     busLabel = 'BUS-001',
     stats = DEFAULT_STATS,
     routeCoords = DEFAULT_ROUTE_COORDS,
-    busIndex = 2,
-    /** Explicit coords from route/assignment — preferred over geocoding */
-    startPosition = null,
-    endPosition = null,
-    /** Extra stop pins (other pickups / drop points on the same route) */
-    stopMarkers = [],
-    /** pickup = home→school; drop = school→home */
-    tripMode = 'pickup',
-    /** Live ProTrack GPS [lat, lng] — when set, bus marker follows the device */
-    livePosition = null,
-    liveStatusLabel = '',
-    /**
-     * live — verified ProTrack fix (bus marker on GPS)
-     * waiting — duty started; map + stops only, no demo bus
-     * demo — simulated geometry (TM preview only)
-     */
+    busIndex = 54,
     trackingMode = 'demo',
-    /** Optional status line under the title (e.g. on the move from…) */
-    tripStatusLine = '',
-    /** Show graded pickup/drop checklist under the map */
-    showStopProgress = true,
 }) {
-    const isLive = trackingMode === 'live' && Array.isArray(livePosition) && livePosition.length === 2
-    const isWaitingGps = trackingMode === 'waiting' || (trackingMode === 'live' && !isLive)
-    const useRealTrip = isLive || isWaitingGps
-    const isDropTrip = String(tripMode || '').toLowerCase() === 'drop'
-    const [geoStart, setGeoStart] = useState(null)
-    const [geoEnd, setGeoEnd] = useState(() => (
-        parseMapLatLng(endPosition?.[0], endPosition?.[1])
-        || resolveDestinationPosition({ endPosition, endLocation })
-        || (!isDropTrip ? SCHOOL_CAMPUS.position : null)
-    ))
-
-    useEffect(() => {
-        let active = true
-        const explicitStart = parseMapLatLng(startPosition?.[0], startPosition?.[1])
-            || (isDropTrip && isSchoolPlaceName(startLocation) ? SCHOOL_CAMPUS.position : null)
-        const explicitEnd = parseMapLatLng(endPosition?.[0], endPosition?.[1])
-            || (!isDropTrip
-                ? resolveDestinationPosition({ endPosition, endLocation })
-                : null)
-
-        if (explicitStart) setGeoStart(explicitStart)
-        else setGeoStart(null)
-
-        if (explicitEnd) {
-            setGeoEnd(explicitEnd)
-        } else if (!isDropTrip) {
-            setGeoEnd(SCHOOL_CAMPUS.position)
-        } else {
-            setGeoEnd(null)
-        }
-
-        ;(async () => {
-            if (!explicitStart && startLocation) {
-                const point = await geocodePlace(startLocation)
-                if (active && point) setGeoStart(point)
-            }
-            if (!explicitEnd && endLocation && !isGenericPlace(endLocation)) {
-                const point = isSchoolPlaceName(endLocation) && !isDropTrip
-                    ? SCHOOL_CAMPUS.position
-                    : await geocodePlace(endLocation)
-                if (active && point) setGeoEnd(point)
-            }
-        })()
-
-        return () => {
-            active = false
-        }
-    }, [startLocation, endLocation, startPosition, endPosition, isDropTrip])
-
-    const demoStart = routeCoords[0]
-    const demoEnd = routeCoords[routeCoords.length - 1]
-    const simulatedBus = routeCoords[busIndex] ?? demoEnd
-
-    // Live / waiting: never fall back to dummy Madurai demo points for pickup/destination.
-    const startPoint = useRealTrip ? geoStart : (geoStart || demoStart)
-    const endPoint = useRealTrip ? geoEnd : (geoEnd || demoEnd)
-    const busPosition = isLive ? livePosition : (useRealTrip ? null : simulatedBus)
-
+    const isLiveGps = trackingMode === 'live'
+    const startPoint = routeCoords[0]
+    const endPoint = routeCoords[routeCoords.length - 1]
+    const busPosition = routeCoords[busIndex] ?? endPoint
     const completedCoords = routeCoords.slice(0, busIndex + 1)
     const remainingCoords = routeCoords.slice(busIndex)
-    const progressWidth = isLive
-        ? '100%'
-        : useRealTrip
-            ? '0%'
-            : `${Math.min(100, Math.round((busIndex / Math.max(routeCoords.length - 1, 1)) * 100))}%`
+    const progressWidth = `${Math.min(100, Math.round((busIndex / Math.max(routeCoords.length - 1, 1)) * 100))}%`
 
-    const startIcon = useMemo(
-        () => makeStopIcon('#22c55e', isDropTrip ? '🏫 School start' : '📍 Pickup Point'),
-        [isDropTrip],
-    )
-    const endIcon = useMemo(
-        () => makeStopIcon('#f59e0b', isDropTrip ? '🏠 Drop-off' : '🏫 Destination'),
-        [isDropTrip],
-    )
+    const startIcon = useMemo(() => makeStopIcon('#22c55e', '📍 Pickup Point'), [])
+    const endIcon = useMemo(() => makeStopIcon('#f59e0b', '🏫 Destination'), [])
     const busIcon = useMemo(() => makeBusIcon(busLabel), [busLabel])
-    const stopIconFor = (stop) => {
-        const done = stop?.status === 'done'
-        const active = stop?.status === 'active'
-        const student = Boolean(stop?.isStudentStop)
-        const kind = isDropTrip ? 'Drop' : 'Pickup'
-        const label = done
-            ? `✓ ${kind} done`
-            : active
-                ? `▶ Next ${kind}`
-                : (student ? `Your ${kind}` : (stop?.label || kind))
-        const color = done ? '#16a34a' : active ? '#f59e0b' : student ? '#515DEF' : '#6366f1'
-        return makeStopIcon(color, label, { done, active, student })
-    }
-
-    const fitCoords = useMemo(() => {
-        const extras = (Array.isArray(stopMarkers) ? stopMarkers : [])
-            .map((row) => row?.position)
-            .filter(Boolean)
-        if (useRealTrip) {
-            return [startPoint, endPoint, busPosition, ...extras].filter(Boolean)
-        }
-        return routeCoords
-    }, [useRealTrip, startPoint, endPoint, busPosition, routeCoords, stopMarkers])
 
     const phoneHref = driverContact.startsWith('+') ? `tel:${driverContact}` : `tel:+91${driverContact}`
-    const liveLine = [startPoint, busPosition, endPoint].filter(Boolean)
 
     return (
         <div className='flex flex-col'>
@@ -326,9 +223,6 @@ export default function BusTrackingMap({
                         <p className='text-[#667085] text-xs'>
                             Vehicle: {vehicleNumber} &nbsp;·&nbsp; Driver: {driverName}
                         </p>
-                        {tripStatusLine ? (
-                            <p className='text-[#515DEF] text-xs font-semibold mt-1'>{tripStatusLine}</p>
-                        ) : null}
                     </div>
                 </div>
 
@@ -343,25 +237,19 @@ export default function BusTrackingMap({
                         <span className='text-emerald-700 text-xs font-semibold'>Call Driver</span>
                     </a>
 
-                    <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${
-                        isLive
-                            ? 'bg-[#EDEEF5]'
-                            : isWaitingGps
-                                ? 'bg-[#EEF2FF] border border-[#C7D2FE]'
-                                : 'bg-[#FFF7ED] border border-[#FDBA74]'
-                    }`}>
-                        {isLive ? (
-                            <span className='relative flex h-2.5 w-2.5'>
-                                <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75' />
-                                <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500' />
-                            </span>
-                        ) : null}
-                        <span className='text-[#0C1E5B] text-xs font-semibold tracking-wide'>
-                            {isLive
-                                ? (liveStatusLabel || 'LIVE GPS')
-                                : isWaitingGps
-                                    ? 'WAITING FOR BUS GPS'
-                                    : 'DEMO ROUTE — NOT LIVE GPS'}
+                    <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${isLiveGps ? 'bg-[#EDEEF5]' : 'bg-amber-50 border border-amber-200'}`}>
+                        <span className='relative flex h-2.5 w-2.5'>
+                            {isLiveGps ? (
+                                <>
+                                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75' />
+                                    <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500' />
+                                </>
+                            ) : (
+                                <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500' />
+                            )}
+                        </span>
+                        <span className={`text-xs font-semibold tracking-wide ${isLiveGps ? 'text-[#0C1E5B]' : 'text-amber-800'}`}>
+                            {isLiveGps ? 'LIVE GPS' : 'DEMO ROUTE — NOT LIVE GPS'}
                         </span>
                     </div>
                 </div>
@@ -369,216 +257,60 @@ export default function BusTrackingMap({
 
             <div className='relative z-0 h-[60vh] min-h-[420px]'>
                 <MapContainer
-                    center={busPosition || startPoint || endPoint || SCHOOL_CAMPUS.position}
-                    zoom={useRealTrip ? 14 : 13}
+                    center={busPosition}
+                    zoom={13}
                     style={{ height: '100%', width: '100%' }}
                     scrollWheelZoom
                 >
-                    <TileLayer url={STREET_TILE_URL} attribution={STREET_TILE_ATTR} />
-
-                    <FitBounds
-                        coords={fitCoords}
-                        fallbackCenter={busPosition || startPoint || endPoint || SCHOOL_CAMPUS.position}
-                        fallbackZoom={useRealTrip ? 14 : 13}
+                    <TileLayer
+                        url='https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+                        attribution='&copy; OpenStreetMap &copy; CARTO'
                     />
-                    <FollowLiveBus position={busPosition} enabled={isLive} />
 
-                    {!useRealTrip && (
-                        <>
-                            <Polyline
-                                positions={completedCoords}
-                                pathOptions={{ color: '#515DEF', weight: 5, opacity: 0.95 }}
-                            />
-                            <Polyline
-                                positions={remainingCoords}
-                                pathOptions={{ color: '#94a3b8', weight: 4, opacity: 0.7, dashArray: '10 8' }}
-                            />
-                        </>
-                    )}
-                    {isLive && liveLine.length >= 2 && (
-                        <Polyline
-                            positions={liveLine}
-                            pathOptions={{ color: '#515DEF', weight: 4, opacity: 0.55, dashArray: '6 8' }}
-                        />
-                    )}
-                    {isWaitingGps && startPoint && endPoint && (
-                        <Polyline
-                            positions={[startPoint, endPoint]}
-                            pathOptions={{ color: '#94a3b8', weight: 3, opacity: 0.45, dashArray: '6 8' }}
-                        />
-                    )}
+                    <FitBounds coords={routeCoords} />
 
-                    {startPoint && (isDropTrip || !(Array.isArray(stopMarkers) && stopMarkers.length > 0)) && (
-                        <Marker position={startPoint} icon={startIcon}>
-                            <Popup>
-                                <div className='text-sm font-semibold'>
-                                    {isDropTrip ? '🏫 School (trip start)' : '📍 Pickup Point'}
-                                </div>
-                                <div className='text-xs text-gray-500 mt-1'>{startLocation}</div>
-                                <div className='text-xs text-gray-400 mt-1'>
-                                    {startPoint[0].toFixed(5)}, {startPoint[1].toFixed(5)}
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )}
+                    <Polyline
+                        positions={completedCoords}
+                        pathOptions={{ color: '#515DEF', weight: 5, opacity: 0.95 }}
+                    />
 
-                    {endPoint && (
-                        <Marker position={endPoint} icon={endIcon}>
-                            <Popup>
-                                <div className='text-sm font-semibold'>
-                                    {isDropTrip ? `🏠 ${endLocation}` : `🏫 ${endLocation}`}
-                                </div>
-                                <div className='text-xs text-gray-500 mt-1'>{endSubtitle}</div>
-                                <div className='text-xs text-gray-400 mt-1'>
-                                    {endPoint[0].toFixed(5)}, {endPoint[1].toFixed(5)}
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )}
+                    <Polyline
+                        positions={remainingCoords}
+                        pathOptions={{ color: '#94a3b8', weight: 4, opacity: 0.7, dashArray: '10 8' }}
+                    />
 
-                    {(Array.isArray(stopMarkers) ? stopMarkers : []).map((stop, index) => {
-                        if (!stop?.position) return null
-                        const sameAsEnd = endPoint
-                            && Math.abs(stop.position[0] - endPoint[0]) < 1e-5
-                            && Math.abs(stop.position[1] - endPoint[1]) < 1e-5
-                        // Keep school destination marker separate; still show all pickup/drop stops.
-                        if (sameAsEnd && !isDropTrip) return null
-                        return (
-                            <Marker
-                                key={`stop-${index}-${stop.name}-${stop.status}`}
-                                position={stop.position}
-                                icon={stopIconFor(stop)}
-                                zIndexOffset={stop.status === 'done' ? 200 : stop.isStudentStop ? 300 : 100}
-                            >
-                                <Popup>
-                                    <div className='text-sm font-semibold'>
-                                        {stop.status === 'done' ? '✓ ' : ''}
-                                        {stop.label || 'Stop'}
-                                        {stop.isStudentStop ? ' (yours)' : ''}
-                                    </div>
-                                    <div className='text-xs text-gray-500 mt-1'>{stop.name}</div>
-                                    {stop.scheduleTime ? (
-                                        <div className='text-xs text-gray-500 mt-1'>
-                                            Scheduled: {stop.scheduleTime}
-                                        </div>
-                                    ) : null}
-                                    <div className='text-xs mt-1 font-medium' style={{ color: stop.status === 'done' ? '#15803d' : '#b45309' }}>
-                                        {stop.status === 'done'
-                                            ? (stop.reason === 'time'
-                                                ? 'Marked done — scheduled time passed'
-                                                : stop.reason === 'arrived'
-                                                    ? 'Marked done — bus reached this stop'
-                                                    : 'Marked done — bus has crossed this stop')
-                                            : stop.status === 'active'
-                                                ? 'Next stop on this trip'
-                                                : 'Upcoming'}
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        )
-                    })}
+                    <Marker position={startPoint} icon={startIcon}>
+                        <Popup>
+                            <div className='text-sm font-semibold'>📍 Pickup Point</div>
+                            <div className='text-xs text-gray-500 mt-1'>{startLocation}</div>
+                        </Popup>
+                    </Marker>
 
-                    {/* Bus marker only for real live GPS — never a demo bus on parent/student trips. */}
-                    {isLive && busPosition && (
-                        <Marker position={busPosition} icon={busIcon}>
-                            <Popup>
-                                <div className='text-sm font-semibold'>
-                                    🚌 {busLabel} (Live GPS)
-                                </div>
-                                <div className='text-xs text-gray-500 mt-1'>
-                                    {liveStatusLabel || `En route to ${endLocation}`}
-                                </div>
-                                <div className='text-xs text-emerald-600 font-medium mt-1'>
-                                    {`${stats.speed} · ${livePosition[0].toFixed(5)}, ${livePosition[1].toFixed(5)}`}
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )}
-                    {!useRealTrip && busPosition && (
-                        <Marker position={busPosition} icon={busIcon}>
-                            <Popup>
-                                <div className='text-sm font-semibold'>
-                                    🚌 {busLabel} (Demo route position)
-                                </div>
-                                <div className='text-xs text-gray-500 mt-1'>
-                                    Demo geometry only — not a live GPS fix
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )}
+                    <Marker position={endPoint} icon={endIcon}>
+                        <Popup>
+                            <div className='text-sm font-semibold'>🏫 {endLocation}</div>
+                            <div className='text-xs text-gray-500 mt-1'>{endSubtitle}</div>
+                        </Popup>
+                    </Marker>
+
+                    <Marker position={busPosition} icon={busIcon}>
+                        <Popup>
+                            <div className='text-sm font-semibold'>🚌 {busLabel} (Current Location)</div>
+                            <div className='text-xs text-gray-500 mt-1'>En route to {endLocation}</div>
+                            <div className='text-xs text-emerald-600 font-medium mt-1'>
+                                ETA: {stats.eta} · {stats.distanceLeft} away
+                            </div>
+                        </Popup>
+                    </Marker>
                 </MapContainer>
-                {isWaitingGps && (
-                    <div className='absolute bottom-3 left-1/2 -translate-x-1/2 z-[500] pointer-events-none'>
-                        <div className='bg-white/95 border border-[#C7D2FE] shadow-md rounded-full px-4 py-2 text-xs font-semibold text-[#515DEF]'>
-                            Driver started — fetching bus GPS…
-                        </div>
-                    </div>
-                )}
             </div>
-
-            {showStopProgress && Array.isArray(stopMarkers) && stopMarkers.length > 0 && (
-                <div className='px-4 py-3 border-t border-[#f2f4f7] bg-[#FAFBFF]'>
-                    <p className='text-[11px] uppercase tracking-widest text-[#667085] mb-2'>
-                        {isDropTrip ? 'Drop points' : 'Pickup points'}
-                    </p>
-                    <ol className='space-y-2 max-h-40 overflow-y-auto pr-1'>
-                        {stopMarkers.map((stop) => {
-                            const done = stop.status === 'done'
-                            const active = stop.status === 'active'
-                            return (
-                                <li
-                                    key={`progress-${stop.index}-${stop.name}`}
-                                    className={`flex items-start gap-2 text-sm rounded-lg px-2 py-1.5 ${
-                                        done ? 'bg-[#ECFDF5]' : active ? 'bg-[#FFFBEB]' : 'bg-white'
-                                    } ${stop.isStudentStop ? 'ring-1 ring-[#515DEF55]' : ''}`}
-                                >
-                                    <span
-                                        className={`mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                                            done
-                                                ? 'bg-[#16a34a] text-white'
-                                                : active
-                                                    ? 'bg-[#f59e0b] text-white'
-                                                    : 'bg-[#E2E8F0] text-[#64748B]'
-                                        }`}
-                                    >
-                                        {done ? '✓' : stop.index + 1}
-                                    </span>
-                                    <div className='min-w-0 flex-1'>
-                                        <p className={`font-medium truncate ${done ? 'text-[#15803d] line-through decoration-[#86efac]' : 'text-[#0C1E5B]'}`}>
-                                            {stop.name}
-                                            {stop.isStudentStop ? ' · Your stop' : ''}
-                                        </p>
-                                        <p className='text-[11px] text-[#667085]'>
-                                            {stop.scheduleTime ? `Time ${stop.scheduleTime}` : 'No scheduled time'}
-                                            {!stop.position ? ' · Locating pin…' : ''}
-                                            {done
-                                                ? (stop.reason === 'time'
-                                                    ? ' · Time expired'
-                                                    : stop.reason === 'arrived'
-                                                        ? ' · Bus arrived'
-                                                        : stop.reason === 'passed'
-                                                            ? ' · Passed'
-                                                            : ' · Done')
-                                                : active
-                                                    ? ' · Next'
-                                                    : ''}
-                                        </p>
-                                    </div>
-                                </li>
-                            )
-                        })}
-                    </ol>
-                </div>
-            )}
 
             <div className='px-4 py-4 border-t border-[#f2f4f7]'>
                 <div className='flex items-center gap-4 mb-4'>
                     <div className='flex-1 min-w-0'>
                         <p className='text-[#667085] text-[10px] uppercase tracking-widest mb-0.5'>From</p>
                         <p className='text-[#0C1E5B] font-semibold text-sm truncate'>{startLocation}</p>
-                        <p className='text-[#667085] text-[11px]'>
-                            {startPoint ? startSubtitle : (isLive ? 'No map pin yet — set a real pickup place name' : startSubtitle)}
-                        </p>
+                        <p className='text-[#667085] text-[11px]'>{startSubtitle}</p>
                     </div>
 
                     <div className='flex flex-col items-center gap-1.5 shrink-0'>
@@ -590,17 +322,13 @@ export default function BusTrackingMap({
                                 style={{ left: progressWidth }}
                             />
                         </div>
-                        <p className='text-[#515DEF] text-[10px] font-semibold'>
-                            {isWaitingGps ? 'Awaiting GPS' : `${stats.distanceLeft} left`}
-                        </p>
+                        <p className='text-[#515DEF] text-[10px] font-semibold'>{stats.distanceLeft} left</p>
                     </div>
 
                     <div className='flex-1 min-w-0 text-right'>
                         <p className='text-[#667085] text-[10px] uppercase tracking-widest mb-0.5'>To</p>
                         <p className='text-[#0C1E5B] font-semibold text-sm truncate'>{endLocation}</p>
-                        <p className='text-[#667085] text-[11px]'>
-                            {endPoint ? endSubtitle : (isLive ? 'No map pin yet — set a real destination name' : endSubtitle)}
-                        </p>
+                        <p className='text-[#667085] text-[11px]'>{endSubtitle}</p>
                     </div>
                 </div>
 

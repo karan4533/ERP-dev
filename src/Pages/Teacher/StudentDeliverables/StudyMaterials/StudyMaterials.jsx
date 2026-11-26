@@ -13,14 +13,11 @@ import {
     DEFAULT_ROUTE_BASE,
     filterStudyMaterials,
     getStudyMaterials,
-    hydrateStudyMaterialsFromApi,
     SECTIONS,
-    STUDY_MATERIALS_UPDATED_EVENT,
     SUBJECTS,
 } from './studyMaterialsData'
-import { useActiveStudent } from '../../../../context/ActiveStudentContext'
-import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
-import { matchesStudentClass } from '../../../Student/Class/studentClassMatch'
+import { useAuth } from '../../../../context/AuthContext'
+import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
 
 export { DEFAULT_ROUTE_BASE }
 
@@ -66,37 +63,16 @@ const StudyMaterialsEmpty = ({ routeBase, viewMode }) => {
 }
 
 const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const isStudent = viewMode === 'student'
-    const { activeStudent } = useActiveStudent()
-    const assignments = useTeacherAssignments()
     const [filters, setFilters] = useState(emptyFilters)
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
     const [entriesPerPage, setEntriesPerPage] = useState(10)
 
-    const scopedItems = useMemo(() => {
-        if (!isStudent || !activeStudent) return items
-        return items.filter((row) => matchesStudentClass(row, activeStudent))
-    }, [items, isStudent, activeStudent])
-
-    const filterOptions = useMemo(() => ({
-        subjects: [...new Set(scopedItems.map((r) => r.subject).filter(Boolean))],
-        classes: [...new Set(scopedItems.map((r) => r.className).filter(Boolean))],
-        sections: [...new Set(scopedItems.map((r) => r.section).filter(Boolean))],
-    }), [scopedItems])
-
-    const staffFilterOptions = useMemo(() => ({
-        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
-        classes: assignments.classes?.length ? assignments.classes : CLASSES,
-        sections: filters.className
-            ? (assignments.sectionsFor?.(filters.className) || [])
-            : (assignments.assignments?.length
-                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
-                : SECTIONS),
-    }), [assignments, filters.className])
-
-    const filteredItems = useMemo(() => filterStudyMaterials(scopedItems, filters), [scopedItems, filters])
+    const filteredItems = useMemo(() => filterStudyMaterials(items, filters), [items, filters])
 
     const updateFilter = (key, value) => {
         setFilters((current) => ({ ...current, [key]: value }))
@@ -140,7 +116,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {(isStudent ? filterOptions.subjects : staffFilterOptions.subjects).map((subject) => (
+                            {SUBJECTS.map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -150,15 +126,11 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                         <select
                             id='class-filter'
                             value={filters.className}
-                            onChange={(event) => setFilters((current) => ({
-                                ...current,
-                                className: event.target.value,
-                                section: '',
-                            }))}
+                            onChange={(event) => updateFilter('className', event.target.value)}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {(isStudent ? filterOptions.classes : staffFilterOptions.classes).map((item) => (
+                            {CLASSES.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -172,7 +144,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {(isStudent ? filterOptions.sections : staffFilterOptions.sections).map((item) => (
+                            {SECTIONS.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -263,13 +235,15 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                                                     >
                                                         Edit
                                                     </button>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => setDeleteRequestModal(true)}
-                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                    >
-                                                        Delete
-                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => setDeleteRequestModal(true)}
+                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                         </Dropdown>
@@ -298,43 +272,22 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='study-materials'
-                rows={Array.isArray(filteredItems) ? filteredItems : []}
-                exportDescription={<>You are exporting {Array.isArray(filteredItems) ? filteredItems.length : 0} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </>
     )
 }
 
 const StudyMaterials = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }) => {
     const location = useLocation()
-    const { activeStudent } = useActiveStudent()
     const [items, setItems] = useState(() => getStudyMaterials())
 
     useEffect(() => {
-        let cancelled = false
-        hydrateStudyMaterialsFromApi().finally(() => {
-            if (!cancelled) setItems(getStudyMaterials())
-        })
-        const onUpdate = () => setItems(getStudyMaterials())
-        window.addEventListener(STUDY_MATERIALS_UPDATED_EVENT, onUpdate)
-        return () => {
-            cancelled = true
-            window.removeEventListener(STUDY_MATERIALS_UPDATED_EVENT, onUpdate)
-        }
+        setItems(getStudyMaterials())
     }, [location.key])
 
-    const visibleCount = useMemo(() => {
-        if (viewMode !== 'student' || !activeStudent) return items.length
-        return items.filter((row) => matchesStudentClass(row, activeStudent)).length
-    }, [items, viewMode, activeStudent])
-
-    if (visibleCount === 0) {
+    if (items.length === 0) {
         return (
             <section>
                 <StudyMaterialsEmpty routeBase={routeBase} viewMode={viewMode} />

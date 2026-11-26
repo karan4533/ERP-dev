@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar } from 'lucide-react'
@@ -9,36 +9,39 @@ import {
     REFERENCE_OPTIONS,
     SOURCE_OPTIONS,
 } from '../admissionEnquiryData'
-import { getCreatedUsersByRole, syncCreatedUsersFromApi } from '../../../../../Common/RBAC/createdUsersData'
+import { getCreatedUsersByRole } from '../../../../../Common/RBAC/createdUsersData'
+import { getClasses } from '../../../../../Common/RBAC/academicsCatalogData'
 import { CLASS_LEVEL_OPTIONS } from '../../../Class/ClassDetails/classDetailsOptions'
+import { TEACHERS } from '../../../../Principal/TeacherAllocation/teacherAllocationData'
 
 const inputClass = 'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
 
 const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
-    const [prmRecords, setPrmRecords] = useState(() => getCreatedUsersByRole('prm'))
-    const assignees = useMemo(() => {
-        const created = prmRecords
+    // Dynamic teacher options for reference = Teacher
+    const teacherOptions = useMemo(() => {
+        const createdTeachers = getCreatedUsersByRole('teacher')
             .filter((user) => user.status === 'Active')
             .map((user) => user.name)
-        const defaults = ['Admin Desk', 'Front Office']
-        return [...new Set([...created, ...defaults])]
-    }, [prmRecords])
-
-    // In API mode the server owns the user list; refresh the local mirror before listing PRMs.
-    useEffect(() => {
-        let cancelled = false
-        syncCreatedUsersFromApi()
-            .then((mapped) => {
-                if (mapped && !cancelled) setPrmRecords(getCreatedUsersByRole('prm'))
-            })
-            .catch(() => { /* keep whatever is already mirrored */ })
-        return () => { cancelled = true }
+        const defaultTeachers = TEACHERS.map((t) => t.name)
+        return [...new Set([...createdTeachers, ...defaultTeachers])]
     }, [])
+
+    // Dynamic classes from Academics Catalog
+    const classOptions = useMemo(() => {
+        const catalogClasses = getClasses() || []
+        const merged = [...new Set([...catalogClasses, ...CLASS_LEVEL_OPTIONS])]
+        if (form.className && !merged.includes(form.className)) {
+            merged.push(form.className)
+        }
+        return merged
+    }, [form.className])
 
     const update = (key, value) => {
         if (readOnly) return
         onChange?.(key, value)
     }
+
+    const isTeacherReference = String(form.reference || '').trim().toLowerCase() === 'teacher'
 
     return (
         <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 lg:mt-8 mt-2'>
@@ -154,21 +157,8 @@ const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
                     <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
                 </div>
             </div>
-            <div className='flex flex-col gap-y-2'>
-                <label htmlFor='assignedTo' className='text-base font-medium text-[#1E1E1E]'>Assigned:</label>
-                <select
-                    id='assignedTo'
-                    value={form.assignedTo}
-                    onChange={(e) => update('assignedTo', e.target.value)}
-                    disabled={readOnly}
-                    className={inputClass}
-                >
-                    <option value=''>--Select--</option>
-                    {assignees.map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                    ))}
-                </select>
-            </div>
+
+            {/* Reference field */}
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='reference' className='text-base font-medium text-[#1E1E1E]'>Reference:</label>
                 <select
@@ -184,6 +174,34 @@ const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
                     ))}
                 </select>
             </div>
+
+            {/* Dynamically open new column when Reference is Teacher */}
+            {isTeacherReference && (
+                <div className='flex flex-col gap-y-2 transition-all duration-300'>
+                    <label htmlFor='referredTeacher' className='text-base font-medium text-[#1E1E1E] flex items-center gap-1.5'>
+                        <span>Referred Teacher Name / Staff:</span>
+                        <span className='text-xs text-[#3B5CEB] font-semibold bg-blue-50 px-2 py-0.5 rounded'>Teacher Ref</span>
+                    </label>
+                    <div className='relative'>
+                        <input
+                            id='referredTeacher'
+                            type='text'
+                            list='teacher-list-options'
+                            value={form.referredTeacher || ''}
+                            onChange={(e) => update('referredTeacher', e.target.value)}
+                            disabled={readOnly}
+                            className={inputClass}
+                            placeholder='Select or type teacher name'
+                        />
+                        <datalist id='teacher-list-options'>
+                            {teacherOptions.map((teacher) => (
+                                <option key={teacher} value={teacher} />
+                            ))}
+                        </datalist>
+                    </div>
+                </div>
+            )}
+
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='source' className='text-base font-medium text-[#1E1E1E]'>Source:</label>
                 <select
@@ -199,6 +217,8 @@ const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
                     ))}
                 </select>
             </div>
+
+            {/* Dynamic Class field */}
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='className' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
                 <select
@@ -209,11 +229,12 @@ const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
                     className={inputClass}
                 >
                     <option value=''>Select Class</option>
-                    {CLASS_LEVEL_OPTIONS.map((item) => (
+                    {classOptions.map((item) => (
                         <option key={item} value={item}>{item}</option>
                     ))}
                 </select>
             </div>
+
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='numberOfChild' className='text-base font-medium text-[#1E1E1E]'>Number Of Child:</label>
                 <input
@@ -225,6 +246,8 @@ const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
                     className={inputClass}
                 />
             </div>
+
+            {/* State and City with comprehensive city coverage */}
             <StateCityFields
                 state={form.state}
                 city={form.city}
@@ -235,6 +258,7 @@ const AdmissionEnquiryInfo = ({ form, onChange, readOnly = false }) => {
                 cityId='city'
                 selectClassName={inputClass}
             />
+
             <div className='cols-span-1 md:col-span-3 lg:col-span-3'>
                 <div className='flex flex-col gap-y-2'>
                     <label className='text-base font-medium text-[#1E1E1E]'>Profile Image:</label>

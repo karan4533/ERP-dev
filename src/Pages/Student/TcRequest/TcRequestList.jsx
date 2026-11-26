@@ -6,52 +6,17 @@ import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import { useActiveStudent } from '../../../context/ActiveStudentContext'
 import {
     getTcRequestsByStudentId,
-    hydrateTcRequestsFromApi,
     statusBadgeColor,
 } from '../../../Common/TcRequest/tcRequestData'
-import { canUseTcApi } from '../../../services/tcApi'
 
 const TcRequestList = () => {
     const location = useLocation()
     const { activeStudentId, routePrefix } = useActiveStudent()
     const [requests, setRequests] = useState([])
     const [exportModal, setExportModal] = useState(false)
-    const [loadError, setLoadError] = useState('')
-    const [loading, setLoading] = useState(false)
 
     useEffect(() => {
-        if (!activeStudentId) {
-            setRequests([])
-            return undefined
-        }
-
-        if (!canUseTcApi()) {
-            setRequests(getTcRequestsByStudentId(activeStudentId))
-            setLoadError('')
-            return undefined
-        }
-
-        let active = true
-        setLoading(true)
-        hydrateTcRequestsFromApi()
-            .then((rows) => {
-                if (!active) return
-                const sid = String(activeStudentId)
-                setRequests(rows.filter((row) => String(row.studentId) === sid))
-                setLoadError('')
-            })
-            .catch((error) => {
-                if (active) {
-                    setRequests([])
-                    setLoadError(error?.message || 'TC requests could not be loaded.')
-                }
-            })
-            .finally(() => {
-                if (active) setLoading(false)
-            })
-        return () => {
-            active = false
-        }
+        setRequests(getTcRequestsByStudentId(activeStudentId))
     }, [activeStudentId, location.key])
 
     const approvedCount = useMemo(
@@ -66,7 +31,6 @@ const TcRequestList = () => {
                 <p className='text-sm text-[#667085] mt-1'>
                     Request a Transfer Certificate from Front Office. After Super Admin approval, your TC will appear here.
                 </p>
-                {loadError ? <p className='text-sm text-[#B42318] mt-2'>{loadError}</p> : null}
                 {approvedCount > 0 ? (
                     <p className='text-sm text-[#4CAF50] font-medium mt-2'>
                         {approvedCount} approved TC{approvedCount > 1 ? 's' : ''} available for download.
@@ -109,13 +73,7 @@ const TcRequestList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={6} className='px-2 py-8 text-center text-[#667085]'>
-                                        Loading TC requests…
-                                    </td>
-                                </tr>
-                            ) : requests.length === 0 ? (
+                            {requests.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className='px-2 py-8 text-center text-[#667085]'>
                                         No TC requests yet. Click &quot;Request TC&quot; to submit a new request to PRM.
@@ -159,7 +117,6 @@ const TcRequestList = () => {
                     <div className='flex justify-center gap-x-2 flex-wrap'>
                         <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>1</button>
                         <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronRight size={16} /></button>
-                        <button type='button' className='hidden'><ChevronLeft size={16} /></button>
                     </div>
                 </div>
             ) : null}

@@ -19,7 +19,11 @@ COLLECTIONS: dict[str, str] = {
     "goods-received-passes": "GRP",
     "student-transfers": "STR",
     "student-re-enrollments": "SRE",
+    # W1 compatibility alias — authoritative SoT is /api/v1/ops/gate-visitors
+    "visitors": "VIS",
 }
+
+_VISITORS_OPS_COLLECTION = "gate-visitors"
 
 _WRITERS = {"prm", "admin", "superadmin", "managing_director"}
 _READERS = _WRITERS | {"principal", "director"}
@@ -74,6 +78,10 @@ def _next_public_id(db: Session, actor: User, collection: str) -> str:
 
 def list_records(db: Session, actor: User, collection: str) -> list[dict]:
     _ensure_collection(collection)
+    if collection == "visitors":
+        from app.services import ops_collections as ops
+
+        return ops.list_records(db, actor, _VISITORS_OPS_COLLECTION)
     if not _can_read(db, actor, collection):
         fail(403, "forbidden", "You are not allowed to view front-office records.")
     rows = db.scalars(
@@ -89,6 +97,14 @@ def list_records(db: Session, actor: User, collection: str) -> list[dict]:
 
 def get_record(db: Session, actor: User, collection: str, public_id: str) -> dict:
     _ensure_collection(collection)
+    if collection == "visitors":
+        from app.services import ops_collections as ops
+
+        rows = ops.list_records(db, actor, _VISITORS_OPS_COLLECTION)
+        match = next((row for row in rows if str(row.get("id")) == str(public_id)), None)
+        if match is None:
+            fail(404, "not_found", "That record was not found.")
+        return match
     if not _can_read(db, actor, collection):
         fail(403, "forbidden", "You are not allowed to view front-office records.")
     row = db.scalar(
@@ -105,6 +121,17 @@ def get_record(db: Session, actor: User, collection: str, public_id: str) -> dic
 
 def create_record(db: Session, actor: User, collection: str, body: dict) -> dict:
     _ensure_collection(collection)
+    if collection == "visitors":
+        from app.services import ops_collections as ops
+
+        if not isinstance(body, dict):
+            fail(422, "invalid_body", "Body must be an object.")
+        existing = ops.list_records(db, actor, _VISITORS_OPS_COLLECTION)
+        public_id = str(body.get("id") or "").strip() or f"GVS-{len(existing) + 1:04d}"
+        payload = {**body, "id": public_id, "status": body.get("status") or "Checked In"}
+        rows = [payload, *existing]
+        saved = ops.replace_records(db, actor, _VISITORS_OPS_COLLECTION, rows)
+        return next((row for row in saved if str(row.get("id")) == public_id), payload)
     if not _can_write(db, actor):
         fail(403, "forbidden", "You are not allowed to create front-office records.")
     if not isinstance(body, dict):
@@ -140,6 +167,19 @@ def create_record(db: Session, actor: User, collection: str, body: dict) -> dict
 
 def update_record(db: Session, actor: User, collection: str, public_id: str, body: dict) -> dict:
     _ensure_collection(collection)
+    if collection == "visitors":
+        from app.services import ops_collections as ops
+
+        if not isinstance(body, dict):
+            fail(422, "invalid_body", "Body must be an object.")
+        existing = ops.list_records(db, actor, _VISITORS_OPS_COLLECTION)
+        idx = next((i for i, row in enumerate(existing) if str(row.get("id")) == str(public_id)), -1)
+        if idx < 0:
+            fail(404, "not_found", "That record was not found.")
+        merged = {**existing[idx], **body, "id": public_id}
+        existing[idx] = merged
+        saved = ops.replace_records(db, actor, _VISITORS_OPS_COLLECTION, existing)
+        return next((row for row in saved if str(row.get("id")) == str(public_id)), merged)
     if not _can_write(db, actor):
         fail(403, "forbidden", "You are not allowed to change front-office records.")
     row = db.scalar(

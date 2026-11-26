@@ -1,126 +1,42 @@
-import React, { useMemo } from 'react'
-import { Search } from 'lucide-react'
-import { walletStatusBadgeColor } from '../walletManagementData'
-import {
-    RoleChip,
-    SummaryCards,
-    TableCard,
-    TablePagination,
-    UserAvatar,
-    tdClass,
-    thClass,
-} from './WalletShared'
+import { useMemo, useState } from 'react'
+import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
+import { matchesWalletRole, USER_WALLETS, USER_WALLETS_SUMMARY } from '../walletManagementData'
+import { RoleChip, SummaryCards, UserAvatar } from './WalletShared'
 
-const parseBalance = (value) => {
-    if (typeof value === 'number') return value
-    const digits = String(value ?? '').replace(/[^\d.-]/g, '')
-    return Number(digits) || 0
-}
-
-const formatInr = (amount) => {
-    try {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0,
-        }).format(amount)
-    } catch {
-        return `₹${amount}`
-    }
-}
-
-const UserWalletsTab = ({ userWallets }) => {
-    const rows = Array.isArray(userWallets) ? userWallets : []
-    const summaryCards = useMemo(() => {
-        const totalBalance = rows.reduce((sum, row) => sum + parseBalance(row.balance), 0)
-        const active = rows.filter((row) => String(row.status || 'Active').toLowerCase() === 'active').length
-        return [
-            { label: 'Wallets on snapshot', value: String(rows.length), sub: 'Finance state', iconTone: 'success' },
-            { label: 'Active', value: String(active), sub: 'Status Active', iconTone: 'success' },
-            { label: 'Total balance', value: formatInr(totalBalance), sub: 'Sum of listed wallets', iconTone: 'success' },
-            { label: 'Zero / other', value: String(Math.max(0, rows.length - active)), sub: 'Not Active', iconTone: 'warning' },
-        ]
-    }, [rows])
+const STATUS_FILTERS = ['All Status', 'Active', 'Zero Balance', 'Frozen', 'Flagged']
+const UserWalletsTab = ({ userWallets = USER_WALLETS, initialRole = 'All Roles' }) => {
+    const [query, setQuery] = useState('')
+    const [status, setStatus] = useState(STATUS_FILTERS[0])
+    const rows = useMemo(() => userWallets.filter((row) => {
+        if (!matchesWalletRole(row.role, initialRole)) return false
+        if (status !== STATUS_FILTERS[0] && row.status !== status) return false
+        const normalizedQuery = query.trim().toLowerCase()
+        if (!normalizedQuery) return true
+        return [row.name, row.email, row.role, row.walletId, row.balance, row.status].join(' ').toLowerCase().includes(normalizedQuery)
+    }), [initialRole, query, status, userWallets])
+    const columns = [
+        { key: 'name', label: 'User', required: true, render: (row) => <UserAvatar initials={row.initials} name={row.name} /> },
+        { key: 'role', label: 'Role', render: (row) => <RoleChip role={row.role} /> },
+        { key: 'walletId', label: 'Wallet ID', render: (row) => <span className='font-mono text-xs'>{row.walletId}</span> },
+        { key: 'balance', label: 'Balance', render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{row.balance}</span> },
+        { key: 'lastRecharge', label: 'Last credit' },
+        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    ]
 
     return (
-    <div className='space-y-6'>
-        <SummaryCards cards={summaryCards} />
-
-        <TableCard
-            title='User wallet register'
-            filters={(
-                <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
-                    <div className='relative min-w-[160px]'>
-                        <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
-                        <input
-                            type='text'
-                            placeholder='Search user...'
-                            className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
-                        />
-                    </div>
-                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[110px]'>
-                        <option>All Roles</option>
-                        <option>Student</option>
-                        <option>Staff</option>
-                        <option>Parent</option>
-                    </select>
-                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'>
-                        <option>All Status</option>
-                        <option>Active</option>
-                        <option>Zero Balance</option>
-                        <option>Frozen</option>
-                    </select>
-                </div>
-            )}
-            footer={<TablePagination summary={`${rows.length} wallet${rows.length === 1 ? '' : 's'} total`} />}
-        >
-            <table className='w-full text-sm text-left mt-4'>
-                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                    <tr>
-                        <th className={`${thClass} rounded-s-lg`}>User</th>
-                        <th className={thClass}>Role</th>
-                        <th className={thClass}>Wallet ID</th>
-                        <th className={thClass}>Balance</th>
-                        <th className={thClass}>Last Recharge</th>
-                        <th className={thClass}>Status</th>
-                        <th className={`${thClass} rounded-e-lg`}>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.length === 0 ? (
-                        <tr>
-                            <td colSpan={7} className={`${tdClass} text-[#667085]`}>
-                                No wallets on the campus finance snapshot yet.
-                            </td>
-                        </tr>
-                    ) : rows.map((row) => (
-                        <tr key={row.id || row.walletId || row.email} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                            <td className={`${tdClass} rounded-s-lg`}>
-                                <UserAvatar
-                                    initials={row.initials || String(row.name || '?').slice(0, 2).toUpperCase()}
-                                    name={row.name || '—'}
-                                />
-                            </td>
-                            <td className={tdClass}><RoleChip role={row.role || '—'} /></td>
-                            <td className={`${tdClass} font-mono text-xs`}>{row.walletId || row.id || '—'}</td>
-                            <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.balance ?? '—'}</td>
-                            <td className={tdClass}>{row.lastRecharge || '—'}</td>
-                            <td className={tdClass}>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${walletStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
-                                    {row.status || 'Active'}
-                                </span>
-                            </td>
-                            <td className={`${tdClass} rounded-e-lg`}>
-                                <button type='button' className='text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'>
-                                    {row.status === 'Flagged' ? 'Review' : 'View ledger'}
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </TableCard>
-    </div>
+        <div className='space-y-5'>
+            <IntegrationNotice state='demo' title='Sample wallet population' description='Summary cards and seeded wallets are browser demonstration records, not balances from an authoritative wallet ledger.' />
+            <SummaryCards cards={USER_WALLETS_SUMMARY} />
+            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='wallet-register-title'>
+                <div className='px-4 pt-4 sm:px-5'><h3 id='wallet-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>User wallet register</h3></div>
+                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search user wallets' searchPlaceholder='Name, email, role or wallet ID…' resultCount={rows.length} onReset={() => { setQuery(''); setStatus(STATUS_FILTERS[0]) }} filters={(
+                    <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status
+                        <select value={status} onChange={(event) => setStatus(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{STATUS_FILTERS.map((item) => <option key={item}>{item}</option>)}</select>
+                    </label>
+                )} />
+                <DataTable caption='User wallet register' rows={rows} columns={columns} rowKey='id' emptyTitle='No wallets found' emptyDescription='Reset the filters to see other browser-stored wallets.' renderActions={() => <button type='button' disabled title='Wallet ledger detail requires the connected wallet API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Ledger unavailable</button>} />
+            </section>
+        </div>
     )
 }
 

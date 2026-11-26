@@ -3,7 +3,7 @@ import CreateUserPage from '../../../Common/RBAC/CreateUserPage'
 import { ROLES } from '../../../constants/roles'
 import {
     ADMIN_ROLE_LABEL,
-    createAdminUserViaApi,
+    createAdminUser,
     DEFAULT_ADMIN_USER_FORM,
     ROUTE_BASE,
 } from './adminUsersData'
@@ -18,7 +18,7 @@ const CreateAdminUser = () => (
         pageDescription='Create an Administrator account with the full user profile. Role is fixed to Administrator for Super Admin user creation.'
         submitLabel='Create Admin User'
         successMessage='Admin user created successfully.'
-        onSubmit={createAdminUserViaApi}
+        onSubmit={createAdminUser}
         onSuccess={(result, navigate) => navigate(`${ROUTE_BASE}/view/${result.user.id}`)}
     />
 )

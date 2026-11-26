@@ -1,1 +1,3 @@
-export { default } from '../../../Teacher/StudentEvaluation/ExamSchedule/ExamSchedule'
+import ExamSchedule from '../../../Teacher/StudentEvaluation/ExamSchedule/ExamSchedule'
+
+export default ExamSchedule

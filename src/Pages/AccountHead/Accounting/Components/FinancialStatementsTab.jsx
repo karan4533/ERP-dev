@@ -159,20 +159,10 @@ const FinancialStatementsTab = ({
     appliedFilters,
     lastGeneratedAt,
     isGenerating,
-    trialBalanceRows: trialBalanceProp,
-    profitLossRows,
-    balanceSheetRows,
-    cashFlowRows,
-    snapshotMode = false,
 }) => {
     const trialBalanceRows = useMemo(
-        () => filterTrialBalance(
-            snapshotMode
-                ? (trialBalanceProp || [])
-                : (trialBalanceProp?.length ? trialBalanceProp : TRIAL_BALANCE_REGISTER),
-            appliedFilters,
-        ),
-        [appliedFilters, trialBalanceProp, snapshotMode],
+        () => filterTrialBalance(TRIAL_BALANCE_REGISTER, appliedFilters),
+        [appliedFilters],
     )
 
     const trialBalanceTotals = useMemo(
@@ -181,25 +171,14 @@ const FinancialStatementsTab = ({
     )
 
     const sectionRows = useMemo(() => {
-        if (statementType === 'profit-loss') {
-            if (snapshotMode) return profitLossRows || []
-            return profitLossRows?.length ? profitLossRows : PROFIT_LOSS_STATEMENT
-        }
-        if (statementType === 'balance-sheet') {
-            if (snapshotMode) return balanceSheetRows || []
-            return balanceSheetRows?.length ? balanceSheetRows : BALANCE_SHEET_STATEMENT
-        }
-        if (statementType === 'cash-flow') {
-            if (snapshotMode) return cashFlowRows || []
-            return cashFlowRows?.length ? cashFlowRows : CASH_FLOW_STATEMENT
-        }
+        if (statementType === 'profit-loss') return PROFIT_LOSS_STATEMENT
+        if (statementType === 'balance-sheet') return BALANCE_SHEET_STATEMENT
+        if (statementType === 'cash-flow') return CASH_FLOW_STATEMENT
         return []
-    }, [statementType, profitLossRows, balanceSheetRows, cashFlowRows, snapshotMode])
+    }, [statementType])
 
     const reportTitle = `${STATEMENT_LABELS[statementType]} — FY ${appliedFilters.financialYear}`
-    const filterSummary = snapshotMode
-        ? `${formatFilterSummary(appliedFilters)} · from campus GL / books`
-        : formatFilterSummary(appliedFilters)
+    const filterSummary = formatFilterSummary(appliedFilters)
 
     return (
         <div className='space-y-6' id='financial-statements-print-area'>

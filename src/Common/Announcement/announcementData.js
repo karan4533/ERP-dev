@@ -1,22 +1,12 @@
-import { ROLES } from '../../constants/roles'
-import { getAnnouncements as getHrAnnouncements, saveAnnouncements as saveHrAnnouncements } from '../../Pages/HR/domain/hrStore'
-import {
-    acknowledgeAnnouncementApi,
-    canUseAnnouncementsApi,
-    createAnnouncementApi,
-    getAnnouncementApi,
-    listAnnouncementsApi,
-    replyToAnnouncementApi,
-} from '../../services/announcementsApi'
-import { isoToDmy } from '../../services/documentsApi'
+import { ROLES } from '../../constants/roles.js'
 
 export const STORAGE_KEY = 'school-erp-announcements'
-const RESPONSES_STORAGE_KEY = 'schoolerp-announcement-responses-v1'
-const HR_ROLE = ROLES.HR
 
 export const CATEGORY_OPTIONS = [
     'Administrative Notice',
     'Staff Notice',
+    'Stores & Material Collection',
+    'Academic / Student Notice',
     'Examination',
     'General Announcement',
     'Emergency',
@@ -28,12 +18,26 @@ export const CATEGORY_OPTIONS = [
 ]
 
 export const CREATOR_ROLE_KEYS = new Set([
+    ROLES.SUPER_ADMIN,
     ROLES.ADMIN,
+    ROLES.DIRECTOR,
     ROLES.PRINCIPAL,
-    ROLES.GATEKEEPER_MANAGER,
+    ROLES.JOINT_DIRECTOR,
+    ROLES.JOINT_DIRECTOR_ASSISTANT,
+    ROLES.JOINT_DIRECTOR_AUDIT,
+    ROLES.COORDINATOR,
+    ROLES.TEACHER,
+    ROLES.HR,
+    ROLES.ACCOUNT_HEAD,
+    ROLES.LIBRARIAN,
+    ROLES.STATIONERY_STORE_MANAGER,
+    ROLES.CANTEEN_MANAGER,
+    ROLES.TRANSPORT_MANAGER,
     ROLES.IT_SUPPORT_MANAGER,
     ROLES.HOUSEKEEPING_MANAGER,
-    ROLES.HR,
+    ROLES.GATEKEEPER_MANAGER,
+    ROLES.GATEKEEPER,
+    ROLES.PRM,
 ])
 
 export const DEFAULT_BROADCAST_AUDIENCE = [
@@ -44,48 +48,58 @@ export const DEFAULT_BROADCAST_AUDIENCE = [
     ROLES.COORDINATOR,
     ROLES.LIBRARIAN,
     ROLES.STUDENT,
-    ROLES.PARENT,
     ROLES.GATEKEEPER_MANAGER,
     ROLES.GATEKEEPER,
     ROLES.ADMIN,
 ]
 
-export const canCreateAnnouncements = (roleKey) => CREATOR_ROLE_KEYS.has(roleKey)
+const normalizeRole = (r) => String(r || '').toLowerCase().replace(/[-_\s]/g, '')
+
+export const canCreateAnnouncements = (roleKey) => {
+    const norm = normalizeRole(roleKey)
+    for (const key of CREATOR_ROLE_KEYS) {
+        if (normalizeRole(key) === norm) return true
+    }
+    return false
+}
+
+let _memoryAnnouncements = null
 
 const loadFromStorage = () => {
     try {
-        if (typeof localStorage === 'undefined') return []
-        const raw = localStorage.getItem(STORAGE_KEY)
-        if (!raw) return []
-        const parsed = JSON.parse(raw)
-        return Array.isArray(parsed) ? parsed : []
+        if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem(STORAGE_KEY)
+            if (raw) {
+                const parsed = JSON.parse(raw)
+                if (Array.isArray(parsed)) return parsed
+            }
+        }
     } catch {
-        return []
+        // ignore
     }
+    if (_memoryAnnouncements && Array.isArray(_memoryAnnouncements)) {
+        return _memoryAnnouncements
+    }
+    _memoryAnnouncements = []
+    return _memoryAnnouncements
 }
 
 const saveToStorage = (items) => {
+    _memoryAnnouncements = items
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+        }
     } catch {
         /* ignore */
     }
 }
 
-const loadAnnouncements = (roleKey) => {
-    if (roleKey === HR_ROLE) return getHrAnnouncements()
-    return loadFromStorage()
-}
-
-const saveAnnouncementsForRole = (roleKey, items) => {
-    if (roleKey === HR_ROLE) {
-        saveHrAnnouncements(items)
-        return
-    }
-    saveToStorage(items)
-}
-
 export const formatAnnouncementDate = (date) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+        const [year, month, day] = String(date).split('-')
+        return `${day}-${month}-${year}`
+    }
     const value = date instanceof Date ? date : new Date(date)
     if (Number.isNaN(value.getTime())) return ''
     const day = String(value.getDate()).padStart(2, '0')
@@ -105,104 +119,22 @@ export const parseAnnouncementDate = (dateStr) => {
     return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-const generateId = (roleKey) => {
-    const items = loadAnnouncements(roleKey)
+const generateId = () => {
+    const items = loadFromStorage()
     const next = items.length + 1
     return `AN-${String(next).padStart(4, '0')}`
 }
 
 const isVisibleToRole = (announcement, roleKey) => {
-    const audience = announcement.audience || []
-    return audience.includes(roleKey) || announcement.senderRole === roleKey
-}
-
-// With a backend session announcements (and replies/acknowledgements) live on the server. What it returned is
-// held in memory only, never written to the browser's storage. The HR portal keeps its own store.
-let apiAnnouncements = []
-
-/** True when this role's announcements come from the server. */
-export const usesAnnouncementsApi = (roleKey) => roleKey !== HR_ROLE && canUseAnnouncementsApi()
-
-const mapApiAnnouncement = (row) => ({
-    id: row.id,
-    uuid: row.uuid,
-    title: row.title,
-    category: row.category,
-    message: row.message,
-    sentBy: row.sentBy,
-    senderRole: row.senderRole,
-    announcementDate: isoToDmy(row.announcementDate),
-    attachmentName: row.attachmentName,
-    attachmentUrl: row.attachmentUrl,
-    acknowledged: row.acknowledged,
-    acknowledgedAt: row.acknowledgedAt,
-    replies: row.replies ?? [],
-    createdAt: row.createdAt,
-    fromApi: true,
-})
-
-const remember = (row) => {
-    const mapped = mapApiAnnouncement(row)
-    apiAnnouncements = apiAnnouncements.some((item) => item.id === mapped.id)
-        ? apiAnnouncements.map((item) => (item.id === mapped.id ? mapped : item))
-        : [mapped, ...apiAnnouncements]
-    return mapped
-}
-
-const purgeBrowserAnnouncementCopies = () => {
-    try {
-        localStorage.removeItem(STORAGE_KEY)
-        localStorage.removeItem(RESPONSES_STORAGE_KEY)
-    } catch {
-        /* ignore */
-    }
-}
-
-/** Load what the signed-in user may see from the server. */
-export const hydrateAnnouncementsFromApi = async () => {
-    const rows = await listAnnouncementsApi()
-    apiAnnouncements = rows.map(mapApiAnnouncement)
-    purgeBrowserAnnouncementCopies()
-    return apiAnnouncements
-}
-
-/** Load one announcement with the signed-in user's acknowledgement and replies. */
-export const hydrateAnnouncementFromApi = async (ref) => remember(await getAnnouncementApi(ref))
-
-/** Drop the in-memory copy (call on sign-out). */
-export const clearAnnouncementsMemory = () => {
-    apiAnnouncements = []
-}
-
-const toIsoDate = (value) => {
-    const date = value instanceof Date ? value : new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-    const pad = (part) => String(part).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-/** Send an announcement through the API; the server sets the sender and the audience. */
-export const addAnnouncementViaApi = async ({ title, category, message, announcementDate, file }) =>
-    remember(
-        await createAnnouncementApi({
-            title: title?.trim() || '',
-            category,
-            message: message?.trim() || '',
-            announcementDate: announcementDate ? toIsoDate(announcementDate) : '',
-            file,
-        }),
-    )
-
-export const acknowledgeAnnouncementViaApi = async (ref) => remember(await acknowledgeAnnouncementApi(ref))
-
-export const replyToAnnouncementViaApi = async (ref, text) => {
-    await replyToAnnouncementApi(ref, text)
-    return hydrateAnnouncementFromApi(ref)
+    const norm = normalizeRole(roleKey);
+    const audience = (announcement.audience || []).map(normalizeRole);
+    if (audience.includes('all') || audience.includes('allschool') || audience.includes('allroles')) return true;
+    const senderNorm = normalizeRole(announcement.senderRole);
+    return audience.includes(norm) || senderNorm === norm;
 }
 
 export const getAnnouncementsForRole = (roleKey) => {
-    if (usesAnnouncementsApi(roleKey)) return [...apiAnnouncements]
-    return loadAnnouncements(roleKey)
+    return loadFromStorage()
         .filter((item) => isVisibleToRole(item, roleKey))
         .sort((a, b) => {
             const dateA = parseAnnouncementDate(a.announcementDate)?.getTime() || 0
@@ -212,17 +144,16 @@ export const getAnnouncementsForRole = (roleKey) => {
 }
 
 export const getAnnouncementById = (id, roleKey) => {
-    if (usesAnnouncementsApi(roleKey)) return apiAnnouncements.find((item) => item.id === id) ?? null
-    const announcement = loadAnnouncements(roleKey).find((item) => item.id === id) ?? null
+    const announcement = loadFromStorage().find((item) => item.id === id) ?? null
     if (!announcement) return null
     if (roleKey && !isVisibleToRole(announcement, roleKey)) return null
     return announcement
 }
 
 export const addAnnouncement = (payload, senderRole) => {
-    const items = loadAnnouncements(senderRole)
+    const items = loadFromStorage()
     const announcement = {
-        id: generateId(senderRole),
+        id: generateId(),
         title: payload.title?.trim() || '',
         category: payload.category || '',
         message: payload.message?.trim() || '',
@@ -230,10 +161,13 @@ export const addAnnouncement = (payload, senderRole) => {
         announcementDate: formatAnnouncementDate(payload.announcementDate || new Date()),
         attachmentName: payload.attachmentName || '',
         senderRole,
-        audience: [...DEFAULT_BROADCAST_AUDIENCE],
+        audience: payload.audience?.length ? [...new Set(payload.audience)] : [...DEFAULT_BROADCAST_AUDIENCE],
+        audienceLabel: payload.audienceLabel || 'Default school audience',
+        priority: payload.priority || 'Normal',
+        requireAcknowledgement: payload.requireAcknowledgement !== false,
         createdAt: new Date().toISOString(),
     }
     items.unshift(announcement)
-    saveAnnouncementsForRole(senderRole, items)
+    saveToStorage(items)
     return announcement
 }

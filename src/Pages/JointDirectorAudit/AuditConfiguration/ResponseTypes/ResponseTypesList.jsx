@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -12,8 +12,7 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import ResponseTypeFormModal from './ResponseTypeFormModal'
 import {
-    getAuditResponseTypes,
-    hydrateAuditResponseTypesFromApi,
+    RESPONSE_TYPES_LIST,
     RESPONSE_TYPE_STATUS_OPTIONS,
     createResponseTypeId,
     getResponseTypeStatus,
@@ -24,10 +23,7 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const ResponseTypesList = () => {
-    const [responseTypes, setResponseTypes] = useState(() => getAuditResponseTypes())
-    useEffect(() => {
-        hydrateAuditResponseTypesFromApi().finally(() => setResponseTypes(getAuditResponseTypes()))
-    }, [])
+    const [responseTypes, setResponseTypes] = useState(RESPONSE_TYPES_LIST)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [exportModal, setExportModal] = useState(false)

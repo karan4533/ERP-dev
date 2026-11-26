@@ -3,3 +3,7 @@
 __pycache__/
 .pytest_cache/
 *.db
+
+# Local staging secrets
+.env.staging
+

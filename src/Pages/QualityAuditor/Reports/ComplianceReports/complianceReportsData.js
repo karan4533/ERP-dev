@@ -1,4 +1,3 @@
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 const STORAGE_KEY = 'quality-auditor-compliance-reports'
 
 export const COMPLIANCE_SUMMARY = {
@@ -29,13 +28,13 @@ export const getComplianceColor = (value) => {
 }
 
 export const saveComplianceData = (data) => {
-    saveCampusJson(STORAGE_KEY, data)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
 export const getComplianceData = () => {
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
-    if (stored) return stored
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) return JSON.parse(stored)
     } catch {
         /* ignore */
     }
@@ -43,6 +42,3 @@ export const getComplianceData = () => {
     saveComplianceData(data)
     return data
 }
-
-export const hydrateFromApi = (seed = DEFAULT_DEPARTMENT_ROWS) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

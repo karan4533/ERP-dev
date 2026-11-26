@@ -1,6 +1,5 @@
 import { DEPARTMENTS, CAMPUSES } from '../../AuditManagement/AuditHistory/auditHistoryData'
 
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, CAMPUSES }
 
 export const REPORT_STATUSES = ['Completed', 'Approved', 'Closed']
@@ -230,13 +229,13 @@ const DEFAULT_AUDIT_REPORTS = [
 ]
 
 export const saveAuditReports = (records) => {
-    saveCampusJson(STORAGE_KEY, records)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
 export const getAuditReports = () => {
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
-    if (stored) return stored
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) return JSON.parse(stored)
     } catch {
         /* ignore */
     }
@@ -246,6 +245,3 @@ export const getAuditReports = () => {
 
 export const getAuditReportById = (id) =>
     getAuditReports().find((item) => item.id === id || item.auditNumber === id) ?? null
-
-export const hydrateFromApi = (seed = DEFAULT_AUDIT_REPORTS) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

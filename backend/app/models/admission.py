@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, utcnow
 
@@ -67,7 +67,7 @@ class Admission(Base):
     country: Mapped[str | None] = mapped_column(String(80), nullable=True)
     state: Mapped[str | None] = mapped_column(String(80), nullable=True)
     city: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    zip_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     mobile_number: Mapped[str] = mapped_column(String(20), nullable=False)
     alt_mobile_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -93,7 +93,7 @@ class Admission(Base):
     parent_country: Mapped[str | None] = mapped_column(String(80), nullable=True)
     parent_state: Mapped[str | None] = mapped_column(String(80), nullable=True)
     parent_city: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    parent_zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    parent_zip_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     parent_mobile_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     parent_alt_mobile_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     parent_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -111,6 +111,32 @@ class Admission(Base):
     parent_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    referral: Mapped["AdmissionReferral | None"] = relationship(
+        back_populates="admission", uselist=False, lazy="selectin", cascade="all, delete-orphan"
+    )
+
+
+class AdmissionReferral(Base):
+    """Who referred an admission. Record only: any bonus is applied manually by the Account Head."""
+
+    __tablename__ = "admission_referrals"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    campus_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campuses.id"), nullable=False)
+    admission_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("admissions.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    referrer_type: Mapped[str] = mapped_column(String(20), nullable=False)  # Parent / Staff / Other
+    referrer_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    referrer_contact: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # For a parent referrer: their own child's admission number, so a fee concession can be found.
+    referrer_student_admission_no: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    admission: Mapped[Admission] = relationship(back_populates="referral")
 
 
 class Student(Base):

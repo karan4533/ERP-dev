@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
-import { History, Link2, Smartphone, Wallet } from 'lucide-react'
+import React, { useState } from 'react'
+import { History, Link2, Wallet } from 'lucide-react'
 import { toast } from 'react-toastify'
-import { DEFAULT_ACADEMIC_YEAR, FEE_INSTALLMENT_STATUSES } from '../../financeDomain/financeConstants'
-import { formatCurrency, groupInstallmentsByMonth } from '../../financeDomain/financeHelpers'
+import { DEFAULT_ACADEMIC_YEAR, FEE_INSTALLMENT_STATUSES, paymentModeLabel } from '../../financeDomain/financeConstants'
+import { formatCurrency, formatDisplayDate, groupInstallmentsByMonth } from '../../financeDomain/financeHelpers'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import StudentSearch from './StudentSearch'
 import StudentFeeProfile from './StudentFeeProfile'
@@ -11,11 +11,17 @@ import FeeInstallmentCard from './FeeInstallmentCard'
 import FeePaymentModal from './FeePaymentModal'
 import SiblingFeesDrawer from './SiblingFeesDrawer'
 import PaymentHistoryDrawer from './PaymentHistoryDrawer'
-import PaymentLinkModal from './PaymentLinkModal'
 import ReceiptDetailsDrawer from './ReceiptDetailsDrawer'
-import CheckoutMockModal from './CheckoutMockModal'
 import EntryClosureGate from '../../../../Common/demoDomain/EntryClosureGate'
 import { entryBlocked } from '../../../../Common/demoDomain/governance'
+import { openPrintDocument } from '../../../../Common/printDocument'
+
+const escapeHtml = (value) => String(value ?? '—')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
 
 const FeeCollectionTab = () => {
     const {
@@ -25,49 +31,20 @@ const FeeCollectionTab = () => {
         getSiblings,
         getStudentSummary,
         collectFeePayment,
-        generatePaymentLink,
         receipts,
         reprintReceipt,
-        sendReceipt,
         bankAccounts,
         posTerminals,
         waiveFine,
-        refreshFinanceStudentRoster,
     } = useFinance()
 
     const [academicYear, setAcademicYear] = useState(DEFAULT_ACADEMIC_YEAR)
     const [student, setStudent] = useState(null)
-
-    // Keep class/section/roll in sync after Principal/Coordinator Section Assignment.
-    useEffect(() => {
-        if (typeof refreshFinanceStudentRoster !== 'function') return undefined
-        let cancelled = false
-        refreshFinanceStudentRoster().then(() => {
-            if (cancelled) return
-        }).catch(() => {})
-        return () => {
-            cancelled = true
-        }
-    }, [refreshFinanceStudentRoster])
-
-    useEffect(() => {
-        if (!student?.id) return
-        const latest = getStudentById(student.id)
-        if (latest && (
-            latest.className !== student.className
-            || latest.section !== student.section
-            || latest.rollNo !== student.rollNo
-        )) {
-            setStudent(latest)
-        }
-    }, [students, student, getStudentById])
     const [selectedIds, setSelectedIds] = useState([])
     const [partials, setPartials] = useState({})
     const [paymentOpen, setPaymentOpen] = useState(false)
-    const [checkoutOpen, setCheckoutOpen] = useState(false)
     const [siblingsOpen, setSiblingsOpen] = useState(false)
     const [historyOpen, setHistoryOpen] = useState(false)
-    const [link, setLink] = useState(null)
     const [receipt, setReceipt] = useState(null)
     const [siblingSelection, setSiblingSelection] = useState([])
     const [activeStudentId, setActiveStudentId] = useState(null)
@@ -126,8 +103,8 @@ const FeeCollectionTab = () => {
         })
     }
 
-    const handleCollectResult = async (payload) => {
-        const result = await confirmPayment(payload)
+    const handleCollectResult = (payload) => {
+        const result = confirmPayment(payload)
         if (result?.success) {
             setSelectedIds([])
             setPartials({})
@@ -144,6 +121,24 @@ const FeeCollectionTab = () => {
             toast.success('Fine waived.')
             setWaiverReason('')
         }
+    }
+
+    const printReceipt = (selectedReceipt) => {
+        const fields = [
+            ['Receipt', selectedReceipt.receiptNo],
+            ['Student', activeStudent?.name || selectedReceipt.admissionNo],
+            ['Admission no.', activeStudent?.admissionNo || selectedReceipt.admissionNo],
+            ['Payment date', formatDisplayDate(selectedReceipt.paymentDate)],
+            ['Fee heads', (selectedReceipt.feeHeads || []).join(', ')],
+            ['Amount paid', formatCurrency(selectedReceipt.amountPaid)],
+            ['Payment mode', paymentModeLabel(selectedReceipt.paymentMode)],
+            ['Transaction reference', selectedReceipt.transactionReference],
+            ['Collected by', selectedReceipt.collectedBy],
+        ]
+        openPrintDocument({
+            title: `Receipt ${selectedReceipt.receiptNo}`,
+            body: `<h1 style="margin-bottom:16px">Fee receipt</h1><table><tbody>${fields.map(([label, value]) => `<tr><th style="text-align:left">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</tbody></table><p style="margin-top:16px;font-size:11px;color:#667085">Browser-stored demonstration receipt. Verify against the production ledger before external use.</p>`,
+        })
     }
 
     return (
@@ -176,35 +171,8 @@ const FeeCollectionTab = () => {
                         <button type='button' onClick={() => setHistoryOpen(true)} className='inline-flex items-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md cursor-pointer'>
                             <History size={16} /> Payment History
                         </button>
-                        <button
-                            type='button'
-                            onClick={() => {
-                                if (!totalAmount) {
-                                    toast.error('Select payable instalments before generating a link.')
-                                    return
-                                }
-                                setLink(generatePaymentLink({
-                                    studentId: activeStudent.id,
-                                    amount: totalAmount,
-                                    installmentIds: selectedIds,
-                                }))
-                            }}
-                            className='inline-flex items-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md cursor-pointer'
-                        >
-                            <Link2 size={16} /> Generate Payment Link
-                        </button>
-                        <button
-                            type='button'
-                            onClick={() => {
-                                if (!totalAmount) {
-                                    toast.error('Select payable instalments first.')
-                                    return
-                                }
-                                setCheckoutOpen(true)
-                            }}
-                            className='inline-flex items-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md cursor-pointer'
-                        >
-                            <Smartphone size={16} /> Mock Card / UPI
+                        <button type='button' disabled title='Payment links require a connected payment gateway.' className='inline-flex items-center gap-2 rounded-md border border-[var(--erp-line-strong)] px-4 py-2 text-sm text-[var(--erp-muted)] opacity-60'>
+                            <Link2 size={16} /> Payment link unavailable
                         </button>
                     </div>
 
@@ -270,13 +238,6 @@ const FeeCollectionTab = () => {
                 posTerminals={posTerminals}
             />
             )}
-            <CheckoutMockModal
-                isOpen={checkoutOpen}
-                onClose={() => setCheckoutOpen(false)}
-                amount={totalAmount}
-                student={activeStudent}
-                onSuccess={(payload) => handleCollectResult(payload)}
-            />
             <SiblingFeesDrawer
                 isOpen={siblingsOpen}
                 onClose={() => setSiblingsOpen(false)}
@@ -305,15 +266,13 @@ const FeeCollectionTab = () => {
                 receipts={studentReceipts}
                 onViewReceipt={(row) => { setReceipt(row); setHistoryOpen(false) }}
             />
-            <PaymentLinkModal isOpen={Boolean(link)} onClose={() => setLink(null)} link={link} />
             <ReceiptDetailsDrawer
                 isOpen={Boolean(receipt)}
                 onClose={() => setReceipt(null)}
                 receipt={receipt}
                 student={activeStudent}
                 onReprint={reprintReceipt}
-                onSend={sendReceipt}
-                onPrint={() => window.print()}
+                onPrint={printReceipt}
             />
         </div>
     )

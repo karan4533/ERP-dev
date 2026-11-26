@@ -18,6 +18,7 @@ import UserAvatar from './UserAvatar'
 import MessageComposer from './MessageComposer'
 import { getAttachmentKind } from '../communicationData'
 import { formatMessageTime, groupMessagesByDate } from '../utils'
+import Dialog from '../../ui/Dialog'
 
 const attachmentIcon = (kind) => {
     if (kind === 'image') return ImageIcon
@@ -308,19 +309,21 @@ const ChatPanel = ({
                 />
             </div>
 
-            {previewImage && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-                    onClick={() => setPreviewImage(null)}
-                >
+            <Dialog
+                open={Boolean(previewImage)}
+                onClose={() => setPreviewImage(null)}
+                title='Image preview'
+                size='full'
+                contentClassName='flex items-center justify-center bg-[var(--erp-canvas)]'
+            >
+                {previewImage && (
                     <img
                         src={previewImage}
-                        alt="Preview"
-                        className="max-h-full max-w-full rounded-xl object-contain"
-                        onClick={(e) => e.stopPropagation()}
+                        alt='Message attachment preview'
+                        className='max-h-[75dvh] max-w-full rounded-lg object-contain'
                     />
-                </div>
-            )}
+                )}
+            </Dialog>
         </section>
     )
 }

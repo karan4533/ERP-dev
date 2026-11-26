@@ -1,4 +1,3 @@
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export const DEPARTMENTS = [
     'Finance',
     'HR',
@@ -21,7 +20,7 @@ export const AUDIT_TYPES = [
 
 export const PRIORITIES = ['High', 'Medium', 'Low']
 
-export const STATUSES = ['Pending', 'In Progress', 'Completed', 'Overdue']
+export const STATUSES = ['Pending', 'In Progress', 'Submitted', 'Completed', 'Overdue']
 
 export const FREQUENCIES = ['ONE_TIME', 'DAILY', 'WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'TERMLY', 'YEARLY', 'Quarterly', 'Ad-hoc']
 
@@ -34,6 +33,7 @@ export const priorityBadgeColor = {
 export const statusBadgeColor = {
     Pending: 'bg-[#2196F333] text-[#2196F3]',
     'In Progress': 'bg-[#FF980033] text-[#FF9800]',
+    Submitted: 'bg-[#515DEF33] text-[#515DEF]',
     Completed: 'bg-[#4CAF5033] text-[#4CAF50]',
     Overdue: 'bg-[#FF000033] text-[#FF0000]',
 }
@@ -175,13 +175,13 @@ const DEFAULT_MY_AUDITS = [
 ]
 
 export const saveMyAudits = (records) => {
-    saveCampusJson(STORAGE_KEY, records)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
 export const getMyAudits = () => {
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
-    if (stored) return stored
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) return JSON.parse(stored)
     } catch {
         /* ignore */
     }
@@ -200,6 +200,3 @@ export const updateAuditStatus = (id, status) => {
 
 export const getAuditById = (id) =>
     getMyAudits().find((item) => item.id === id || item.auditId === id) ?? null
-
-export const hydrateFromApi = (seed = DEFAULT_MY_AUDITS) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

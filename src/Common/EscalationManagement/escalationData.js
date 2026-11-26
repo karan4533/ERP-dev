@@ -1,14 +1,4 @@
 import { matchesEscalationUser } from './escalationUsersData'
-import { getRoleConfig } from './escalationRoleConfig'
-import {
-    canUseEscalationsApi,
-    getEscalationApi,
-    listEscalationsApi,
-    raiseEscalationApi,
-    setEscalationStatusApi,
-} from '../../services/escalationApi'
-
-export const ESCALATIONS_UPDATED_EVENT = 'schoolerp-escalations-updated'
 
 const UNIFIED_STORAGE_KEY = 'schoolerp-escalations'
 const LEGACY_STORAGE_PREFIX = 'escalation-management-'
@@ -55,6 +45,8 @@ export const isSentEscalation = (escalation, roleKey, currentUser = null) => {
 }
 
 export const isReceivedEscalation = (escalation, roleKey, currentUser = null) => {
+    // Leadership & administration have complete governance visibility across student and staff escalations
+    if (roleKey === 'admin' || roleKey === 'superAdmin') return true
     if (escalation?.escalatedToRoleKey !== roleKey) return false
     if (!currentUser) return true
     if (!escalation?.escalatedToUserId && !escalation?.escalatedToUserEmail) return true
@@ -79,11 +71,8 @@ export const parseEscalationDate = (dateStr) => {
 export const getEscalationStartTime = (escalation) =>
     escalation.escalatedAt ? new Date(escalation.escalatedAt) : parseEscalationDate(escalation.escalationDate)
 
-// The server moves `resolveBy` forward each time the 24h clock escalates an item, so prefer it when present.
 export const getResolveByDate = (escalation) =>
-    escalation.resolveBy
-        ? new Date(escalation.resolveBy)
-        : new Date(getEscalationStartTime(escalation).getTime() + RESOLUTION_SLA_HOURS * 60 * 60 * 1000)
+    new Date(getEscalationStartTime(escalation).getTime() + RESOLUTION_SLA_HOURS * 60 * 60 * 1000)
 
 export const formatDateTime = (date) => {
     const value = date instanceof Date ? date : new Date(date)
@@ -104,145 +93,63 @@ export const isResolutionOverdue = (escalation) => {
     return getResolveByDate(escalation).getTime() < Date.now()
 }
 
-// With a real backend session the server is the source of truth, so what it returned is held in
-// memory only: nothing is written to localStorage, and a reload or another person signing in on the
-// same browser never sees the previous person's escalations.
-let apiMemoryEscalations = []
-const usesApiMemory = () => canUseEscalationsApi()
-
-/** Drop the in-memory copy (call on sign-out). */
-export const clearEscalationMemory = () => {
-    apiMemoryEscalations = []
-    try {
-        window.dispatchEvent(new CustomEvent(ESCALATIONS_UPDATED_EVENT))
-    } catch {
-        /* ignore */
-    }
-}
+export const INITIAL_ESCALATIONS = [
+    {
+        id: 'ESC-2026-001',
+        escalatedBy: 'Aarav Sharma',
+        escalatedByRole: 'Student',
+        escalatedByRoleKey: 'student',
+        escalatedByUserId: 'STU-2024-0142',
+        escalatedByUserEmail: 'student@school.com',
+        escalatedTo: 'Teacher',
+        escalatedToRoleKey: 'teacher',
+        escalatedToUserId: 'EMP-TCH-014',
+        escalatedToUserName: 'Priya Menon',
+        escalatedToUserEmail: 'teacher@school.com',
+        description: 'Request for additional sample question papers and doubt resolution for Mathematics CA-1 chapter on Trigonometry.',
+        escalationDate: '10-11-2026',
+        escalatedAt: new Date(Date.now() - 3600000 * 8).toISOString(),
+        status: 'In Review',
+        fullDescription: 'Request for additional sample question papers and doubt resolution for Mathematics CA-1 chapter on Trigonometry.',
+        remarks: 'Class teacher acknowledged. Study notes shared with student.',
+        attachment: 'trigonometry-query.pdf',
+        attachmentSize: '48 KB',
+        attachmentType: 'application/pdf',
+    },
+    {
+        id: 'ESC-2026-002',
+        escalatedBy: 'Raj Kumar',
+        escalatedByRole: 'Parent',
+        escalatedByRoleKey: 'parent',
+        escalatedByUserId: 'PAR-2026-001',
+        escalatedByUserEmail: 'parent@school.com',
+        escalatedTo: 'Teacher',
+        escalatedToRoleKey: 'teacher',
+        escalatedToUserId: 'EMP-TCH-014',
+        escalatedToUserName: 'Priya Menon',
+        escalatedToUserEmail: 'teacher@school.com',
+        description: 'Inquiry regarding extended school transport pickup delay on Route #04 and evening arrival status.',
+        escalationDate: '10-11-2026',
+        escalatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+        status: 'Pending',
+        fullDescription: 'Inquiry regarding extended school transport pickup delay on Route #04 and evening arrival status.',
+        remarks: 'Forwarded to Transport Manager for route checkpoint timing log.',
+        attachment: '',
+        attachmentSize: '',
+        attachmentType: '',
+    },
+]
 
 const saveAllEscalations = (records) => {
-    if (usesApiMemory()) {
-        apiMemoryEscalations = Array.isArray(records) ? records : []
-        return
-    }
     localStorage.setItem(UNIFIED_STORAGE_KEY, JSON.stringify(records))
 }
 
-/** Earlier builds mirrored server data into the browser; remove that stale copy once the API has answered. */
-const purgeBrowserEscalationCopy = () => {
-    try {
-        localStorage?.removeItem(UNIFIED_STORAGE_KEY)
-    } catch {
-        /* ignore */
-    }
-}
-
-// ---------------------------------------------------------------------------
-// API source of truth (Y-5). With a real backend session the local list is only a
-// cache of what the server returned; writes go to the API first.
-// ---------------------------------------------------------------------------
-
-const BACKEND_TO_FE_ROLE = { gatekeeper: 'gateKeeper', gatekeepermanager: 'gateKeeperManager', superadmin: 'superAdmin' }
-const toFeRole = (code) => BACKEND_TO_FE_ROLE[code] || code
-
-const isoToDmy = (iso) => {
-    const date = new Date(iso)
-    if (Number.isNaN(date.getTime())) return ''
-    return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`
-}
-
-const mapApiEscalation = (item) => {
-    const byKey = toFeRole(item.escalatedByRoleKey)
-    const toKey = toFeRole(item.escalatedToRoleKey)
-    return {
-        id: item.id,
-        escalationId: item.escalationId,
-        escalatedBy: item.escalatedBy,
-        escalatedByRole: getRoleConfig(byKey)?.roleLabel || item.escalatedByRoleKey,
-        escalatedByRoleKey: byKey,
-        escalatedByUserEmail: item.escalatedBy,
-        escalatedTo: getRoleConfig(toKey)?.roleLabel || item.escalatedToRoleKey,
-        escalatedToRoleKey: toKey,
-        escalatedToUserId: item.escalatedToUserId || '',
-        escalatedToUserName: item.escalatedToUserEmail || '',
-        escalatedToUserEmail: item.escalatedToUserEmail || '',
-        description: item.description,
-        fullDescription: item.fullDescription,
-        remarks: item.remarks,
-        escalationDate: isoToDmy(item.escalatedAt),
-        escalatedAt: item.escalatedAt,
-        status: item.status,
-        resolutionNote: item.resolutionNote,
-        resolveBy: item.resolveBy,
-        resolvedAt: item.resolvedAt,
-        overdue: Boolean(item.overdue),
-        level: item.level ?? 0,
-        trail: item.trail,
-        fromApi: true,
-    }
-}
-
-const emitEscalationsUpdated = () => {
-    try {
-        window.dispatchEvent(new CustomEvent(ESCALATIONS_UPDATED_EVENT))
-    } catch {
-        /* ignore */
-    }
-}
-
-/** Replace the local cache with the signed-in user's server data. Returns true when the API was used. */
-export const hydrateEscalationsFromApi = async () => {
-    if (!canUseEscalationsApi()) return false
-    try {
-        const [mine, received] = await Promise.all([listEscalationsApi('mine'), listEscalationsApi('received')])
-        const merged = new Map()
-        ;[...mine, ...received].forEach((item) => merged.set(item.id, mapApiEscalation(item)))
-        saveAllEscalations([...merged.values()])
-        purgeBrowserEscalationCopy()
-        emitEscalationsUpdated()
-        return true
-    } catch {
-        return false
-    }
-}
-
-/** Fetch one escalation with its trail and update the cache. Returns the mapped record or null. */
-export const hydrateEscalationFromApi = async (id) => {
-    if (!canUseEscalationsApi()) return null
-    try {
-        const record = mapApiEscalation(await getEscalationApi(id))
-        const rest = getAllEscalations().filter((item) => item.id !== record.id)
-        saveAllEscalations([record, ...rest])
-        emitEscalationsUpdated()
-        return record
-    } catch {
-        return null
-    }
-}
-
-export const raiseEscalationViaApi = async (form) => {
-    const created = await raiseEscalationApi({
-        description: form.description.trim(),
-        fullDescription: form.fullDescription?.trim(),
-        remarks: form.remarks?.trim(),
-        recipientUserId: form.recipientUserId,
-    })
-    await hydrateEscalationsFromApi()
-    return mapApiEscalation(created)
-}
-
-export const setEscalationStatusViaApi = async (id, status, note) => {
-    await setEscalationStatusApi(id, status, note)
-    return hydrateEscalationFromApi(id)
-}
-
 export const getAllEscalations = () => {
-    if (usesApiMemory()) return apiMemoryEscalations.map(normalizeEscalation)
     try {
         const stored = localStorage.getItem(UNIFIED_STORAGE_KEY)
         if (stored !== null) {
             const parsed = JSON.parse(stored)
-            if (Array.isArray(parsed)) {
+            if (Array.isArray(parsed) && parsed.length > 0) {
                 return parsed.map(normalizeEscalation)
             }
         }
@@ -250,8 +157,8 @@ export const getAllEscalations = () => {
         /* ignore */
     }
 
-    saveAllEscalations([])
-    return []
+    saveAllEscalations(INITIAL_ESCALATIONS)
+    return INITIAL_ESCALATIONS.map(normalizeEscalation)
 }
 
 /** @deprecated Use getSentEscalations / getReceivedEscalations — kept for compatibility */
@@ -298,6 +205,9 @@ export const emptyEscalationForm = (defaultRecipientUserId = '') => ({
     fullDescription: '',
     remarks: '',
     recipientUserId: defaultRecipientUserId,
+    attachment: '',
+    attachmentSize: '',
+    attachmentType: '',
 })
 
 export const createEscalation = (roleKey, form, roleConfig, senderUser, recipientUser) => {
@@ -330,6 +240,9 @@ export const createEscalation = (roleKey, form, roleConfig, senderUser, recipien
         status: 'Pending',
         fullDescription: form.fullDescription?.trim() || form.description.trim(),
         remarks: form.remarks?.trim() || '',
+        attachment: form.attachment || '',
+        attachmentSize: form.attachmentSize || '',
+        attachmentType: form.attachmentType || '',
     })
 
     saveAllEscalations([record, ...getAllEscalations()])

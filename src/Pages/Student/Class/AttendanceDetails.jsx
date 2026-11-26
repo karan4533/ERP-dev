@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { CalendarRange, BadgePercent, CircleCheck, Download, Calendar, XCircle, ArrowRight } from 'lucide-react'
 import DatePicker from 'react-datepicker'
@@ -6,8 +6,6 @@ import 'react-datepicker/dist/react-datepicker.css'
 import AttendanceCalendar from './Components/AttendanceCalendar'
 import { NavLink } from 'react-router-dom'
 import { useActiveStudent } from '../../../context/ActiveStudentContext'
-import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
-import { studentAttendanceCalendarApi } from '../../../services/attendanceApi'
 
 const attendanceStats = {
     percentage: 75,
@@ -40,18 +38,8 @@ const recentStatusStyles = {
 }
 
 const AttendanceDetails = () => {
-    const { routePrefix, activeStudent } = useActiveStudent()
+    const { routePrefix } = useActiveStudent()
     const [selectMonth, setSelectMonth] = useState(new Date());
-
-    const fetchAttendance = useCallback(
-        async (year, month) => {
-            if (!isApiAuthEnabled() || !getAccessToken() || !activeStudent?.id) {
-                return {}
-            }
-            return studentAttendanceCalendarApi(activeStudent.id, year, month)
-        },
-        [activeStudent?.id],
-    )
 
     const attendanceChartOption = useMemo(() => ({
         series: [{
@@ -176,7 +164,7 @@ const AttendanceDetails = () => {
 
             <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-x-6 gap-y-4 mt-6'>
                 <div className='col-span-4'>
-                    <AttendanceCalendar fetchAttendance={fetchAttendance} />
+                    <AttendanceCalendar />
                 </div>
 
                 <div className='col-span-2'>

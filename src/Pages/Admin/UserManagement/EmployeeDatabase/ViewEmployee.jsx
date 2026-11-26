@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import mo_user from '../../../../assets/images/no-profile.png'
 import { ROUTE_BASE, getEmployeeById } from './employeeDatabaseData'
-import { useEmployeeDirectory } from './useEmployeeDirectory'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -22,36 +21,16 @@ const Field = ({ label, value }) => (
 const ViewEmployee = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const directory = useEmployeeDirectory()
-    const apiMode = directory.apiMode
-    const employee = apiMode
-        ? directory.records.find((record) => record.row.id === id)?.detail ?? null
-        : getEmployeeById(id)
+    const employee = getEmployeeById(id)
 
     if (!employee) {
-        const message = apiMode && directory.status === 'loading'
-            ? 'Loading employee…'
-            : apiMode && directory.status === 'error'
-                ? directory.error
-                : 'Employee not found.'
         return (
             <section className='space-y-6'>
                 <button type='button' onClick={() => navigate(ROUTE_BASE)} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
-                <div
-                    role={directory.status === 'error' ? 'alert' : undefined}
-                    className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'
-                >
-                    {message}
-                    {apiMode && directory.status === 'error' ? (
-                        <>
-                            {' '}
-                            <button type='button' onClick={directory.reload} className='text-[#515DEF] hover:underline cursor-pointer'>Retry</button>
-                        </>
-                    ) : null}
-                </div>
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>Employee not found.</div>
             </section>
         )
     }
@@ -121,29 +100,13 @@ const ViewEmployee = () => {
                     <Field label='Work shift' value={employee.employmentInfo.workShift} />
                     <Field label='Assigned class' value={employee.employmentInfo.assignedClass} />
                     <Field label='Assigned subjects' value={employee.employmentInfo.assignedSubjects} />
-                    {apiMode ? (
-                        <>
-                            <Field label='Designation' value={employee.employmentInfo.designation} />
-                            <Field label='Category' value={employee.employmentInfo.category} />
-                            <Field label='Reporting manager' value={employee.employmentInfo.reportingManager} />
-                            <Field label='Status' value={employee.employmentInfo.status} />
-                        </>
-                    ) : null}
                 </div>
             </Section>
 
             <Section title='Account'>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <Field label='Username' value={employee.account.username} />
-                    {apiMode ? (
-                        // A password is never shown: the server keeps only a hash and never returns it.
-                        <>
-                            <Field label='Source' value={employee.source === 'hr' ? 'HR employee record' : 'User Creation'} />
-                            <Field label='Login' value={employee.account.loginNote} />
-                        </>
-                    ) : (
-                        <Field label='Password' value={employee.account.password} />
-                    )}
+                    <Field label='Password' value={employee.account.password} />
                 </div>
             </Section>
 

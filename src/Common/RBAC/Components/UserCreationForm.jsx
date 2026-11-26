@@ -34,43 +34,14 @@ const Field = ({ label, htmlFor, children }) => (
     </div>
 )
 
-const UserCreationForm = ({
-    form,
-    onChange,
-    fixedRole,
-    fixedRoleLabel,
-    passwordLabel = 'Password',
-    passwordPlaceholder = 'Set login password',
-    passwordHelp = '',
-    hidePassword = false,
-    staffCode = '',
-    /** Optional override from GET /admin/users/creatable-roles; falls back to CREATABLE_ROLES. */
-    roleOptions = null,
-}) => {
+const UserCreationForm = ({ form, onChange, fixedRole, fixedRoleLabel }) => {
     const updateField = (key, value) => onChange?.(key, value)
-    const rolesForSelect = Array.isArray(roleOptions) && roleOptions.length
-        ? roleOptions
-        : CREATABLE_ROLES.map((role) => ({ role, label: CREATABLE_ROLE_LABELS[role] || role }))
-    const roleLabel = fixedRoleLabel
-        || rolesForSelect.find((item) => item.role === (fixedRole || form.role))?.label
-        || CREATABLE_ROLE_LABELS[fixedRole || form.role]
-        || form.role
+    const roleLabel = fixedRoleLabel || CREATABLE_ROLE_LABELS[fixedRole || form.role] || form.role
 
     return (
         <div>
             <FormSection title='Account Details'>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                    {staffCode ? (
-                        <Field label='Staff ID' htmlFor='staffCode'>
-                            <input
-                                id='staffCode'
-                                type='text'
-                                value={staffCode}
-                                readOnly
-                                className={`${inputClass} bg-[#FAFBFF] text-[#667085] cursor-not-allowed`}
-                            />
-                        </Field>
-                    ) : null}
                     <Field label='Role' htmlFor='role'>
                         {fixedRole ? (
                             <input
@@ -87,9 +58,9 @@ const UserCreationForm = ({
                                 onChange={(e) => updateField('role', e.target.value)}
                                 className={inputClass}
                             >
-                                {rolesForSelect.map((item) => (
-                                    <option key={item.role} value={item.role}>
-                                        {item.label}
+                                {CREATABLE_ROLES.map((role) => (
+                                    <option key={role} value={role}>
+                                        {CREATABLE_ROLE_LABELS[role]}
                                     </option>
                                 ))}
                             </select>
@@ -404,28 +375,16 @@ const UserCreationForm = ({
                             placeholder='Defaults to email prefix if blank'
                         />
                     </Field>
-                    {!hidePassword ? (
-                        <Field label={passwordLabel} htmlFor='password'>
-                            <input
-                                id='password'
-                                type='password'
-                                autoComplete='new-password'
-                                value={form.password}
-                                onChange={(e) => updateField('password', e.target.value)}
-                                className={inputClass}
-                                placeholder={passwordPlaceholder}
-                            />
-                            {passwordHelp ? (
-                                <p className='text-xs text-[#667085]'>{passwordHelp}</p>
-                            ) : null}
-                        </Field>
-                    ) : (
-                        <div className='flex flex-col gap-y-2 sm:col-span-2'>
-                            <p className='text-sm text-[#667085]'>
-                                Password is not edited here. Use <span className='font-medium text-[#515DEF]'>Reset password</span> on the user list to issue a new temporary password.
-                            </p>
-                        </div>
-                    )}
+                    <Field label='Password' htmlFor='password'>
+                        <input
+                            id='password'
+                            type='password'
+                            value={form.password}
+                            onChange={(e) => updateField('password', e.target.value)}
+                            className={inputClass}
+                            placeholder='Set login password'
+                        />
+                    </Field>
                 </div>
             </FormSection>
 

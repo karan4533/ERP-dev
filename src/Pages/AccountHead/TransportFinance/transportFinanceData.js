@@ -6,7 +6,7 @@ export const TRANSPORT_TABS = [
     { id: 'staff-salaries', label: 'Staff Salaries' },
 ]
 
-export const TRANSPORT_ACADEMIC_YEARS = ['2026–27', '2025–26', '2024–25', '2023–24']
+export const TRANSPORT_ACADEMIC_YEARS = ['2025–26', '2024–25', '2023–24']
 
 export const FLEET_SUMMARY = [
     { label: 'Total Vehicles', value: '18', sub: '14 buses · 4 vans', iconTone: 'info' },
@@ -311,6 +311,7 @@ export const PAYROLL_STAFF = [
     },
 ]
 
+// Legacy overview consumers still use these palette maps while their table layer is migrated.
 export const fleetStatusBadgeColor = {
     Active: 'bg-[#4CAF5033] text-[#4CAF50]',
     'In Service': 'bg-[#FF980033] text-[#FF9800]',
@@ -354,3 +355,4 @@ export const payrollStatusBadgeColor = {
     Paid: 'bg-[#4CAF5033] text-[#4CAF50]',
     Pending: 'bg-[#FF980033] text-[#FF9800]',
 }
+

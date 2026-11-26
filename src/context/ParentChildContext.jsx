@@ -7,8 +7,6 @@ import React, {
     useState,
 } from 'react'
 import { ROLES, useAuth } from './AuthContext'
-import { isApiAuthEnabled } from '../services/apiClient'
-import { listMyChildrenApi } from '../services/parentsApi'
 import { getParentByEmail } from '../Pages/Parent/parentData'
 import {
     getMappedStudentsForParent,
@@ -41,113 +39,56 @@ const writeStoredChildId = (parentId, studentId) => {
 }
 
 export const ParentChildProvider = ({ children }) => {
-    const { role, email, name } = useAuth()
-    const apiParent = isApiAuthEnabled() && role === ROLES.PARENT
-
-    const localParentAccount = useMemo(() => {
-        if (apiParent || role !== ROLES.PARENT || !email) return null
-        return getParentByEmail(email)
-    }, [apiParent, role, email])
-
+    const { role, email } = useAuth()
     const parentAccount = useMemo(() => {
         if (role !== ROLES.PARENT || !email) return null
-        if (apiParent) {
-            return {
-                id: email,
-                email,
-                name: name || email.split('@')[0] || 'Parent',
-                source: 'api',
-            }
-        }
-        return localParentAccount
-    }, [apiParent, role, email, name, localParentAccount])
+        return getParentByEmail(email)
+    }, [role, email])
 
     const [activeStudentId, setActiveStudentId] = useState(null)
-    const [apiChildren, setApiChildren] = useState([])
     const [initialized, setInitialized] = useState(false)
-    const [loadError, setLoadError] = useState(null)
 
-    const localMappedChildren = useMemo(
-        () => (localParentAccount ? getMappedStudentsForParent(localParentAccount.id) : []),
-        [localParentAccount],
+    const mappedChildren = useMemo(
+        () => (parentAccount ? getMappedStudentsForParent(parentAccount.id) : []),
+        [parentAccount],
     )
 
-    const mappedChildren = apiParent ? apiChildren : localMappedChildren
-
     useEffect(() => {
-        let cancelled = false
-
         if (role !== ROLES.PARENT) {
             setActiveStudentId(null)
-            setApiChildren([])
-            setLoadError(null)
             setInitialized(true)
-            return undefined
+            return
         }
 
-        if (apiParent) {
-            setInitialized(false)
-            setLoadError(null)
-            listMyChildrenApi()
-                .then((rows) => {
-                    if (cancelled) return
-                    setApiChildren(rows)
-                    const parentKey = email
-                    const storedId = readStoredChildId(parentKey)
-                    const ids = new Set(rows.map((row) => String(row.id)))
-                    if (storedId && ids.has(String(storedId))) {
-                        setActiveStudentId(String(storedId))
-                    } else if (rows.length === 1) {
-                        setActiveStudentId(String(rows[0].id))
-                        writeStoredChildId(parentKey, rows[0].id)
-                    } else {
-                        setActiveStudentId(null)
-                    }
-                    setInitialized(true)
-                })
-                .catch((error) => {
-                    if (cancelled) return
-                    console.error(error)
-                    setApiChildren([])
-                    setActiveStudentId(null)
-                    setLoadError(error?.message || 'Could not load children from API.')
-                    setInitialized(true)
-                })
-            return () => {
-                cancelled = true
-            }
-        }
-
-        if (!localParentAccount) {
+        if (!parentAccount) {
             setActiveStudentId(null)
             setInitialized(true)
-            return undefined
+            return
         }
 
-        const storedId = readStoredChildId(localParentAccount.id)
-        if (storedId && isStudentMappedToParent(localParentAccount.id, storedId)) {
+        const storedId = readStoredChildId(parentAccount.id)
+        if (storedId && isStudentMappedToParent(parentAccount.id, storedId)) {
             setActiveStudentId(storedId)
-        } else if (localMappedChildren.length === 1) {
-            setActiveStudentId(localMappedChildren[0].id)
-            writeStoredChildId(localParentAccount.id, localMappedChildren[0].id)
+        } else if (mappedChildren.length === 1) {
+            setActiveStudentId(mappedChildren[0].id)
+            writeStoredChildId(parentAccount.id, mappedChildren[0].id)
         } else {
             setActiveStudentId(null)
         }
+
         setInitialized(true)
-        return undefined
-    }, [role, apiParent, email, localParentAccount, localMappedChildren])
+    }, [role, parentAccount, mappedChildren])
 
     const selectChild = useCallback(
         (studentId) => {
             if (!parentAccount) return false
-            const allowed = mappedChildren.some((child) => String(child.id) === String(studentId))
-            if (!allowed) return false
+            if (!isStudentMappedToParent(parentAccount.id, studentId)) return false
 
-            setActiveStudentId(String(studentId))
+            setActiveStudentId(studentId)
             writeStoredChildId(parentAccount.id, studentId)
             return true
         },
-        [parentAccount, mappedChildren],
+        [parentAccount],
     )
 
     const clearActiveChild = useCallback(() => {
@@ -158,10 +99,8 @@ export const ParentChildProvider = ({ children }) => {
 
     const activeStudent = useMemo(() => {
         if (!activeStudentId) return null
-        const fromApi = mappedChildren.find((child) => String(child.id) === String(activeStudentId))
-        if (fromApi) return fromApi
         return getStudentProfileById(activeStudentId)
-    }, [activeStudentId, mappedChildren])
+    }, [activeStudentId])
 
     const value = useMemo(
         () => ({
@@ -172,7 +111,6 @@ export const ParentChildProvider = ({ children }) => {
             selectChild,
             clearActiveChild,
             initialized,
-            loadError,
             hasMultipleChildren: mappedChildren.length > 1,
         }),
         [
@@ -183,7 +121,6 @@ export const ParentChildProvider = ({ children }) => {
             selectChild,
             clearActiveChild,
             initialized,
-            loadError,
         ],
     )
 

@@ -9,10 +9,6 @@ import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
 
-const EXPORT_ROWS = [
-    {book_image: '', subject_name: 'Tamil', subject_code: 'TAM1001', education_board: 'Matriculation', subject_type: 'Theory', assigned_teacher: 'Sandy Selva', class: '12th'},
-]
-
 const Subjects = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -179,13 +175,7 @@ const Subjects = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='subjects'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

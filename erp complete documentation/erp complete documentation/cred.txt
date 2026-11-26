@@ -1,0 +1,25 @@
+MD will pull from all five, then admin, refer "https://school-erp-demo-beta.vercel.app/select-profile", essl link, "http://103.87.106.120:99/iclock/Main.aspx", user id and password "essl", "essl"
+
+================================================================================
+DEMO CREDENTIALS DIRECTORY (26 INSTITUTIONAL ROLES)
+================================================================================
+Maintenance Manager:
+  Role Key    : maintenancemanager
+  Employee ID : EMP-MNT-001
+  Name        : Gopalakrishnan R
+  Department  : Campus Infrastructure & Maintenance
+  Email       : maintenancemanager@school.com
+  Username    : maintenancemanager
+  Password    : School@123
+  Home URL    : /maintenance-manager/dashboard
+
+Housekeeping Manager:
+  Role Key    : housekeepingmanager
+  Employee ID : EMP-HK-001
+  Name        : Rajesh Nair
+  Department  : Housekeeping & Sanitation
+  Email       : housekeepingmanager@school.com
+  Username    : housekeepingmanager
+  Password    : School@123
+  Home URL    : /housekeeping-manager/dashboard
+================================================================================

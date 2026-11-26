@@ -1,133 +1,149 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, Download, IndianRupee, ShoppingCart, ClipboardCheck, UtensilsCrossed } from 'lucide-react'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { parseCanteenDate } from '../Dashboard/dashboardData'
+import { useMemo, useState } from 'react'
+import { Download, IndianRupee, Layers, Package, ShoppingCart, Trash2, TrendingUp, Truck } from 'lucide-react'
+import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../Common/ui'
+import { filterCanteenReportRows } from '../../../Common/operations/canteenReportState'
 import {
+    SUMMARY_CARDS,
     REPORT_CATEGORIES,
-    getReportsView,
-    hydrateReportsFromApi,
-    persistReportSnapshot,
-    orderStatusBadgeColor,
-    requestStatusBadgeColor,
+    SALES_REPORT,
+    INVENTORY_CONSUMPTION_REPORT,
+    WASTAGE_REPORT,
+    VENDOR_PURCHASE_REPORT,
 } from './reportsData'
 
 const CARD_ICONS = {
-    'Total Orders': ShoppingCart,
-    'Order Sales': IndianRupee,
-    'Pending Requests': ClipboardCheck,
-    'Top Selling Menu Item': UtensilsCrossed,
+    'Total Sales Today': IndianRupee,
+    'Total Sales This Month': TrendingUp,
+    'Inventory Consumption Cost': Package,
+    'Wastage Cost': Trash2,
+    'Pending Vendor Bills': Truck,
+    'Top Selling Menu Item': ShoppingCart,
+    'Report Categories': Layers,
 }
 
-const ReportTableSection = ({ title, children, onExport }) => (
-    <div className='bg-white rounded-2xl shadow-md p-4'>
-        <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-            <h2 className='text-xl font-medium text-black'>{title}</h2>
-            {onExport && (
-                <button
-                    type='button'
-                    onClick={onExport}
-                    className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                >
-                    <Download size={16} />
-                    Export
-                </button>
-            )}
-        </div>
-        <div className="relative overflow-x-auto">{children}</div>
-    </div>
-)
+const REPORT_DEFINITIONS = {
+    'Sales Report': {
+        rows: SALES_REPORT,
+        rowKey: 'orderId',
+        dateKey: 'orderDate',
+        searchPlaceholder: 'Search order, customer or payment method…',
+        columns: [
+            { key: 'orderId', label: 'Order', required: true },
+            { key: 'customerName', label: 'Customer', required: true },
+            { key: 'customerType', label: 'Type' },
+            { key: 'orderDate', label: 'Date', required: true },
+            { key: 'amount', label: 'Amount', required: true },
+            { key: 'paymentMethod', label: 'Payment method' },
+            { key: 'status', label: 'Fulfilment', required: true, render: (row) => <StatusBadge status={row.status} /> },
+        ],
+    },
+    'Inventory Consumption Report': {
+        rows: INVENTORY_CONSUMPTION_REPORT,
+        rowKey: (row) => `${row.itemName}-${row.consumptionDate}`,
+        dateKey: 'consumptionDate',
+        searchPlaceholder: 'Search item, quantity or unit…',
+        columns: [
+            { key: 'itemName', label: 'Item', required: true },
+            { key: 'openingStock', label: 'Opening', required: true },
+            { key: 'consumedQuantity', label: 'Consumed', required: true },
+            { key: 'remainingStock', label: 'Remaining', required: true },
+            { key: 'unit', label: 'Unit' },
+            { key: 'consumptionDate', label: 'Date', required: true },
+        ],
+    },
+    'Wastage Report': {
+        rows: WASTAGE_REPORT,
+        rowKey: (row) => `${row.itemName}-${row.date}`,
+        dateKey: 'date',
+        searchPlaceholder: 'Search item, reason or recorder…',
+        columns: [
+            { key: 'itemName', label: 'Item', required: true },
+            { key: 'wastedQuantity', label: 'Wasted', required: true },
+            { key: 'unit', label: 'Unit' },
+            { key: 'reason', label: 'Reason', required: true },
+            { key: 'recordedBy', label: 'Recorded by' },
+            { key: 'date', label: 'Date', required: true },
+        ],
+    },
+    'Vendor Purchase Report': {
+        rows: VENDOR_PURCHASE_REPORT,
+        rowKey: 'purchaseId',
+        dateKey: 'purchaseDate',
+        searchPlaceholder: 'Search purchase, vendor or invoice…',
+        columns: [
+            { key: 'purchaseId', label: 'Purchase', required: true },
+            { key: 'vendor', label: 'Vendor', required: true },
+            { key: 'itemCount', label: 'Items' },
+            { key: 'purchaseAmount', label: 'Amount', required: true },
+            { key: 'invoiceNo', label: 'Invoice', required: true },
+            { key: 'purchaseDate', label: 'Date', required: true },
+        ],
+    },
+    'Order Summary Report': null,
+}
 
-const EmptyRow = ({ cols, message }) => (
-    <tr>
-        <td colSpan={cols} className="px-2 py-6 text-center text-[#667085]">{message}</td>
-    </tr>
-)
-
-const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
-const tdClass = 'px-2 py-4 text-[#667085]'
+const dateInputClass = 'min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm text-[var(--erp-ink)]'
 
 const Reports = () => {
-    const [fromDate, setFromDate] = useState(null)
-    const [toDate, setToDate] = useState(null)
-    const [exportModal, setExportModal] = useState(false)
-    const [activeCategory, setActiveCategory] = useState('All')
-    const [view, setView] = useState(() => getReportsView())
-
-    useEffect(() => {
-        let cancelled = false
-        hydrateReportsFromApi().finally(() => {
-            if (cancelled) return
-            const next = getReportsView()
-            setView(next)
-            persistReportSnapshot(next)
-        })
-        return () => {
-            cancelled = true
-        }
-    }, [])
-
-    const show = (category) => activeCategory === 'All' || activeCategory === category
-
-    const filteredSales = useMemo(() => {
-        const from = fromDate ? new Date(fromDate) : null
-        const to = toDate ? new Date(toDate) : null
-        if (from) from.setHours(0, 0, 0, 0)
-        if (to) to.setHours(23, 59, 59, 999)
-        return view.salesReport.filter((row) => {
-            const date = parseCanteenDate(row.orderDate)
-            if (!date) return !from && !to
-            if (from && date < from) return false
-            if (to && date > to) return false
-            return true
-        })
-    }, [view.salesReport, fromDate, toDate])
-
-    const clearFilters = () => {
-        setFromDate(null)
-        setToDate(null)
-        setActiveCategory('All')
+    const [activeCategory, setActiveCategory] = useState(REPORT_CATEGORIES[0])
+    const [query, setQuery] = useState('')
+    const [fromDate, setFromDate] = useState('')
+    const [toDate, setToDate] = useState('')
+    const report = REPORT_DEFINITIONS[activeCategory]
+    const visibleRows = useMemo(() => report ? filterCanteenReportRows(report.rows, {
+        query,
+        dateKey: report.dateKey,
+        fromDate,
+        toDate,
+    }) : [], [fromDate, query, report, toDate])
+    const resetFilters = () => {
+        setQuery('')
+        setFromDate('')
+        setToDate('')
+    }
+    const selectCategory = (category) => {
+        setActiveCategory(category)
+        resetFilters()
     }
 
     return (
-        <section className='space-y-6'>
-            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
-                {view.summaryCards.map((card) => {
-                    const Icon = CARD_ICONS[card.label] ?? ShoppingCart
+        <section className='space-y-5'>
+            <div className='rounded-2xl bg-white p-4 shadow-md sm:p-5'>
+                <h2 className='text-xl font-semibold text-[var(--erp-ink)]'>Canteen reports</h2>
+                <p className='mt-1 max-w-3xl text-sm text-[var(--erp-slate)]'>Review sales, stock consumption, wastage and vendor purchasing without presenting reference records as authoritative finance data.</p>
+                <IntegrationNotice
+                    state='demo'
+                    className='mt-4'
+                    title='Reference analytics only'
+                    description='All totals and report rows on this page are static frontend samples. Production reports must be generated from reconciled order, payment, inventory, wastage and procurement ledgers with period locks and export audit events.'
+                />
+            </div>
+
+            <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                {SUMMARY_CARDS.map((card) => {
+                    const Icon = CARD_ICONS[card.label] ?? Layers
                     return (
-                        <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
+                        <article key={card.label} className='rounded-2xl bg-white p-4 shadow-md'>
                             <div className='flex items-start justify-between gap-3'>
-                                <div>
-                                    <p className='text-sm text-[#808080]'>{card.label}</p>
-                                    <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
-                                    <p className='text-xs text-[#667085] mt-1'>{card.sub}</p>
-                                </div>
-                                <div className='p-2.5 rounded-xl bg-[#515DEF]/10 text-[#515DEF]'>
-                                    <Icon size={20} />
-                                </div>
+                                <div><p className='text-sm text-[var(--erp-muted)]'>{card.label}</p><p className='mt-1 text-xl font-semibold text-[var(--erp-ink)]'>{card.value}</p><p className='mt-1 text-xs text-[var(--erp-slate)]'>{card.sub} · sample</p></div>
+                                <span className='rounded-xl bg-[var(--erp-indigo-soft)] p-2.5 text-[var(--erp-indigo)]'><Icon aria-hidden='true' size={20} /></span>
                             </div>
-                        </div>
+                        </article>
                     )
                 })}
             </div>
 
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>Report Categories</h3>
-                <div className='flex flex-wrap gap-2'>
-                    <button
-                        type='button'
-                        onClick={() => setActiveCategory('All')}
-                        className={`text-sm px-4 py-2 rounded-md border transition-all cursor-pointer ${activeCategory === 'All' ? 'bg-[#515DEF] text-white border-[#515DEF]' : 'bg-white text-[#515DEF] border-[#515DEF] hover:bg-[#515DEF] hover:text-white'}`}
-                    >
-                        All Reports
-                    </button>
+            <div className='rounded-2xl bg-white p-4 shadow-md'>
+                <h3 className='text-sm font-semibold text-[var(--erp-ink)]'>Report dataset</h3>
+                <div className='mt-3 flex flex-wrap gap-2' role='tablist' aria-label='Canteen report datasets'>
                     {REPORT_CATEGORIES.map((category) => (
                         <button
                             key={category}
                             type='button'
-                            onClick={() => setActiveCategory(category)}
-                            className={`text-sm px-4 py-2 rounded-md border transition-all cursor-pointer ${activeCategory === category ? 'bg-[#515DEF] text-white border-[#515DEF]' : 'bg-white text-[#515DEF] border-[#515DEF] hover:bg-[#515DEF] hover:text-white'}`}
+                            role='tab'
+                            aria-selected={activeCategory === category}
+                            onClick={() => selectCategory(category)}
+                            className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${activeCategory === category ? 'border-[var(--erp-indigo)] bg-[var(--erp-indigo)] text-white' : 'border-[var(--erp-line-strong)] text-[var(--erp-slate)] hover:border-[var(--erp-indigo)] hover:text-[var(--erp-indigo)]'}`}
                         >
                             {category}
                         </button>
@@ -135,127 +151,43 @@ const Reports = () => {
                 </div>
             </div>
 
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button
-                        type='button'
-                        onClick={clearFilters}
-                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
-                    >
-                        Clear Filters
-                    </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs'>
-                        <option value="">From Beginning</option>
-                    </select>
+            {report ? (
+                <div className='overflow-hidden rounded-2xl bg-white shadow-md'>
+                    <DataToolbar
+                        query={query}
+                        onQueryChange={setQuery}
+                        searchLabel={`Search ${activeCategory.toLowerCase()}`}
+                        searchPlaceholder={report.searchPlaceholder}
+                        resultCount={visibleRows.length}
+                        onReset={query || fromDate || toDate ? resetFilters : undefined}
+                        filters={(
+                            <>
+                                <label className='grid gap-1 text-sm font-medium text-[var(--erp-ink)]'>From date<input type='date' value={fromDate} onChange={(event) => setFromDate(event.target.value)} className={dateInputClass} /></label>
+                                <label className='grid gap-1 text-sm font-medium text-[var(--erp-ink)]'>To date<input type='date' value={toDate} onChange={(event) => setToDate(event.target.value)} className={dateInputClass} /></label>
+                            </>
+                        )}
+                        actions={(
+                            <button type='button' disabled title='Export requires the reporting service.' className='inline-flex min-h-10 cursor-not-allowed items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-70'>
+                                <Download aria-hidden='true' size={16} /> Export unavailable
+                            </button>
+                        )}
+                    />
+                    <DataTable
+                        caption={activeCategory}
+                        rows={visibleRows}
+                        columns={report.columns}
+                        rowKey={report.rowKey}
+                        emptyTitle='No report rows match'
+                        emptyDescription='Reset the search and date range to review the complete sample dataset.'
+                    />
                 </div>
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4 lg:mt-6 mt-2'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
-                        <div className='relative w-full'>
-                            <DatePicker selected={fromDate} onChange={setFromDate} isClearable showMonthYearDropdown scrollableMonthYearDropdown placeholderText="Start date" className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>To</label>
-                        <div className='relative'>
-                            <DatePicker selected={toDate} onChange={setToDate} isClearable showMonthYearDropdown scrollableMonthYearDropdown placeholderText="End date" className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {show('Order Summary Report') && (
-                <ReportTableSection title="Order Totals by Status" onExport={() => setExportModal(true)}>
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
-                            <tr>
-                                <th className={`${thClass} rounded-s-lg`}>Status</th>
-                                <th className={thClass}>Count</th>
-                                <th className={`${thClass} rounded-e-lg`}>Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {view.orderStatusRows.some((row) => row.count) ? view.orderStatusRows.map((row) => (
-                                <tr key={row.status} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]">
-                                    <td className="px-2 py-4 rounded-s-lg">
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${orderStatusBadgeColor[row.status] || 'bg-[#66708533] text-[#667085]'}`}>
-                                            {row.status}
-                                        </span>
-                                    </td>
-                                    <td className={tdClass}>{row.count}</td>
-                                    <td className={`${tdClass} rounded-e-lg`}>{row.amount}</td>
-                                </tr>
-                            )) : <EmptyRow cols={3} message="No orders to summarize." />}
-                        </tbody>
-                    </table>
-                </ReportTableSection>
+            ) : (
+                <IntegrationNotice
+                    state='disconnected'
+                    title='Order summary dataset unavailable'
+                    description='The current frontend contains no independent order-summary dataset or aggregation contract. Define dimensions, measures, grouping periods, cancellation treatment and reconciliation rules before implementing this report.'
+                />
             )}
-
-            {show('Sales Report') && (
-                <ReportTableSection title="Sales Report" onExport={() => setExportModal(true)}>
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
-                            <tr>
-                                <th className={`${thClass} rounded-s-lg`}>Order ID</th>
-                                <th className={thClass}>Customer Name</th>
-                                <th className={thClass}>Customer Type</th>
-                                <th className={thClass}>Order Date</th>
-                                <th className={thClass}>Amount</th>
-                                <th className={thClass}>Payment Method</th>
-                                <th className={`${thClass} rounded-e-lg`}>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredSales.length ? filteredSales.map((row) => (
-                                <tr key={row.orderId} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]">
-                                    <td className="px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg">{row.orderId}</td>
-                                    <td className={tdClass}>{row.customerName}</td>
-                                    <td className={tdClass}>{row.customerType}</td>
-                                    <td className={tdClass}>{row.orderDate}</td>
-                                    <td className={tdClass}>{row.amount}</td>
-                                    <td className={tdClass}>{row.paymentMethod}</td>
-                                    <td className={`${tdClass} rounded-e-lg`}>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${orderStatusBadgeColor[row.status] || 'bg-[#66708533] text-[#667085]'}`}>
-                                            {row.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            )) : <EmptyRow cols={7} message="No orders in this range." />}
-                        </tbody>
-                    </table>
-                </ReportTableSection>
-            )}
-
-            {show('Request Summary') && (
-                <ReportTableSection title="Request Totals by Status" onExport={() => setExportModal(true)}>
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
-                            <tr>
-                                <th className={`${thClass} rounded-s-lg`}>Status</th>
-                                <th className={thClass}>Count</th>
-                                <th className={`${thClass} rounded-e-lg`}>Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {view.requestStatusRows.some((row) => row.count) ? view.requestStatusRows.map((row) => (
-                                <tr key={row.status} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]">
-                                    <td className="px-2 py-4 rounded-s-lg">
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${requestStatusBadgeColor[row.status] || 'bg-[#66708533] text-[#667085]'}`}>
-                                            {row.status}
-                                        </span>
-                                    </td>
-                                    <td className={tdClass}>{row.count}</td>
-                                    <td className={`${tdClass} rounded-e-lg`}>{row.amount}</td>
-                                </tr>
-                            )) : <EmptyRow cols={3} message="No requests to summarize." />}
-                        </tbody>
-                    </table>
-                </ReportTableSection>
-            )}
-
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

@@ -1,157 +1,42 @@
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } from 'lucide-react'
-import Dropdown from '../../../Common/CommonComponents/Dropdown'
-import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
-import { ASSET_CATEGORIES, getAssets, hydrateAssetsFromApi, statusBadgeColor } from './assetData'
+import { Plus } from 'lucide-react'
+import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../Common/ui'
+import { ASSET_CATEGORIES, getAssets, STATUS_OPTIONS } from './assetData'
+
+const selectClass = 'min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm text-[var(--erp-ink)]'
 
 const AssetManagement = () => {
-    const [assets, setAssets] = useState(() => getAssets())
-    useEffect(() => {
-        hydrateAssetsFromApi().finally(() => setAssets(getAssets()))
-    }, [])
-
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
-    const [exportModal, setExportModal] = useState(false)
-    const [editRequestModal, setEditRequestModal] = useState(false)
-    const categoryCounts = ASSET_CATEGORIES.map((category) => ({
-        category,
-        count: assets.filter((asset) => asset.category === category).length,
-    })).filter((item) => item.count > 0 || item.category === 'Others')
-
+    const assets = useMemo(() => getAssets(), [])
+    const [query, setQuery] = useState('')
+    const [category, setCategory] = useState('')
+    const [status, setStatus] = useState('')
+    const filtered = useMemo(() => assets.filter((asset) => {
+        const search = query.trim().toLowerCase()
+        const matchesSearch = !search || [asset.assetId, asset.assetName, asset.serialNumber, asset.department, asset.custodian].join(' ').toLowerCase().includes(search)
+        return matchesSearch && (!category || asset.category === category) && (!status || asset.status === status)
+    }), [assets, category, query, status])
+    const categoryCounts = ASSET_CATEGORIES.map((item) => ({ category: item, count: assets.filter((asset) => asset.category === item).length })).filter((item) => item.count > 0)
+    const columns = [
+        { key: 'assetId', label: 'Asset ID', required: true },
+        { key: 'assetName', label: 'Asset', required: true },
+        { key: 'category', label: 'Category' },
+        { key: 'department', label: 'Location / department', required: true, render: (asset) => asset.department || 'Location not recorded' },
+        { key: 'custodian', label: 'Owner / custodian', render: (asset) => asset.custodian || 'Unassigned' },
+        { key: 'quantity', label: 'Quantity', render: (asset) => asset.quantity || 1 },
+        { key: 'serialNumber', label: 'Serial number' },
+        { key: 'warrantyExpiry', label: 'Warranty expiry' },
+        { key: 'status', label: 'Status', render: (asset) => <StatusBadge status={asset.status} /> },
+    ]
+    const reset = () => { setQuery(''); setCategory(''); setStatus('') }
     return (
-        <section>
-            <div className='grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6'>
-                {categoryCounts.map((item) => (
-                    <div key={item.category} className='bg-white rounded-2xl shadow-md p-4'>
-                        <p className='text-xs text-[#667085]'>{item.category}</p>
-                        <p className='text-2xl font-semibold text-[#1E1E1E]'>{item.count}</p>
-                    </div>
-                ))}
+        <section className='space-y-5'>
+            <IntegrationNotice state='demo' title='Browser-stored asset register' description='Asset locations, custodians and lifecycle states are local demonstration records. Production updates require the asset API, authorization and immutable transfer history.' />
+            <div className='grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6'>{categoryCounts.map((item) => <div key={item.category} className='rounded-2xl bg-white p-4 shadow-md'><p className='text-xs text-[#667085]'>{item.category}</p><p className='text-2xl font-semibold text-[#1E1E1E]'>{item.count}</p></div>)}</div>
+            <div className='overflow-hidden rounded-2xl bg-white shadow-md'>
+                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search IT assets' searchPlaceholder='Asset, serial, location or owner…' resultCount={filtered.length} onReset={reset} filters={<><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Category<select className={selectClass} value={category} onChange={(event) => setCategory(event.target.value)}><option value=''>All categories</option>{ASSET_CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select></label><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status<select className={selectClass} value={status} onChange={(event) => setStatus(event.target.value)}><option value=''>All statuses</option>{STATUS_OPTIONS.map((item) => <option key={item}>{item}</option>)}</select></label></>} actions={<><NavLink to='/it-support-manager/asset-management/add-asset' className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'><Plus size={16} /> Add asset</NavLink><button type='button' disabled title='Export requires the connected asset service.' className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Export unavailable</button></>} />
+                <DataTable caption='IT asset register' rows={filtered} columns={columns} rowKey='assetId' emptyTitle='No assets match these filters' emptyDescription='Reset the filters or add an asset if you have permission.' renderActions={(asset) => <NavLink to={`/it-support-manager/asset-management/view-asset/${asset.assetId}`} className='inline-flex min-h-9 items-center rounded-md border border-[var(--erp-indigo)] px-3 text-xs font-semibold text-[var(--erp-indigo)]'>View record</NavLink>} />
             </div>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs'>
-                        <option value="">From Beginning</option>
-                    </select>
-                </div>
-                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type="text" placeholder="Asset ID, name, serial..." className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Category</label>
-                        <select className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value="">All</option>
-                            {ASSET_CATEGORIES.map((category) => (
-                                <option key={category} value={category}>{category}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Status</label>
-                        <select className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value="">All</option>
-                            <option value="active">Active</option>
-                            <option value="damaged">Damaged</option>
-                            <option value="repair">Under Repair</option>
-                            <option value="retired">Retired</option>
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
-                        <div className='relative w-full'>
-                            <DatePicker selected={fromDate} onChange={setFromDate} isClearable showMonthYearDropdown scrollableMonthYearDropdown className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Asset Management</h2>
-                    <div className='flex gap-x-2'>
-                        <NavLink to="/it-support-manager/asset-management/add-asset" className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                            <Plus size={16} />
-                            Add Asset
-                        </NavLink>
-                        <button onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                            <Download size={16} />
-                            Export
-                        </button>
-                    </div>
-                </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value="10">10</option>
-                        <option value="20">20</option>
-                        <option value="30">30</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
-                <div className="relative overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
-                            <tr>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg">Asset ID</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Asset Name</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Category</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Brand</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Model</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Serial Number</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Purchase Date</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Warranty Expiry</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Status</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {assets.map((asset) => (
-                                <tr key={asset.assetId} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]">
-                                    <td className="px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg">{asset.assetId}</td>
-                                    <td className="px-2 py-4 max-w-[160px] truncate" title={asset.assetName}>{asset.assetName}</td>
-                                    <td className="px-2 py-4">{asset.category}</td>
-                                    <td className="px-2 py-4">{asset.brand}</td>
-                                    <td className="px-2 py-4">{asset.model}</td>
-                                    <td className="px-2 py-4 whitespace-nowrap">{asset.serialNumber}</td>
-                                    <td className="px-2 py-4 whitespace-nowrap">{asset.purchaseDate}</td>
-                                    <td className="px-2 py-4 whitespace-nowrap">{asset.warrantyExpiry}</td>
-                                    <td className="px-2 py-4">
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[asset.status]}`}>
-                                            {asset.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-2 py-4 text-center rounded-e-lg">
-                                        <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                            <NavLink to={`/it-support-manager/asset-management/view-asset/${asset.assetId}`} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer block">View</NavLink>
-                                            <button type='button' onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">Edit</button>
-                                        </Dropdown>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {assets.length} of {assets.length} entries</p>
-                <div className="flex justify-center gap-x-2">
-                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer"><ChevronLeft size={16} /></button>
-                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] border border-[#E2E8F0] rounded-full cursor-pointer">1</button>
-                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer"><ChevronRight size={16} /></button>
-                </div>
-            </div>
-
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
         </section>
     )
 }

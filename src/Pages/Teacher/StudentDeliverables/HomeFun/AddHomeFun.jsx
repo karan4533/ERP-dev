@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import HomeFunForm from './Components/HomeFunForm'
 import { addHomeFunItem } from './homeFunData'
 
-const AddHomeFun = ({ routeBase = '/teacher/student-deliverables/home-fun' }) => {
+const AddHomeFun = () => {
     const navigate = useNavigate()
 
     const handleSave = (values) => {
         addHomeFunItem(values)
-        navigate(routeBase)
+        navigate('/teacher/student-deliverables/home-fun')
     }
 
     return (
@@ -21,7 +21,7 @@ const AddHomeFun = ({ routeBase = '/teacher/student-deliverables/home-fun' }) =>
             <div className='flex sm:justify-end justify-center gap-x-4 mt-6'>
                 <button
                     type='button'
-                    onClick={() => navigate(routeBase)}
+                    onClick={() => navigate('/teacher/student-deliverables/home-fun')}
                     className='bg-white text-[#515DEF] text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:bg-[#515DEF] hover:text-white hover:border-[#515DEF] transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
                     Discard Changes

@@ -383,6 +383,7 @@ def test_creatable_roles_for_admin(client):
         "teacher",
         "coordinator",
         "librarian",
+        "hostelwarden",
         "gatekeepermanager",
         "gatekeeper",
         "transportmanager",

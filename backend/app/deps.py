@@ -72,5 +72,7 @@ def require_any(*codes: str):
 
 
 def role_code_for(db: Session, user: User) -> str:
+    from app.permissions.matrix import normalize_role_code
+
     role = db.get(Role, user.role_id)
-    return role.code if role else ""
+    return normalize_role_code(role.code if role else "")

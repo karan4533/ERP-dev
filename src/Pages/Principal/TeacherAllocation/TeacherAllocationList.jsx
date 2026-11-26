@@ -6,20 +6,16 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import RemoveAllocationModal from './Components/RemoveAllocationModal'
 import {
+    DEPARTMENTS,
+    GRADES,
+    ROUTE_BASE,
+    SUBJECTS,
     ALLOCATION_STATUSES,
     allocationStatusColor,
     emptyTeacherAllocationFilters,
     filterTeacherAllocationRows,
-    getDepartments,
-    getGrades,
-    getSubjects,
     getTeacherAllocationRows,
-    hydrateTeacherAllocationsFromApi,
-    hydrateTeachersFromDirectory,
-    isUsingDemoTeacherRoster,
     removeTeacherAllocation,
-    ROUTE_BASE,
-    TEACHER_ALLOCATIONS_UPDATED_EVENT,
 } from './teacherAllocationData'
 
 const filterInputClass =
@@ -27,32 +23,20 @@ const filterInputClass =
 
 const TeacherAllocationList = () => {
     const location = useLocation()
+    const routeBase = location.pathname.startsWith('/admin') ? '/admin/academic/teacher-allocation' : ROUTE_BASE
     const [rows, setRows] = useState(() => getTeacherAllocationRows())
     const [filters, setFilters] = useState(emptyTeacherAllocationFilters)
     const [exportModal, setExportModal] = useState(false)
     const [entriesPerPage, setEntriesPerPage] = useState(10)
     const [removeTarget, setRemoveTarget] = useState(null)
-    const [usingDemoRoster, setUsingDemoRoster] = useState(() => isUsingDemoTeacherRoster())
 
     const filteredRows = useMemo(() => filterTeacherAllocationRows(rows, filters), [rows, filters])
-    const departments = getDepartments()
-    const grades = getGrades()
-    const subjects = getSubjects()
-
-    const refreshRows = () => {
-        setRows(getTeacherAllocationRows())
-        setUsingDemoRoster(isUsingDemoTeacherRoster())
-    }
 
     useEffect(() => {
-        ;(async () => {
-            await hydrateTeacherAllocationsFromApi()
-            await hydrateTeachersFromDirectory({ force: true })
-            refreshRows()
-        })()
-        window.addEventListener(TEACHER_ALLOCATIONS_UPDATED_EVENT, refreshRows)
-        return () => window.removeEventListener(TEACHER_ALLOCATIONS_UPDATED_EVENT, refreshRows)
+        setRows(getTeacherAllocationRows())
     }, [location.key])
+
+    const refreshRows = () => setRows(getTeacherAllocationRows())
 
     const updateFilter = (key, value) => {
         setFilters((current) => ({ ...current, [key]: value }))
@@ -78,14 +62,7 @@ const TeacherAllocationList = () => {
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <p className='text-sm text-[#667085] mb-4'>
                     Allocate newly joined and existing teachers to classes, subjects, and class teacher roles.
-                    Teachers come from HR Employee Database after offer accept / staff create.
                 </p>
-                {usingDemoRoster ? (
-                    <p className='text-sm text-[#B54708] bg-[#FFFAEB] border border-[#FEDF89] rounded-lg px-3 py-2 mb-4'>
-                        Showing demo teachers (TEA-1001…). Sign in with API enabled and ensure HR has Active
-                        teachers — then refresh this page to allocate real employees.
-                    </p>
-                ) : null}
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button
                         type='button'
@@ -119,7 +96,7 @@ const TeacherAllocationList = () => {
                             className={filterInputClass}
                         >
                             <option value=''>All</option>
-                            {departments.map((item) => (
+                            {DEPARTMENTS.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -133,7 +110,7 @@ const TeacherAllocationList = () => {
                             className={filterInputClass}
                         >
                             <option value=''>All</option>
-                            {grades.map((item) => (
+                            {GRADES.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -147,7 +124,7 @@ const TeacherAllocationList = () => {
                             className={filterInputClass}
                         >
                             <option value=''>All</option>
-                            {subjects.map((item) => (
+                            {SUBJECTS.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -230,7 +207,7 @@ const TeacherAllocationList = () => {
                                     <td className='px-2 py-4 text-center rounded-e-lg'>
                                         <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
                                             <NavLink
-                                                to={`${ROUTE_BASE}/allocate/${row.employeeId}`}
+                                                to={`${routeBase}/allocate/${row.employeeId}`}
                                                 className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Allocate
@@ -238,13 +215,13 @@ const TeacherAllocationList = () => {
                                             {row.status !== 'Not Allocated' && (
                                                 <>
                                                     <NavLink
-                                                        to={`${ROUTE_BASE}/view/${row.employeeId}`}
+                                                        to={`${routeBase}/view/${row.employeeId}`}
                                                         className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                     >
                                                         View
                                                     </NavLink>
                                                     <NavLink
-                                                        to={`${ROUTE_BASE}/edit/${row.employeeId}`}
+                                                        to={`${routeBase}/edit/${row.employeeId}`}
                                                         className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                     >
                                                         Edit
@@ -284,13 +261,7 @@ const TeacherAllocationList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='teacher-allocation'
-                rows={Array.isArray(filteredRows) ? filteredRows : []}
-                exportDescription={exportDescription}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} exportDescription={exportDescription} />
             <RemoveAllocationModal
                 open={Boolean(removeTarget)}
                 teacherName={removeTarget?.name}

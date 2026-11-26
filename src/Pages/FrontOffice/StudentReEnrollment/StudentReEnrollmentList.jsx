@@ -5,20 +5,21 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { useAuth } from '../../../Context/AuthContext'
+import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import {
     ADD_ROUTE,
     ROUTE_BASE,
     STATUS_OPTIONS,
     getReEnrollments,
-    hydrateReEnrollmentsFromApi,
     statusBadgeColor,
 } from './studentReEnrollmentData'
-import { frontOfficeApiOn } from '../frontOfficeStore'
 
 const StudentReEnrollmentList = () => {
+    const { role } = useAuth()
+    const canDelete = canRoleDelete(role)
     const location = useLocation()
-    const [records, setRecords] = useState(() => (frontOfficeApiOn() ? [] : getReEnrollments()))
-    const [loadError, setLoadError] = useState('')
+    const [records, setRecords] = useState(() => getReEnrollments())
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [exportModal, setExportModal] = useState(false)
@@ -26,28 +27,7 @@ const StudentReEnrollmentList = () => {
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
 
     useEffect(() => {
-        if (!frontOfficeApiOn()) {
-            setRecords(getReEnrollments())
-            setLoadError('')
-            return undefined
-        }
-        let active = true
-        hydrateReEnrollmentsFromApi()
-            .then(() => {
-                if (active) {
-                    setRecords(getReEnrollments())
-                    setLoadError('')
-                }
-            })
-            .catch((error) => {
-                if (active) {
-                    setRecords([])
-                    setLoadError(error?.message || 'Could not load re-enrollment records.')
-                }
-            })
-        return () => {
-            active = false
-        }
+        setRecords(getReEnrollments())
     }, [location.key])
 
     const filteredRecords = useMemo(() => {
@@ -62,7 +42,6 @@ const StudentReEnrollmentList = () => {
 
     return (
         <section>
-            {loadError ? <p className='text-sm text-[#B42318] mb-3'>{loadError}</p> : null}
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
                     <div className='flex flex-col gap-y-2'>
@@ -172,7 +151,9 @@ const StudentReEnrollmentList = () => {
                                             <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
                                                 <NavLink to={`${ROUTE_BASE}/view/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
                                                 <NavLink to={`${ROUTE_BASE}/edit/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Edit</NavLink>
-                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Delete</button>
+                                                {canDelete && (
+                                                    <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Delete</button>
+                                                )}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -192,22 +173,9 @@ const StudentReEnrollmentList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='student-re-enrollments'
-                rows={filteredRecords.map((r) => ({
-                    id: r.id || r.publicId,
-                    studentName: r.studentName,
-                    admissionNumber: r.admissionNumber || r.studentId,
-                    classSection: r.classSection,
-                    status: r.status,
-                    date: r.date || r.requestedOn,
-                }))}
-                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'}.</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
         </section>
     )
 }

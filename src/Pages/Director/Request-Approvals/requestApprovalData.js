@@ -1,3 +1,6 @@
+const STORAGE_KEY = 'schoolerp-director-purchase-requests'
+let _memoryPurchaseRequests = null
+
 export const BUDGET_THRESHOLD = 100000
 export const MD_APPROVAL_THRESHOLD = 20000
 
@@ -100,3 +103,61 @@ export const requiresMdApproval = (requestedAmount) => requestedAmount > MD_APPR
 
 export const getApprovalStatusLabel = (requestedAmount) =>
     requiresMdApproval(requestedAmount) ? 'MD Approval Status' : 'Status'
+
+
+export const getPurchaseRequests = () => {
+    if (_memoryPurchaseRequests && Array.isArray(_memoryPurchaseRequests) && _memoryPurchaseRequests.length > 0) {
+        return _memoryPurchaseRequests
+    }
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem(STORAGE_KEY)
+            if (stored) {
+                _memoryPurchaseRequests = JSON.parse(stored)
+                return _memoryPurchaseRequests
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(PURCHASE_REQUESTS))
+        }
+    } catch {
+        /* ignore */
+    }
+    _memoryPurchaseRequests = PURCHASE_REQUESTS.map((r) => ({ ...r, approvalHistory: r.approvalHistory || [] }))
+    return _memoryPurchaseRequests
+}
+
+export const savePurchaseRequests = (records) => {
+    _memoryPurchaseRequests = records
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+        }
+    } catch {
+        /* ignore */
+    }
+}
+
+export const updatePurchaseRequestDecision = (requestId, decision, actor = 'Director', remarks = '') => {
+    const list = getPurchaseRequests()
+    const index = list.findIndex((r) => r.requestId === requestId)
+    if (index === -1) return null
+
+    const status = decision === 'Approved' ? 'Approved' : 'Rejected'
+    const decidedAt = new Date().toISOString()
+    const historyEntry = {
+        id: `APR-${Date.now()}`,
+        status,
+        actor,
+        actorRole: 'director',
+        remarks: remarks || (decision === 'Approved' ? 'Sanctioned by Director / MD' : 'Declined by Director / MD'),
+        decidedAt
+    }
+
+    list[index] = {
+        ...list[index],
+        status,
+        approvalHistory: [...(list[index].approvalHistory || []), historyEntry],
+        decidedAt
+    }
+    savePurchaseRequests(list)
+    return list[index]
+}

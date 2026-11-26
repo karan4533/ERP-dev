@@ -1,4 +1,3 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 import { AUDIT_TEMPLATES } from '../AuditTemplates/auditTemplatesData'
 
 export const VERSION_STATUS_OPTIONS = ['Published', 'Draft', 'Archived', 'Superseded', 'Restored']
@@ -16,7 +15,7 @@ export const TEMPLATE_FILTER_OPTIONS = AUDIT_TEMPLATES.map((template) => ({
     name: template.templateName,
 }))
 
-const DEFAULT_TEMPLATE_VERSIONS = [
+export const TEMPLATE_VERSIONS = [
     {
         id: 'TV-001',
         version: 'v2.1',
@@ -140,15 +139,3 @@ export const getVersionsForTemplate = (templateId, versions = TEMPLATE_VERSIONS)
 export const getCurrentVersion = (templateId, versions = TEMPLATE_VERSIONS) => (
     versions.find((item) => item.templateId === templateId && item.isCurrent)
 )
-export const TEMPLATE_VERSIONS_STORAGE_KEY = 'schoolerp-jd-audit-template-versions-v1'
-export function getAuditTemplateVersions() {
-    return ensureCampusSeed('schoolerp-jd-audit-template-versions-v1', DEFAULT_TEMPLATE_VERSIONS)
-}
-export function saveAuditTemplateVersions(rows) {
-    return saveCampusJson('schoolerp-jd-audit-template-versions-v1', rows)
-}
-export function hydrateAuditTemplateVersionsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-jd-audit-template-versions-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-jd-audit-template-versions-v1', DEFAULT_TEMPLATE_VERSIONS)
-}
-export const TEMPLATE_VERSIONS = DEFAULT_TEMPLATE_VERSIONS

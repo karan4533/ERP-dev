@@ -1,176 +1,29 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import WeeklyTimetable from '../Components/WeeklyTimetable'
-import { useActiveStudent } from '../../../context/ActiveStudentContext'
-import PlacementAwaitingNotice, { isStudentPlaced } from './Components/PlacementAwaitingNotice'
-import {
-    buildClassGridFromTimelines,
-    getClassTimetables,
-    hydrateClassTimetablesFromApi,
-} from '../../Principal/ClassTimetable/classTimetableData'
-import { canUseAcademicsApi } from '../../../services/academicsApi'
+import React, { useState } from 'react'
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { format } from 'date-fns';
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import WeeklyTimetable from "../Components/WeeklyTimetable";
 
-const classKey = (value) => String(value || '').trim().toLowerCase()
+const DAILY_TIMETABLE_ROWS = [
+    { period: '1', time: '09:00 AM - 09:45 AM', subject: 'Mathematics', teacher: 'Sandy Selva' },
+    { period: '2', time: '09:45 AM - 10:30 AM', subject: 'English', teacher: 'Kamal' },
+    { period: '3', time: '10:30 AM - 11:15 AM', subject: 'Science', teacher: 'Vichu' },
+]
 
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-const pickTimetableForStudent = (timetables, student) => {
-    if (!student || !timetables?.length) return null
-    const wantClass = classKey(student.className)
-    const wantSection = classKey(student.section)
-    const approved = timetables.filter((row) => {
-        const status = String(row.approvalStatus || row.status || '').toLowerCase()
-        return !status || status === 'approved' || status === 'active'
-    })
-    const pool = approved.length ? approved : timetables
-
-    const scored = pool.map((row) => {
-        const rowClass = classKey(row.className)
-        const timelines = row.timelines || []
-        const timelineMatch = timelines.some((t) => classKey(t.className) === wantClass)
-        const classMatch = rowClass === wantClass || timelineMatch
-        const sectionMatch = !wantSection
-            || wantSection === '—'
-            || classKey(row.section) === wantSection
-            || timelines.some((t) => classKey(t.className) === wantClass && classKey(t.section) === wantSection)
-        return { row, score: (classMatch ? 2 : 0) + (sectionMatch ? 1 : 0) }
-    })
-    scored.sort((a, b) => b.score - a.score)
-    return scored[0]?.score > 0 ? scored[0].row : null
-}
-
-const deriveDailyRows = (grid) => {
-    if (!grid?.timeSlots?.length || !grid?.schedule) return []
-    const todayName = DAY_NAMES[new Date().getDay()]
-    const dayKey = (grid.days || []).find((d) => classKey(d) === classKey(todayName))
-        || (grid.days || [])[0]
-    if (!dayKey) return []
-    return grid.timeSlots.map((slot, index) => {
-        const cell = grid.schedule?.[slot]?.[dayKey] || {}
-        return {
-            period: String(index + 1),
-            time: slot,
-            subject: cell.subject || '—',
-            teacher: cell.teacher || '—',
-        }
-    }).filter((row) => row.subject && row.subject !== '—')
-}
-
-/**
- * Student/Parent timetable from campus class-timetables (no demo schedule).
- * `weeklyOnly` keeps a simpler Parent layout; Student still gets Daily + Weekly tabs from the same data.
- */
 const TimeTableDetails = ({ weeklyOnly = false }) => {
-    const { activeStudent, isParentPortal } = useActiveStudent()
-    const [activeTab, setActiveTab] = useState(weeklyOnly ? 2 : 2)
-    const [loading, setLoading] = useState(true)
-    const [timetables, setTimetables] = useState([])
-    const [loadError, setLoadError] = useState(null)
 
-    useEffect(() => {
-        let cancelled = false
-        setLoading(true)
-        setLoadError(null)
-        const load = async () => {
-            if (canUseAcademicsApi()) {
-                const ok = await hydrateClassTimetablesFromApi()
-                if (!ok && !cancelled) {
-                    setLoadError('Could not load class timetables from the campus API.')
-                }
-            }
-            if (!cancelled) {
-                setTimetables(getClassTimetables())
-                setLoading(false)
-            }
-        }
-        load()
-        return () => { cancelled = true }
-    }, [activeStudent?.id])
+    const [fromDate, setFromDate] = useState(new Date());
+    const [toDate, setToDate] = useState(new Date());
 
-    const matched = useMemo(
-        () => pickTimetableForStudent(timetables, activeStudent),
-        [timetables, activeStudent],
-    )
-
-    const grid = useMemo(() => {
-        if (!matched?.timelines?.length) return null
-        const built = buildClassGridFromTimelines(
-            matched.timelines.filter((row) => {
-                if (!activeStudent?.className) return true
-                return classKey(row.className) === classKey(activeStudent.className)
-            }),
-        )
-        const schedule = {}
-        Object.entries(built.schedule || {}).forEach(([slot, days]) => {
-            schedule[slot] = {}
-            Object.entries(days || {}).forEach(([day, cell]) => {
-                const subject = String(cell?.subject || '').replace(/\s*\([^)]*\)\s*$/, '').trim()
-                schedule[slot][day] = { subject: subject || cell?.subject, teacher: cell?.teacher || '—' }
-            })
-        })
-        return { ...built, schedule }
-    }, [matched, activeStudent?.className])
-
-    const dailyRows = useMemo(() => deriveDailyRows(grid), [grid])
-    const placed = isStudentPlaced(activeStudent)
-
-    const header = (
-        <div>
-            <h2 className='text-xl font-medium text-black'>
-                {weeklyOnly ? 'Timetable' : 'Time Table List'}
-            </h2>
-            <p className='text-sm text-[#667085] mt-1'>
-                {activeStudent?.name
-                    ? `${activeStudent.name} · ${activeStudent.className || 'Class'}${activeStudent.section ? `-${activeStudent.section}` : ''}`
-                    : 'Select a child to view the class timetable'}
-                {isParentPortal ? ' · campus class timetable' : ''}
-            </p>
-            {placed && activeStudent?.classTeacherEmail ? (
-                <p className='text-sm text-[#515DEF] mt-1'>
-                    Class teacher: {activeStudent.classTeacherEmail}
-                </p>
-            ) : null}
-        </div>
-    )
-
-    const emptyOrLoading = (
-        <>
-            {!placed && (
-                <PlacementAwaitingNotice
-                    studentName={activeStudent?.name}
-                    featureLabel='the class timetable'
-                />
-            )}
-            {placed && loading && (
-                <p className='text-sm text-[#667085] py-8 text-center'>Loading timetable…</p>
-            )}
-            {placed && !loading && loadError && (
-                <p className='text-sm text-[#B54708] py-4'>{loadError}</p>
-            )}
-            {placed && !loading && !loadError && !matched && (
-                <div className='py-10 text-center text-sm text-[#667085] space-y-2'>
-                    <p>No approved class timetable found for this student’s class yet.</p>
-                    <p className='text-xs'>
-                        Principal / Coordinator publish class timetables under Academics.
-                        Until then, this page stays empty (no demo schedule).
-                    </p>
-                </div>
-            )}
-        </>
-    )
+    const [activeTab, setActiveTab] = useState(weeklyOnly ? 2 : 1);
 
     if (weeklyOnly) {
         return (
             <section>
-                <div className='bg-white rounded-2xl shadow-md p-4 space-y-4'>
-                    {header}
-                    {emptyOrLoading}
-                    {placed && !loading && matched && grid && (
-                        <WeeklyTimetable
-                            days={grid.days}
-                            timeSlots={grid.timeSlots}
-                            schedule={grid.schedule}
-                        />
-                    )}
+                <div className='bg-white rounded-2xl shadow-md p-4'>
+                    <h2 className='text-xl font-medium text-black mb-4'>Timetable</h2>
+                    <WeeklyTimetable />
                 </div>
             </section>
         )
@@ -178,74 +31,161 @@ const TimeTableDetails = ({ weeklyOnly = false }) => {
 
     return (
         <section>
-            <div className='bg-white rounded-2xl shadow-md p-4 space-y-4'>
-                {header}
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
+                    <button className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
+                    <select name="" id="" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
+                        <option value="">From Beginning</option>
+                    </select>
+                </div>
+                <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor="search" className='text-base font-medium text-[#808080]'>Search</label>
+                        <input type="text" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor="class" className='text-base font-medium text-[#808080]'>Status</label>
+                        <select name="" id="" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>From</label>
 
-                {emptyOrLoading}
-
-                {placed && !loading && matched && grid && (
-                    <>
-                        <div className='flex gap-6 overflow-x-auto no-scrollbar border-b border-[#F2F4F7]'>
-                            {[
-                                { id: 1, label: 'Daily Timetable' },
-                                { id: 2, label: 'Weekly Timetable' },
-                            ].map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    type='button'
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`whitespace-nowrap px-1 pb-3 text-sm md:text-base font-medium cursor-pointer transition-all duration-200 ${
-                                        activeTab === tab.id
-                                            ? 'text-[#515DEF] border-b-2 border-[#515DEF] font-semibold'
-                                            : 'text-[#808080]'
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        {activeTab === 1 && (
-                            <div className='overflow-x-auto'>
-                                {dailyRows.length === 0 ? (
-                                    <p className='text-sm text-[#667085] py-8 text-center'>
-                                        No periods scheduled for today in the published timetable.
-                                    </p>
-                                ) : (
-                                    <table className='w-full text-sm text-left'>
-                                        <thead className='text-xs bg-[#EDEEF5]'>
-                                            <tr>
-                                                <th className='px-3 py-3 rounded-s-lg'>Period</th>
-                                                <th className='px-3 py-3'>Time</th>
-                                                <th className='px-3 py-3'>Subject</th>
-                                                <th className='px-3 py-3 rounded-e-lg'>Teacher</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {dailyRows.map((row) => (
-                                                <tr key={`${row.period}-${row.time}`} className='border-b border-[#F2F4F7]'>
-                                                    <td className='px-3 py-3'>{row.period}</td>
-                                                    <td className='px-3 py-3'>{row.time}</td>
-                                                    <td className='px-3 py-3'>{row.subject}</td>
-                                                    <td className='px-3 py-3'>{row.teacher}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
-                        )}
-
-                        {activeTab === 2 && (
-                            <WeeklyTimetable
-                                days={grid.days}
-                                timeSlots={grid.timeSlots}
-                                schedule={grid.schedule}
+                        <div className='relative w-full'>
+                            <DatePicker
+                                selected={fromDate}
+                                onChange={(date) => setFromDate(date)}
+                                isClearable={true}
+                                showMonthYearDropdown={true}
+                                scrollableMonthYearDropdown={true}
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
                             />
-                        )}
+
+                            <Calendar
+                                size={16}
+                                className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none'
+                            />
+                        </div>
+                    </div>
+
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>To</label>
+
+                        <div className='relative'>
+                            <DatePicker
+                                selected={toDate}
+                                onChange={(date) => setToDate(date)}
+                                isClearable={true}
+                                showMonthYearDropdown={true}
+                                scrollableMonthYearDropdown={true}
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+
+                            <Calendar
+                                size={16}
+                                className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none'
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
+                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
+                    <h2 className='text-xl font-medium text-black'>Time Table List</h2>
+                </div>
+                <div className='flex gap-x-2 items-center my-2'>
+                    <select name="" id="" className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="30">30</option>
+                        <option value="40">40</option>
+                        <option value="50">50</option>
+                    </select>
+                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
+                </div>
+
+                <div className="flex gap-4 overflow-x-auto no-scrollbar my-6">
+                    {[
+                        { id: 1, label: "Daily Time Table" },
+                        { id: 2, label: "Weekly Time Table" },
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`whitespace-nowrap px-2 pb-1 text-sm md:text-lg font-medium cursor-pointer transition-all duration-200 ${activeTab === tab.id
+                                ? "text-[#515DEF] border-b-2 border-[#515DEF] font-semibold"
+                                : "text-[#808080] border-b-2 border-transparent"
+                                }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {activeTab === 1 && (
+                    <>
+                        <div className="relative overflow-x-auto">
+                            <table className="w-full text-sm text-left rtl:text-right">
+                                <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                                    <tr className='rounded-lg'>
+                                        <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg">Period</th>
+                                        <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Time</th>
+                                        <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Subject</th>
+                                        <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Date</th>
+                                        <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg">Teacher</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {DAILY_TIMETABLE_ROWS.map((row) => (
+                                        <tr key={row.period} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
+                                            <td className="px-2 py-4 rounded-s-lg">{row.period}</td>
+                                            <td className="px-2 py-4">{row.time}</td>
+                                            <td className="px-2 py-4">{row.subject}</td>
+                                            <td className="px-2 py-4">{format(fromDate, 'dd-MM-yyyy')}</td>
+                                            <td className="px-2 py-4 rounded-e-lg">{row.teacher}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </>
                 )}
+
+                {activeTab === 2 && (
+                    <>
+                        <WeeklyTimetable />
+                    </>
+                )}
+
             </div>
+
+            {/* Pagination */}
+            <div className='flex justify-between items-center px-4 mt-4'>
+                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to 10 of 20 entries</p>
+
+                <div className="flex justify-center gap-x-2 flex-wrap">
+                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
+                        <ChevronLeft size={16} />
+                    </button>
+
+                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
+                        1
+                    </button>
+
+                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
+                        2
+                    </button>
+
+                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            </div>
+
         </section>
     )
 }

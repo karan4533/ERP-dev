@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -14,8 +14,7 @@ import QuestionFormModal from './QuestionFormModal'
 import {
     DEPARTMENT_OPTIONS,
     MANDATORY_FILTER_OPTIONS,
-    getAuditQuestions,
-    hydrateAuditQuestionsFromApi,
+    QUESTION_BANK,
     QUESTION_STATUS_OPTIONS,
     SECTION_OPTIONS,
     createQuestionId,
@@ -30,10 +29,7 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const QuestionBankList = () => {
-    const [questions, setQuestions] = useState(() => getAuditQuestions())
-    useEffect(() => {
-        hydrateAuditQuestionsFromApi().finally(() => setQuestions(getAuditQuestions()))
-    }, [])
+    const [questions, setQuestions] = useState(QUESTION_BANK)
     const [search, setSearch] = useState('')
     const [department, setDepartment] = useState('')
     const [sectionId, setSectionId] = useState('')

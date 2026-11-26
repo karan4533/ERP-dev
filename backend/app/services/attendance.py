@@ -93,9 +93,10 @@ def roster_with_marks(
 
     repair_student_class_labels(db, actor.campus_id)
 
+    # Include pending + placed: newly enrolled students have a class before formal placement.
     stmt = select(Student).where(
         Student.campus_id == actor.campus_id,
-        Student.placement_status == "placed",
+        Student.placement_status.in_(("placed", "pending")),
     )
     students = [
         row

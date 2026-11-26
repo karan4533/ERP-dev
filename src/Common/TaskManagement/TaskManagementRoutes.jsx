@@ -1,17 +1,19 @@
 import React from 'react'
-import { Navigate, Route } from 'react-router-dom'
-import AssignTasksPage from './AssignTasksPage'
-import MyTasksPage from './MyTasksPage'
-import AddAssignTaskPage from './AddAssignTaskPage'
-import TaskManagementRedirect from './TaskManagementRedirect'
+import { Route } from 'react-router-dom'
+import EnterpriseTaskWorkspace from './EnterpriseTaskWorkspace'
 
 export const TaskManagementRoutes = ({ basePath }) => (
     <>
-        <Route path={`${basePath}/task-management/assign-tasks`} element={<AssignTasksPage />} />
-        <Route path={`${basePath}/task-management/assign-tasks/add`} element={<AddAssignTaskPage />} />
-        <Route path={`${basePath}/task-management/my-tasks`} element={<MyTasksPage />} />
-        <Route path={`${basePath}/task-management/assigned-tasks`} element={<MyTasksPage />} />
-        <Route path={`${basePath}/task-management`} element={<TaskManagementRedirect />} />
-        <Route path={`${basePath}/task-management/add-task`} element={<Navigate to={`${basePath}/task-management/assign-tasks/add`} replace />} />
+        <Route path={`${basePath}/task-management`} element={<EnterpriseTaskWorkspace defaultTab="received" />} />
+        <Route path={`${basePath}/task-management/workspace`} element={<EnterpriseTaskWorkspace defaultTab="received" />} />
+        <Route path={`${basePath}/task-management/assign-tasks`} element={<EnterpriseTaskWorkspace defaultTab="created" />} />
+        <Route path={`${basePath}/task-management/assign-tasks/add`} element={<EnterpriseTaskWorkspace defaultTab="created" initialCreateOpen={true} />} />
+        <Route path={`${basePath}/task-management/my-tasks`} element={<EnterpriseTaskWorkspace defaultTab="received" />} />
+        <Route path={`${basePath}/task-management/assigned-tasks`} element={<EnterpriseTaskWorkspace defaultTab="received" />} />
+        <Route path={`${basePath}/task-management/add-task`} element={<EnterpriseTaskWorkspace defaultTab="created" initialCreateOpen={true} />} />
+        <Route path={`${basePath}/tasks`} element={<EnterpriseTaskWorkspace defaultTab="received" />} />
     </>
 )
+
+export default TaskManagementRoutes
+

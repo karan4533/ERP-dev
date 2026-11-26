@@ -1,64 +1,42 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
-import ExportModal from '../CommonComponents/ExportModal'
+import { useEffect, useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import DataTable from '../ui/DataTable'
+import DataToolbar from '../ui/DataToolbar'
+import IntegrationNotice from '../ui/IntegrationNotice'
+import PageHeader from '../ui/PageHeader'
+import Pagination from '../ui/Pagination'
+import StatusBadge from '../ui/StatusBadge'
+import { paginateRows, parseTableState, serializeTableState } from '../ui/dataTableState'
+import { getWorkflowDueDate, getWorkflowState } from '../ui/workflow'
 import UpdateTaskStatusModal from './Components/UpdateTaskStatusModal'
-import {
-    getDemoUserId,
-    getMyTasks,
-    hydrateTasksFromApi,
-    isTasksApiMode,
-    setTaskStatusViaApi,
-    TASKS_UPDATED_EVENT,
-    updateTaskStatus,
-} from './taskManagementData'
-import { getNextStatusOptions, statusBadgeColor, TASK_STATUSES } from './taskManagementConfig'
+import { getDemoUserId, getMyTasks, updateTaskStatus } from './taskManagementData'
+import { getNextStatusOptions, TASK_STATUSES } from './taskManagementConfig'
 import { useTaskRole } from './useTaskRole'
 
 const MyTasksPage = () => {
     const { pathname } = useLocation()
-    const pageTitle = pathname.includes('/assigned-tasks') ? 'Assigned Tasks List' : 'My Tasks'
+    const pageTitle = pathname.includes('/assigned-tasks') ? 'Assigned tasks' : 'My tasks'
     const roleKey = useTaskRole()
     const userId = getDemoUserId(roleKey)
-
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
-    const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState('')
-    const [assignedByFilter, setAssignedByFilter] = useState('')
-    const [exportModal, setExportModal] = useState(false)
+    const [urlParams, setUrlParams] = useSearchParams()
+    const initialTableState = parseTableState(urlParams)
+    const [search, setSearch] = useState(initialTableState.query)
+    const [statusFilter, setStatusFilter] = useState(initialTableState.filters.status || '')
+    const [assignedByFilter, setAssignedByFilter] = useState(initialTableState.filters.assignedBy || '')
+    const [page, setPage] = useState(initialTableState.page)
+    const [pageSize, setPageSize] = useState(initialTableState.pageSize)
+    const [refreshKey, setRefreshKey] = useState(0)
     const [statusModalTask, setStatusModalTask] = useState(null)
 
-    const apiMode = isTasksApiMode()
-    // Rows live in state and are re-read whenever the data layer announces a change (API refresh or local write).
-    const [tasks, setTasks] = useState(() => getMyTasks(roleKey, userId))
-    const [load, setLoad] = useState({ loading: apiMode, error: '' })
-
-    useEffect(() => {
-        let cancelled = false
-        const refresh = () => {
-            if (!cancelled) setTasks(getMyTasks(roleKey, userId))
-        }
-        window.addEventListener(TASKS_UPDATED_EVENT, refresh)
-        // Re-read once asynchronously so a changed role/user shows the right rows even before the API answers.
-        Promise.resolve().then(refresh)
-        if (apiMode) {
-            hydrateTasksFromApi().then((result) => {
-                if (cancelled || result.skipped) return
-                setLoad({ loading: false, error: result.ok ? '' : result.error })
-            })
-        }
-        return () => {
-            cancelled = true
-            window.removeEventListener(TASKS_UPDATED_EVENT, refresh)
-        }
-    }, [roleKey, userId, apiMode])
+    const tasks = useMemo(() => {
+        void refreshKey
+        return getMyTasks(roleKey, userId)
+    }, [roleKey, userId, refreshKey])
 
     const assignedByOptions = useMemo(
         () => [...new Set(tasks.map((task) => task.assignedBy).filter(Boolean))],
-        [tasks]
+        [tasks],
     )
 
     const filteredTasks = useMemo(() => {
@@ -67,181 +45,112 @@ const MyTasksPage = () => {
             if (statusFilter && task.status !== statusFilter) return false
             if (assignedByFilter && task.assignedBy !== assignedByFilter) return false
             if (!query) return true
-            return (
-                task.taskId?.toLowerCase().includes(query) ||
-                task.title?.toLowerCase().includes(query) ||
-                task.description?.toLowerCase().includes(query) ||
-                task.assignedBy?.toLowerCase().includes(query)
-            )
+            return [task.taskId, task.title, task.description, task.assignedBy]
+                .some((value) => String(value || '').toLowerCase().includes(query))
         })
     }, [tasks, search, statusFilter, assignedByFilter])
 
-    const showRemarks = apiMode || pathname.includes('/housekeeping-manager/')
+    const showRemarks = pathname.includes('/housekeeping-manager/')
+    const pagination = paginateRows(filteredTasks, { page, pageSize })
+
+    useEffect(() => {
+        setUrlParams(serializeTableState({
+            query: search,
+            page: pagination.page,
+            pageSize,
+            filters: { status: statusFilter, assignedBy: assignedByFilter },
+        }), { replace: true })
+    }, [assignedByFilter, pageSize, pagination.page, search, setUrlParams, statusFilter])
+
     const handleStatusSave = (taskId, status, remark) => {
-        if (apiMode) return setTaskStatusViaApi(taskId, status, remark) // resolves { ok, error }; list refreshes itself
         updateTaskStatus(taskId, status, remark)
-        return undefined
+        setRefreshKey((key) => key + 1)
     }
 
+    const resetFilters = () => {
+        setSearch('')
+        setStatusFilter('')
+        setAssignedByFilter('')
+        setPage(1)
+    }
+
+    const columns = useMemo(() => [
+        { key: 'taskId', label: 'Task ID', required: true, render: (task) => <span className='font-semibold text-[var(--erp-ink)]'>{task.taskId}</span> },
+        { key: 'title', label: 'Task' },
+        { key: 'assignedBy', label: 'Assigned by' },
+        { key: 'priority', label: 'Priority', render: (task) => <StatusBadge status={task.priority === 'High' ? 'danger' : task.priority === 'Medium' ? 'warning' : 'neutral'} label={task.priority} /> },
+        { key: 'dueDate', label: 'Due date' },
+        {
+            key: 'status',
+            label: 'Workflow state',
+            render: (task) => {
+                const dueAt = getWorkflowDueDate(task.dueDate)
+                const workflow = getWorkflowState(task.status, { dueAt })
+                return <StatusBadge status={workflow.key} label={workflow.overdue ? `${task.status} · overdue` : task.status} />
+            },
+        },
+        ...(showRemarks ? [{ key: 'remark', label: 'Latest remark', render: (task) => task.remark || '—' }] : []),
+    ], [showRemarks])
+
     return (
-        <section>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Search</label>
-                        <input
-                            type='text'
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder='Task ID, title...'
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Assigned By</label>
-                        <select
-                            value={assignedByFilter}
-                            onChange={(e) => setAssignedByFilter(e.target.value)}
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
-                            <option value=''>All</option>
-                            {assignedByOptions.map((name) => (
-                                <option key={name} value={name}>{name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Status</label>
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
-                            <option value=''>All</option>
-                            {TASK_STATUSES.map((status) => (
-                                <option key={status} value={status}>{status}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
-                        <div className='relative'>
-                            <DatePicker selected={fromDate} onChange={setFromDate} isClearable showMonthYearDropdown scrollableMonthYearDropdown className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <section className='space-y-5'>
+            <PageHeader title={pageTitle} description='Work assigned to you, ordered for status and deadline follow-up.' context={`${tasks.length} total · ${filteredTasks.length} matching`} />
 
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center mb-4'>
-                    <h2 className='text-xl font-medium text-black'>{pageTitle}</h2>
-                    <button type='button' onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                        <Download size={16} />
-                        Export
-                    </button>
-                </div>
-                {load.error && (
-                    <p role='alert' className='mb-3 text-sm text-[#B42318] bg-[#FEF3F2] border border-[#FDA29B] rounded-md px-3 py-2'>
-                        Could not load tasks from the server: {load.error}
-                    </p>
-                )}
-                <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                            <tr>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Task ID</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Title</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Description</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Assigned By</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Priority</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Due Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
-                                {showRemarks && <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Remarks</th>}
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredTasks.length === 0 ? (
-                                <tr>
-                                    <td colSpan={showRemarks ? 9 : 8} className='px-2 py-8 text-center text-[#808080]'>
-                                        {load.loading ? 'Loading tasks…' : 'No tasks assigned to you.'}
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredTasks.map((task) => {
-                                    const canUpdate = getNextStatusOptions(task.status).length > 0
-                                    return (
-                                        <tr key={task.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                            <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{task.taskId}</td>
-                                            <td className='px-2 py-4'>{task.title}</td>
-                                            <td className='px-2 py-4 max-w-[200px] truncate' title={task.description}>{task.description}</td>
-                                            <td className='px-2 py-4'>{task.assignedBy}</td>
-                                            <td className='px-2 py-4'>{task.priority}</td>
-                                            <td className='px-2 py-4 whitespace-nowrap'>
-                                                {task.dueDate}
-                                                {task.overdue && (
-                                                    <span className='ml-2 px-2 py-0.5 rounded-lg text-xs font-semibold bg-[#FF000033] text-[#FF0000]'>Overdue</span>
-                                                )}
-                                            </td>
-                                            <td className='px-2 py-4'>
-                                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[task.status] ?? ''}`}>{task.status}</span>
-                                            </td>
-                                            {showRemarks && <td className='px-2 py-4 max-w-[180px]'>{task.remark || '—'}</td>}
-                                            <td className='px-2 py-4 rounded-e-lg'>
-                                                {canUpdate ? (
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => setStatusModalTask(task)}
-                                                        className='bg-[#515DEF] text-white text-xs px-3 py-1.5 rounded-md hover:opacity-90 transition-all cursor-pointer whitespace-nowrap'
-                                                    >
-                                                        Update Status
-                                                    </button>
-                                                ) : (
-                                                    <span className='text-xs text-[#808080]'>—</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    )
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {filteredTasks.length} of {filteredTasks.length} entries
-                </p>
-                <div className='flex gap-x-2'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronLeft size={16} /></button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>1</button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronRight size={16} /></button>
-                </div>
-            </div>
-
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='my-tasks'
-                rows={filteredTasks.map((t) => ({
-                    taskId: t.taskId,
-                    title: t.title,
-                    assignedBy: t.assignedBy,
-                    status: t.status,
-                    dueDate: t.dueDate,
-                }))}
-                exportDescription={<>You are exporting {filteredTasks.length} record{filteredTasks.length === 1 ? '' : 's'}.</>}
+            <IntegrationNotice
+                state='demo'
+                title='Browser-stored task workflow'
+                description='Task updates are stored locally. Assignee notifications, attachments and audit delivery require the backend task service.'
             />
+
+            <div className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white'>
+                <DataToolbar
+                    query={search}
+                    onQueryChange={(value) => { setSearch(value); setPage(1) }}
+                    searchPlaceholder='Search task ID, title or owner'
+                    resultCount={filteredTasks.length}
+                    onReset={resetFilters}
+                    filters={(
+                        <>
+                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Assigned by
+                                <select value={assignedByFilter} onChange={(event) => { setAssignedByFilter(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
+                                    <option value=''>All owners</option>
+                                    {assignedByOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                                </select>
+                            </label>
+                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Status
+                                <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
+                                    <option value=''>All statuses</option>
+                                    {TASK_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                                </select>
+                            </label>
+                        </>
+                    )}
+                    actions={(
+                        <button type='button' disabled title='Export service is not connected' className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-65'>
+                            <Download aria-hidden='true' size={16} /> Export unavailable
+                        </button>
+                    )}
+                />
+                <DataTable
+                    caption={pageTitle}
+                    rows={pagination.rows}
+                    columns={columns}
+                    rowKey='id'
+                    emptyTitle='No assigned tasks'
+                    emptyDescription='No tasks match the current filters. Reset filters to review the complete inbox.'
+                    renderActions={(task) => getNextStatusOptions(task.status).length > 0 ? (
+                        <button type='button' onClick={() => setStatusModalTask(task)} className='min-h-9 rounded-lg bg-[var(--erp-indigo)] px-3 text-xs font-semibold text-white'>Update status</button>
+                    ) : <span className='text-xs text-[var(--erp-muted)]'>Complete</span>}
+                />
+                <Pagination {...pagination} onPageChange={setPage} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
+            </div>
+
             <UpdateTaskStatusModal
-                key={statusModalTask?.id ?? 'none'}
+                key={statusModalTask?.id || 'closed-task-status'}
                 open={Boolean(statusModalTask)}
                 task={statusModalTask}
                 onClose={() => setStatusModalTask(null)}
                 showRemark={showRemarks}
-                requireStatusChange={apiMode}
-                prefillRemark={!apiMode}
                 onSave={handleStatusSave}
             />
         </section>
@@ -249,3 +158,4 @@ const MyTasksPage = () => {
 }
 
 export default MyTasksPage
+

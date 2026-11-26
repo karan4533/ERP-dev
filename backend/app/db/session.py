@@ -1,33 +1,19 @@
+"""ORM Base plus shared Session/engine.
+
+Request handlers use ``app.core.database``. This module keeps ``Base`` for legacy
+model imports and re-exports the same engine/session factory so audit middleware
+does not open a second SQLite engine against the same file.
+"""
+
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session
 
-from app.core.config import get_settings
-
-settings = get_settings()
-
-connect_args: dict = {}
-if settings.is_sqlite:
-    # Required for SQLite + FastAPI (multi-threaded request handling)
-    connect_args = {"check_same_thread": False}
-
-engine = create_engine(
-    settings.database_url,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from app.core.database import SessionLocal, engine, get_db
 
 
 class Base(DeclarativeBase):
-    """SQLAlchemy declarative base for all ORM models."""
+    """Declarative base retained for modules that still import Base from here."""
 
 
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+__all__ = ["Base", "SessionLocal", "engine", "get_db", "Session", "Generator"]

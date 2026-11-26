@@ -1,5 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-const DEFAULT_REQUESTS = [
+export const REQUESTS = [
     {
         requestId: 'REQ-SS-2026-008',
         requestType: 'Stock Replenishment',
@@ -164,17 +163,3 @@ export const priorityBadgeColor = {
 
 export const getRequestById = (id) =>
     REQUESTS.find((entry) => entry.requestId === id)
-
-export const REQUESTS_STORAGE_KEY = 'schoolerp-stationery-requests-v1'
-export function getRequests() {
-    return ensureCampusSeed('schoolerp-stationery-requests-v1', DEFAULT_REQUESTS)
-}
-export function saveRequests(rows) {
-    return saveCampusJson('schoolerp-stationery-requests-v1', rows)
-}
-export function hydrateRequestsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-stationery-requests-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-stationery-requests-v1', DEFAULT_REQUESTS)
-}
-export const REQUESTS = DEFAULT_REQUESTS
-

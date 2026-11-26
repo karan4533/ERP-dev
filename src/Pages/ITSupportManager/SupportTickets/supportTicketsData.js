@@ -1,5 +1,4 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
-export const ISSUE_TYPES = ['Hardware', 'Software', 'Network']
+export const ISSUE_TYPES = ['Hardware', 'Software', 'Network', 'Printer Maintenance', 'Outside Service Maintenance']
 
 export const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical']
 
@@ -20,7 +19,7 @@ export const statusBadgeColor = {
     Closed: 'bg-[#4CAF5033] text-[#4CAF50]',
 }
 
-const DEFAULT_SUPPORT_TICKETS = [
+export const SUPPORT_TICKETS = [
     {
         ticketId: 'TKT-2026-1042',
         requesterName: 'Priya Nair',
@@ -145,17 +144,3 @@ export const getTicketsForAsset = (assetId) =>
 
 export const getTicketById = (id) =>
     SUPPORT_TICKETS.find((entry) => entry.ticketId === id)
-
-export const SUPPORT_TICKETS_STORAGE_KEY = 'schoolerp-it-tickets-v1'
-export function getSupportTickets() {
-    return ensureCampusSeed('schoolerp-it-tickets-v1', DEFAULT_SUPPORT_TICKETS)
-}
-export function saveSupportTickets(rows) {
-    return saveCampusJson('schoolerp-it-tickets-v1', rows)
-}
-export function hydrateSupportTicketsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-it-tickets-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-it-tickets-v1', DEFAULT_SUPPORT_TICKETS)
-}
-export const SUPPORT_TICKETS = DEFAULT_SUPPORT_TICKETS
-

@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { useNavigate, useParams, NavLink } from 'react-router-dom'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
-import { getStudentById } from '../../../Common/StudentDatabase/studentDatabaseData'
-import { ensureEnrolledStudentDetailFromApi } from '../../../Common/StudentDatabase/enrolledStudentsData'
-import { isApiStudentsEnabled } from '../../../services/apiClient'
-import noProfile from '../../../assets/images/no-profile.png'
+import { getStudentById } from './studentsListData'
 import StudentAttendanceDetails from './Components/StudentAttendanceDetails'
 import StudentResultDetails from './Components/StudentResultDetails'
 
@@ -20,40 +17,11 @@ const Field = ({ label, value }) => (
 const ViewStudent = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const [student, setStudent] = useState(() => getStudentById(id))
-    const [loading, setLoading] = useState(isApiStudentsEnabled())
-    const [error, setError] = useState('')
-
-    useEffect(() => {
-        let cancelled = false
-        if (!isApiStudentsEnabled()) {
-            setStudent(getStudentById(id))
-            setLoading(false)
-            return undefined
-        }
-        setLoading(true)
-        setError('')
-        ensureEnrolledStudentDetailFromApi(id)
-            .then(() => {
-                if (cancelled) return
-                setStudent(getStudentById(id))
-            })
-            .catch((err) => {
-                if (cancelled) return
-                setStudent(null)
-                setError(err.message || 'Could not load student.')
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false)
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [id])
+    const student = getStudentById(id)
 
     return (
         <section className='space-y-6'>
-            <div className='flex flex-wrap items-center gap-3'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
                 <button
                     type='button'
                     onClick={() => navigate('/coordinator/user-management/students-list')}
@@ -62,33 +30,28 @@ const ViewStudent = () => {
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
+                <NavLink
+                    to={`/coordinator/user-management/students-list/view/${id}/full`}
+                    className='inline-flex items-center gap-2 text-sm bg-blue-600 text-white rounded-md px-4 py-2 hover:bg-blue-700 transition-colors font-semibold cursor-pointer shadow-xs'
+                >
+                    <Eye size={16} />
+                    View Full Profile & Parent Details
+                </NavLink>
             </div>
 
-            {loading && (
+            {!student ? (
                 <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                    Loading student…
+                    Student record not found or could not be loaded.
                 </div>
-            )}
-
-            {!loading && (error || !student) && (
-                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                    {error || 'Student record not found, or outside your grade band.'}
-                </div>
-            )}
-
-            {!loading && student && (
+            ) : (
                 <>
                     <div className='bg-white rounded-2xl shadow-md p-4'>
                         <div className='flex flex-wrap items-start gap-4 mb-6'>
-                            <img
-                                src={student.profile || student.profileImage || noProfile}
-                                alt={student.name}
-                                className='w-16 h-16 rounded-full object-cover'
-                            />
+                            <img src={student.profile} alt={student.name} className='w-16 h-16 rounded-full object-cover' />
                             <div>
                                 <h1 className='text-2xl font-semibold text-black'>{student.name}</h1>
                                 <p className='text-sm text-[#667085] mt-1'>
-                                    {student.admissionNumber} · {student.classSection}
+                                    {student.admissionNumber} · Class {student.classSection}
                                 </p>
                             </div>
                         </div>
@@ -115,12 +78,12 @@ const ViewStudent = () => {
 
                     <div>
                         <h2 className='text-xl font-semibold text-black mb-4'>Attendance Information</h2>
-                        <StudentAttendanceDetails studentId={student.id || id} />
+                        <StudentAttendanceDetails />
                     </div>
 
                     <div>
                         <h2 className='text-xl font-semibold text-black mb-4'>Results</h2>
-                        <StudentResultDetails studentId={student.id || id} />
+                        <StudentResultDetails />
                     </div>
                 </>
             )}

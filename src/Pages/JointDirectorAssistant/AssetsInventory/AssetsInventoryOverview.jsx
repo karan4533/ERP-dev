@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -19,11 +19,6 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const AssetsInventoryOverview = () => {
-    const [assets, setAssets] = useState(() => getJdAssets())
-    useEffect(() => {
-        hydrateJdAssetsFromApi().finally(() => setAssets(getJdAssets()))
-    }, [])
-
     const [activeView, setActiveView] = useState('all')
     const [fromDate, setFromDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)

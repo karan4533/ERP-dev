@@ -1,5 +1,3 @@
-export const PAYMENT_GATEWAY_URL = 'https://razorpay.com/payment-gateway/'
-
 export const parseRupeeAmount = (value) => Number(String(value).replace(/[₹,\s]/g, '')) || 0
 
 export const formatRupeeAmount = (amount) => `₹${amount.toLocaleString('en-IN')}`
@@ -20,6 +18,16 @@ export const WALLET_TABS = [
 ]
 
 export const WALLET_ROLE_FILTERS = ['All Roles', 'Students', 'Staff', 'Parents']
+
+export const WALLET_ROLE_VALUES = {
+    Students: 'Student',
+    Staff: 'Staff',
+    Parents: 'Parent',
+}
+
+export const matchesWalletRole = (role, roleFilter) => (
+    roleFilter === 'All Roles' || role === WALLET_ROLE_VALUES[roleFilter]
+)
 
 export const OVERVIEW_SUMMARY = [
     { label: 'Total Held in Wallets', value: '₹18.6L', sub: 'across 2,140 wallets', iconTone: 'info' },
@@ -239,19 +247,6 @@ export const walletStatusBadgeColor = {
     'Zero Balance': 'bg-[#66708533] text-[#667085]',
     Flagged: 'bg-[#FF572233] text-[#FF5722]',
     Frozen: 'bg-[#FF572233] text-[#FF5722]',
-}
-
-export const rechargeStatusBadgeColor = {
-    Success: 'bg-[#4CAF5033] text-[#4CAF50]',
-    Failed: 'bg-[#FF572233] text-[#FF5722]',
-    Refunded: 'bg-[#FF980033] text-[#FF9800]',
-}
-
-export const spendCategoryBadgeColor = {
-    Canteen: 'bg-[#515DEF33] text-[#515DEF]',
-    Stationery: 'bg-[#66708533] text-[#667085]',
-    Events: 'bg-[#FF980033] text-[#FF9800]',
-    Other: 'bg-[#2196F333] text-[#2196F3]',
 }
 
 export const methodStatusBadgeColor = {

@@ -1,7 +1,11 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
+import CentralActivitiesWorkspace from '../Common/Activities/CentralActivitiesWorkspace'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/Principal/Dashboard/Dashboard'
 import StarRatings from '../Pages/Principal/StarRatings/StarRatings'
+import EnterpriseRecognitionPage from '../Common/Recognition/EnterpriseRecognitionPage'
 import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
 import AddRatings from '../Pages/Principal/StarRatings/AddRatings'
 import ExaminationTimetableList from '../Pages/Principal/ExaminationTimetable/ExaminationTimetableList'
@@ -16,9 +20,6 @@ import StudentLMS from '../Pages/Principal/LMS/StudentLMS'
 import TeacherLMS from '../Pages/Principal/LMS/TeacherLMS'
 import ViewStudentLMS from '../Pages/Principal/LMS/ViewStudentLMS'
 import ViewTeacherLMS from '../Pages/Principal/LMS/ViewTeacherLMS'
-import AddStudentHomeFun from '../Pages/Principal/LMS/AddStudentHomeFun'
-import AddTeacherHomeFun from '../Pages/Principal/LMS/AddTeacherHomeFun'
-import ViewExtraClass from '../Pages/Teacher/ExtraClass/ViewExtraClass'
 import EscalationList from '../Pages/Principal/EscalationManagement/EscalationList'
 import AddEscalation from '../Pages/Principal/EscalationManagement/AddEscalation'
 import ViewEscalation from '../Pages/Principal/EscalationManagement/ViewEscalation'
@@ -37,31 +38,40 @@ import ReceivedLeaveRequests from '../Pages/Principal/LeaveRequest/ReceivedLeave
 import ViewReceivedLeaveRequest from '../Pages/Principal/LeaveRequest/ViewReceivedLeaveRequest'
 import ExtraClass from '../Pages/Teacher/ExtraClass/ExtraClass'
 import AddExtraClass from '../Pages/Teacher/ExtraClass/AddExtraClass'
+import ViewExtraClass from '../Pages/Teacher/ExtraClass/ViewExtraClass'
 import AnnouncementList from '../Pages/Principal/Announcement/AnnouncementList'
 import AddAnnouncement from '../Pages/Principal/Announcement/AddAnnouncement'
 import ViewAnnouncement from '../Pages/Principal/Announcement/ViewAnnouncement'
 import MyAttendance from '../Pages/Principal/Attendance/MyAttendance'
-import {
-    PrincipalPendingPlacement,
-    PrincipalPlaceStudent,
-    PrincipalPromoteStudents,
-} from '../Pages/Principal/StudentAllocation/PrincipalStudentPlacement'
-import CoordinatorGradeBands from '../Pages/Principal/CoordinatorGradeBands/CoordinatorGradeBands'
-import TransportApprovals from '../Pages/Principal/TransportApprovals/TransportApprovals'
+import PrincipalStudentAllocationApproval from '../Pages/Principal/StudentAllocation/PrincipalStudentAllocationApproval'
+import StudentAllocationDetail from '../Common/StudentAllocation/StudentAllocationDetail'
+import MarkEntryPage from '../Common/MarkEntryApproval/MarkEntryPage'
+import PrincipalMarkEntryApproval from '../Pages/Principal/MarkEntryApproval/PrincipalMarkEntryApproval'
+import PrincipalMarkEntryReview from '../Pages/Principal/MarkEntryApproval/PrincipalMarkEntryReview'
+import ReportCardGenerator from '../Common/Academic/ReportCardGenerator'
+import EnterprisePerformanceAnalyticsPage from '../Common/Academic/EnterprisePerformanceAnalyticsPage'
 
 const PrincipalRoutes = () => {
     return (
         <ReactRoutes>
             <Route path="/principal/dashboard" element={<Dashboard />} />
+            <Route path="/principal/activities" element={<CentralActivitiesWorkspace defaultCategory="all" roleKey="principal" />} />
             <Route path="/principal/attendance" element={<Navigate to="/principal/attendance/my-attendance" replace />} />
-            <Route path="/principal/attendance/my-attendance" element={<MyAttendance />} />
+            <Route path="/principal/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            <Route path="/principal/attendance/my-attendance" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
             {TaskManagementRoutes({ basePath: '/principal' })}
-            <Route path="/principal/star-ratings/star-of-month" element={<StarRatings view="som" />} />
-            <Route path="/principal/star-ratings/star-of-year" element={<StarRatings view="soy" />} />
+            <Route path="/principal/star-ratings/star-of-month" element={<EnterpriseRecognitionPage view="som" />} />
+            <Route path="/principal/star-ratings/star-of-year" element={<EnterpriseRecognitionPage view="soy" />} />
             <Route path="/principal/star-ratings/add-ratings" element={<AddRatings />} />
             <Route path="/principal/star-ratings-list" element={<Navigate to="/principal/star-ratings/star-of-month" replace />} />
             <Route path="/principal/examination-timetable" element={<ExaminationTimetableList />} />
             <Route path="/principal/create-examination-timetable" element={<CreateExaminationTimetable />} />
+            <Route path="/principal/student-evaluation/mark-entry" element={<MarkEntryPage />} />
+            <Route path="/principal/mark-entry-approval" element={<PrincipalMarkEntryApproval />} />
+            <Route path="/principal/mark-entry-approval/review/:contextKey" element={<PrincipalMarkEntryReview />} />
+            <Route path="/principal/student-evaluation/mark-entry-approval" element={<Navigate to="/principal/mark-entry-approval" replace />} />
+            <Route path="/principal/student-evaluation/report-cards" element={<ReportCardGenerator />} />
+            <Route path="/principal/student-evaluation/analytics" element={<EnterprisePerformanceAnalyticsPage />} />
             <Route path="/principal/class-timetable" element={<ClassTimetableList />} />
             <Route path="/principal/create-class-timetable" element={<CreateClassTimetable />} />
             <Route path="/principal/user-management/student-database" element={<StudentDatabaseList />} />
@@ -83,12 +93,8 @@ const PrincipalRoutes = () => {
             <Route path="/principal/employees-management/gatekeepers" element={<Navigate to="/principal/user-management/employee-database" replace />} />
             <Route path="/principal/employees-management/view-gatekeeper" element={<Navigate to="/principal/user-management/employee-database" replace />} />
             <Route path="/principal/lms/student-lms" element={<StudentLMS />} />
-            <Route path="/principal/lms/student-lms/add" element={<AddStudentHomeFun />} />
-            <Route path="/principal/lms/student-lms/view/:id" element={<ViewStudentLMS />} />
             <Route path="/principal/lms/view-student-lms" element={<ViewStudentLMS />} />
             <Route path="/principal/lms/teacher-lms" element={<TeacherLMS />} />
-            <Route path="/principal/lms/teacher-lms/add" element={<AddTeacherHomeFun />} />
-            <Route path="/principal/lms/teacher-lms/view/:id" element={<ViewTeacherLMS />} />
             <Route path="/principal/lms/view-teacher-lms" element={<ViewTeacherLMS />} />
             <Route path="/principal/academic-calendar" element={<AcademicCalendar />} />
             <Route path="/principal/notifications" element={<Notifications />} />
@@ -99,13 +105,9 @@ const PrincipalRoutes = () => {
             <Route path="/principal/academic/teacher-allocation/allocate/:employeeId" element={<AllocateTeacher />} />
             <Route path="/principal/academic/teacher-allocation/view/:employeeId" element={<ViewTeacherAllocation />} />
             <Route path="/principal/academic/teacher-allocation/edit/:employeeId" element={<EditTeacherAllocation />} />
-            <Route path="/principal/student-allocation-approval" element={<PrincipalPendingPlacement />} />
-            <Route path="/principal/student-allocation-approval/place/:id" element={<PrincipalPlaceStudent />} />
-            <Route path="/principal/student-allocation-approval/promote" element={<PrincipalPromoteStudents />} />
-            <Route path="/principal/student-allocation-approval/allocate/:id" element={<Navigate to="/principal/student-allocation-approval" replace />} />
-            <Route path="/principal/student-allocation-approval/review/:id" element={<Navigate to="/principal/student-allocation-approval" replace />} />
-            <Route path="/principal/transport-approvals" element={<TransportApprovals />} />
-            <Route path="/principal/coordinator-grade-bands" element={<CoordinatorGradeBands />} />
+            <Route path="/principal/student-allocation-approval" element={<PrincipalStudentAllocationApproval />} />
+            <Route path="/principal/student-allocation-approval/allocate/:id" element={<StudentAllocationDetail />} />
+            <Route path="/principal/student-allocation-approval/review/:id" element={<StudentAllocationDetail />} />
             <Route path="/principal/communication" element={<Navigate to="/principal/communication/inbox" replace />} />
             <Route path="/principal/communication/inbox" element={<CommunicationInbox />} />
             <Route path="/principal/communication/inbox/:conversationId" element={<CommunicationInbox />} />
@@ -114,24 +116,17 @@ const PrincipalRoutes = () => {
             <Route path="/principal/escalation-management" element={<EscalationList />} />
             <Route path="/principal/escalation-management/add-escalation" element={<AddEscalation />} />
             <Route path="/principal/escalation-management/view/:id" element={<ViewEscalation />} />
-            <Route path="/principal/leave-request/my-requests" element={<MyLeaveRequests />} />
+            <Route path="/principal/leave-request/my-requests" element={<AttendanceAndLeaveWorkspace defaultTab="my-leaves" />} />
             <Route path="/principal/leave-request/my-requests/add" element={<AddLeaveRequest />} />
             <Route path="/principal/leave-request/my-requests/view/:id" element={<ViewMyLeaveRequest />} />
-            <Route path="/principal/leave-request/received" element={<ReceivedLeaveRequests />} />
+            <Route path="/principal/leave-request/received" element={<AttendanceAndLeaveWorkspace defaultTab="received-leaves" />} />
             <Route path="/principal/leave-request/received/view/:id" element={<ViewReceivedLeaveRequest />} />
-            <Route
-                path="/principal/class/extra-class"
-                element={(
-                    <ExtraClass
-                        canCreate
-                        listPath="/principal/class/extra-class"
-                        addPath="/principal/class/extra-class/add"
-                        viewPath="/principal/class/extra-class/view"
-                    />
-                )}
-            />
+            <Route path="/principal/class/extra-class" element={<ExtraClass canCreate listPath="/principal/class/extra-class" addPath="/principal/class/extra-class/add" />} />
             <Route path="/principal/class/extra-class/add" element={<AddExtraClass listPath="/principal/class/extra-class" />} />
             <Route path="/principal/class/extra-class/view/:id" element={<ViewExtraClass listPath="/principal/class/extra-class" />} />
+            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
+            {EnterpriseOperationsRoutes({ basePath: '/principal', role: 'principal' })}
+
             <Route path="*" element={<Navigate to="/principal/dashboard" replace />} />
         </ReactRoutes>
     )

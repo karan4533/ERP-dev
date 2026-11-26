@@ -65,34 +65,6 @@ const DEFAULT_EXAM_TIMETABLES = [
     },
 ]
 
-/** Map campus GET /exams row into the Principal timetable list shape. */
-export const mapExamApiToTimetableRecord = (exam) => {
-    const statusRaw = String(exam.status || '').toLowerCase()
-    const status = statusRaw.includes('publish') || statusRaw === 'approved' ? 'Published' : 'Draft'
-    const approvalStatus =
-        statusRaw.includes('pending') || statusRaw.includes('await')
-            ? 'Pending'
-            : statusRaw === 'approved' || statusRaw.includes('publish')
-              ? 'Approved'
-              : statusRaw.includes('reject') || statusRaw.includes('den')
-                ? 'Denied'
-                : 'Pending'
-    return {
-        id: String(exam.id),
-        examName: exam.name || exam.examName || '',
-        className: exam.className || exam.class_name || '',
-        section: exam.section || '',
-        teacherName: '',
-        status,
-        startDate: exam.startDate || exam.start_date || '',
-        endDate: exam.endDate || exam.end_date || '',
-        createdDate: '',
-        approvalStatus,
-        timelines: Array.isArray(exam.timelines) ? exam.timelines : [],
-        source: 'api',
-    }
-}
-
 export const getExamTimetables = () => {
     try {
         const stored = localStorage.getItem(STORAGE_KEY)
@@ -125,30 +97,34 @@ export const formatDisplayDate = (value) => {
     return value.toLocaleDateString('en-GB').replace(/\//g, '-')
 }
 
-export const addExamTimetable = (payload) => {
+export const addExamTimetable = (payload = {}) => {
+    const timelines = Array.isArray(payload.timelines)
+        ? payload.timelines.filter((row) => row && row.day && row.subject)
+        : []
     const record = {
         id: payload.examId || generateExamId(),
-        examName: payload.examName,
-        className: payload.className,
-        section: payload.section,
-        teacherName: payload.teacherName,
+        examName: payload.examName || 'Assessment',
+        className: payload.className || '',
+        section: payload.section || '',
+        teacherName: payload.teacherName || '',
         status: payload.status || 'Draft',
         startDate: formatDisplayDate(payload.startDate),
         endDate: formatDisplayDate(payload.endDate),
         createdDate: formatDisplayDate(new Date()),
         approvalStatus: 'Pending',
-        timelines: payload.timelines.filter((row) => row.day && row.subject),
+        timelines,
     }
     saveExamTimetables([record, ...getExamTimetables()])
     return record
 }
 
 export const buildExamGridFromTimelines = (timelines = []) => {
-    const days = [...new Set(timelines.map((row) => row.day).filter(Boolean))]
+    const safeTimelines = Array.isArray(timelines) ? timelines.filter(Boolean) : []
+    const days = [...new Set(safeTimelines.map((row) => row.day).filter(Boolean))]
     const slotMap = new Map()
 
-    timelines.forEach((row) => {
-        if (!row.startTime || !row.endTime) return
+    safeTimelines.forEach((row) => {
+        if (!row || !row.startTime || !row.endTime) return
         const label = `${row.startTime} - ${row.endTime}`
         if (!slotMap.has(label)) {
             slotMap.set(label, {
@@ -161,8 +137,8 @@ export const buildExamGridFromTimelines = (timelines = []) => {
     const timeSlots = [...slotMap.values()]
     const schedule = {}
 
-    timelines.forEach((row) => {
-        if (!row.day || !row.startTime || !row.endTime || !row.subject) return
+    safeTimelines.forEach((row) => {
+        if (!row || !row.day || !row.startTime || !row.endTime || !row.subject) return
         const label = `${row.startTime} - ${row.endTime}`
         if (!schedule[label]) schedule[label] = {}
         schedule[label][row.day] = {

@@ -197,7 +197,8 @@ function FitBounds({ coords }) {
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export default function BusTrackingMap() {
+export default function BusTrackingMap({ trackingMode = 'demo' } = {}) {
+    const isLiveGps = trackingMode === 'live'
     const completedCoords = ROUTE_COORDS.slice(0, BUS_INDEX + 1); // already travelled
     const remainingCoords = ROUTE_COORDS.slice(BUS_INDEX);        // yet to travel
 
@@ -228,13 +229,20 @@ export default function BusTrackingMap() {
                         <span className="text-emerald-700 text-xs font-semibold">Call Driver</span>
                     </a>
 
-                    {/* Live badge */}
-                    <div className="flex items-center gap-2 bg-[#EDEEF5] rounded-full px-3 py-1.5">
+                    <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${isLiveGps ? 'bg-[#EDEEF5]' : 'bg-amber-50 border border-amber-200'}`}>
                         <span className="relative flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            {isLiveGps ? (
+                                <>
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </>
+                            ) : (
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                            )}
                         </span>
-                        <span className="text-[#0C1E5B] text-xs font-semibold tracking-wide">LIVE</span>
+                        <span className={`text-xs font-semibold tracking-wide ${isLiveGps ? 'text-[#0C1E5B]' : 'text-amber-800'}`}>
+                            {isLiveGps ? 'LIVE GPS' : 'DEMO ROUTE — NOT LIVE GPS'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -249,8 +257,8 @@ export default function BusTrackingMap() {
                     scrollWheelZoom={true}
                 >
                     <TileLayer
-                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-                        attribution="Tiles &copy; Esri &mdash; Source: Esri, OpenStreetMap contributors"
+                        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
                     />
 
                     <FitBounds coords={ROUTE_COORDS} />

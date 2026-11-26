@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { CalendarRange, BadgePercent, BookOpenCheck, CircleCheck, ChevronLeft, ChevronRight, Calendar, Download, Star } from "lucide-react"
@@ -7,7 +7,6 @@ import resultImg from "../../../assets/images/result-img.png"
 import { useActiveStudent } from '../../../context/ActiveStudentContext'
 import { getStudentResultSummary } from '../../Parent/parentStudentViewData'
 import { getApprovedMarksForStudent } from '../../../Common/MarkEntryApproval/markEntryApprovalData'
-import { canUseResultsApi, getStudentResultsApi } from '../../../services/resultsApi'
 
 const performanceCategories = [
     { label: "Excellent", range: "90 - 100%", subjects: 1, color: "#4CAF50" },
@@ -24,55 +23,15 @@ const ResultDetails = () => {
 
     const [selectMonth, setSelectMonth] = useState(new Date());
     const { activeStudent } = useActiveStudent()
-    const [apiPayload, setApiPayload] = useState(null)
-    const [apiError, setApiError] = useState('')
-
-    useEffect(() => {
-        if (!canUseResultsApi() || !activeStudent?.id) {
-            setApiPayload(null)
-            setApiError('')
-            return undefined
-        }
-        let active = true
-        getStudentResultsApi(activeStudent.id)
-            .then((rows) => {
-                if (active) {
-                    setApiPayload(rows)
-                    setApiError('')
-                }
-            })
-            .catch((error) => {
-                if (active) {
-                    setApiPayload(null)
-                    setApiError(error?.message || 'Results could not be loaded from the server.')
-                }
-            })
-        return () => {
-            active = false
-        }
-    }, [activeStudent?.id])
-
     const summary = useMemo(
         () => getStudentResultSummary(activeStudent.id),
         [activeStudent.id],
     )
 
-    const approvedResults = useMemo(() => {
-        if (apiPayload?.exams?.length) {
-            return apiPayload.exams.map((exam, index) => ({
-                id: exam.examId || `api-${index}`,
-                examName: exam.examName,
-                examType: exam.examType,
-                total: exam.total,
-                maxTotal: exam.maxTotal,
-                percentage: exam.percentage,
-                rank: exam.rank,
-                status: 'Pass',
-                subjects: exam.subjects,
-            }))
-        }
-        return getApprovedMarksForStudent(activeStudent.id)
-    }, [activeStudent.id, apiPayload])
+    const approvedResults = useMemo(
+        () => getApprovedMarksForStudent(activeStudent.id),
+        [activeStudent.id],
+    )
 
     const bagdeColor = {
         "Pass": "bg-[#4CAF5033] text-[#4CAF50]",
@@ -101,10 +60,6 @@ const ResultDetails = () => {
 
     return (
         <section>
-            {apiError ? <p className='text-sm text-[#B42318] mb-3'>{apiError}</p> : null}
-            {apiPayload?.exams?.length ? (
-                <p className='text-sm text-[#667085] mb-3'>Showing published results from the server for {activeStudent.name}.</p>
-            ) : null}
 
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>

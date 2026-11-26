@@ -9,8 +9,6 @@ const NotificationsListView = ({
     notificationTypes,
     typeBadgeColor,
     title = 'Notifications',
-    onOpen,
-    emptyMessage = 'No notifications found.',
 }) => {
     const [filters, setFilters] = useState(emptyFilters)
     const [expandedId, setExpandedId] = useState(null)
@@ -69,7 +67,7 @@ const NotificationsListView = ({
 
             {filtered.length === 0 ? (
                 <div className='bg-white rounded-2xl shadow-md p-12 text-center text-[#667085]'>
-                    {emptyMessage}
+                    No notifications found.
                 </div>
             ) : (
                 <div className='flex flex-col gap-3'>
@@ -127,10 +125,7 @@ const NotificationsListView = ({
 
                                     <button
                                         type='button'
-                                        onClick={() => {
-                                            setExpandedId(isExpanded ? null : record.id)
-                                            if (!isExpanded && onOpen) onOpen(record)
-                                        }}
+                                        onClick={() => setExpandedId(isExpanded ? null : record.id)}
                                         className='mt-4 text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'
                                     >
                                         {isExpanded ? 'Show less' : 'Read more'}

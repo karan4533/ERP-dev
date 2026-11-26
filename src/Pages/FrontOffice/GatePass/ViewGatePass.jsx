@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import mo_user from '../../../assets/images/no-profile.png'
+import { ArrowLeft, Printer, Shield, CheckCircle2, Clock } from 'lucide-react'
 import { getStudentGatePassById, formatOutTimeForDisplay, statusBadgeColor } from './gatePassData'
+import { CAMPUS_NAME } from '../../../Common/GatePassSecurity/gatePassSecurityData'
 
 const Field = ({ label, value }) => (
-    <div className='flex flex-col gap-y-1'>
-        <span className='text-base font-medium text-[#808080]'>{label}</span>
-        <span className='text-sm text-[#1E1E1E]'>{value || '—'}</span>
+    <div className='flex flex-col gap-1'>
+        <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>{label}</span>
+        <span className='text-sm font-medium text-slate-800'>{value || '—'}</span>
     </div>
 )
 
@@ -22,58 +22,110 @@ const ViewGatePass = () => {
                 <button
                     type='button'
                     onClick={() => navigate('/front-office/gate-pass-list')}
-                    className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                    className='inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer'
                 >
-                    <ArrowLeft size={18} />
-                    Back to list
+                    <ArrowLeft size={14} /> Back to list
                 </button>
-                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                <div className='bg-white rounded-2xl shadow-xs border border-slate-200 p-8 text-center text-slate-500 text-sm'>
                     Gate pass not found.
                 </div>
             </section>
         )
     }
 
-    return (
-        <section className='space-y-6'>
-            <button
-                type='button'
-                onClick={() => navigate('/front-office/gate-pass-list')}
-                className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-            >
-                <ArrowLeft size={18} />
-                Back to list
-            </button>
+    const badgeClass = statusBadgeColor[record.displayStatus] || statusBadgeColor[record.status] || 'bg-slate-100 text-slate-700'
 
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex flex-wrap items-start gap-4 mb-6'>
-                    <img
-                        src={record.profileImage || mo_user}
-                        alt=''
-                        className='w-16 h-16 rounded-full object-cover'
-                    />
+    return (
+        <section className='space-y-6 max-w-4xl mx-auto'>
+            <div className='flex items-center justify-between'>
+                <button
+                    type='button'
+                    onClick={() => navigate('/front-office/gate-pass-list')}
+                    className='inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer'
+                >
+                    <ArrowLeft size={14} /> Back to list
+                </button>
+                <button
+                    type='button'
+                    onClick={() => window.print()}
+                    className='inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer'
+                >
+                    <Printer size={14} /> Print Pass
+                </button>
+            </div>
+
+            <div className='rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden'>
+                {/* Header Banner */}
+                <div className='bg-slate-900 p-6 text-white flex items-center justify-between'>
                     <div>
-                        <h2 className='text-xl font-semibold text-black'>{record.studentName}</h2>
-                        <p className='text-sm text-[#667085] mt-1'>
-                            Gate Pass: {record.gatePassId} · Student ID: {record.studentId}
+                        <div className='flex items-center gap-2'>
+                            <Shield size={20} className='text-blue-400' />
+                            <h2 className='text-base font-bold uppercase tracking-wider'>{CAMPUS_NAME}</h2>
+                        </div>
+                        <p className='text-xs text-slate-400 mt-1'>
+                            Student Security Gate Pass • Pass ID: <span className='font-mono font-bold text-white'>{record.gatePassId || record.id}</span>
                         </p>
-                        <span
-                            className={`inline-block mt-2 text-xs font-medium px-2 py-1 rounded ${statusBadgeColor[record.status] || 'bg-[#EDEEF5] text-[#667085]'}`}
-                        >
-                            {record.status}
-                        </span>
                     </div>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-bold ${badgeClass}`}>
+                        {record.displayStatus || record.status}
+                    </span>
                 </div>
 
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                    <Field label='Class & Section' value={record.classSection} />
-                    <Field label='Gender' value={record.gender} />
-                    <Field label='Mobile Number' value={record.mobileNumber} />
-                    <Field label='City' value={record.city} />
-                    <Field label='Date' value={record.date} />
-                    <Field label='Out Time' value={formatOutTimeForDisplay(record.outTime)} />
-                    <div className='lg:col-span-3'>
-                        <Field label='Reason' value={record.reason} />
+                <div className='p-6 space-y-6'>
+                    {/* Student Info Grid */}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-slate-100'>
+                        <Field label='Student Full Name' value={record.studentName} />
+                        <Field label='Student ID' value={record.studentId} />
+                        <Field label='Class & Section' value={record.classSection} />
+                        <Field label='Academic Department' value={record.department || 'Academics - Secondary'} />
+                        <Field label='Date of Movement' value={record.date} />
+                        <Field label='Parent / Guardian Contact' value={record.parentGuardianInfo || record.mobileNumber} />
+                    </div>
+
+                    {/* Movement Logistics */}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-slate-100'>
+                        <Field label='Expected Departure Time' value={formatOutTimeForDisplay(record.expectedDepartureTime || record.outTime)} />
+                        <Field label='Expected Return Time' value={formatOutTimeForDisplay(record.expectedReturnTime)} />
+                        <Field label='Accompanying Escort' value={record.accompanyingPerson || 'Parent / Guardian'} />
+                        <div className='md:col-span-3'>
+                            <Field label='Reason for Leaving' value={record.reason} />
+                        </div>
+                        {record.remarks && (
+                            <div className='md:col-span-3'>
+                                <Field label='Special Security Instructions' value={record.remarks} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Executive Approval & Security Log */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                        <div className='rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-1.5'>
+                            <div className='text-xs font-bold uppercase text-emerald-800 flex items-center gap-1.5'>
+                                <CheckCircle2 size={14} className='text-emerald-600' /> Sanctioning Authority
+                            </div>
+                            {record.approvedBy ? (
+                                <>
+                                    <div className='font-bold text-emerald-950 text-sm'>{record.approvedBy.name}</div>
+                                    <div className='text-xs text-emerald-700'>{record.approvedBy.roleLabel} • {record.approvedBy.timestamp}</div>
+                                    <div className='text-xs text-emerald-800 italic mt-1'>"{record.approvedBy.remarks}"</div>
+                                </>
+                            ) : (
+                                <div className='text-xs text-amber-700 italic flex items-center gap-1'>
+                                    <Clock size={12} /> Pending Sanction from Principal or Director of Academics
+                                </div>
+                            )}
+                        </div>
+
+                        <div className='rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-1.5'>
+                            <div className='text-xs font-bold uppercase text-slate-700 flex items-center gap-1.5'>
+                                <Shield size={14} className='text-slate-500' /> Gate Security Terminal Clearance
+                            </div>
+                            <div className='text-xs text-slate-600'>
+                                <div>Actual Exit: <span className='font-medium text-slate-900'>{record.actualDepartureTime || 'Pending Gate Scan'}</span></div>
+                                <div>Actual Return: <span className='font-medium text-slate-900'>{record.actualReturnTime || 'Pending Return'}</span></div>
+                                <div>Gate Officer: <span className='font-medium text-slate-900'>{record.exitGatekeeper || 'Ram Singh (Gate #1)'}</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

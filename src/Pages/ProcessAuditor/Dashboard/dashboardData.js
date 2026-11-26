@@ -1,41 +1,13 @@
-import { getMyAudits, hydrateFromApi as hydrateMyAudits } from '../AuditManagement/MyAudits/myAuditsData'
-import { getAuditHistory, hydrateFromApi as hydrateAuditHistory } from '../AuditManagement/AuditHistory/auditHistoryData'
-import { getObservations, getOpenObservations, hydrateFromApi as hydrateObservations } from '../Observations/observationsData'
-import { getEscalations, hydrateFromApi as hydrateEscalations } from '../CorrectiveActions/Escalations/escalationsData'
-import { getComplianceData, hydrateFromApi as hydrateCompliance } from '../Reports/ComplianceReports/complianceReportsData'
-import { buildAuditorKpiCards, emptyKpiCards } from '../../../Common/auditDomain/auditorDashboardKpis'
-import { loadCampusJson, usesCampusApiForKey } from '../../../services/campusJsonStore'
-
-const COMPLIANCE_KEY = 'process-auditor-compliance-reports'
-
-const readCompliance = () => {
-    if (usesCampusApiForKey(COMPLIANCE_KEY)) return loadCampusJson(COMPLIANCE_KEY, [])
-    return getComplianceData()
-}
-
-export const buildLiveKpiCards = () =>
-    buildAuditorKpiCards({
-        audits: getMyAudits(),
-        observations: getObservations(),
-        openObservations: getOpenObservations(),
-        escalations: getEscalations(),
-        compliance: readCompliance(),
-        history: getAuditHistory(),
-    })
-
-export const hydrateAuditorDashboardFromApi = async () => {
-    await Promise.all([
-        hydrateMyAudits(),
-        hydrateAuditHistory(),
-        hydrateObservations(),
-        hydrateEscalations(),
-        hydrateCompliance(),
-    ])
-    return buildLiveKpiCards()
-}
-
-/** Live counts from campus-audit collections (zeros until hydrate). */
-export const KPI_CARDS = emptyKpiCards()
+export const KPI_CARDS = [
+    { label: "Today's Audits", value: '3', sub: 'Scheduled for today' },
+    { label: 'Pending Audits', value: '9', sub: 'Assigned, not yet started' },
+    { label: 'Completed Audits', value: '28', sub: 'Closed this quarter' },
+    { label: 'Overdue Audits', value: '2', sub: 'Past scheduled date' },
+    { label: 'Open Observations', value: '7', sub: 'Awaiting corrective action' },
+    { label: 'Escalated Issues', value: '4', sub: 'Non-compliance escalated' },
+    { label: 'Average Compliance %', value: '89%', sub: 'Across audited departments' },
+    { label: 'Departments Audited', value: '12', sub: 'Unique departments covered' },
+]
 
 export const MONTHLY_COMPLIANCE_TREND = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],

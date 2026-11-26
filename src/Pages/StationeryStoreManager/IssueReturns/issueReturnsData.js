@@ -1,4 +1,3 @@
-import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const ACTIVITY_TYPES = ['Issue', 'Return']
 
 export const DEPARTMENTS = [
@@ -32,7 +31,7 @@ export const PURPOSE_OPTIONS = [
 
 export const CONDITION_OPTIONS = ['Good', 'Damaged', 'Lost']
 
-const DEFAULT_ISSUE_RETURNS = [
+export const ISSUE_RETURNS = [
     {
         id: 'IR-2026-0042',
         activityType: 'Issue',
@@ -148,19 +147,7 @@ export const statusBadgeColor = {
 }
 
 export const getIssueReturnById = (id) =>
-    getIssueReturns().find((entry) => entry.id === id)
+    ISSUE_RETURNS.find((entry) => entry.id === id)
 
 export const getAvailableStock = (itemName) =>
     ITEM_OPTIONS.find((item) => item.name === itemName)?.availableStock ?? '—'
-export const ISSUE_RETURNS_STORAGE_KEY = 'schoolerp-stationery-issue-returns-v1'
-export function getIssueReturns() {
-    return ensureCampusSeed('schoolerp-stationery-issue-returns-v1', DEFAULT_ISSUE_RETURNS)
-}
-export function saveIssueReturns(rows) {
-    return saveCampusJson('schoolerp-stationery-issue-returns-v1', rows)
-}
-export function hydrateIssueReturnsFromApi() {
-    if (!usesCampusApiForKey('schoolerp-stationery-issue-returns-v1')) return Promise.resolve(false)
-    return hydrateCampusKey('schoolerp-stationery-issue-returns-v1', DEFAULT_ISSUE_RETURNS)
-}
-export const ISSUE_RETURNS = DEFAULT_ISSUE_RETURNS

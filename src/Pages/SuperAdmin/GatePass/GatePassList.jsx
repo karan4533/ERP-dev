@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -11,38 +11,18 @@ import {
     filterGatePasses,
     getAllGatePasses,
     getGatePassStatusOptions,
-    hydrateAllGatePassesFromApi,
     passCategoryBadgeColor,
     statusBadgeColor,
 } from './gatePassData'
 
 const GatePassList = () => {
-    const [records, setRecords] = useState(() => getAllGatePasses())
-    const [loading, setLoading] = useState(true)
-    const [fromDate, setFromDate] = useState(null)
-    const [toDate, setToDate] = useState(null)
+    const [records] = useState(() => getAllGatePasses())
+    const [fromDate, setFromDate] = useState(new Date())
+    const [toDate, setToDate] = useState(new Date())
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('')
     const [passCategory, setPassCategory] = useState('')
     const [exportModal, setExportModal] = useState(false)
-
-    useEffect(() => {
-        let active = true
-        setLoading(true)
-        hydrateAllGatePassesFromApi()
-            .then((rows) => {
-                if (active) setRecords(rows)
-            })
-            .catch(() => {
-                if (active) setRecords(getAllGatePasses())
-            })
-            .finally(() => {
-                if (active) setLoading(false)
-            })
-        return () => {
-            active = false
-        }
-    }, [])
 
     const statusOptions = useMemo(() => getGatePassStatusOptions(records), [records])
 
@@ -55,8 +35,8 @@ const GatePassList = () => {
         setSearch('')
         setStatus('')
         setPassCategory('')
-        setFromDate(null)
-        setToDate(null)
+        setFromDate(new Date())
+        setToDate(new Date())
     }
 
     return (
@@ -147,12 +127,7 @@ const GatePassList = () => {
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <div>
-                        <h2 className='text-xl font-medium text-black'>Gate Pass List</h2>
-                        <p className='text-sm text-[#667085] mt-1'>
-                            Student, hostel, and material passes from Front Office — same records across the ERP.
-                        </p>
-                    </div>
+                    <h2 className='text-xl font-medium text-black'>Gate Pass List</h2>
                     <button
                         type='button'
                         onClick={() => setExportModal(true)}
@@ -177,13 +152,7 @@ const GatePassList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
-                                        Loading gate passes…
-                                    </td>
-                                </tr>
-                            ) : filteredRecords.length === 0 ? (
+                            {filteredRecords.length === 0 ? (
                                 <tr>
                                     <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
                                         No gate passes found.
@@ -242,22 +211,7 @@ const GatePassList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename="super-admin-gate-passes"
-                title="Gate Pass List"
-                rows={filteredRecords.map((row) => ({
-                    pass_id: row.passId,
-                    date: row.date,
-                    subject: row.subjectName,
-                    detail: row.subjectDetail,
-                    category: row.passCategory,
-                    status: row.status,
-                    created_by: row.createdBy,
-                }))}
-                exportDescription={<>You are exporting {filteredRecords.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </section>
     )
 }

@@ -8,10 +8,6 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 
-const EXPORT_ROWS = [
-    {profile: '', teacher_name: 'Sandy Selva', teacher_s_id: 'TEA-1001', class: 'Class-10', subject: 'English', email_id: 'san@gmail.com', gender: 'Male', mobile_number: '9944076993', qualification: 'B.SC, B.ED', experience: '8 Years', city: 'Trichy', state: 'Tamil Nadu'},
-]
-
 const TeachersList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -187,13 +183,7 @@ const TeachersList = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='teachers-list'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

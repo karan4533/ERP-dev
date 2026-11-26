@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Navigate, useParams } from 'react-router-dom'
-import { ArrowLeft, KeyRound } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { toast } from 'react-toastify'
 import mo_user from '../../../assets/images/no-profile.png'
 import { PROFILE_TABS } from './employeeData'
@@ -9,11 +9,11 @@ import { salaryRows } from '../domain/hrStore'
 import {
     getAdvances, getAttendance, getDisciplinary, getDocuments, getEmployee, getExits, saveExits,
     getObservations, getOnboarding, getPerformance, getReferrals, getShadow, getTraining, completionOf,
-    queueCommunication, pushNotification,
 } from '../domain/hrStore'
 import { getLeaveBundle } from '../domain/hrStore'
-import { resetStaffPassword } from '../../../services/hrApi'
-import { Badge, Modal, PrimaryButton, td, th, useHrTick } from '../components/HrUi'
+import { DataTable } from '../../../Common/ui'
+import { Badge } from '../components/HrUi'
+import { useHrTick } from '../components/hrUiState'
 import { SOM_KEY, SOM_SEED } from '../../../Common/demoDomain/housekeeping'
 import { ensureSeed } from '../../../Common/demoDomain/storage'
 
@@ -24,68 +24,34 @@ const Info = ({ label, value }) => (
     </div>
 )
 
-const MiniTable = ({ headers, rows }) => (
-    <div className='overflow-x-auto'>
-        <table className='w-full text-left'>
-            <thead className='bg-[#EDEEF5]'><tr>{headers.map((header) => <th key={header} className={th}>{header}</th>)}</tr></thead>
-            <tbody>
-                {rows.length === 0 && <tr><td className={td} colSpan={headers.length}>No records for this employee.</td></tr>}
-                {rows.map((row) => <tr key={row.key} className='border-b border-[#f2f4f7]'>{row.cells.map((cell, index) => <td key={index} className={td}>{cell}</td>)}</tr>)}
-            </tbody>
-        </table>
-    </div>
-)
+const MiniTable = ({ headers, rows }) => {
+    const columns = headers.map((header, index) => ({
+        key: `cell-${index}`,
+        label: header,
+        required: index === 0,
+        render: (row) => row.cells[index],
+    }))
+    return (
+        <DataTable
+            caption={`${headers[0] || 'Employee'} records`}
+            rows={rows}
+            columns={columns}
+            rowKey='key'
+            emptyTitle='No records for this employee'
+            emptyDescription='This section will update when the corresponding HR workflow records activity.'
+        />
+    )
+}
 
 const EmployeeProfile = () => {
     const { id } = useParams()
     const tick = useHrTick()
-    const employee = useMemo(() => getEmployee(id), [id, tick])
+    const employee = useMemo(() => {
+        void tick
+        return getEmployee(id)
+    }, [id, tick])
     const [tab, setTab] = useState('overview')
-    const [resetting, setResetting] = useState(false)
-    const [credentialNotice, setCredentialNotice] = useState(null)
     if (!employee) return <Navigate to='/hr/employee-management/employees' replace />
-
-    const resetPassword = async () => {
-        if (!employee.email) {
-            toast.error('This employee has no email. Add an email before resetting the login password.')
-            return
-        }
-        if (!window.confirm(`Reset portal password for ${employee.name} (${employee.email})? They must change it on next login.`)) {
-            return
-        }
-        setResetting(true)
-        try {
-            const result = await resetStaffPassword(employee.id)
-            const temporaryPassword = result.temporaryPassword || ''
-            const loginEmail = result.loginEmail || result.email || employee.email
-            queueCommunication({
-                channel: 'Email',
-                subject: `QMIS password reset — ${loginEmail}`,
-                audience: loginEmail,
-                body: temporaryPassword
-                    ? `Dear ${employee.name},\n\nYour QMIS password was reset by HR.\nEmail: ${loginEmail}\nTemporary password: ${temporaryPassword}\n\nChange this password on next login.\n\n— HR`
-                    : `Dear ${employee.name},\n\nYour password was reset. Contact HR for the temporary password.`,
-                note: 'Queued locally — live SMTP is not connected in this campus demo.',
-            })
-            pushNotification({
-                type: 'HR',
-                title: 'Password reset',
-                message: `Temporary password issued for ${employee.name} (${loginEmail}).`,
-                relatedDate: '',
-            })
-            setCredentialNotice({ loginEmail, temporaryPassword })
-            toast.success(
-                temporaryPassword
-                    ? `Password reset. Temp password: ${temporaryPassword} (also queued to email demo).`
-                    : 'Password reset requested.',
-                { autoClose: 12000 },
-            )
-        } catch (error) {
-            toast.error(error?.message || 'Could not reset password. Ensure the employee has a portal role and email.')
-        } finally {
-            setResetting(false)
-        }
-    }
 
     const documents = getDocuments().filter((item) => item.employeeId === employee.id)
     const attendance = getAttendance().filter((item) => item.employeeId === employee.id)
@@ -158,37 +124,14 @@ const EmployeeProfile = () => {
     return (
         <section className='space-y-6'>
             <NavLink to='/hr/employee-management/employees' className='inline-flex items-center gap-2 text-sm text-[#515DEF]'><ArrowLeft size={16} /> Employees</NavLink>
-            <div className='bg-white rounded-2xl shadow-md p-4 flex flex-wrap gap-4 items-center justify-between'>
-                <div className='flex gap-4 items-center'>
-                    <img src={mo_user} alt='' className='w-16 h-16 rounded-full object-cover' />
-                    <div>
-                        <h2 className='text-xl font-semibold'>{employee.name}</h2>
-                        <p className='text-sm text-[#667085]'>{employee.id} · {employee.designation} · {employee.department}</p>
-                        <p className='text-sm text-[#667085]'>{employee.email || 'No login email'}</p>
-                        <Badge value={employee.status} />
-                    </div>
+            <div className='bg-white rounded-2xl shadow-md p-4 flex gap-4 items-center'>
+                <img src={mo_user} alt='' className='w-16 h-16 rounded-full object-cover' />
+                <div>
+                    <h2 className='text-xl font-semibold'>{employee.name}</h2>
+                    <p className='text-sm text-[#667085]'>{employee.id} · {employee.designation} · {employee.department}</p>
+                    <Badge value={employee.status} />
                 </div>
-                <button
-                    type='button'
-                    disabled={resetting || !employee.email}
-                    onClick={resetPassword}
-                    className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50'
-                >
-                    <KeyRound size={16} />
-                    {resetting ? 'Resetting…' : 'Reset / send login password'}
-                </button>
             </div>
-            {credentialNotice && (
-                <Modal title='Temporary login credentials' onClose={() => setCredentialNotice(null)}>
-                    <div className='space-y-3 text-sm text-[#344054]'>
-                        <p>Share these once with the employee. They must change the password on first login.</p>
-                        <p><span className='text-[#667085]'>Login email:</span> <strong>{credentialNotice.loginEmail}</strong></p>
-                        <p><span className='text-[#667085]'>Temporary password:</span> <strong className='font-mono text-base'>{credentialNotice.temporaryPassword || '—'}</strong></p>
-                        <p className='text-xs text-[#667085]'>Also queued under HR Communications as a local demo email (SMTP is not live unless campus mail is connected).</p>
-                        <PrimaryButton type='button' onClick={() => setCredentialNotice(null)}>Done</PrimaryButton>
-                    </div>
-                </Modal>
-            )}
             <div className='flex gap-2 overflow-x-auto'>
                 {visibleTabs.map((item) => (
                     <button key={item.id} type='button' onClick={() => setTab(item.id)} className={`text-sm px-3 py-2 rounded-md whitespace-nowrap cursor-pointer ${tab === item.id ? 'bg-[#515DEF] text-white' : 'bg-white text-[#515DEF] border border-[#515DEF]'}`}>{item.label}</button>

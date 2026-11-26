@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { getCandidates, getJobs, nextId, saveCandidates } from '../domain/hrStore'
-import { Badge, FormField, HrExport, KeyFields, Modal, PageIntro, PrimaryButton, SearchBox, Select, TableWrap, inputClass, td, th, useFilters, useHrTick, matches } from '../components/HrUi'
+import { Badge, HrExport, Modal, PageIntro, PrimaryButton, SearchBox, Select, TableWrap, inputClass } from '../components/HrUi'
+import { matches, useFilters, useHrTick } from '../components/hrUiState'
+import { DataTable } from '../../../Common/ui'
 
 const SOURCES = ['Walk-in', 'Employee Referral', 'Consultancy', 'Job Portal', 'Internal', 'Campus', 'Other']
 const STATUSES = ['Applied', 'Screening', 'Interview', 'Selected', 'Rejected', 'On Hold']
@@ -11,13 +13,20 @@ const empty = { jobId: '', name: '', dateOfBirth: '', gender: '', maritalStatus:
 const Candidates = () => {
     const tick = useHrTick()
     const [params] = useSearchParams()
-    const rows = useMemo(() => getCandidates(), [tick])
-    const jobs = useMemo(() => getJobs(), [tick])
+    const rows = useMemo(() => { void tick; return getCandidates() }, [tick])
+    const jobs = useMemo(() => { void tick; return getJobs() }, [tick])
     const { filters, set } = useFilters({ search: '', source: '', status: params.get('status') || '' })
     const [form, setForm] = useState(null)
     const [selected, setSelected] = useState(null)
     const [exportOpen, setExportOpen] = useState(false)
     const filtered = rows.filter((row) => (!filters.source || row.source === filters.source) && (!filters.status || row.status === filters.status) && matches(`${row.name} ${row.id} ${row.position}`, filters.search))
+    const columns = [
+        { key: 'id', label: 'Candidate ID', required: true },
+        { key: 'name', label: 'Name', required: true },
+        { key: 'position', label: 'Position' },
+        { key: 'source', label: 'Source' },
+        { key: 'status', label: 'Status', render: (row) => <Badge value={row.status} /> },
+    ]
 
     const save = (event) => {
         event.preventDefault()
@@ -39,42 +48,19 @@ const Candidates = () => {
                 </div>
             </PageIntro>
             <TableWrap title='Candidates' action={<><PrimaryButton onClick={() => setForm({ ...empty, jobId: jobs[0]?.id || '' })}>Add Candidate</PrimaryButton><PrimaryButton onClick={() => setExportOpen(true)}>Export</PrimaryButton></>}>
-                <table className='w-full text-left'><thead className='bg-[#EDEEF5]'><tr>{['ID', 'Name', 'Position', 'Source', 'Status', ''].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-                    <tbody>{filtered.map((row) => <tr key={row.id} className='border-b border-[#f2f4f7]'><td className={td}>{row.id}</td><td className={td}>{row.name}</td><td className={td}>{row.position}</td><td className={td}>{row.source}</td><td className={td}><Badge value={row.status} /></td><td className={td}><button type='button' className='text-[#515DEF] mr-3' onClick={() => setSelected(row)}>View</button><button type='button' className='text-[#515DEF]' onClick={() => setForm(row)}>Edit</button></td></tr>)}</tbody>
-                </table>
+                <DataTable caption='HR candidate register' rows={filtered} columns={columns} rowKey='id' emptyTitle='No candidates found' emptyDescription='Change source, status or search to review other candidates.' renderActions={(row) => <><button type='button' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold' onClick={() => setSelected(row)}>View</button><button type='button' className='min-h-9 rounded-md border border-[var(--erp-indigo)] px-3 text-sm font-semibold text-[var(--erp-indigo)]' onClick={() => setForm(row)}>Edit</button></>} />
             </TableWrap>
             {selected && <Modal title={selected.name} onClose={() => setSelected(null)}>
                 <div className='grid sm:grid-cols-2 gap-3 text-sm'>{Object.entries(selected).map(([key, value]) => <p key={key}><span className='text-[#808080]'>{key}: </span>{String(value || '—')}</p>)}</div>
             </Modal>}
             {form && <Modal title='Candidate' onClose={() => setForm(null)} wide>
                 <form onSubmit={save} className='grid md:grid-cols-2 gap-3'>
-                    <Select
-                        label='Position / job'
-                        value={form.jobId}
-                        onChange={(e) => setForm({ ...form, jobId: e.target.value })}
-                        options={jobs.map((job) => ({ value: job.id, label: `${job.position} (${job.id})` }))}
-                        allLabel='Select position'
-                    />
-                    <KeyFields
-                        keys={['name', 'dateOfBirth', 'gender', 'maritalStatus', 'address', 'mobile', 'email', 'qualification', 'experience', 'currentCompany', 'currentSalary', 'expectedSalary', 'noticePeriod', 'reference', 'applicationDate']}
-                        form={form}
-                        setForm={setForm}
-                    />
+                    <Select label='Position' value={form.jobId} onChange={(e) => setForm({ ...form, jobId: e.target.value })} options={jobs.map((job) => job.id)} allLabel='Select' />
+                    {['name', 'dateOfBirth', 'gender', 'maritalStatus', 'address', 'mobile', 'email', 'qualification', 'experience', 'currentCompany', 'currentSalary', 'expectedSalary', 'noticePeriod', 'reference', 'applicationDate'].map((key) => <input key={key} className={inputClass} placeholder={key} value={form[key] || ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />)}
                     <Select label='Source' value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} options={SOURCES} allLabel='Select' />
                     <Select label='Status' value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} options={STATUSES} allLabel='Select' />
-                    <FormField label='Resume file' hint={form.resumeName ? `${form.resumeName} · ${form.resumeSize || ''}` : 'Optional — file name is stored for reference'}>
-                        <input
-                            type='file'
-                            className={inputClass}
-                            onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file) setForm({ ...form, resumeName: file.name, resumeSize: `${Math.ceil(file.size / 1024)} KB` })
-                            }}
-                        />
-                    </FormField>
-                    <div className='md:col-span-2 flex justify-end'>
-                        <PrimaryButton type='submit'>Save</PrimaryButton>
-                    </div>
+                    <input type='file' onChange={(e) => { const file = e.target.files?.[0]; if (file) setForm({ ...form, resumeName: file.name, resumeSize: `${Math.ceil(file.size / 1024)} KB` }) }} />
+                    <PrimaryButton type='submit'>Save</PrimaryButton>
                 </form>
             </Modal>}
             <HrExport open={exportOpen} setOpen={setExportOpen} filename='candidates' rows={filtered} />

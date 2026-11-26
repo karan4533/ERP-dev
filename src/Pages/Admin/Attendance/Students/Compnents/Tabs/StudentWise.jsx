@@ -2,10 +2,6 @@ import React, { useState } from 'react'
 import { Download } from 'lucide-react'
 import ExportModal from '../../../../../../Common/CommonComponents/ExportModal';
 
-const EXPORT_ROWS = [
-    {admission_number: 'ADM-NO1845', student_name: 'Sandy', class: '10th', section: 'A'},
-]
-
 const StudentWise = () => {
 
     const [exportModal, setExportModal] = useState(false);
@@ -58,13 +54,7 @@ const StudentWise = () => {
                 </div>
             </div>
 
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='student-wise'
-                rows={EXPORT_ROWS}
-                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
-            />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
         </div>
     )
 }

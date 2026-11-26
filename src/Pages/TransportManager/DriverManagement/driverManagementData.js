@@ -1,5 +1,4 @@
-import { getTransportRows, hydrateTransportRows, saveTransportRows } from '../transportCampus'
-import {
+﻿import {
     DRIVERS as BASE_DRIVERS,
     getDriverDisplayName,
     statusBadgeColor,
@@ -41,44 +40,11 @@ const DRIVER_EXTRAS = {
     },
 }
 
-const DEFAULT_DRIVERS = BASE_DRIVERS.map((driver) => ({
+export const DRIVERS = BASE_DRIVERS.map((driver) => ({
     ...driver,
     ...(DRIVER_EXTRAS[driver.id] ?? {}),
 }))
 
-export const getDriverById = (id) => getDrivers().find((driver) => driver.id === id) ?? null
+export const getDriverById = (id) => DRIVERS.find((driver) => driver.id === id) ?? null
 
 export { getDriverDisplayName, statusBadgeColor, DRIVER_STATUSES }
-
-export const DRIVERS_STORAGE_KEY = 'schoolerp-transport-drivers-v1'
-
-export function getDrivers() {
-    return getTransportRows(DRIVERS_STORAGE_KEY, DEFAULT_DRIVERS)
-}
-
-export function saveDrivers(rows) {
-    return saveTransportRows(DRIVERS_STORAGE_KEY, rows)
-}
-
-export function hydrateDriversFromApi() {
-    return hydrateTransportRows(DRIVERS_STORAGE_KEY)
-}
-
-export function getDriverOptions({ activeOnly = true } = {}) {
-    return getDrivers()
-        .filter((driver) => {
-            if (!activeOnly) return true
-            const status = String(driver.status || 'Active').toLowerCase()
-            return status === 'active' || status === ''
-        })
-        .map((driver) => ({
-            id: driver.id,
-            label: getDriverDisplayName(driver) || driver.name || driver.driverName || driver.id,
-            contact: driver.mobileNumber || driver.contact || '',
-            vehicleNumber: driver.vehicleNumber || '',
-            routeName: driver.routeAssigned || '',
-            vehicleType: driver.vehicleType || '',
-        }))
-}
-
-export const DRIVERS = DEFAULT_DRIVERS

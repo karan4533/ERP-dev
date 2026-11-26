@@ -32,33 +32,23 @@ const FeeInstallmentCard = ({
                     : 'border-[#EDEEF5] bg-white'
         }`}>
             <div className='flex items-start justify-between gap-3 mb-3'>
-                <label className={`inline-flex items-start gap-2 ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
+                <label className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
                     <input
                         type='checkbox'
                         checked={isPaid ? true : selected}
                         disabled={disabled}
                         onChange={() => onToggle(installment)}
-                        className='size-4 accent-[#515DEF] mt-0.5'
+                        className='size-4 accent-[#515DEF]'
                     />
-                    <span>
-                        <span className='font-semibold text-[#1E1E1E] block'>
-                            {installment.installmentLabel || installment.feeHead}
-                        </span>
-                        {installment.installmentLabel && installment.feeHead && (
-                            <span className='text-xs text-[#808080]'>{installment.feeHead}</span>
-                        )}
-                    </span>
+                    <span className='font-semibold text-[#1E1E1E]'>{installment.feeHead}</span>
                 </label>
-                <span className={`px-2 py-1 rounded-lg text-xs font-semibold shrink-0 ${installmentStatusBadgeColor[installment.status]}`}>
+                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${installmentStatusBadgeColor[installment.status]}`}>
                     {installment.status.replaceAll('_', ' ')}
                 </span>
             </div>
 
             {isPaid ? (
                 <div className='space-y-1'>
-                    {installment.dueDate && (
-                        <Row label='Paid for due date' value={installment.dueDate} muted />
-                    )}
                     <Row label='Concession' value={formatCurrency(installment.concessionAmount)} />
                     <Row label='Fee Amount' value={formatCurrency(installment.feeAmount)} />
                     <Row label='Net Amount (After concession)' value={formatCurrency(installment.netAmount)} />
@@ -68,12 +58,6 @@ const FeeInstallmentCard = ({
                 </div>
             ) : (
                 <div className='space-y-1'>
-                    {installment.dueDate && (
-                        <Row label='Pay by' value={installment.dueDate} />
-                    )}
-                    {installment.frequency && (
-                        <Row label='Billing' value={String(installment.frequency).replaceAll('_', ' ')} muted />
-                    )}
                     <Row label='Concession' value={formatCurrency(installment.concessionAmount)} />
                     <Row label='Fee Amount' value={formatCurrency(installment.feeAmount)} />
                     <Row label='Net Amount' value={formatCurrency(installment.netAmount)} />

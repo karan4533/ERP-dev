@@ -8,6 +8,873 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ---
 
+## 26 November 2026 — Finance Wave A7–A10 + integration with partner new-UI main
+
+### A7–A10 done (staging)
+- Book Fee (A7): per-student vendor/book lines with assigned fee check (Matched / Under / Over), edit and delete, audited
+- Annual Budget (A8): budget lines per FY/department/category, actuals from posted expense ledger lines, variance and over-budget count; assistants cannot set budgets
+- Reports (A9): one report pack per FY (overview, income, expenditure, fee comparison vs previous FY, trends) feeding all Reports tabs, CSV export
+- Settings (A10): institution and tax identifiers (GSTIN/PAN/TAN, TDS/GST %), academic year checked against April–March FY, saved on the server and audited
+- Staging smoke 18/18, finance pytest subset 36 passed, ERP_QMIS build Pass
+
+### Integration branch (not pushed)
+- Branch `integration/main-finance-2026-11-26` from partner `new-ui/main` (acb39ed): merge commit of my finance branch plus a backend port commit
+- Two frontend conflicts resolved, keeping both sides: Accounting (partner's role-based base paths and live subtitles plus my live ledger) and Payment Vouchers (partner's live header plus my live register and vendor payment)
+- Finance backend three-way merged into the partner backend; the partner's gateway links, reminder sweep, Non-Academics tickets and HR role guard are kept. Alembic now follows the staging chain 0019–0028 (single head)
+- Found and fixed a leak from my finance work: parents and students could read campus finance registers (state, reports, wallets, budgets, etc.) because they hold finance.read for their own fees. All campus finance reads now refuse portal roles; new regression test covers every finance read route
+- Fixed one frontend wallet static test that my wallet change had broken
+
+### Still open
+- Pushed to `new-ui/main` after Karan's approval (fast-forward acb39ed → f9835b0, 112 files); not deployed
+- Read leak on staging fixed: the fix was applied in a separate copy (`_integration/ERP_dev_finance_leakfix`), and the staging API on :8010 now runs from it (parents/students get 403 on all 19 campus finance reads; `/my-fees` and staff access unchanged). After Karan approved, the same two changes were carried into the root finance worktree (not committed); 48 security/finance tests pass there
+- TC workflow-stage backend exists only as uncommitted work in the root checkout, so it is not on either branch
+- Partner databases need a one-time `alembic stamp` for the renumbered migrations
+- Not done: browser click-through, PDF report export, MFP, books-closure enforcement, automatic TDS/GST
+
+---
+
+## 26 November 2026 — Finance Wave A6 (wallet) + A5 (accounting) + A4 (payment vouchers)
+
+### A6 done (wallet)
+- BE `finance_wallets.py`: open wallet (idempotent per email), offline recharge (cash/cheque/bank transfer; reference required and used as the repeat-safe key), spend (category, vendor, reference; overdraft/frozen blocked), freeze/flag/reactivate with reason; every money move posts a balanced GL entry against "Wallet Balances Payable" and is audited; finance roles only
+- Wallet overview/summary, recharge and spend history, ledger-drift check all computed from the live snapshot; new `walletSpends` registry kept in the finance snapshot
+- FE `walletApiService.js`; Wallet page tabs read the API in live mode with loading/error/Retry, new Open wallet / Record spend / Freeze actions, recharge modal takes mode + reference; demo behaviour unchanged outside live mode
+- Staging smoke (open, recharge, repeat, overdraft, spend, freeze, unfreeze, statements balanced, registries kept) + pytest subset (31 passed) + ERP_QMIS build Pass
+
+### A6 still open
+- UPI / card / net-banking recharge stays BLOCKED (no payment gateway); shown disabled in the UI
+- Wallet balance is read-modify-write on the JSON snapshot with no row lock, so two simultaneous spends on one wallet could race
+- Browser click-through of the Wallet page not done (API and build verified)
+
+---
+
+## 26 November 2026 — Finance Wave A5 (accounting) + A4 (payment vouchers)
+
+**Status:** A5 live on staging. Preserve TC / limits / payroll / Activity / Transport / Academic fees. No commit/push.
+
+### A5 done
+- BE `finance_accounting.py`: chart of accounts (list/upsert, balances from ledger), journal vouchers (balanced-only draft, idempotent by voucher no, post once to GL with audit), bank reconciliation (items derived from bank book; statement amount + reference required; mismatch stays Pending), financial statements (trial balance, P&L, balance sheet, cash flow with date/department filters)
+- FE `accountingApiService.js`; Accounting page loads COA/JV/recon/statements from API in live mode with loading/error/Retry; demo registers and demo opening balances are not shown in live mode
+- FinanceContext now carries `chartOfAccounts`, `journalVouchers`, `bookFeeBreakup` so the debounced state PUT cannot wipe them
+- Staging smoke (account, JV create/post/repost, statements balanced, recon list) + pytest subset (24 passed) + ERP_QMIS build Pass
+
+### A5 still open
+- Bank statement import and report export remain blocked (no bank feed / export service)
+- Day/Cash/Bank/General-ledger/Online book tabs are fed from the live snapshot but not yet individually paginated server-side
+- No maker-checker rule on journal posting beyond role (Account Head/Finance/Admin may post; assistants may only draft)
+- Browser click-through of the Accounting page not done (API and build verified)
+
+---
+
+## 26 November 2026 — Finance Wave A4 (payment vouchers)
+
+**Status:** A4 live on staging. Preserve TC / limits / payroll / Activity / Transport / Academic fees. No commit/push.
+
+### Done
+- BE `finance_vouchers.py`: unified voucher register (fees, vendor AP, vendor payments, payroll, reversals) and `pay-vendor-liability` (balanced GL, idempotent, audited, finance-write roles only)
+- Fixed vendor AP field mismatch (FE read `amountDue`/`payeeName`; BE stores `amount`/`vendorName`)
+- FE `paymentVoucherApiService.js`; Payment Vouchers page loads from API in live mode with loading/error/Retry and a "Pay vendor & post voucher" action
+- Staging smoke + pytest subset (22 passed) + ERP_QMIS build Pass
+
+### Still open (Wave A)
+- A5–A10: accounting, wallet, book fee, budget/MFP, reports, FY settings
+- Vendor payment uses bank transfer only (no cheque/partial payment flow yet)
+- Full `tests/` run has 50 failures in static-frontend/sqlite/parent-access tests; not yet compared with a clean baseline
+
+---
+
+## 25 November 2026 — Finance Wave A PARTIAL (A1–A3)
+
+**Status:** A1 fee structures, A2 concessions, A3 unpaid/defaulters live on staging. Preserve TC / limits / payroll / Activity / Transport. No commit/push.
+
+### Done
+- BE `finance_academic_fees.py`: list/upsert fee structures, create/list concessions, unpaid-installments + defaulters aggregate
+- FE live tabs/services; Fees Management banners connected for structure/concessions/defaulters
+- FinanceContext PUT now preserves `activityFees` + `transportFees` (wipe fix)
+- Staging smoke + pytest academic/transport/activity/payroll/limits; ERP_QMIS build Pass
+
+### Still open (Wave A)
+- A4–A10: vouchers (non-payroll), accounting, wallet, book fee, budget/MFP, reports, FY settings
+- Defaulter WhatsApp/email reminders (BLOCKED)
+
+---
+
+## 25 November 2026 — Finance fill #5 Transport Fee (live PG)
+
+**Status:** Complete in `_integration/ERP_dev_finance_limits` + `ERP_QMIS`. Staging `qmis_erp_staging` only. No commit/push. TC, finance limits, payroll, Activity Fee preserved.
+
+### Done
+- Transport fee registry APIs: list / upsert / assign / collect with idempotent assign & collect
+- `post_transport_enrollment_fee` posts installments; collection issues Finance receipts
+- Short stable assignment ids for UUID students (audit `entity_id` varchar 64)
+- FE Fees Management → Transport Fees tab + TM StudentTransport wired to live API (no localStorage)
+- Staging smoke + browser Account Head create/assign/collect; ERP_QMIS production build Pass
+- Pytest transport + activity + payroll + limits: **23 passed**
+
+### Still open
+- Finance Assistant dedicated portal route
+- WhatsApp receipts (blocked)
+- Commit/PR when asked
+- Optional: deeper TM ops → finance sync browser path beyond API hook
+
+---
+
+## 25 November 2026 — P0 Finance approval limits (isolated worktree)
+
+**Status:** Complete in `_integration/ERP_dev_finance_limits` (`fix/finance-approval-limits`). Staging PG only. No commit/push. TC worktree preserved.
+
+### Done
+- Migration `0028_finance_approval_limits` on `qmis_erp_staging`; table + Head-only configure APIs + audit
+- Backend enforcement on finance decide-approval, purchase PO approve, material decide, stationery approve
+- Live purchase APIs; FE Approval Limits → PostgreSQL; browser Account Head save verified (teacher=5600)
+- Pytest finance suites **14 passed**; worktree FE production build Pass
+
+### Hardening (same day)
+- Store/ops spend collections blocked over limit; FE PO/requisition fail-closed when live
+- Assistant Finance API matrix; campus isolation; audit; Alembic `0027→0028` linear
+- Started next Finance P0: HR payroll → voucher (GL posting, audit, Payment Vouchers payroll tab)
+
+### Still open
+- Finance Assistant dedicated portal route (API already read-only for limits)
+- Commit/PR when asked
+- WhatsApp receipts (blocked) — Activity Fee + Transport Fee live paths completed same day
+
+---
+
+## 25 November 2026 — TC FE display fixes + multi-role browser (staging)
+
+**Status:** Two FE display bugs fixed in `ERP_QMIS`; multi-role browser workflow completed on staging for `TC-REQ-007`. No commit/push. Finance not started (at time of that slice).
+
+### Done
+- **Status label:** `displayTcStatus` / `resolveTcWorkflowStage` now show stage-aware labels while API status is still `Pending PRM Review` (e.g. “Pending Class Teacher review”).
+- **Highlighter:** `prm` is its own step; no longer mapped onto Class Teacher. PRM actions gated on `workflowStage === 'prm'`.
+- Role TC routes mounted for teacher/coordinator/principal/director/account-head/librarian/transport/stores.
+- Browser multi-role on `TC-REQ-007`: PRM forward → CT → Coord → Principal → DA → 5 NOCs → MD approve (`TC/2026/4`); wrong-role advance/decide → 403.
+- Helper unit tests: 3 passed.
+
+### Still open
+- BE worktree still uncommitted; no production deploy.
+
+---
+
+## 25 November 2026 — TC PostgreSQL integration complete (staging)
+
+**Status:** TC role authorization + `workflow_stage` migration + full CT→…→NOC→MD workflow verified on `qmis_erp_staging`. No commit/push/deploy. Finance approval-limits not started.
+
+### Done
+- Additive Alembic **`0027_tc_workflow_stage`** (`down_revision = 0026_audit_logs_ip_ua`) applied on **`qmis_erp_staging` only**; column `workflow_stage` present. NOCs use existing `tc_request_nocs` (0025) — no duplicate `noc_json` column.
+- Worktree `_integration/ERP_dev_tc_auth` (`fix/tc-role-authorization`): service stages, assigned-CT gate, dept NOC matrix, `tc.advance`/`tc.noc`/`tc.decide`, audit actions.
+- Staging API E2E: create → forward → CT→Coord→Principal→DA → 5 NOCs → MD approve; unauthorized skips rejected; audits recorded (`STAGING_TC_E2E_OK`).
+- Browser (ERP_QMIS :5173 ↔ API :8000): parent create `TC-REQ-006`, PRM forward + reject (`TC-REQ-004`), admin MD approve (`TC-REQ-003` → `TC/2026/3529`).
+- Regression: TC auth + lifecycle + reject + security **58 passed**; ERP_QMIS `npm run build` **pass**.
+
+### Still open (addressed later same day — see section above)
+- Intermediate stage display + highlighter quirks (fixed in FE follow-up).
+- BE not committed/pushed; Finance approval-limit implementation not started.
+- Main dirty worktree `deploy/gatekeeper-live-apis-and-tests` and other worktrees left untouched.
+
+---
+
+## 25 November 2026 — Full client-doc coverage + FE push (earlier)
+
+**Status:** Client PDF gap/overflow coverage slice finished on FE and pushed to `new-UI_irul` `deploy/stable` (`a4af51c`). Matching BE TC/escalation APIs remain local (not pushed).
+
+### Done
+- **TC overflow:** FE advance + NOC clear + MD decide; live `workflow_stage` CT→Coord→Principal→DA→NOC→MD
+- **Finance limits:** Approval Limits settings + helper gates purchase/material approvals above role cap
+- **Integrations console:** Super Admin `/super-admin/integrations` (iClock, WhatsApp, Paytm, GPS, Email, Bank)
+- **MD Final Approvals Centre:** Director `/director/final-approvals`
+- **Escalations:** Not Satisfied action + 24h SLA sweep button
+- **Audit CAPA spine:** JD Audit CAPA page + finding CAPA sections
+- **Immutable helper:** shared lock helper wired into gate-pass edit
+- Gap MD updated (`_integration/client_docs_extract/QMIS_MODULE_GAP_AND_OVERFLOW.md`)
+
+### Still open
+- BE push of TC advance/NOC + not-satisfied + migration 0020 (local only)
+- WhatsApp/Paytm/RFID live connectors; tickets/helpdesk Not Satisfied; BSC→HR write-back
+
+---
+
+## 24 November 2026 — Fix attendance session + parent exam/fee KPIs
+
+**Status:** Three approved fixes done on local code against `qmis_erp_staging`. No migration 0027. No commit/push/cleanup.
+
+### Done
+- **P0 attendance:** ORM/API now persist `session` (FN/AN, default FN) matching existing PG NOT NULL + `uq_student_attendance_day_session`. No schema change.
+- **P1 exam UI:** `ResultDetails` loads `GET /api/v1/results/students/{id}` (shows XINT Midterm Maths 42/50).
+- **P1 dashboard KPIs:** Parent attendance from calendar API; fees from `/finance/my-fees`; empty/honest states when missing. Assignments card marked not connected.
+- Verified teacher/admin mark + parent calendar/results/fees; XINT ops rows preserved (9). FE `npm run build` Pass after removing empty banner ternaries that blocked build.
+- Pytest attendance/exams/students/finance: **13 passed**
+
+### Still open
+- Await approval for commit/push and any further UI polish
+- Assignment KPI still not live (honest empty)
+
+---
+
+## 24 November 2026 — XINT tagged staging test-record set (workflows 1–10)
+
+**Status:** Tagged records created on `qmis_erp_staging` only. Matrix delivered. **Waiting for approval before any code fixes.** No commit/push/deploy/cleanup.
+
+### Done
+- Created `XINT-20261124` student **ADM-0001** / UUID `66a559b3-5154-4dee-b5ff-a961155674f4` (campus `6d1d9390-…`)
+- LIVE: admission+place, parent link (`/parents/me/children`), CASH fee collect, exams+marks API, transport/hostel/library/gate ops, leave chain
+- Browser: admin Student Database shows XINT Alpha; refresh OK; parent logout/login shows same student UUID
+- Evidence: `_integration/xint_matrix_final.json`, `_integration/xint_evidence_1795532032.json`
+
+### Blockers / honesty (no fixes yet)
+- **WF4 attendance BLOCKED:** PG `student_attendance.session` NOT NULL; API/ORM omits `session` → 500
+- Parent Exam Result UI empty while `GET /api/v1/results/students/{id}` returns Maths 42/50 (PARTIAL UI)
+- Parent dashboard fee/attendance KPIs look MOCK vs live finance/attendance
+- Coordinator/teacher visibility needs grade-band / class-teacher (configured via existing masters APIs)
+
+### Still open
+- Approve cleanup of XINT tagged rows when ready
+- Approve code/migration fix for attendance `session` (and optional parent exam UI binding)
+
+---
+
+## 24 November 2026 — Phase 2 Gate Keeper + Manager (roles 5–6/6)
+
+**Status:** Gate Keeper / Manager core moved PARTIAL→LIVE. FO write still blocked by design. No commit/push/deploy.
+
+### Done
+- Audited GK/GKM vs `/api/v1/ops/gate-*` + FO read-only `*-gate-passes`
+- Wired LIVE registers / handover / vendors / team-attendance (removed mock lists + mock workspace routes)
+- Student gate-pass list LIVE read; My Duty assignee-only (no campus mock fallback)
+- Assign Duty persists `assigneeEmail`; skip hostel matrix for gate roles
+- Pytest `test_gatekeeper_apis.py` **7 passed**; live PUT/GET smoke on staging PG
+- Docs updated: `PHASE2_GATEKEEPER_VERIFICATION_REPORT.md`, `PHASE2_GATEKEEPER_MANAGER_VERIFICATION_REPORT.md`
+
+### Still open
+- FO gate-pass **write** remains PRM/admin only (403 for GK — not mock)
+- Enterprise MOCK outside Phase 2 core (stores/file room/etc.)
+- Optional: merge/push deploy branches when asked
+
+---
+
+## 24 November 2026 — Partner staging deploy readiness
+
+**Status:** Staging DB + BE/FE deploy branches ready. Not merged to main. No ECS/prod cutover.
+
+### Done
+- Applied production DDL to local `qmis_erp_staging` (57 public tables, alembic stamped `0026`); seeded campus/roles/permissions/users
+- Pushed BE `deploy/partner-backend-staging-ready` (`d324e19`) to ERP-dev origin
+- Pushed FE `deploy/partner-frontend-staging-ready` (`cc94139`, 176 files) to `new-UI_irul`
+- FE `npm run build` Pass; BE pytest **429 passed**, 37 skipped
+- Staging API smoke: health/openapi 200 (212 paths); admin login + `/auth/me` + `/students` 200; unauth 401; 40 module GETs non-5xx
+
+### Still open
+- Merge PRs / ECS (or host) deploy of those branches
+- Wire FE `VITE_API_URL` to staging API host; true-prod seed policy without demo accounts
+- Gate Keeper → Gate Keeper Manager (Phase 2 sequence continues)
+
+---
+
+## 24 November 2026 — Phase 2 Hostel Warden (role 4/6)
+
+**Status:** Hostel Warden verification report ready. Gate Keeper not started. No commit/push/deploy.
+
+### Done
+- Audited Hostel Warden screens vs `/api/v1/ops/hostel-assignments` + `hostel-payments`
+- Mark Paid on dues register with gateway honesty; MOCK/BLOCKED page for room/outpass/mess deep links
+- Persist seed + teacher/finance/admin 403; pytest 3 passed; build Pass; browser UAT
+- Doc: `PHASE2_HOSTEL_WARDEN_VERIFICATION_REPORT.md`
+
+### Still open
+- Gate Keeper → Gate Keeper Manager (sequential)
+- Room/outpass/mess/visitors/complaints/maintenance BLOCKED (no hostel domain)
+
+---
+
+## 23 November 2026 — Phase 2 Transport Driver (role 3/6)
+
+**Status:** Transport Driver verification report ready. Hostel Warden not started. No commit/push/deploy.
+
+### Done
+- Audited Driver screens vs driver-scoped `/api/v1/ops/transport-*`
+- Wired fuel/maintenance/health View pages; Add forms prefill scoped vehicles
+- Honesty banners: LIVE core, BLOCKED documents, MOCK reports, GPS not LIVE
+- Merge-seed driver scope without wiping TM data; persist + isolation + teacher 403
+- Pytest 7 passed; FE build Pass; browser UAT as `driver@qmis.edu`
+- Doc: `PHASE2_TRANSPORT_DRIVER_VERIFICATION_REPORT.md`
+
+### Still open
+- Hostel Warden → Gate Keeper → Gate Keeper Manager (sequential)
+- Document upload BLOCKED; Edit forms LOCAL ONLY; GPS DEMO elsewhere
+
+---
+
+## 23 November 2026 — Phase 2 Transport Manager (role 2/6)
+
+**Status:** Transport Manager verification report ready. Transport Driver not started. No commit/push/deploy.
+
+### Done
+- Audited TM screens vs `/api/v1/ops/transport-*`
+- Wired maintenance, driver fuel/maintenance approvals, expenses ledger to existing ops collections
+- Preserved Track Bus DEMO / fail-closed GPS (never LIVE)
+- Persist + teacher 403; pytest 10 passed; build Pass; browser UAT
+- Doc: `PHASE2_TRANSPORT_MANAGER_VERIFICATION_REPORT.md`
+
+### Still open
+- Transport Driver → Hostel → Gate Keeper → Gate Keeper Manager (sequential)
+- Expense Add full field mapping PARTIAL; budget MOCK; NOC BLOCKED
+
+---
+
+## 23 November 2026 — Phase 2 Librarian (role 1/6)
+
+**Status:** Librarian verification report ready. Transport Manager not started. No commit/push/deploy.
+
+### Done
+- Audited Librarian screens vs `/api/v1/ops/library-*`
+- Wired dashboard KPIs + Mark Returned to live library collections (requests/SMS remain MOCK)
+- Persist + teacher 403 verified; pytest library ops 2 passed; build Pass; browser UAT dashboard + catalog
+- Doc: `PHASE2_LIBRARIAN_VERIFICATION_REPORT.md`; tracker updated
+
+### Still open
+- Transport Manager → Driver → Hostel → Gate Keeper → Gate Keeper Manager (sequential)
+- Librarian book-requests domain (needs approval); SMS reminder gateway
+
+---
+
+## 23 November 2026 — Phase 1 final stabilization
+
+**Status:** Remaining Phase 1 gaps stabilized with evidence. Phase 2 not started. Awaiting approval. No commit/push/deploy.
+
+### Done
+- Coordinator Enterprise Exam Management schedules → LIVE (`GET/POST /exams` + submit); blueprints/grading/duties labeled MOCK/LOCAL
+- Parent identity → `GET /parents/me/children` (FE seed unused while live); Student identity → `GET /students/me`
+- Attendance calendar: no invented marks; UUID calendar path; documented class-list over-fetch limitation
+- Finance: POS / Book Fee / Budget / MFP honest MOCK notices; POS sync toast demoted; payment success still API-gated
+- Teacher RBAC preserved (View Only exams; leave decide / announce / exam write blocked; API 403 confirmed)
+- Browser UAT for all seven roles; pytest 28 passed; `npm run build` Pass; reused healthy `:8000`
+- Docs: `PHASE1_FINAL_STABILIZATION_REPORT.md`, tracker, matrix, W1 cross-link, testing/daily reports
+
+### Still open (blockers)
+- Invigilation/halls API absent; exam-weightage UI not wired; POS gateway unset; Book Fee/Budget/MFP domains
+- Parent escalations blocked; dashboard KPIs / Home Fun / Track Bus MOCK
+- Phase 2 / W2 not started — stop for approval
+
+---
+
+## 23 November 2026 — Phase 1 seven-role evidence (HR→Student)
+
+**Status:** Phase 1 core-role audit / wire / UAT / evidence complete. Phase 2 not started. No commit/push/deploy.
+
+### Done
+- Audited and classified HR, Finance, Principal, Teacher, Coordinator, Parent, Student against FastAPI (LIVE / PARTIAL / MOCK / LOCAL ONLY / BLOCKED)
+- Wired remaining existing-API gaps: principal announcement create; exam timetable list; HR training + disciplinary; teacher leave-decide UI gate; parent escalations fail-closed; attendance calendar live path; finance dashboard live notice; parent seed ↔ `parent@qmis.edu` / `ADM-DEMO-001`
+- Preserved controlled triage fixes (migration 0007, NullPool skip, Track Bus DEMO, Roles honesty, calendar hydrate)
+- HTTP probe 17/17; pytest focused suite 72 passed; `npm run build` Pass
+- Browser UAT per role on LIVE FE/API (training, finance snapshot, exam list, teacher announcements, placement, parent escalations blocked, student my-fees)
+- Docs: `PHASE1_CORE_ROLES_EVIDENCE_REPORT.md`; tracker rollup; this testing report
+
+### Still open
+- Phase 2 specialty domains (approval required) — not started
+- Coordinator Exam Management page still MOCK UI despite `exams.write`
+- Parent/student enrollment identity API; attendance class-roster over-fetch product decision
+- POS/Razorpay unset; Book Fee / Budget / MFP / recognition / helpdesk still MOCK
+- Role permissions PATCH still 405
+
+---
+
+## 23 November 2026 — W1 Auth/RBAC + Visitors + LIVE/MOCK indicators
+
+**Status:** W1 implementation complete and verified. W2 not started. No commit/push/deploy.
+
+### Done
+- Role alignment: registered `maintenancemanager`/`pro`/`fileroom`/`cctv` in BE matrix; aliases + `normalize_role_code`; FE `roleRegistry` + AuthContext normalization
+- Visitors 404 fixed: SoT `/api/v1/ops/gate-visitors`; FO `/front-office/visitors` alias; PRM in gate writers; FE VisitorsWorkspace LIVE path
+- Honest `DataSourceIndicator` on SA enterprise screens (Helpdesk/Stores/FileRoom/L&F/Recognition/Monitoring/Activity Logs/Compliance) + Visitors LIVE
+- Docs: `QMIS_ROLE_ALIGNMENT_MATRIX.md`, `QMIS_W1_IMPLEMENTATION_REPORT.md`; matrix/tracker updates
+- Tests: pytest W1+FO+ops **25 passed**; FE role/indicator tests **7 passed**; `npm run build` Pass
+- Browser UAT: PRM visitors LIVE + persistence; SA indicators LOCAL ONLY/MOCK; RBAC 401/403
+
+### Still open
+- W2 enterprise ops wiring (not started)
+- Seed credential drift for some roles (documented; no password reset)
+- Ops full-collection PUT concurrency hardening for visitors
+- Prior triage items (~41 legacy root-`src` static failures; calendar/roles notes) unchanged outside W1
+
+---
+
+## 23 November 2026 — Controlled triage fixes + Phase 1 calendar hydrate
+
+**Status:** Controlled fix sequence complete. Phase 1 calendar LIVE hydrate started. No commit/push.
+
+### Done
+- Migration 0007 test INSERT aligned with `all_day`; added 0019 upgrade-path test (no unsafe rewrite of historical 0007 DDL)
+- SQLite NullPool test skip detects URL-encoded `:memory:` / StaticPool; production pooling unchanged
+- Track Bus DEMO badge: `DEMO ROUTE — NOT LIVE GPS` (ERP_QMIS + root); never presents demo GPS as LIVE
+- Roles audit: confirmed admin permissions GET-only (PATCH 405); ERP_QMIS live UI read-only with server codes; removed false server-success paths; root Roles read-only
+- Phase 1: AcademicCalendarPage live list hydrate + create re-hydrate (no sessionStorage SoT when live)
+- ERP_QMIS production build Pass; focused pytest for migration/track-bus/leave/finance Pass (legacy static B#13 still FNF on missing `adminUsersApi.js`)
+
+### Still open
+- ~41 legacy root-`src` static failures remain classified (retarget later)
+- Role navigation-module PATCH write contract needs product/schema approval
+- Remaining Phase 1 PARTIAL/MOCK (dashboards, Home Fun, Star Ratings, gateway) unchanged
+
+---
+
+## 22 November 2026 — NEW UI ↔ reference backend Phase 1–2 integration
+
+**Status:** Implementation complete for Phase 1 core + Phase 2 ops. Phase 3 specialty documented MOCK only. No commit/push.
+
+### Done
+- Created `docs/NEW_UI_REFERENCE_BACKEND_INTEGRATION_MATRIX.md` + `docs/NEW_UI_REFERENCE_BACKEND_IMPLEMENTATION_REPORT.md`
+- Phase 0 regression SA/Admin/PRM: login + priority APIs OK; no reimplementation
+- Phase 1: leave create/detail LIVE; HR my-leave formal routes; tasks + escalations Common LIVE; lesson plans LIVE; parent/student fees/TC/attendance LIVE; CheckoutMockModal fail-closed when live
+- Phase 2: Librarian / Transport Manager / Hostel / Gate ops collections LIVE with honesty banners; GPS/rooms/mess stay MOCK
+- Phase 3: Helpdesk/Stores/File Room/CCTV/PRO/Awards remain documented MOCK (no new domains)
+- ERP_QMIS production build Pass; pytest 399 passed / 43 failed (legacy root-`src` static); browser teacher my-leave shows live queue with persisted LR
+
+### Still open
+- Specialty Phase 3 FE wiring awaits domain approval
+- Legacy root-`src` static pytest cleanup
+- Parent attendance scoping edge cases in browser
+
+---
+
+## 22 November 2026 — Full-application backend integration audit (all roles)
+
+**Status:** Audit-only complete. No app code / schema / env / data changes. No commit/push.
+
+### Done
+- Discovered FE **31** portal roles vs BE **27** matrix roles; OpenAPI **209** paths; runtime DB **SQLite** on `:8000`; FE live mode on `:5175`
+- Documented LIVE priority slices vs MOCK enterprise surface across all portals
+- Created `docs/QMIS_FULL_APPLICATION_BACKEND_INTEGRATION_MATRIX.md`, `docs/QMIS_ROLE_WISE_INTEGRATION_AUDIT.md`, `docs/QMIS_BACKEND_INTEGRATION_REMEDIATION_ROADMAP.md`
+- Runtime spot-checks: auth, dashboard KPIs, students, HR employees, finance state, calendar, ops L&F, leave, approvals
+
+### Still open
+- Remediation not started (await review of roadmap)
+- Full browser UAT of every role tab not in this audit pass
+
+---
+
+## 21 November 2026 — Super Admin / Director 50-case UAT continuation
+
+**Status:** Evidence-based status update; **28/50 FIXED + VERIFIED**. Not 50/50. No commit/push.
+
+### Done
+- Browser UAT promoted Activity Logs (063/064/065/067/069), Helpdesk (089–094), Stores (074/075/076/078/079), Approvals refresh (011), Gate Pass PDF (017), Monitoring dept filter (099), Star Ratings (053/054), L&F badge/CSV (110/111)
+- Fixed Feedback Register empty CSV via rated seed ticket; Activity Log breadcrumb Login History false parent; L&F empty directory via `loadLocalLostFoundDirectory` fallback + Claim Approved seed
+- Updated checklist + FINAL_UAT_REPORT (28 FV / 15 PF / 7 NV)
+- Partner handoff: `docs/SUPER_ADMIN_DIRECTOR_LIVE_VS_MOCK_SHEET.md` (LIVE priority slice vs MOCK enterprise modules)
+- FE focused tests 12 passed; backend `test_admin_remaining_modules` 10 passed; Vite production build Pass (~1m 14s)
+
+### Still open
+- PARTIAL: SOY mock SoT, File Room LS, exam 131 browser Director walk, leave/tasks/calendar refresh LIVE, student/teacher year, cultural, Home Fun attachments, compliance MOCK
+- NOT VERIFIED: 046, 052, 077, 100, 102, 103, 160
+- NUI-SA-128 timed browser create still incomplete
+
+---
+
+## 20 November 2026 — Official 50 FAIL NUI ID pass + NUI-SA-128
+
+**Status:** Fixes continued; checklist rewritten to official Test IDs. **Not 50/50 FIXED+VERIFIED.** No commit/push.
+
+### Done
+- Rewrote `docs/SUPER_ADMIN_DIRECTOR_50_FAIL_VERIFICATION_CHECKLIST.md` with exact 50 NUI Test IDs (9H/31M/7L/3U) + enhancement NUI-SA-128
+- Created `docs/SUPER_ADMIN_DIRECTOR_FINAL_UAT_REPORT.md`
+- Fixed approvals decide vocabulary (`approve`/`deny`) for NUI-SA-131 live path
+- Exam Approvals: merge live `/exams` with Principal shared submissions (NUI-SA-130)
+- Gate Pass / ExportModal: real `buildValidPdf` (NUI-SA-017)
+- NUI-SA-128: alembic `0019` all_day/start_time/end_time; calendar API + `calendarApiService`; FE live create path
+- Browser UAT: NUI-SA-125/126 (invalid dates), NUI-169 (Nov 2026), All-Day control visible
+- FE focused tests 10 pass; calendar/exams pytest 6 pass; Vite build Pass (~57s)
+- Full pytest: 399 passed, 43 failed (pre-existing frontend static), 36 skipped
+
+### Still open
+- 28 NOT VERIFIED + 17 PARTIALLY FIXED — need per-ID browser UAT and LIVE persistence for File Room / Leave / Tasks / SOY / Exam approvalId path
+- Reload API process and re-UAT timed LIVE calendar create for NUI-SA-128
+- Commit/push when approved
+
+---
+
+## 20 November 2026 — Director portal multi-module defect fixes
+
+**Status:** Defects fixed locally. No commit/push.
+
+### Done
+- Exam Timetable Approvals: unified Principal↔Director SoT (`examinationTimetableShared`); EXM003 aligned to `Unit -4a`; approve/deny persists; live `/api/v1/exams` when non-empty, shared fallback when empty; Principal create can submit live then mirror shared
+- Student Profile: academic-session-scoped timetable + effective dates; empty historical message
+- Teacher Database: year-dependent Assignment column without hiding master records
+- Cultural Activities: `ACTIVITIES_UPDATED_EVENT` list refresh without full browser reload
+- Progress Report Cards: fixed `classFilteredStudents` TDZ
+- Student Home Fun: Eye preview modal + Download Blob (Director + Principal LMS views)
+- Academic Calendar: initial month = current local month
+- FE node tests **17 passed**; BE academics/calendar **17 passed**; Vite build **Pass**
+- Browser UAT Director: EXM003/approve persist, Report Cards, Calendar Nov 2026, Home Fun preview
+
+### Still open
+- Home Fun still MOCK for live file storage (no `/files/{id}` wiring on dossier docs)
+- Exam LIVE path needs Principal-created backend exams to prefer over shared seed
+- Student/Teacher historical year data remains FE-mapped, not full REST history
+- Commit/push when approved
+
+---
+
+## 20 November 2026 — Super Admin multi-module defect fixes
+
+**Status:** Defects fixed locally. No commit/push.
+
+### Done
+- Physical File Room: Log Inward + rack assignment confirmed on same `logFileInward` path as Docket; form reset after success
+- Department Helpdesk: ticketNumber/title/category/SLA/head/actions mapping; Issue Category select; real SLA + Feedback CSV downloads
+- Activity Monitoring: filter/review no longer reset to Monitoring Overview (`availableTabs` effect); review dialog closes after Approved
+- Lost & Found: long status badge wraps inside card; Custody Ledger CSV actually downloads
+- Leave / Tasks: memory-first reads + refresh/tab jump so new leave/task appears without full browser reload
+- Academic Calendar: end≥start FE validation (no success toast on invalid); all-day + optional times on custom events; BE `_dates` already rejects inverted ranges
+- FE node tests **14 passed** (calendar + ticketing + activity logs + SOY); BE calendar pytest **2 passed**; Vite build **Pass**
+- Browser UAT: Helpdesk shows TICK-*/SLA Nh/heads/Assign·Resolve; Calendar invalid range toast without save
+
+### Still open
+- Helpdesk / Monitoring / L&F / Leave / Tasks remain PARTIAL/MOCK (local SoT; not full REST)
+- Academic Calendar timed events: FE custom SoT only — API `calendar_events` has no start/end time columns (schema change required for LIVE timed events)
+- Full interactive UAT matrix for File Room rack, Leave submit, Task create, L&F CSV still recommended before commit
+- Commit/push when approved
+
+---
+
+## 20 November 2026 — Super Admin Activity Logs / Stores / File Room fixes
+
+**Status:** Defects fixed locally. No commit/push.
+
+### Done
+- Activity Logs: change-value aliases (`oldValue`/`previousValue`/…) never render `undefined`; Inspect uses `/:logType/view/:id`; Back returns to originating category (Data Changes / Deleted / Demo)
+- Stores & Procurement: tab click no longer reset by `defaultTab` effect; route `:tab` sync; Restock RFQ → requirements; Edit before HOD approval; request modal viewport fit; tab label wrap; SA role key `superadmin`
+- Physical File Room: Docket Inward/Issue/Receive-Back mapped to `fileRoomData` contracts (`newFile.fileRefNo`, `issueId`); smoke inward→issue→return Pass
+- FE activity log tests **5 passed**; Vite build **Pass**
+
+### Still open
+- Activity Logs / Stores / File Room remain DEMO/PARTIAL (browser SoT; dedicated REST still incomplete)
+- File Room UI still on local `fileRoomData` (service exists but not fully wired to workspace)
+- Commit/push when approved
+
+---
+
+## 20 November 2026 — Super Admin Star Ratings (SOY) defect fixes
+
+**Status:** Functional + UI defects fixed locally. No commit/push.
+
+### Done
+- Root causes: incomplete eligibility (`somCount`+score only), silent GPA defaults (`Number(gpa) || 9.0`), Gate 2 NaN from missing `gpa` field, Audit summary mismatched gates, SOM/SOY tabs local-state only
+- Shared `soyEligibility.js` 4-gate evaluator wired into leaderboard, Audit Gates, and `awardsService.verifySoyEligibility` / `nominateSoy`
+- Strict GPA parse (missing/invalid never pass); nominate sends real GPA + `somWinsCount`
+- Audit Gates modal portaled; leaderboard column/badge readability; SOM↔SOY route/URL/breadcrumb sync
+- FE unit/service tests pass; production Vite build Pass; browser UAT Pass on SA SOY
+
+### Still open
+- Star Ratings remains PARTIAL (FE awardsService + local SOM SoT; no dedicated REST domain)
+- Dual nominee ID SoT (`STU-2024-0142` vs awards seed `STU-001`) mitigated, not fully unified
+- Commit/push when approved
+
+---
+
+## 19 November 2026 — TM SQLite concurrency crash fix
+
+**Status:** Fixed and re-UAT’d locally. No commit/push.
+
+### Done
+- Root cause: request-path `StaticPool` shared SQLite connection across threads (`app.core.database`)
+- Fix: file SQLite **NullPool**; unify `db.session` onto same engine; FE sequential loads + stale guards
+- Concurrent pytest **3 passed**; live 64-way burst survived; transport/hostel/ops **13 passed**; FE build **Pass**
+- Browser UAT: dashboard counts, lists, create `TDR-0002`, refresh, RBAC 403, MOCK honesty **Pass**
+
+### Still open
+- GPS / maintenance / approvals / expenses / NOC still MOCK/BLOCKED
+- Commit/push when approved
+
+---
+
+## 19 November 2026 — Transport Manager browser UAT
+
+**Status:** Browser UAT was **partial** before NullPool fix (superseded by section above).
+
+### Done
+- Browser: TM login + sidebar + Live banner (honest GPS/NOC wording) **Pass**
+- Sequential API: lists + create `TDR-UAT-LOCAL` persist + admin/finance **403** **Pass**
+
+### Failures (at that time)
+- Dashboard/list UI data **Fail** under concurrent StaticPool crash — later fixed same day
+
+---
+
+## 19 November 2026 — Push checkpoint + Transport Manager LIVE start
+
+**Status:** PRM + Hostel + regression **pushed**. Transport Manager Phase B core fleet wired and pushed earlier same day.
+
+### Done
+- Pushed root `irul` and FE `new-ui/main` (regression, PRM, Hostel, TM LIVE)
+- Pytest transport+hostel+ops **13 passed**; FE build **Pass**
+
+### Still open
+- TM GPS track UI, maintenance/approvals/expenses, NOC — MOCK/BLOCKED
+
+---
+
+## 19 November 2026 — Regression fixes + Hostel Warden checkpoint
+
+**Status:** Committed/pushed same day.
+
+### Done
+- Fixed admissions `AdmissionCreate.student_account_email` AttributeError (schema + enroll soft-skip); Parent TC cascade cleared
+- Attendance roster includes pending+placed; finance_actions expect Razorpay `NOT_CONFIGURED`; HR 409 not reproduced
+- Added backend `hostelwarden` role (matrix, seed, creatable STAFF, ops writers, `students.read`)
+- Frontend Hostel Warden layout/routes/dashboard/assignments/payments + `hostelApiService`
+- Browser UAT hostel; pytest **93/0**; FE build **Pass**
+
+### Still open
+- Hostel blocks/rooms masters, outpass, visitors, mess, complaints — **BLOCKED** (no APIs)
+
+---
+
+## 18 November 2026 — PRM / Front Office checkpoint (awaiting commit approval)
+
+**Status:** Local only. **Do not commit/push until explicit approval.**
+
+### Done
+- Audited PRM routes/sidebar vs FastAPI: admissions, students, HR portal teachers, TC forward/reject, FO collections exist; visitors **404**
+- LIVE wire: enquiry create/update/detail/status/convert; students+teachers; TC list/forward/reject; FO collection lists; PRM layout banner; leave routes use formal pages + enterprise stub skip for `prm`
+- Added `frontOfficeApiService`; extended admissions + TC API services
+- Browser UAT: Live banner; enquiry 4→5 after UI create; students 3/3; gate pass 1/1
+- Pytest 36 passed / 5 failed (known admissions AttributeError + parent-TC); build Pass
+- Tracker + testing report updated
+
+### Still open
+- Visitors BLOCKED; FO Add forms PARTIAL; dashboard/parent DB/reports MOCK
+- Await ack to commit/push PRM checkpoint on `ERP_QMIS` `main` / `new-ui`
+
+---
+
+## 18 November 2026 — Regression audit + Librarian checkpoint
+
+**Status:** Local only. Commit/push authorized for verified ERP_QMIS work.
+
+### Done
+- Re-verified Super Admin → Coordinator LIVE slices via code + API probes (HR seed password note: `hr12345`)
+- Librarian LIVE: `libraryApiService` + catalog/members/add-book/issue-return against `/api/v1/ops/library-*`; layout banner
+- Browser UAT: Live Librarian banner; catalog TOTAL TITLES 1 / UAT Physics; API issue→return persistence; teacher library write 403
+- Pytest ops/role suites + frontend build Pass; known admissions/TC/Razorpay failures left untouched
+- Tracker + testing report updated
+
+### Still open
+- Librarian book-requests / dashboard KPI remain MOCK
+- Next role after ack: PRM / Front Office
+
+---
+
+## 18 November 2026 — Coordinator expansion checkpoint
+
+**Status:** Local only. No commit/push.
+
+### Done
+- Phase A/B audit for `coordinator` (`exams.write`, `students.place`/`promote`, `hr.employees.read`, `leave.decide`) vs sidebar/routes; tracker updated
+- LIVE: grade-band students + view; class attendance GET/POST; my-leave + received leave (`leave.decide`); student placement page; announcements read (shared)
+- Extended `studentApiService` with placement/promote helpers; Coordinator layout Live banner; enterprise leave stubs skipped for coordinator; sidebar Placement + Attendance/Leave sublinks
+- Browser UAT: students 1/1; attendance save + Present after refresh; leave queues live; placement band 1–12; announcements 59
+- RBAC: finance + admin users **403**; exams create **201**
+- Pytest coordinator/teacher/leave/auth 17 (+2 attendance known fails); HR/principal/admin + known admissions/TC 36/5; finance foundation+finance 8; build Pass
+
+### Still open
+- Dashboard / exams FE / timetable / mark entry / lesson-plan approval UI mostly MOCK/PARTIAL
+- Empty roster without Principal grade-band assignment
+- Next role after ack: Librarian (or PRM)
+
+---
+
+## 18 November 2026 — Teacher expansion checkpoint
+
+**Status:** Local only. No commit/push.
+
+### Done
+- Phase A/B audit for `teacher` vs `_STAFF_ACADEMIC` + probes; tracker updated
+- Added `attendanceApiService` + `lessonPlanApiService`; LIVE students roster (scoped), class attendance GET/POST, my-leave list; announcements already shared LIVE
+- Teacher layout Live banner; enterprise leave stubs skipped for teacher
+- Browser UAT: live banner; students 0/0 (unassigned roster); attendance live; my-leave 1 matching
+- RBAC: no exams.write / leave.decide / finance / admin users
+- Pytest teacher+leave+auth 16; HR/finance/principal/admin 44; build Pass; attendance 2 fail via admissions AttributeError; known admissions(3)/parent-TC(2) remain
+
+### Still open
+- Dashboard / lesson-plan UI / exams / timetable / mark entry / enterprise ops mostly MOCK
+- Teacher roster empty until class-teacher / allocation pins exist
+- Next role after ack: Coordinator
+
+---
+
+## 18 November 2026 — Principal expansion checkpoint
+
+**Status:** Local only. No commit/push.
+
+### Done
+- Phase A/B audit for `principal` (sidebar/routes vs matrix + probes); tracker updated
+- Repaired inactive local seed `principal@qmis.edu` (activate + password) without wiping campus data; cleared login lockout via uvicorn restart
+- LIVE: Student Database + Teacher Database (shared `studentApiService` / `hrApiService`); Received leave list/decide (route fixed; enterprise leave stubs skipped for principal); Announcements already shared LIVE
+- Layout Live Principal workspace banner
+- Browser UAT: students 1/1 live, employees 6/6 live, received leave live queue (1)
+- RBAC: finance/admin users/admissions/TC **403** for principal
+- Pytest principal+leave+auth **15**; HR/finance/admin users **43**; build Pass; known admissions(3)/parent-TC(2) still fail
+
+### Still open
+- Academic dashboard charts MOCK; my-leave list UI still local; calendar/tasks/escalations/exams FE not fully live-gated
+- Timetable/teacher allocation localStorage; Home Fun / stars / most enterprise ops MOCK
+- Next role after ack: Teacher (or Coordinator)
+
+---
+
+## 18 November 2026 — Finance / Account Head expansion checkpoint
+
+**Status:** Local only. No commit/push.
+
+### Done
+- Phase A/B audit+mapping for Account Head vs `/api/v1/finance/*`; tracker updated
+- Added `financeApiService` (state get/put/reset, collect/settle/send/decide, gateway/HR concessions helpers)
+- `FinanceContext` LIVE hydrate + debounced PUT persist; collect/settle/send/decide/reset go through actions; wait for `isSessionReady` + JWT before hydrate (avoids 401 wiping session)
+- Approvals page LIVE via campus `approvals` + `decide-approval`; Settings reset async; layout Live Finance banner; FeePaymentModal notice honest about gateway stubs
+- API UAT as `accounthead@qmis.edu` / `accounts123`: seed PUT → collect ₹1000 (`REC-*`) → decide `APR-1` Approved; HR PUT `/finance/state` → **403**
+- Browser: Live Finance workspace banner; Collection Today ₹1,000 after seed/collect
+- Frontend build **Pass**; finance pytest **10 passed / 2 failed** (gateway `NOT_CONFIGURED` / receipt stub — env, not FE)
+
+### Still open
+- Book Fee / Annual Budget / MFP + enterprise ops remain MOCK
+- Gateway/WhatsApp remain stubbed or `NOT_CONFIGURED` until Razorpay/SMTP configured
+- Dashboard chart widgets still mix some static demo copy alongside LIVE metrics
+- Next role after ack: Principal (or Teacher)
+
+---
+
+## 18 November 2026 — HR role expansion checkpoint
+
+**Status:** Local only. No commit/push.
+
+### Done
+- Phase A audit of HR sidebar/routes vs FastAPI `/hr/*` + leave-requests; tracker updated before coding
+- Extended `hrApiService` with collection helpers + leave/payroll bundles; reuse `leaveApiService`
+- LIVE wired: Leave Management, formal Received Leave (route shadow fixed for HR), Attendance, Documents, Jobs/Candidates/Interviews, Performance, Payroll Mark Paid, derived Reports
+- Preserved Employees + Announcements LIVE; layout banner shows Live HR workspace
+- Browser UAT as `hr@qmis.edu`: employees 6/6, leave live, received leave 2 records, attendance shows API-persisted Late, jobs live
+- RBAC: teacher GET allowed via `hr.self`; teacher writes **403**; HR final-approved LR-0002
+- Regression **76 passed**; build Pass; known admissions(3)/parent-TC(2) failures reconfirmed separately
+
+### Still open
+- Dashboard charts + enterprise Attendance workspace MOCK
+- Onboarding/Training/Disciplinary/Exit and some payroll sub-tabs not fully remounted
+- Next role after ack: Finance / Account Head
+
+---
+
+## 18 November 2026 — Admin ops checkpoint complete (admissions / leave / TC)
+
+**Status:** Local only. No commit/push this slice.
+
+### Done
+- Diagnosed leave route shadow: `EnterpriseOperationsRoutes` overrode Admin `ReceivedLeaveRequests` with Attendance workspace — fixed (Admin routes first; skip enterprise leave stubs for `role=admin`)
+- Wired/hardened LIVE: admissions enquiry+list (`admissionsApiService`), received leave (`leaveApiService`), TC list/decide (`tcApiService`)
+- Browser UAT as `admin@qmis.edu`: `AE-0001`; live empty admissions list; leave queue (LR-0002 Admin step → hr); `TC-REQ-001` Approved
+- Teacher RBAC 403 on admissions/tc/admin users/dashboard
+- Regression: 49 passed (leave+auth+hr+admin users); build Pass; admissions/parent-tc pytest failures pre-existing backend
+- Tracker updated; Admin ops checkpoint marked COMPLETE; next role = HR expansion after ack
+
+### Still open
+- Remaining Admin MOCK modules (attendance workspace, tasks, escalations, calendar, finance/ops, …)
+- Pre-existing backend admissions/TC parent pytest AttributeErrors (out of FE scope)
+
+---
+
+## 18 November 2026 — Role-wise: Admin priority slice + push to new-UI_irul
+
+**Status:** Frontend pushed to https://github.com/karan4533/new-UI_irul. Local backend only.
+
+### Done
+- Pushed ERP_QMIS (Super Admin LIVE baseline) to `new-UI_irul`, then started Admin
+- Admin LIVE: dashboard KPIs, RBAC user list/create/status (deactivate only), student + employee directories (shared APIs)
+- Roles page: permission matrix write **BLOCKED** in live mode (honest notice + disabled save)
+- Browser UAT as `admin@qmis.edu`: KPIs 1/6, live users, students 1/1, employees 6/6, roles save blocked
+- API create teacher `TEA-0001`; `test_admin_users` 32 passed; frontend build Pass
+- Tracker updated: `docs/ROLE_WISE_UI_BACKEND_INTEGRATION_TRACKER.md`
+
+### Still open
+- Later SA remaining MOCK modules
+
+---
+
+## 18 November 2026 — Role-wise strategy: Super Admin priority slice
+
+**Status:** Priority slice complete; pushed with Admin follow-on to GitHub `new-UI_irul`.
+
+### Done
+- Created `docs/ROLE_WISE_UI_BACKEND_INTEGRATION_TRACKER.md` with Super Admin full audit + API map
+- Super Admin LIVE slice: dashboard KPIs, administrator accounts (list/create/status/reset), student directory, employee directory (shared `hrApiService`)
+- Shared services: `adminUsersApiService`, `studentApiService`, `adminDashboardApiService`
+- Browser UAT as `superadmin@qmis.edu`: live KPIs, ADM-0001 listed after create, students ADM-DEMO-001, 6 employees
+- Regression: 44 passed (`test_admin_users`, auth static, `test_hr`); frontend production build Pass
+- Remaining Super Admin modules left MOCK/BLOCKED per tracker (permission matrix write BLOCKED)
+
+### Still open
+- Later SA slices: escalations, tasks, leave, approvals, communication, calendar, notifications, gate, finance UI, audit logs
+
+---
+
+## 18 November 2026 — Phase 2: HR Employees LIVE
+
+**Status:** Local only. No AWS deploy, no commit/push.
+
+### Done
+- Audited HR Employee Management UI vs other HR modules (only list + profile wired)
+- Wired `hrApiService` into `EmployeesList` / `EmployeeProfile` (JWT `apiClient`, no silent localStorage fallback when live)
+- Live list/detail/create; activate/deactivate via portal PUT; client search/filters
+- Documented backend edit limit: existing portal PUT only persists department / role / reportingManager / status
+- Browser UAT as `hr@qmis.edu`: created `EMP-0006` (UAT Hr Employee); detail/search/filter/status verified
+- Tests: 46 passed (`test_hr`, `test_hr_modules`, `test_admin_employee_directory`, `test_frontend_auth_static`); frontend production build OK
+- Tracker updated in `docs/UI_BACKEND_INTEGRATION_TRACKER.md`
+
+### Still open
+- Other HR modules (recruitment, payroll, leave UI, etc.) remain mock/localStorage
+- No hard-delete employee endpoint
+- Full field edit for existing employees needs a backend typed PATCH (do not invent)
+
+---
+
+## 18 November 2026 — Phase 2: Announcements LIVE + inventory
+
+**Status:** Local only. No AWS deploy, no commit/push.
+
+### Done
+- Full module inventory in `docs/UI_BACKEND_INTEGRATION_TRACKER.md`
+- Announcements LIVE: list, create (multipart), view, acknowledge, reply; no silent localStorage fallback on API failure
+- `FileDropzone` `valueMode='file'` for real uploads
+- Retargeted `tests/test_frontend_auth_static.py` to `ERP_QMIS/src` (9 passed)
+- Browser UAT: list shows AN-0059; ack + reply persist after refresh
+
+### Still open
+- Next module: HR employees
+- Library / tickets / CCTV / hostel / L&F / PRO still API NOT AVAILABLE
+- One flaky attachment pytest query (wrong FileAsset by name only) remains
+
+---
+
+## 18 November 2026 — Local UI ↔ backend integration (ERP_QMIS)
+
+**Status:** Local development only. No AWS deploy, no commit/push.
+
+### Done
+- Inspected ERP_QMIS UI (demo auth + localStorage) and existing `backend/` FastAPI (Heuristic-Labs/QMIS compatible)
+- Reference shallow-clone at `c:\karan\QMIS-heuristic-ref` (not used to overwrite local backend)
+- Local SQLite DB `backend/qmis_erp_local.db`, `.env` with `ENVIRONMENT=development`
+- Wired live JWT login/logout/session refresh in ERP_QMIS (`VITE_USE_MOCK=false`)
+- Fixed API client mock flag + Bearer token + FastAPI error parsing
+- Partial announcements list from `GET /api/v1/announcements`
+- Docs: `docs/LOCAL_DEVELOPMENT_SETUP.md`, `docs/LOCAL_UI_BACKEND_INTEGRATION_MAP.md`
+- Browser verified: admin seed login → `/admin/dashboard`; bad password shows backend error
+
+### Still open
+- Most modules still localStorage/mock; map remaining AVAILABLE endpoints screen-by-screen
+- CCTV / Hostel / Lost&Found / PRO dedicated APIs not found (blocked)
+
+---
+
 ## 23 October 2026 — Leave and approval API wiring
 
 **Status:** Fixed broken leave/approval screens that showed demo data or “not found”. Not full go-live.

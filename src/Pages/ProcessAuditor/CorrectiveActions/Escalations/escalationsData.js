@@ -1,6 +1,5 @@
 import { DEPARTMENTS, PRIORITIES } from '../../Observations/observationsData'
 
-import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, PRIORITIES }
 
 export const ESCALATION_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Resolved', 'Closed']
@@ -143,13 +142,13 @@ const DEFAULT_ESCALATIONS = [
 ]
 
 export const saveEscalations = (records) => {
-    saveCampusJson(STORAGE_KEY, records)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
 export const getEscalations = () => {
     try {
-        const stored = loadCampusJson(STORAGE_KEY, null)
-    if (stored) return stored
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) return JSON.parse(stored)
     } catch {
         /* ignore */
     }
@@ -197,6 +196,3 @@ export const createEscalation = (form) => {
     saveEscalations(next)
     return record
 }
-
-export const hydrateFromApi = (seed = DEFAULT_ESCALATIONS) => hydrateCampusKey(STORAGE_KEY, seed)
-export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

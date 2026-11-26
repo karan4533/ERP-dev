@@ -1,28 +1,4 @@
-import {
-    canUseAcademicsApi,
-    listAcademicsCollectionApi,
-    replaceAcademicsCollectionApi,
-    stripAcademicsMeta,
-} from '../../../services/academicsApi'
-import { canUseEmployeeDirectoryApi, loadEmployeeDirectory } from '../../../services/employeeDirectoryApi'
-import {
-    getClasses as getCatalogClasses,
-    getSections as getCatalogSections,
-    getSubjects as getCatalogSubjects,
-} from '../../../Common/RBAC/academicsCatalogData'
-import { liveArray } from '../../../Common/RBAC/liveArray'
-import { CLASS_LEVEL_OPTIONS } from '../../Admin/Class/ClassDetails/classDetailsOptions'
-
-export const STORAGE_KEY = 'principal-teacher-allocation'
-export const TEACHER_ALLOCATIONS_UPDATED_EVENT = 'schoolerp-teacher-allocations-updated'
-
-const emitUpdated = () => {
-    try {
-        window.dispatchEvent(new CustomEvent(TEACHER_ALLOCATIONS_UPDATED_EVENT))
-    } catch {
-        /* ignore */
-    }
-}
+const STORAGE_KEY = 'principal-teacher-allocation'
 
 export const ROUTE_BASE = '/principal/academic/teacher-allocation'
 
@@ -30,11 +6,15 @@ export const ALLOCATION_STATUSES = ['Active', 'Inactive', 'Not Allocated']
 
 export const ACADEMIC_YEARS = ['2026–2027', '2025–2026']
 
-const FALLBACK_GRADES = [...CLASS_LEVEL_OPTIONS]
+export const GRADES = [
+    'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5',
+    'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10',
+    'Grade 11', 'Grade 12',
+]
 
-const FALLBACK_SECTIONS = ['A', 'B', 'C']
+export const SECTIONS = ['A', 'B', 'C']
 
-const FALLBACK_SUBJECTS = [
+export const SUBJECTS = [
     'Mathematics',
     'English',
     'Science',
@@ -43,38 +23,7 @@ const FALLBACK_SUBJECTS = [
     'Computer Science',
 ]
 
-const normalizeGradeLabel = (value) => {
-    const text = String(value || '').trim()
-    if (!text) return ''
-    if (/^grade\s+/i.test(text)) return text.replace(/^grade\s+/i, 'Grade ')
-    if (/^\d+[A-Z]?$/i.test(text)) return `Grade ${text}`
-    return text
-}
-
-/** Live class list from Admin Class Details / academics catalog (fallback seed grades). */
-export const getGrades = () => {
-    const fromCatalog = getCatalogClasses().map(normalizeGradeLabel).filter(Boolean)
-    return fromCatalog.length ? [...new Set(fromCatalog)] : [...FALLBACK_GRADES]
-}
-
-export const getSections = () => {
-    const fromCatalog = getCatalogSections().map((item) => String(item || '').trim().toUpperCase()).filter(Boolean)
-    return fromCatalog.length ? [...new Set(fromCatalog)] : [...FALLBACK_SECTIONS]
-}
-
-export const getSubjects = () => {
-    const fromCatalog = getCatalogSubjects().map((item) => String(item || '').trim()).filter(Boolean)
-    return fromCatalog.length ? [...new Set(fromCatalog)] : [...FALLBACK_SUBJECTS]
-}
-
-/** Live getters for dropdowns — prefer Admin Class Details catalog over seed fallbacks. */
-export const GRADES = liveArray(getGrades)
-export const SECTIONS = liveArray(getSections)
-export const SUBJECTS = liveArray(getSubjects)
-
-/** Departments for filters — rebuilt from live teacher roster when hydrated. */
-export let DEPARTMENTS = [
-    'Academic',
+export const DEPARTMENTS = [
     'Mathematics',
     'English',
     'Science',
@@ -89,8 +38,7 @@ export const allocationStatusColor = {
     'Not Allocated': 'bg-[#66708533] text-[#667085]',
 }
 
-/** Demo roster only when HR directory is unavailable / empty. */
-const DEMO_TEACHERS = [
+export const TEACHERS = [
     {
         employeeId: 'TEA-1001',
         name: 'Mr. Ravi Kumar',
@@ -146,127 +94,6 @@ const DEMO_TEACHERS = [
         profilePhoto: '',
     },
 ]
-
-/** @deprecated Prefer getTeachers() — seed list kept for offline demos. */
-export const TEACHERS = DEMO_TEACHERS
-
-let teacherRoster = null
-let teacherRosterHydrating = null
-
-const dashToEmpty = (value) => {
-    const text = String(value ?? '').trim()
-    return !text || text === '—' ? '' : text
-}
-
-const isInactiveEmployment = (status) =>
-    /^(inactive|relieved|terminated|resigned|exited|left)$/i.test(String(status || '').trim())
-
-/** HR / RBAC rows that Principal can allocate (teachers + academic teaching staff). */
-export const isAllocatableTeacherRecord = (row, detail = null) => {
-    if (!row) return false
-    if (isInactiveEmployment(row.status)) return false
-    const designation = dashToEmpty(detail?.employmentInfo?.designation || row.role)
-    const department = dashToEmpty(row.department)
-    const category = dashToEmpty(detail?.employmentInfo?.category)
-    const role = dashToEmpty(row.role)
-    const blob = `${role} ${designation} ${department} ${category}`.toLowerCase()
-    if (/\b(principal|administrator|admin|accountant|accounts|hr\b|gate|security|driver|peon|clerk|nurse)\b/.test(blob)) {
-        if (!/\bteacher\b|\btgt\b|\bpgt\b|\bprt\b|\bleturer\b|\blecturer\b/.test(blob)) return false
-    }
-    if (/\bteacher\b|\btgt\b|\bpgt\b|\bprt\b|\bleturer\b|\blecturer\b|\binstructor\b/.test(blob)) return true
-    if (/\bacademic/.test(blob)) return true
-    if (String(role).toLowerCase() === 'teacher') return true
-    return false
-}
-
-export const mapDirectoryRecordToTeacher = ({ row, detail }) => {
-    const employeeId = String(row.employeeId || row.id || '').trim()
-    const designation =
-        dashToEmpty(detail?.employmentInfo?.designation) ||
-        dashToEmpty(row.role) ||
-        'Teacher'
-    return {
-        employeeId,
-        name: dashToEmpty(row.name) || employeeId,
-        email: dashToEmpty(row.email || detail?.contactInfo?.email || detail?.email).toLowerCase(),
-        department: dashToEmpty(row.department) || 'Academic',
-        designation,
-        qualification:
-            dashToEmpty(row.qualification) ||
-            dashToEmpty(detail?.professionalInfo?.qualification) ||
-            '',
-        joiningDate: dashToEmpty(detail?.professionalInfo?.joiningDate) || '',
-        profilePhoto: row.profileImage || '',
-        source: row.source || 'hr',
-    }
-}
-
-const rebuildDepartments = (teachers) => {
-    const unique = [...new Set(teachers.map((item) => item.department).filter(Boolean))]
-    DEPARTMENTS = unique.length ? unique.sort((a, b) => a.localeCompare(b)) : DEPARTMENTS
-}
-
-export const getDepartments = () => [...DEPARTMENTS]
-
-export const getTeachers = () => {
-    if (Array.isArray(teacherRoster) && teacherRoster.length) return [...teacherRoster]
-    return [...DEMO_TEACHERS]
-}
-
-export const setTeacherRoster = (teachers) => {
-    teacherRoster = Array.isArray(teachers) ? teachers : []
-    rebuildDepartments(teacherRoster)
-    emitUpdated()
-}
-
-export const clearTeacherRosterMemory = () => {
-    teacherRoster = null
-    emitUpdated()
-}
-
-/**
- * Load teachers from HR Employee Directory (same source as Principal Employee Database).
- * Falls back to demo TEA-* roster when the API is off or returns no teaching staff.
- */
-export const hydrateTeachersFromDirectory = async ({ force = false } = {}) => {
-    if (!force && Array.isArray(teacherRoster) && teacherRoster.length) return true
-    if (teacherRosterHydrating) return teacherRosterHydrating
-
-    teacherRosterHydrating = (async () => {
-        if (!canUseEmployeeDirectoryApi()) {
-            teacherRoster = null
-            emitUpdated()
-            return false
-        }
-        try {
-            const { records } = await loadEmployeeDirectory()
-            const allocatedIds = new Set(getAllocations().map((item) => String(item.employeeId)))
-            const teachers = records
-                .filter(({ row, detail }) => {
-                    const id = String(row?.employeeId || row?.id || '')
-                    return isAllocatableTeacherRecord(row, detail) || allocatedIds.has(id)
-                })
-                .map(mapDirectoryRecordToTeacher)
-                .filter((item) => item.employeeId)
-
-            if (teachers.length) {
-                setTeacherRoster(teachers)
-                return true
-            }
-            teacherRoster = null
-            emitUpdated()
-            return false
-        } catch {
-            teacherRoster = null
-            emitUpdated()
-            return false
-        } finally {
-            teacherRosterHydrating = null
-        }
-    })()
-
-    return teacherRosterHydrating
-}
 
 const emptyAllocation = () => ({
     status: 'Not Allocated',
@@ -328,45 +155,7 @@ const DEFAULT_ALLOCATIONS = [
     },
 ]
 
-let apiMemoryAllocations = null
-
-const usesApiMemory = () => canUseAcademicsApi()
-
-const purgeBrowserCopies = () => {
-    try {
-        localStorage.removeItem(STORAGE_KEY)
-        sessionStorage.removeItem(STORAGE_KEY)
-    } catch {
-        /* ignore */
-    }
-}
-
-const cleanList = (rows) => (Array.isArray(rows) ? rows.map(stripAcademicsMeta) : [])
-
-export const clearTeacherAllocationMemory = () => {
-    apiMemoryAllocations = null
-    emitUpdated()
-}
-
-export const hydrateTeacherAllocationsFromApi = async () => {
-    if (!canUseAcademicsApi()) return false
-    try {
-        const rows = await listAcademicsCollectionApi('teacher-allocations')
-        apiMemoryAllocations = cleanList(rows)
-        purgeBrowserCopies()
-        emitUpdated()
-        return true
-    } catch {
-        apiMemoryAllocations = []
-        emitUpdated()
-        return false
-    }
-}
-
 export const getAllocations = () => {
-    if (usesApiMemory()) {
-        return Array.isArray(apiMemoryAllocations) ? [...apiMemoryAllocations] : []
-    }
     try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) return JSON.parse(stored)
@@ -377,23 +166,14 @@ export const getAllocations = () => {
 }
 
 export const saveAllocations = (records) => {
-    const list = Array.isArray(records) ? records : []
-    if (usesApiMemory()) {
-        apiMemoryAllocations = list
-        replaceAcademicsCollectionApi('teacher-allocations', cleanList(list)).catch(() => {})
-        emitUpdated()
-        return
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
-export const getTeacherById = (employeeId) => {
-    const key = String(employeeId || '')
-    return getTeachers().find((item) => String(item.employeeId) === key) ?? null
-}
+export const getTeacherById = (employeeId) =>
+    TEACHERS.find((item) => item.employeeId === employeeId) ?? null
 
 export const getAllocationByEmployeeId = (employeeId) =>
-    getAllocations().find((item) => String(item.employeeId) === String(employeeId)) ?? null
+    getAllocations().find((item) => item.employeeId === employeeId) ?? null
 
 export const getTeacherAllocationRow = (teacher) => {
     const allocation = getAllocationByEmployeeId(teacher.employeeId) ?? emptyAllocation()
@@ -414,11 +194,7 @@ export const getTeacherAllocationRow = (teacher) => {
 }
 
 export const getTeacherAllocationRows = () =>
-    getTeachers().map((teacher) => getTeacherAllocationRow(teacher))
-
-/** True when the list is still the offline demo TEA-* seed (not HR). */
-export const isUsingDemoTeacherRoster = () =>
-    !Array.isArray(teacherRoster) || teacherRoster.length === 0
+    TEACHERS.map((teacher) => getTeacherAllocationRow(teacher))
 
 export const emptyTeacherAllocationFilters = {
     search: '',

@@ -1,26 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } from 'lucide-react'
+import { ArrowUpRight, Download, Plus } from 'lucide-react'
+import { NavLink, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import Dropdown from '../CommonComponents/Dropdown'
-import ExportModal from '../CommonComponents/ExportModal'
-import { getMyLeaveRequestsForRole, hydrateLeaveRequestsFromApi, LEAVE_REQUESTS_UPDATED_EVENT, LEAVE_STATUSES, parseLeaveDate, statusBadgeColor } from './leaveRequestData'
+import DataTable from '../ui/DataTable'
+import DataToolbar from '../ui/DataToolbar'
+import IntegrationNotice from '../ui/IntegrationNotice'
+import PageHeader from '../ui/PageHeader'
+import Pagination from '../ui/Pagination'
+import StatusBadge from '../ui/StatusBadge'
+import { paginateRows, parseTableState, serializeTableState } from '../ui/dataTableState'
+import { getMyLeaveRequestsForRole, LEAVE_REQUESTS_UPDATED_EVENT, LEAVE_STATUSES, parseLeaveDate } from './leaveRequestData'
 import { getLeaveMyViewPath, getLeaveRoutes, resolveRoleKey } from './leaveRequestConfigs'
 
 export default function MyLeaveRequestsList({ roleKey: roleKeyProp }) {
-    const location = useLocation()
-    const { role: authRole, isAuthenticated } = useAuth()
+    const { role: authRole } = useAuth()
     const roleKey = resolveRoleKey(authRole || roleKeyProp)
     const routes = getLeaveRoutes(roleKey)
-    const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState('')
-    const [fromDate, setFromDate] = useState(null)
-    const [toDate, setToDate] = useState(null)
-    const [exportModal, setExportModal] = useState(false)
+    const [urlParams, setUrlParams] = useSearchParams()
+    const initialTableState = parseTableState(urlParams)
+    const [search, setSearch] = useState(initialTableState.query)
+    const [statusFilter, setStatusFilter] = useState(initialTableState.filters.status || '')
+    const [fromDate, setFromDate] = useState(initialTableState.filters.fromDate || '')
+    const [toDate, setToDate] = useState(initialTableState.filters.toDate || '')
+    const [page, setPage] = useState(initialTableState.page)
+    const [pageSize, setPageSize] = useState(initialTableState.pageSize)
     const [refreshKey, setRefreshKey] = useState(0)
-    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         const refresh = () => setRefreshKey((value) => value + 1)
@@ -32,19 +36,6 @@ export default function MyLeaveRequestsList({ roleKey: roleKeyProp }) {
         }
     }, [])
 
-    useEffect(() => {
-        let cancelled = false
-        setLoading(true)
-        hydrateLeaveRequestsFromApi()
-            .catch(() => false)
-            .finally(() => {
-                if (cancelled) return
-                setRefreshKey((value) => value + 1)
-                setLoading(false)
-            })
-        return () => { cancelled = true }
-    }, [location.pathname, location.key, isAuthenticated, authRole])
-
     const requests = useMemo(() => {
         void refreshKey
         return getMyLeaveRequestsForRole(roleKey)
@@ -52,156 +43,98 @@ export default function MyLeaveRequestsList({ roleKey: roleKeyProp }) {
 
     const filteredRequests = useMemo(() => {
         const query = search.trim().toLowerCase()
+        const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null
+        const to = toDate ? new Date(`${toDate}T23:59:59.999`) : null
         return requests.filter((request) => {
             if (statusFilter && request.status !== statusFilter) return false
-
             const requestDate = parseLeaveDate(request.appliedDate)
-            if (fromDate && requestDate && requestDate < fromDate) return false
-            if (toDate && requestDate && requestDate > toDate) return false
-
+            if (from && requestDate && requestDate < from) return false
+            if (to && requestDate && requestDate > to) return false
             if (!query) return true
-            const haystack = `${request.leaveRequestId} ${request.leaveType} ${request.reason} ${request.requestedTo} ${request.status}`.toLowerCase()
-            return haystack.includes(query)
+            return [request.leaveRequestId, request.leaveType, request.reason, request.requestedTo, request.status]
+                .some((value) => String(value || '').toLowerCase().includes(query))
         })
     }, [requests, search, statusFilter, fromDate, toDate])
+    const pagination = paginateRows(filteredRequests, { page, pageSize })
 
-    const clearFilters = () => {
+    useEffect(() => {
+        setUrlParams(serializeTableState({
+            query: search,
+            page: pagination.page,
+            pageSize,
+            filters: { status: statusFilter, fromDate, toDate },
+        }), { replace: true })
+    }, [fromDate, pageSize, pagination.page, search, setUrlParams, statusFilter, toDate])
+
+    const resetFilters = () => {
         setSearch('')
         setStatusFilter('')
-        setFromDate(null)
-        setToDate(null)
+        setFromDate('')
+        setToDate('')
+        setPage(1)
     }
 
+    const columns = [
+        { key: 'leaveRequestId', label: 'Request ID', required: true, render: (request) => <span className='font-semibold text-[var(--erp-ink)]'>{request.leaveRequestId}</span> },
+        { key: 'leaveType', label: 'Leave type' },
+        { key: 'period', label: 'Period', render: (request) => <span>{request.fromDate} – {request.toDate}<span className='block text-xs text-[var(--erp-muted)]'>{request.totalDays} day{Number(request.totalDays) === 1 ? '' : 's'}</span></span> },
+        { key: 'appliedDate', label: 'Applied' },
+        { key: 'requestedTo', label: 'Decision owner' },
+        { key: 'status', label: 'Status', render: (request) => <StatusBadge status={request.status} /> },
+    ]
+
     return (
-        <section>
-            <div className='bg-white rounded-2xl shadow-md p-4'>
-                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'><option value=''>From Beginning</option></select>
-                </div>
-                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type='text' value={search} onChange={(event) => setSearch(event.target.value)} placeholder='Leave ID, type...' className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>Status</label>
-                        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value=''>All</option>
-                            {LEAVE_STATUSES.map((status) => (
-                                <option key={status} value={status}>{status}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
-                        <div className='relative'>
-                            <DatePicker selected={fromDate} onChange={setFromDate} isClearable showMonthYearDropdown scrollableMonthYearDropdown className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>To</label>
-                        <div className='relative'>
-                            <DatePicker selected={toDate} onChange={setToDate} isClearable showMonthYearDropdown scrollableMonthYearDropdown className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
-                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>My Leave Requests</h2>
-                    <div className='flex gap-x-2'>
-                        {routes.add ? (
-                            <NavLink to={routes.add} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                                <Plus size={16} />
-                                Apply Leave
-                            </NavLink>
-                        ) : null}
-                        <button type='button' onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                            <Download size={16} />
-                            Export
-                        </button>
-                    </div>
-                </div>
-                <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                            <tr>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Leave Request ID</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Leave Type</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>From Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>To Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Total Days</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Applied Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Reason</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Requested To</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>Loading leave requests…</td>
-                                </tr>
-                            ) : filteredRequests.length === 0 ? (
-                                <tr>
-                                    <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>No leave requests found.</td>
-                                </tr>
-                            ) : (
-                                filteredRequests.map((request) => (
-                                    <tr key={request.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{request.leaveRequestId}</td>
-                                        <td className='px-2 py-4'>{request.leaveType}</td>
-                                        <td className='px-2 py-4'>{request.fromDate}</td>
-                                        <td className='px-2 py-4'>{request.toDate}</td>
-                                        <td className='px-2 py-4'>{request.totalDays}</td>
-                                        <td className='px-2 py-4'>{request.appliedDate}</td>
-                                        <td className='px-2 py-4 max-w-[180px] truncate' title={request.reason}>{request.reason}</td>
-                                        <td className='px-2 py-4'>{request.requestedTo}</td>
-                                        <td className='px-2 py-4'>
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[request.status]}`}>{request.status}</span>
-                                        </td>
-                                        <td className='px-2 py-4 text-center rounded-e-lg'>
-                                            <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                                <NavLink to={getLeaveMyViewPath(roleKey, request.id)} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
-                                            </Dropdown>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing {filteredRequests.length === 0 ? 0 : 1} to {filteredRequests.length} of {filteredRequests.length} entries</p>
-                <div className='flex gap-x-2'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronLeft size={16} /></button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>1</button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronRight size={16} /></button>
-                </div>
-            </div>
-
-            <ExportModal
-                exportModal={exportModal}
-                setExportModal={setExportModal}
-                filename='my-leave-requests'
-                rows={filteredRequests.map((r) => ({
-                    leaveRequestId: r.leaveRequestId,
-                    leaveType: r.leaveType,
-                    fromDate: r.fromDate,
-                    toDate: r.toDate,
-                    status: r.status,
-                    appliedDate: r.appliedDate,
-                    requestedTo: r.requestedTo,
-                }))}
-                exportDescription={<>You are exporting {filteredRequests.length} record{filteredRequests.length === 1 ? '' : 's'}.</>}
+        <section className='space-y-5'>
+            <PageHeader
+                title='My leave requests'
+                description='Track requests from submission through the approver decision.'
+                context={`${requests.length} total · ${filteredRequests.length} matching`}
+                actions={routes.add ? (
+                    <NavLink to={routes.add} className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>
+                        <Plus aria-hidden='true' size={16} /> Apply for leave
+                    </NavLink>
+                ) : null}
             />
+
+            <IntegrationNotice state='demo' title='Browser-stored leave requests' description='Requests and decisions are local to this browser. Notifications and production leave balances are not connected.' />
+
+            <div className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white'>
+                <DataToolbar
+                    query={search}
+                    onQueryChange={(value) => { setSearch(value); setPage(1) }}
+                    searchPlaceholder='Search request, type or approver'
+                    resultCount={filteredRequests.length}
+                    onReset={resetFilters}
+                    filters={(
+                        <>
+                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Status
+                                <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
+                                    <option value=''>All statuses</option>
+                                    {LEAVE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                                </select>
+                            </label>
+                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Applied from
+                                <input type='date' value={fromDate} onChange={(event) => { setFromDate(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-3 text-sm' />
+                            </label>
+                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Applied to
+                                <input type='date' value={toDate} onChange={(event) => { setToDate(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-3 text-sm' />
+                            </label>
+                        </>
+                    )}
+                    actions={<button type='button' disabled title='Export service is not connected' className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-65'><Download aria-hidden='true' size={16} /> Export unavailable</button>}
+                />
+                <DataTable
+                    caption='My leave requests'
+                    rows={pagination.rows}
+                    columns={columns}
+                    rowKey='id'
+                    emptyTitle='No leave requests found'
+                    emptyDescription='No requests match the current filters. Reset filters or apply for leave.'
+                    renderActions={(request) => <NavLink to={getLeaveMyViewPath(roleKey, request.id)} className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--erp-line-strong)] px-3 text-xs font-semibold text-[var(--erp-ink)]'>Review <ArrowUpRight aria-hidden='true' size={14} /></NavLink>}
+                />
+                <Pagination {...pagination} onPageChange={setPage} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
+            </div>
         </section>
     )
 }
+

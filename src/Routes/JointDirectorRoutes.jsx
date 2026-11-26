@@ -1,3 +1,5 @@
+import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
+import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/JointDirector/Dashboard/Dashboard'
@@ -15,6 +17,11 @@ import ViewAssetInventoryItem from '../Pages/JointDirector/AssetsInventory/ViewA
 import AnnouncementList from '../Pages/JointDirector/Announcement/AnnouncementList'
 import AddAnnouncement from '../Pages/JointDirector/Announcement/AddAnnouncement'
 import ViewAnnouncement from '../Pages/JointDirector/Announcement/ViewAnnouncement'
+import FileRoomWorkspace from '../Common/FileRoom/FileRoomWorkspace'
+import CCTVManagement from '../Pages/Operations/CCTV/CCTVManagement'
+import PROManagement from '../Pages/Operations/PRO/PROManagement'
+import CampusMaintenance from '../Pages/Operations/Maintenance/CampusMaintenance'
+import PlannedOperationsCapabilities from '../Common/operations/PlannedOperationsCapabilities'
 
 const JointDirectorRoutes = () => {
     return (
@@ -26,16 +33,22 @@ const JointDirectorRoutes = () => {
             <Route path="/joint-director/employee-management/:roleKey" element={<ViewEmployeeProfile />} />
             <Route path="/joint-director/employee-management" element={<Navigate to="/joint-director/employee-management/jd-assistant" replace />} />
             <Route path="/joint-director/request-approvals" element={<RequestApprovals />} />
-            <Route path="/joint-director/request-approvals/view-request/:id" element={<ViewRequestApproval />} />
             <Route path="/joint-director/request-approvals/view-request" element={<ViewRequestApproval />} />
             <Route path="/joint-director/escalations" element={<Escalations />} />
             <Route path="/joint-director/escalations/view-escalation/:id" element={<ViewEscalation />} />
             <Route path="/joint-director/meetings-calendar" element={<MeetingsCalendar />} />
             <Route path="/joint-director/assets-inventory" element={<AssetsInventoryOverview />} />
             <Route path="/joint-director/assets-inventory/view/:id" element={<ViewAssetInventoryItem />} />
+                        <Route path="/joint-director/file-room" element={<FileRoomWorkspace roleOverride="jointdirector" />} />
+            <Route path="/joint-director/cctv-surveillance" element={<CCTVManagement />} />
+            <Route path="/joint-director/public-relations" element={<PROManagement />} />
+            <Route path="/joint-director/campus-maintenance" element={<CampusMaintenance />} />
+            <Route path="/joint-director/operations-capabilities" element={<PlannedOperationsCapabilities />} />
             <Route path="/joint-director/broadcast" element={<AnnouncementList />} />
             <Route path="/joint-director/broadcast/add-broadcast" element={<AddAnnouncement />} />
             <Route path="/joint-director/broadcast/view-broadcast/:id" element={<ViewAnnouncement />} />
+                        <Route path="/joint-director/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
+            {EnterpriseOperationsRoutes({ basePath: '/joint-director', role: 'jointdirector' })}
             <Route path="*" element={<Navigate to="/joint-director/dashboard" replace />} />
         </ReactRoutes>
     )

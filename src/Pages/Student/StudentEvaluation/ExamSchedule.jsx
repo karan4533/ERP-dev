@@ -5,11 +5,12 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import ExamTimeTableModal from '../../Teacher/CreateExamSchedule/Components/ExamTimeTableModal'
 import { getExamSchedules } from '../../Teacher/CreateExamSchedule/createExamScheduleData'
-import { useActiveStudent } from '../../../context/ActiveStudentContext'
+
+const STUDENT_CLASS = '10'
+const STUDENT_SECTION = 'A'
 
 const ExamSchedule = () => {
     const location = useLocation()
-    const { activeStudent } = useActiveStudent()
     const [schedules, setSchedules] = useState(() => getExamSchedules())
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
@@ -22,17 +23,10 @@ const ExamSchedule = () => {
 
     const filteredSchedules = useMemo(() => {
         const query = search.trim().toLowerCase()
-        const classHint = String(activeStudent?.className || activeStudent?.classSection || '').toLowerCase()
 
         return schedules.filter((record) => {
             if (record.approvalStatus !== 'Approved') return false
-            if (classHint) {
-                const recordClass = `${record.className || ''} ${record.section || ''}`.toLowerCase()
-                const classToken = classHint.replace(/grade\s*/i, '').trim()
-                if (classToken && !recordClass.includes(classToken.split(/[\s-]/)[0])) {
-                    // Keep showing campus approved schedules when class labels differ in demo data.
-                }
-            }
+            if (record.className !== STUDENT_CLASS || record.section !== STUDENT_SECTION) return false
 
             if (query) {
                 const haystack = `${record.examId} ${record.examName} ${record.teacherName}`.toLowerCase()
@@ -41,7 +35,7 @@ const ExamSchedule = () => {
 
             return true
         })
-    }, [schedules, search, activeStudent])
+    }, [schedules, search])
 
     return (
         <section>
