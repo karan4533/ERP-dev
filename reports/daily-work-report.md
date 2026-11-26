@@ -8,6 +8,232 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ---
 
+## 26 November 2026 — Finance Wave A7–A10 + integration with partner new-UI main
+
+### A7–A10 done (staging)
+- Book Fee (A7): per-student vendor/book lines with assigned fee check (Matched / Under / Over), edit and delete, audited
+- Annual Budget (A8): budget lines per FY/department/category, actuals from posted expense ledger lines, variance and over-budget count; assistants cannot set budgets
+- Reports (A9): one report pack per FY (overview, income, expenditure, fee comparison vs previous FY, trends) feeding all Reports tabs, CSV export
+- Settings (A10): institution and tax identifiers (GSTIN/PAN/TAN, TDS/GST %), academic year checked against April–March FY, saved on the server and audited
+- Staging smoke 18/18, finance pytest subset 36 passed, ERP_QMIS build Pass
+
+### Integration branch (not pushed)
+- Branch `integration/main-finance-2026-11-26` from partner `new-ui/main` (acb39ed): merge commit of my finance branch plus a backend port commit
+- Two frontend conflicts resolved, keeping both sides: Accounting (partner's role-based base paths and live subtitles plus my live ledger) and Payment Vouchers (partner's live header plus my live register and vendor payment)
+- Finance backend three-way merged into the partner backend; the partner's gateway links, reminder sweep, Non-Academics tickets and HR role guard are kept. Alembic now follows the staging chain 0019–0028 (single head)
+- Found and fixed a leak from my finance work: parents and students could read campus finance registers (state, reports, wallets, budgets, etc.) because they hold finance.read for their own fees. All campus finance reads now refuse portal roles; new regression test covers every finance read route
+- Fixed one frontend wallet static test that my wallet change had broken
+
+### Still open
+- Pushed to `new-ui/main` after Karan's approval (fast-forward acb39ed → f9835b0, 112 files); not deployed
+- Read leak on staging fixed: the fix was applied in a separate copy (`_integration/ERP_dev_finance_leakfix`), and the staging API on :8010 now runs from it (parents/students get 403 on all 19 campus finance reads; `/my-fees` and staff access unchanged). After Karan approved, the same two changes were carried into the root finance worktree (not committed); 48 security/finance tests pass there
+- TC workflow-stage backend exists only as uncommitted work in the root checkout, so it is not on either branch
+- Partner databases need a one-time `alembic stamp` for the renumbered migrations
+- Not done: browser click-through, PDF report export, MFP, books-closure enforcement, automatic TDS/GST
+
+---
+
+## 26 November 2026 — Finance Wave A6 (wallet) + A5 (accounting) + A4 (payment vouchers)
+
+### A6 done (wallet)
+- BE `finance_wallets.py`: open wallet (idempotent per email), offline recharge (cash/cheque/bank transfer; reference required and used as the repeat-safe key), spend (category, vendor, reference; overdraft/frozen blocked), freeze/flag/reactivate with reason; every money move posts a balanced GL entry against "Wallet Balances Payable" and is audited; finance roles only
+- Wallet overview/summary, recharge and spend history, ledger-drift check all computed from the live snapshot; new `walletSpends` registry kept in the finance snapshot
+- FE `walletApiService.js`; Wallet page tabs read the API in live mode with loading/error/Retry, new Open wallet / Record spend / Freeze actions, recharge modal takes mode + reference; demo behaviour unchanged outside live mode
+- Staging smoke (open, recharge, repeat, overdraft, spend, freeze, unfreeze, statements balanced, registries kept) + pytest subset (31 passed) + ERP_QMIS build Pass
+
+### A6 still open
+- UPI / card / net-banking recharge stays BLOCKED (no payment gateway); shown disabled in the UI
+- Wallet balance is read-modify-write on the JSON snapshot with no row lock, so two simultaneous spends on one wallet could race
+- Browser click-through of the Wallet page not done (API and build verified)
+
+---
+
+## 26 November 2026 — Finance Wave A5 (accounting) + A4 (payment vouchers)
+
+**Status:** A5 live on staging. Preserve TC / limits / payroll / Activity / Transport / Academic fees. No commit/push.
+
+### A5 done
+- BE `finance_accounting.py`: chart of accounts (list/upsert, balances from ledger), journal vouchers (balanced-only draft, idempotent by voucher no, post once to GL with audit), bank reconciliation (items derived from bank book; statement amount + reference required; mismatch stays Pending), financial statements (trial balance, P&L, balance sheet, cash flow with date/department filters)
+- FE `accountingApiService.js`; Accounting page loads COA/JV/recon/statements from API in live mode with loading/error/Retry; demo registers and demo opening balances are not shown in live mode
+- FinanceContext now carries `chartOfAccounts`, `journalVouchers`, `bookFeeBreakup` so the debounced state PUT cannot wipe them
+- Staging smoke (account, JV create/post/repost, statements balanced, recon list) + pytest subset (24 passed) + ERP_QMIS build Pass
+
+### A5 still open
+- Bank statement import and report export remain blocked (no bank feed / export service)
+- Day/Cash/Bank/General-ledger/Online book tabs are fed from the live snapshot but not yet individually paginated server-side
+- No maker-checker rule on journal posting beyond role (Account Head/Finance/Admin may post; assistants may only draft)
+- Browser click-through of the Accounting page not done (API and build verified)
+
+---
+
+## 26 November 2026 — Finance Wave A4 (payment vouchers)
+
+**Status:** A4 live on staging. Preserve TC / limits / payroll / Activity / Transport / Academic fees. No commit/push.
+
+### Done
+- BE `finance_vouchers.py`: unified voucher register (fees, vendor AP, vendor payments, payroll, reversals) and `pay-vendor-liability` (balanced GL, idempotent, audited, finance-write roles only)
+- Fixed vendor AP field mismatch (FE read `amountDue`/`payeeName`; BE stores `amount`/`vendorName`)
+- FE `paymentVoucherApiService.js`; Payment Vouchers page loads from API in live mode with loading/error/Retry and a "Pay vendor & post voucher" action
+- Staging smoke + pytest subset (22 passed) + ERP_QMIS build Pass
+
+### Still open (Wave A)
+- A5–A10: accounting, wallet, book fee, budget/MFP, reports, FY settings
+- Vendor payment uses bank transfer only (no cheque/partial payment flow yet)
+- Full `tests/` run has 50 failures in static-frontend/sqlite/parent-access tests; not yet compared with a clean baseline
+
+---
+
+## 25 November 2026 — Finance Wave A PARTIAL (A1–A3)
+
+**Status:** A1 fee structures, A2 concessions, A3 unpaid/defaulters live on staging. Preserve TC / limits / payroll / Activity / Transport. No commit/push.
+
+### Done
+- BE `finance_academic_fees.py`: list/upsert fee structures, create/list concessions, unpaid-installments + defaulters aggregate
+- FE live tabs/services; Fees Management banners connected for structure/concessions/defaulters
+- FinanceContext PUT now preserves `activityFees` + `transportFees` (wipe fix)
+- Staging smoke + pytest academic/transport/activity/payroll/limits; ERP_QMIS build Pass
+
+### Still open (Wave A)
+- A4–A10: vouchers (non-payroll), accounting, wallet, book fee, budget/MFP, reports, FY settings
+- Defaulter WhatsApp/email reminders (BLOCKED)
+
+---
+
+## 25 November 2026 — Finance fill #5 Transport Fee (live PG)
+
+**Status:** Complete in `_integration/ERP_dev_finance_limits` + `ERP_QMIS`. Staging `qmis_erp_staging` only. No commit/push. TC, finance limits, payroll, Activity Fee preserved.
+
+### Done
+- Transport fee registry APIs: list / upsert / assign / collect with idempotent assign & collect
+- `post_transport_enrollment_fee` posts installments; collection issues Finance receipts
+- Short stable assignment ids for UUID students (audit `entity_id` varchar 64)
+- FE Fees Management → Transport Fees tab + TM StudentTransport wired to live API (no localStorage)
+- Staging smoke + browser Account Head create/assign/collect; ERP_QMIS production build Pass
+- Pytest transport + activity + payroll + limits: **23 passed**
+
+### Still open
+- Finance Assistant dedicated portal route
+- WhatsApp receipts (blocked)
+- Commit/PR when asked
+- Optional: deeper TM ops → finance sync browser path beyond API hook
+
+---
+
+## 25 November 2026 — P0 Finance approval limits (isolated worktree)
+
+**Status:** Complete in `_integration/ERP_dev_finance_limits` (`fix/finance-approval-limits`). Staging PG only. No commit/push. TC worktree preserved.
+
+### Done
+- Migration `0028_finance_approval_limits` on `qmis_erp_staging`; table + Head-only configure APIs + audit
+- Backend enforcement on finance decide-approval, purchase PO approve, material decide, stationery approve
+- Live purchase APIs; FE Approval Limits → PostgreSQL; browser Account Head save verified (teacher=5600)
+- Pytest finance suites **14 passed**; worktree FE production build Pass
+
+### Hardening (same day)
+- Store/ops spend collections blocked over limit; FE PO/requisition fail-closed when live
+- Assistant Finance API matrix; campus isolation; audit; Alembic `0027→0028` linear
+- Started next Finance P0: HR payroll → voucher (GL posting, audit, Payment Vouchers payroll tab)
+
+### Still open
+- Finance Assistant dedicated portal route (API already read-only for limits)
+- Commit/PR when asked
+- WhatsApp receipts (blocked) — Activity Fee + Transport Fee live paths completed same day
+
+---
+
+## 25 November 2026 — TC FE display fixes + multi-role browser (staging)
+
+**Status:** Two FE display bugs fixed in `ERP_QMIS`; multi-role browser workflow completed on staging for `TC-REQ-007`. No commit/push. Finance not started (at time of that slice).
+
+### Done
+- **Status label:** `displayTcStatus` / `resolveTcWorkflowStage` now show stage-aware labels while API status is still `Pending PRM Review` (e.g. “Pending Class Teacher review”).
+- **Highlighter:** `prm` is its own step; no longer mapped onto Class Teacher. PRM actions gated on `workflowStage === 'prm'`.
+- Role TC routes mounted for teacher/coordinator/principal/director/account-head/librarian/transport/stores.
+- Browser multi-role on `TC-REQ-007`: PRM forward → CT → Coord → Principal → DA → 5 NOCs → MD approve (`TC/2026/4`); wrong-role advance/decide → 403.
+- Helper unit tests: 3 passed.
+
+### Still open
+- BE worktree still uncommitted; no production deploy.
+
+---
+
+## 25 November 2026 — TC PostgreSQL integration complete (staging)
+
+**Status:** TC role authorization + `workflow_stage` migration + full CT→…→NOC→MD workflow verified on `qmis_erp_staging`. No commit/push/deploy. Finance approval-limits not started.
+
+### Done
+- Additive Alembic **`0027_tc_workflow_stage`** (`down_revision = 0026_audit_logs_ip_ua`) applied on **`qmis_erp_staging` only**; column `workflow_stage` present. NOCs use existing `tc_request_nocs` (0025) — no duplicate `noc_json` column.
+- Worktree `_integration/ERP_dev_tc_auth` (`fix/tc-role-authorization`): service stages, assigned-CT gate, dept NOC matrix, `tc.advance`/`tc.noc`/`tc.decide`, audit actions.
+- Staging API E2E: create → forward → CT→Coord→Principal→DA → 5 NOCs → MD approve; unauthorized skips rejected; audits recorded (`STAGING_TC_E2E_OK`).
+- Browser (ERP_QMIS :5173 ↔ API :8000): parent create `TC-REQ-006`, PRM forward + reject (`TC-REQ-004`), admin MD approve (`TC-REQ-003` → `TC/2026/3529`).
+- Regression: TC auth + lifecycle + reject + security **58 passed**; ERP_QMIS `npm run build` **pass**.
+
+### Still open (addressed later same day — see section above)
+- Intermediate stage display + highlighter quirks (fixed in FE follow-up).
+- BE not committed/pushed; Finance approval-limit implementation not started.
+- Main dirty worktree `deploy/gatekeeper-live-apis-and-tests` and other worktrees left untouched.
+
+---
+
+## 25 November 2026 — Full client-doc coverage + FE push (earlier)
+
+**Status:** Client PDF gap/overflow coverage slice finished on FE and pushed to `new-UI_irul` `deploy/stable` (`a4af51c`). Matching BE TC/escalation APIs remain local (not pushed).
+
+### Done
+- **TC overflow:** FE advance + NOC clear + MD decide; live `workflow_stage` CT→Coord→Principal→DA→NOC→MD
+- **Finance limits:** Approval Limits settings + helper gates purchase/material approvals above role cap
+- **Integrations console:** Super Admin `/super-admin/integrations` (iClock, WhatsApp, Paytm, GPS, Email, Bank)
+- **MD Final Approvals Centre:** Director `/director/final-approvals`
+- **Escalations:** Not Satisfied action + 24h SLA sweep button
+- **Audit CAPA spine:** JD Audit CAPA page + finding CAPA sections
+- **Immutable helper:** shared lock helper wired into gate-pass edit
+- Gap MD updated (`_integration/client_docs_extract/QMIS_MODULE_GAP_AND_OVERFLOW.md`)
+
+### Still open
+- BE push of TC advance/NOC + not-satisfied + migration 0020 (local only)
+- WhatsApp/Paytm/RFID live connectors; tickets/helpdesk Not Satisfied; BSC→HR write-back
+
+---
+
+## 24 November 2026 — Fix attendance session + parent exam/fee KPIs
+
+**Status:** Three approved fixes done on local code against `qmis_erp_staging`. No migration 0027. No commit/push/cleanup.
+
+### Done
+- **P0 attendance:** ORM/API now persist `session` (FN/AN, default FN) matching existing PG NOT NULL + `uq_student_attendance_day_session`. No schema change.
+- **P1 exam UI:** `ResultDetails` loads `GET /api/v1/results/students/{id}` (shows XINT Midterm Maths 42/50).
+- **P1 dashboard KPIs:** Parent attendance from calendar API; fees from `/finance/my-fees`; empty/honest states when missing. Assignments card marked not connected.
+- Verified teacher/admin mark + parent calendar/results/fees; XINT ops rows preserved (9). FE `npm run build` Pass after removing empty banner ternaries that blocked build.
+- Pytest attendance/exams/students/finance: **13 passed**
+
+### Still open
+- Await approval for commit/push and any further UI polish
+- Assignment KPI still not live (honest empty)
+
+---
+
+## 24 November 2026 — XINT tagged staging test-record set (workflows 1–10)
+
+**Status:** Tagged records created on `qmis_erp_staging` only. Matrix delivered. **Waiting for approval before any code fixes.** No commit/push/deploy/cleanup.
+
+### Done
+- Created `XINT-20261124` student **ADM-0001** / UUID `66a559b3-5154-4dee-b5ff-a961155674f4` (campus `6d1d9390-…`)
+- LIVE: admission+place, parent link (`/parents/me/children`), CASH fee collect, exams+marks API, transport/hostel/library/gate ops, leave chain
+- Browser: admin Student Database shows XINT Alpha; refresh OK; parent logout/login shows same student UUID
+- Evidence: `_integration/xint_matrix_final.json`, `_integration/xint_evidence_1795532032.json`
+
+### Blockers / honesty (no fixes yet)
+- **WF4 attendance BLOCKED:** PG `student_attendance.session` NOT NULL; API/ORM omits `session` → 500
+- Parent Exam Result UI empty while `GET /api/v1/results/students/{id}` returns Maths 42/50 (PARTIAL UI)
+- Parent dashboard fee/attendance KPIs look MOCK vs live finance/attendance
+- Coordinator/teacher visibility needs grade-band / class-teacher (configured via existing masters APIs)
+
+### Still open
+- Approve cleanup of XINT tagged rows when ready
+- Approve code/migration fix for attendance `session` (and optional parent exam UI binding)
+
+---
+
 ## 24 November 2026 — Phase 2 Gate Keeper + Manager (roles 5–6/6)
 
 **Status:** Gate Keeper / Manager core moved PARTIAL→LIVE. FO write still blocked by design. No commit/push/deploy.
