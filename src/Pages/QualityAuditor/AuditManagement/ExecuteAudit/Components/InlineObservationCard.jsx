@@ -4,6 +4,8 @@ import EvidenceUploader from './EvidenceUploader'
 import {
     OBSERVATION_PRIORITIES,
     ASSIGN_TO_EMPLOYEES,
+    FINDING_RATINGS,
+    RISK_LEVELS,
     resolveReportTo,
     observationStatusBadgeColor,
 } from '../executeAuditData'
@@ -25,7 +27,7 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
         })
     }
 
-    const canSubmit = observation.title?.trim() && observation.description?.trim() && observation.assignTo && observation.dueDate
+    const canSubmit = observation.title?.trim() && observation.assignTo && observation.dueDate
     const displayStatus = observation.status || (observation.saved ? 'Pending Assignment' : 'Unsaved')
     const statusColor = observationStatusBadgeColor[observation.status] ?? 'bg-[#EDEEF5] text-[#667085]'
 
@@ -55,6 +57,32 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
                         placeholder={`e.g. ${parameter.label}`}
                         className={inputClass}
                     />
+                </div>
+
+                <div>
+                    <label className='text-xs font-medium text-[#808080] mb-1 block'>Finding rating</label>
+                    <select
+                        value={observation.findingRating || 'Minor Non-Conformity'}
+                        onChange={(e) => update('findingRating', e.target.value)}
+                        className={inputClass}
+                    >
+                        {FINDING_RATINGS.filter((r) => r !== 'Compliant').map((rating) => (
+                            <option key={rating} value={rating}>{rating}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className='text-xs font-medium text-[#808080] mb-1 block'>Risk</label>
+                    <select
+                        value={observation.riskLevel || 'Medium'}
+                        onChange={(e) => update('riskLevel', e.target.value)}
+                        className={inputClass}
+                    >
+                        {RISK_LEVELS.map((level) => (
+                            <option key={level} value={level}>{level}</option>
+                        ))}
+                    </select>
                 </div>
 
                 <div>
@@ -88,9 +116,17 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
                         className={readOnlyClass}
                     />
                 </div>
+
                 <div>
-                    <label htmlFor={`finding-due-${parameter.id}`} className='text-xs font-medium text-[#808080] mb-1 block'>Due date <span className='text-[#FF0000]'>*</span></label>
-                    <input id={`finding-due-${parameter.id}`} type='date' value={observation.dueDate || ''} onChange={(event) => update('dueDate', event.target.value)} className={inputClass} />
+                    <label className='text-xs font-medium text-[#808080] mb-1 block'>
+                        CAPA deadline <span className='text-[#FF0000]'>*</span>
+                    </label>
+                    <input
+                        type='date'
+                        value={observation.dueDate || ''}
+                        onChange={(e) => update('dueDate', e.target.value)}
+                        className={inputClass}
+                    />
                 </div>
             </div>
 
@@ -127,11 +163,11 @@ const InlineObservationCard = ({ parameter, observation, auditReference, onChang
             </div>
 
             <div className='mb-3'>
-                <label className='text-xs font-medium text-[#808080] mb-1 block'>Description <span className='text-[#FF0000]'>*</span></label>
+                <label className='text-xs font-medium text-[#808080] mb-1 block'>Description</label>
                 <textarea
                     value={observation.description}
                     onChange={(e) => update('description', e.target.value)}
-                    placeholder={`Describe the quality concern for "${parameter.label}"...`}
+                    placeholder={`Describe the non-compliance for "${parameter.label}"...`}
                     className={`${inputClass} min-h-[72px] resize-y`}
                 />
             </div>

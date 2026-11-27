@@ -1,42 +1,238 @@
-import OperationsRecordRegister from '../../../Common/operations/OperationsRecordRegister'
-import { StatusBadge } from '../../../Common/ui'
-import { ACTIVITY_TYPES, ISSUE_RETURNS } from './issueReturnsData'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink } from 'react-router-dom'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } from 'lucide-react'
+import Dropdown from '../../../Common/CommonComponents/Dropdown'
+import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { filterIssueReturns } from '../../../Common/listFiltering'
+import { getIssueReturns, hydrateIssueReturnsFromApi, ACTIVITY_TYPES, activityTypeBadgeColor, statusBadgeColor } from './issueReturnsData'
 
-const columns = [
-    { key: 'id', label: 'Movement', required: true },
-    { key: 'activityType', label: 'Activity', required: true, render: (row) => <StatusBadge status={row.activityType} /> },
-    {
-        key: 'requestedBy',
-        label: 'Custodian',
-        required: true,
-        render: (row) => <div><p className='font-semibold text-[var(--erp-ink)]'>{row.requestedBy}</p><p className='mt-0.5 text-xs text-[var(--erp-muted)]'>{row.employeeId} · {row.department}</p></div>,
-    },
-    { key: 'itemName', label: 'Item', required: true },
-    { key: 'quantity', label: 'Quantity', required: true },
-    { key: 'issueDate', label: 'Issued' },
-    { key: 'returnDate', label: 'Returned' },
-    { key: 'originalIssueRef', label: 'Source issue' },
-    { key: 'condition', label: 'Return condition' },
-    { key: 'status', label: 'Custody state', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
+const IssueReturnsList = () => {
+    const [issueReturns, setIssueReturns] = useState(() => getIssueReturns())
+    const [search, setSearch] = useState('')
+    const [activityType, setActivityType] = useState('')
+    const [status, setStatus] = useState('')
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
+    const [exportModal, setExportModal] = useState(false)
 
-const IssueReturnsList = () => (
-    <OperationsRecordRegister
-        rows={ISSUE_RETURNS}
-        columns={columns}
-        rowKey='id'
-        title='Issue and return custody'
-        description='Track each stationery movement against its custodian, department, source issue and return condition.'
-        caption='Stationery issue and return custody register'
-        searchPlaceholder='Search movement, employee, department or item…'
-        integrationTitle='Stationery custody service not connected'
-        integrationDescription='These movements are frontend reference data. Production must validate available stock, commit stock and custody changes atomically, link every return to its source issue, and record condition, loss, damage and actor timestamps in an immutable ledger.'
-        primaryFilter={{ key: 'activityType', label: 'Activity type', options: ACTIVITY_TYPES }}
-        secondaryFilter={{ key: 'status', label: 'Custody state' }}
-        createPath='/stationery-store-manager/issue-returns/add'
-        createLabel='Record issue / return'
-        viewPath={(row) => `/stationery-store-manager/issue-returns/view/${row.id}`}
-    />
-)
+    useEffect(() => {
+        hydrateIssueReturnsFromApi().finally(() => setIssueReturns(getIssueReturns()))
+    }, [])
+
+    const filtered = useMemo(
+        () =>
+            filterIssueReturns(issueReturns, {
+                search,
+                activityType,
+                status,
+                fromDate,
+                toDate,
+            }),
+        [issueReturns, search, activityType, status, fromDate, toDate],
+    )
+
+    const clearFilters = () => {
+        setSearch('')
+        setActivityType('')
+        setStatus('')
+        setFromDate(null)
+        setToDate(null)
+    }
+
+    const exportColumns = [
+        { key: 'id', label: 'Issue/Return ID' },
+        { key: 'activityType', label: 'Activity Type' },
+        { key: 'requestedBy', label: 'Requested By' },
+        { key: 'department', label: 'Department' },
+        { key: 'itemName', label: 'Item Name' },
+        { key: 'quantity', label: 'Quantity' },
+        { key: 'issueDate', label: 'Issue Date' },
+        { key: 'returnDate', label: 'Return Date' },
+        { key: 'status', label: 'Status' },
+    ]
+
+    return (
+        <section>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
+                    <button
+                        type='button'
+                        onClick={clearFilters}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
+                    >
+                        Clear Filters
+                    </button>
+                </div>
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]' htmlFor='issue-search'>Search</label>
+                        <input
+                            id='issue-search'
+                            type='text'
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder='ID, employee, item...'
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        />
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]' htmlFor='activity-type'>Activity Type</label>
+                        <select
+                            id='activity-type'
+                            value={activityType}
+                            onChange={(event) => setActivityType(event.target.value)}
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            {ACTIVITY_TYPES.map((type) => (
+                                <option key={type} value={type}>{type}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]' htmlFor='issue-status'>Status</label>
+                        <select
+                            id='issue-status'
+                            value={status}
+                            onChange={(event) => setStatus(event.target.value)}
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            <option value='Issued'>Issued</option>
+                            <option value='Returned'>Returned</option>
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>From</label>
+                        <div className='relative w-full'>
+                            <DatePicker
+                                selected={fromDate}
+                                onChange={setFromDate}
+                                isClearable
+                                showMonthYearDropdown
+                                scrollableMonthYearDropdown
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>To</label>
+                        <div className='relative w-full'>
+                            <DatePicker
+                                selected={toDate}
+                                onChange={setToDate}
+                                isClearable
+                                showMonthYearDropdown
+                                scrollableMonthYearDropdown
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
+                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
+                    <h2 className='text-xl font-medium text-black'>Issue & Returns</h2>
+                    <div className='flex gap-x-2'>
+                        <NavLink to="/stationery-store-manager/issue-returns/add" className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
+                            <Plus size={16} />
+                            Record Issue / Return
+                        </NavLink>
+                        <button
+                            type='button'
+                            onClick={() => setExportModal(true)}
+                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                        >
+                            <Download size={16} />
+                            Export
+                        </button>
+                    </div>
+                </div>
+                <div className="relative overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg">Issue/Return ID</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Activity Type</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Requested By</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Department</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Item Name</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Quantity</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Issue Date</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Return Date</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Status</th>
+                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filtered.length === 0 ? (
+                                <tr>
+                                    <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>
+                                        No issue/return records match the current filters.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filtered.map((row) => (
+                                    <tr key={row.id} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                        <td className="px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg">{row.id}</td>
+                                        <td className="px-2 py-4">
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${activityTypeBadgeColor[row.activityType]}`}>
+                                                {row.activityType}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-4">{row.requestedBy}</td>
+                                        <td className="px-2 py-4">{row.department}</td>
+                                        <td className="px-2 py-4 max-w-[140px] truncate" title={row.itemName}>{row.itemName}</td>
+                                        <td className="px-2 py-4">{row.quantity}</td>
+                                        <td className="px-2 py-4 whitespace-nowrap">{row.issueDate}</td>
+                                        <td className="px-2 py-4 whitespace-nowrap">{row.returnDate}</td>
+                                        <td className="px-2 py-4">
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[row.status]}`}>
+                                                {row.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-4 text-center rounded-e-lg">
+                                            <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
+                                                <NavLink to={`/stationery-store-manager/issue-returns/view/${row.id}`} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer block">View</NavLink>
+                                            </Dropdown>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className='flex justify-between items-center px-4 mt-4'>
+                <p className='text-sm font-medium text-[#515DEF]'>
+                    Showing {filtered.length ? 1 : 0} to {filtered.length} of {filtered.length} entries
+                    {filtered.length !== issueReturns.length ? ` (filtered from ${issueReturns.length})` : ''}
+                </p>
+                <div className="flex justify-center gap-x-2">
+                    <button type='button' className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer"><ChevronLeft size={16} /></button>
+                    <button type='button' className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] border border-[#E2E8F0] rounded-full cursor-pointer">1</button>
+                    <button type='button' className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer"><ChevronRight size={16} /></button>
+                </div>
+            </div>
+
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                rows={filtered}
+                columns={exportColumns}
+                filename='issue-returns'
+                title='Issue & Returns'
+                enableDateRange
+                dateKeys={['issueDate', 'returnDate']}
+            />
+        </section>
+    )
+}
 
 export default IssueReturnsList

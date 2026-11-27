@@ -41,6 +41,75 @@ def fee_receipt_whatsapp(*, school_name: str, receipt_no: str, amount_label: str
     )
 
 
+def enquiry_ack_whatsapp(*, school_name: str, student_name: str, class_name: str, enquiry_code: str) -> str:
+    return (
+        f"{school_name}: Thank you. We received the admission enquiry for "
+        f"{student_name or 'your child'} ({class_name or 'class'}). "
+        f"Reference {enquiry_code}. Our admissions team will follow up shortly. "
+        f"Please do not reply on WhatsApp."
+    )
+
+
+def admission_ack_whatsapp(*, school_name: str, student_name: str, class_name: str, admission_code: str) -> str:
+    return (
+        f"{school_name}: Admission recorded for {student_name or 'student'} "
+        f"({class_name or 'class'}). Admission no. {admission_code}. "
+        f"Please do not reply on WhatsApp."
+    )
+
+
+def enrollment_ack_whatsapp(*, school_name: str, student_name: str, class_name: str, admission_code: str) -> str:
+    return (
+        f"{school_name}: {student_name or 'Student'} is enrolled in {class_name or 'class'}. "
+        f"Admission no. {admission_code}. Parent portal access will follow school process. "
+        f"Please do not reply on WhatsApp."
+    )
+
+
+def payment_link_whatsapp(
+    *,
+    school_name: str,
+    student_name: str,
+    amount_label: str,
+    reference: str,
+    url: str,
+) -> str:
+    return (
+        f"{school_name}: Fee payment link for {student_name or 'student'}. "
+        f"Amount {amount_label}. Reference {reference}. "
+        f"Pay securely: {url}. Please do not reply on WhatsApp."
+    )
+
+
+def fee_due_whatsapp(
+    *,
+    school_name: str,
+    student_name: str,
+    label: str,
+    amount_label: str,
+    due_label: str,
+) -> str:
+    return (
+        f"{school_name}: Fee reminder for {student_name or 'student'}. "
+        f"{label} — {amount_label} due on {due_label}. "
+        f"Please pay via the parent portal or accounts office. Do not reply on WhatsApp."
+    )
+
+
+def result_publish_whatsapp(
+    *,
+    school_name: str,
+    student_name: str,
+    exam_name: str,
+    subject: str,
+) -> str:
+    return (
+        f"{school_name}: Result published for {student_name or 'student'}. "
+        f"{exam_name} — {subject} is now available in the parent/student portal. "
+        f"Please do not reply on WhatsApp."
+    )
+
+
 def password_reset_email(*, school_name: str, login_email: str, temporary_password: str, from_address: str) -> tuple[str, str, str]:
     subject = f"{school_name} — Temporary login password"
     text = (

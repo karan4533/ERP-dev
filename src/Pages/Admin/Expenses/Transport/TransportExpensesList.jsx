@@ -1,9 +1,16 @@
-import React from 'react'
-import AdminExpensesWorkspace from '../AdminExpensesWorkspace'
+import React, { useCallback } from 'react'
+import AdminLiveDataList from '../../Components/AdminLiveDataList'
+import { EXPENSE_COLUMNS, loadFinanceExpensesByKeyword } from '../liveExpenseLoader'
 
-/**
- * @deprecated Per Document 7 compliance, Admin transport expense list has been integrated with centralized Finance (Account Head).
- */
 export default function TransportExpensesList() {
-    return <AdminExpensesWorkspace view='approvals' />
+    const loadRows = useCallback(() => loadFinanceExpensesByKeyword(['transport', 'fuel', 'fleet', 'vehicle']), [])
+    return (
+        <AdminLiveDataList
+            title='Transport Expenses'
+            description='Live finance OUT transactions for transport/fuel/fleet spend.'
+            columns={EXPENSE_COLUMNS}
+            loadRows={loadRows}
+            searchKeys={['narration', 'category', 'voucherNo']}
+        />
+    )
 }

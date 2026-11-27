@@ -1,19 +1,19 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Save, ShieldCheck } from 'lucide-react'
 import AdminPermissionsPanel from './Components/AdminPermissionsPanel'
 import {
-    ADMIN_PERMISSION_MODULES,
     ADMIN_ROLE_LABEL,
     ADMIN_USER_STATUSES,
+    MODULE_PERMISSIONS_NOTICE,
+    buildFullPermissions,
+    fetchAdminUserViaApi,
     getAdminUserById,
-    getPermissionLabels,
     ROUTE_BASE,
     statusBadgeColor,
-    updateAdminUser,
+    updateAdminUserViaApi,
 } from './adminUsersData'
-import { ConfirmAction, IntegrationNotice } from '../../../Common/ui'
-import { summarizePermissionChanges } from '../../../Common/ui/governance'
+import { canUseAdminUsersApi } from '../../../services/adminUsersApi'
 
 const Field = ({ label, value }) => (
     <div className='flex flex-col gap-y-1'>
@@ -26,53 +26,87 @@ const ViewAdminUser = () => {
     const { id } = useParams()
     const navigate = useNavigate()
     const [user, setUser] = useState(() => getAdminUserById(id))
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [form, setForm] = useState(() => ({
         status: user?.status ?? 'Active',
-        permissions: { ...(user?.permissions ?? {}) },
     }))
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
-    const [confirmOpen, setConfirmOpen] = useState(false)
 
-    const togglePermission = (key) => {
-        setForm((prev) => ({
-            ...prev,
-            permissions: {
-                ...prev.permissions,
-                [key]: !prev.permissions[key],
-            },
-        }))
-    }
-
-    const toggleAllPermissions = (enabled) => {
-        setForm((prev) => ({
-            ...prev,
-            permissions: Object.fromEntries(
-                ADMIN_PERMISSION_MODULES
-                    .filter((module) => !module.alwaysOn)
-                    .map((module) => [module.key, enabled]),
-            ),
-        }))
-    }
-
-    const handleSave = () => {
-        const result = updateAdminUser(id, {
-            status: form.status,
-            permissions: form.permissions,
-        })
-
-        if (!result.success) {
-            setError(result.message)
-            setMessage('')
-            return
+    useEffect(() => {
+        let cancelled = false
+        const load = async () => {
+            setLoading(true)
+            setError('')
+            try {
+                const next = await fetchAdminUserViaApi(id)
+                if (cancelled) return
+                setUser(next)
+                if (next) {
+                    setForm({ status: next.status ?? 'Active' })
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setError(err?.message || 'Could not load administrator.')
+                    setUser(getAdminUserById(id))
+                }
+            } finally {
+                if (!cancelled) setLoading(false)
+            }
         }
+        load()
+        return () => {
+            cancelled = true
+        }
+    }, [id])
 
-        setUser(result.user)
-        setIsEditing(false)
-        setConfirmOpen(false)
-        setMessage('Administrator permissions updated successfully.')
+    const handleSave = async () => {
+        if (!user) return
+        setSaving(true)
         setError('')
+        setMessage('')
+        try {
+            // ASA-03: only status is persisted. Module checkboxes are not sent.
+            const result = await updateAdminUserViaApi(user, {
+                status: form.status,
+            })
+
+            if (!result.success) {
+                setError(result.message)
+                return
+            }
+
+            setUser(result.user)
+            setForm({ status: result.user.status ?? 'Active' })
+            setIsEditing(false)
+            if (result.persistedOnServer) {
+                setMessage('Administrator account status saved on the server.')
+            } else {
+                setMessage('Administrator updated in local session (API unavailable).')
+            }
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    if (loading) {
+        return (
+            <section className='space-y-6'>
+                <button
+                    type='button'
+                    onClick={() => navigate(ROUTE_BASE)}
+                    className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                >
+                    <ArrowLeft size={18} />
+                    Back to list
+                </button>
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading administrator…
+                </div>
+            </section>
+        )
     }
 
     if (!user) {
@@ -93,13 +127,8 @@ const ViewAdminUser = () => {
         )
     }
 
-    const permissionLabels = getPermissionLabels(isEditing ? form.permissions : user.permissions)
-    const permissionChanges = summarizePermissionChanges(
-        user.permissions,
-        form.permissions,
-        ADMIN_PERMISSION_MODULES,
-    )
-    const statusChanged = form.status !== user.status
+    const apiMode = canUseAdminUsersApi()
+    const previewPermissions = buildFullPermissions()
 
     return (
         <section className='space-y-6'>
@@ -142,21 +171,26 @@ const ViewAdminUser = () => {
                     <Field label='Created On' value={user.createdAt} />
                     <Field label='Role' value={ADMIN_ROLE_LABEL} />
                     <Field label='Login Email' value={user.email} />
+                    <Field label='Server access' value='Full Admin role (matrix permissions)' />
                 </div>
             </div>
 
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex flex-wrap items-center justify-between gap-3 mb-4'>
-                    <h2 className='text-lg font-semibold text-black'>Module Permissions</h2>
+                    <div>
+                        <h2 className='text-lg font-semibold text-black'>Account Status</h2>
+                        {apiMode && (
+                            <p className='text-xs text-[#667085] mt-1'>
+                                Activate / deactivate is saved on the server (ASA-02).
+                            </p>
+                        )}
+                    </div>
                     {!user.isSystem && (
                         <button
                             type='button'
                             onClick={() => {
                                 if (isEditing) {
-                                    setForm({
-                                        status: user.status,
-                                        permissions: { ...user.permissions },
-                                    })
+                                    setForm({ status: user.status })
                                     setIsEditing(false)
                                     setError('')
                                 } else {
@@ -166,68 +200,50 @@ const ViewAdminUser = () => {
                             }}
                             className='text-sm font-semibold text-[#515DEF] hover:underline cursor-pointer'
                         >
-                            {isEditing ? 'Cancel Edit' : 'Edit Permissions'}
+                            {isEditing ? 'Cancel Edit' : 'Edit Status'}
                         </button>
                     )}
                 </div>
 
                 {isEditing ? (
-                    <>
-                        <IntegrationNotice
-                            state='demo'
-                            title='Local permission preview'
-                            description='This prototype updates the current browser session only. The production RBAC API must enforce the same permissions on every protected endpoint.'
-                            className='mb-5'
-                        />
-                        <div className='mb-6 max-w-xs'>
-                            <label htmlFor='status' className='text-sm font-medium text-[#808080] block mb-2'>Status</label>
-                            <select
-                                id='status'
-                                value={form.status}
-                                onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
-                                className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 w-full bg-white focus:outline-none focus:border-[#515DEF]'
-                            >
-                                {ADMIN_USER_STATUSES.map((item) => (
-                                    <option key={item} value={item}>{item}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <AdminPermissionsPanel
-                            permissions={form.permissions}
-                            onToggle={togglePermission}
-                            onToggleAll={toggleAllPermissions}
-                        />
-                        <div className='mt-5 grid gap-3 sm:grid-cols-2' aria-live='polite'>
-                            <div className='rounded-xl border border-[#4CAF5033] bg-[#4CAF500D] p-3'>
-                                <p className='text-sm font-semibold text-[#257A29]'>Access to grant</p>
-                                <p className='mt-1 text-sm text-[#667085]'>
-                                    {permissionChanges.granted.length ? permissionChanges.granted.join(', ') : 'No new module access.'}
-                                </p>
-                            </div>
-                            <div className='rounded-xl border border-[#F4433633] bg-[#F443360D] p-3'>
-                                <p className='text-sm font-semibold text-[#B42318]'>Access to remove</p>
-                                <p className='mt-1 text-sm text-[#667085]'>
-                                    {permissionChanges.revoked.length ? permissionChanges.revoked.join(', ') : 'No module access removed.'}
-                                </p>
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    <div className='flex flex-wrap gap-2'>
-                        {permissionLabels.length === 0 ? (
-                            <span className='text-sm text-[#667085]'>No module permissions assigned.</span>
-                        ) : (
-                            permissionLabels.map((label) => (
-                                <span
-                                    key={label}
-                                    className='inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#515DEF33] text-[#515DEF]'
-                                >
-                                    {label}
-                                </span>
-                            ))
-                        )}
+                    <div className='max-w-xs'>
+                        <label htmlFor='status' className='text-sm font-medium text-[#808080] block mb-2'>Status</label>
+                        <select
+                            id='status'
+                            value={form.status}
+                            onChange={(event) => setForm({ status: event.target.value })}
+                            className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 w-full bg-white focus:outline-none focus:border-[#515DEF]'
+                        >
+                            {ADMIN_USER_STATUSES.map((item) => (
+                                <option key={item} value={item}>{item}</option>
+                            ))}
+                        </select>
                     </div>
+                ) : (
+                    <p className='text-sm text-[#1E1E1E]'>
+                        Current status:{' '}
+                        <span className={`inline-flex px-2 py-1 rounded-lg text-xs font-semibold ${statusBadgeColor[user.status]}`}>
+                            {user.status}
+                        </span>
+                    </p>
                 )}
+            </div>
+
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <h2 className='text-lg font-semibold text-black mb-2'>Module Access (preview)</h2>
+                <div
+                    role='status'
+                    className='mb-4 rounded-xl border border-[#F59E0B66] bg-[#F59E0B0D] px-4 py-3 text-sm text-[#92400E]'
+                >
+                    {MODULE_PERMISSIONS_NOTICE}
+                </div>
+                <AdminPermissionsPanel
+                    permissions={previewPermissions}
+                    onToggle={() => {}}
+                    onToggleAll={() => {}}
+                    disabled
+                    previewOnly
+                />
             </div>
 
             {message && (
@@ -246,32 +262,15 @@ const ViewAdminUser = () => {
                 <div className='flex sm:justify-end justify-center'>
                     <button
                         type='button'
-                        onClick={() => setConfirmOpen(true)}
-                        disabled={!permissionChanges.changedCount && !statusChanged}
-                        className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2'
+                        onClick={handleSave}
+                        disabled={saving}
+                        className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-60'
                     >
                         <Save size={16} />
-                        Save Permissions
+                        {saving ? 'Saving…' : 'Save Status'}
                     </button>
                 </div>
             )}
-
-            <ConfirmAction
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={handleSave}
-                title='Apply access changes?'
-                description='These changes alter what this administrator can see and operate.'
-                confirmLabel='Apply changes'
-                tone={permissionChanges.revoked.length || form.status === 'Inactive' ? 'danger' : 'primary'}
-            >
-                <div className='space-y-2'>
-                    <p><strong>{permissionChanges.granted.length}</strong> module(s) granted and <strong>{permissionChanges.revoked.length}</strong> revoked.</p>
-                    {statusChanged && <p>Account status will change from <strong>{user.status}</strong> to <strong>{form.status}</strong>.</p>}
-                    {form.status === 'Inactive' && <p>The user will be blocked at the next sign-in check.</p>}
-                    <p>Dashboard access remains enabled. Backend authorization must independently enforce every module permission.</p>
-                </div>
-            </ConfirmAction>
         </section>
     )
 }

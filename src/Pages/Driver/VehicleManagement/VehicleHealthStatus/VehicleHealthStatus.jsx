@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+﻿import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -7,20 +7,23 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import { useAuth } from '../../../../context/AuthContext'
-import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
+import { canShowDeleteOption } from '../../../../Common/CommonComponents/approvalGates'
+import { hydrateDriverProfileSources, resolveDriverProfile } from '../../driverProfileData'
 import {
     CONDITION_OPTIONS,
-    HEALTH_STATUS_RECORDS,
-    VEHICLE_NUMBERS,
     filterHealthStatusRecords,
+    getHealthRecords,
+    hydrateHealthRecords,
 } from './vehicleHealthStatusData'
 
 const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
+const plateKey = (value) => String(value || '').replace(/[\s-]/g, '').toUpperCase()
+
 const VehicleHealthStatus = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
+    const { email, role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
     const [exportModal, setExportModal] = useState(false)
     const [search, setSearch] = useState('')
@@ -30,16 +33,37 @@ const VehicleHealthStatus = () => {
     const [period, setPeriod] = useState('')
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
+    const [myPlate, setMyPlate] = useState('')
+    const [records, setRecords] = useState(() => getHealthRecords())
+
+    useEffect(() => {
+        let cancelled = false
+        Promise.all([
+            hydrateHealthRecords(),
+            hydrateDriverProfileSources(),
+        ]).then(() => {
+            if (cancelled) return
+            const ctx = resolveDriverProfile(email)
+            const plate = ctx.vehicleNumber === '—' ? '' : ctx.vehicleNumber
+            setMyPlate(plate)
+            setVehicleNumber(plate)
+            const all = getHealthRecords()
+            setRecords(plate
+                ? all.filter((row) => plateKey(row.vehicleNumber) === plateKey(plate))
+                : all)
+        })
+        return () => { cancelled = true }
+    }, [email])
 
     const filteredRecords = useMemo(() => filterHealthStatusRecords({
-        records: HEALTH_STATUS_RECORDS,
+        records,
         search,
-        vehicleNumber,
+        vehicleNumber: vehicleNumber || myPlate,
         engineStatus,
         tyreCondition,
         fromDate,
         toDate,
-    }), [search, vehicleNumber, engineStatus, tyreCondition, fromDate, toDate])
+    }), [records, search, vehicleNumber, myPlate, engineStatus, tyreCondition, fromDate, toDate])
 
     const clearFilters = () => {
         setSearch('')
@@ -94,7 +118,7 @@ const VehicleHealthStatus = () => {
                             className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {VEHICLE_NUMBERS.map((number) => (
+                            {[...new Set(records.map((row) => row.vehicleNumber).filter(Boolean))].map((number) => (
                                 <option key={number} value={number}>{number}</option>
                             ))}
                         </select>
@@ -251,7 +275,7 @@ const VehicleHealthStatus = () => {
                                                 >
                                                     Edit
                                                 </NavLink>
-                                                {canDelete && (
+                                                {showDelete ? (
                                                     <button
                                                         type='button'
                                                         onClick={() => setDeleteRequestModal(true)}
@@ -259,7 +283,7 @@ const VehicleHealthStatus = () => {
                                                     >
                                                         Delete
                                                     </button>
-                                                )}
+                                                ) : null}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -287,13 +311,18 @@ const VehicleHealthStatus = () => {
                 </div>
             </div>
 
-            {canDelete && (
-                <DeleteRequestModal
-                    deleteRequestModal={deleteRequestModal}
-                    setDeleteRequestModal={setDeleteRequestModal}
-                />
-            )}
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <DeleteRequestModal
+                deleteRequestModal={deleteRequestModal}
+                setDeleteRequestModal={setDeleteRequestModal}
+            />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='vehiclehealthstatus'
+                title='VehicleHealthStatus'
+                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRecords) ? filteredRecords.length : 0} record(s).</>}
+            />
         </section>
     )
 }

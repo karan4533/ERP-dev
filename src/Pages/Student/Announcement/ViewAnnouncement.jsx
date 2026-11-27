@@ -1,5 +1,5 @@
 import ViewAnnouncementPage from '../../../Common/Announcement/ViewAnnouncementPage'
 
-export default function ViewAnnouncement() {
-    return <ViewAnnouncementPage roleKey='student' />
+export default function ViewAnnouncement({ roleKey = 'student' }) {
+    return <ViewAnnouncementPage roleKey={roleKey} />
 }

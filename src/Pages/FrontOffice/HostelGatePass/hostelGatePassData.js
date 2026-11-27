@@ -6,6 +6,16 @@ import {
     mapStudentForGatePass,
     parseGatePassDate,
 } from '../GatePass/gatePassData'
+import {
+    createFrontOfficeItem,
+    decideFrontOfficeItem,
+    deleteFrontOfficeItem,
+    frontOfficeApiOn,
+    hydrateFrontOfficeCollection,
+    peekFrontOfficeCollection,
+    updateFrontOfficeItem,
+} from '../frontOfficeStore'
+import { listParentHostelGatePassesApi } from '../../../services/frontOfficeApi'
 
 export {
     formatGatePassDate,
@@ -77,10 +87,15 @@ const nextGatePassId = () => {
     return `HGP-${String(current).padStart(3, '0')}`
 }
 
-export const getHostelGatePasses = () => readRecords()
+const COLLECTION = 'hostel-gate-passes'
+
+export const hydrateHostelGatePassesFromApi = () => hydrateFrontOfficeCollection(COLLECTION)
+
+export const getHostelGatePasses = () =>
+    frontOfficeApiOn() ? peekFrontOfficeCollection(COLLECTION) : readRecords()
 
 export const getHostelGatePassById = (id) =>
-    readRecords().find((record) => record.id === id) ?? null
+    getHostelGatePasses().find((record) => record.id === id) ?? null
 
 const buildRecordPayload = (payload, existing = null) => {
     const studentId = String(payload.studentId || '').trim()
@@ -111,7 +126,7 @@ const buildRecordPayload = (payload, existing = null) => {
             gender: payload.gender || '',
             mobileNumber: payload.mobileNumber || '',
             city: payload.city || '',
-            profile: payload.profileImage || noProfile,
+            profile: payload.profileImage || payload.profile || noProfile,
             hostel: payload.hostel,
             leaveType: payload.leaveType,
             reason,
@@ -120,15 +135,92 @@ const buildRecordPayload = (payload, existing = null) => {
             returnDate,
             returnTime,
             status: payload.status,
-            parentApproval: existing?.parentApproval || 'Pending',
-            principalApproval: existing?.principalApproval || 'Pending',
+            parentApproval: payload.parentApproval || existing?.parentApproval || 'Pending',
+            // Parent OR Principal only — warden is not part of the required chain (#45).
+            principalApproval:
+                payload.principalApproval
+                || existing?.principalApproval
+                || (existing?.wardenApproval && existing.wardenApproval !== 'Pending' ? existing.wardenApproval : null)
+                || 'Pending',
         },
     }
 }
 
-export const addHostelGatePass = (payload) => {
+/** Effective principal column (legacy rows may still carry wardenApproval only). */
+export const getHostelPrincipalApproval = (record) =>
+    record?.principalApproval
+    || (record?.wardenApproval && record.wardenApproval !== 'Pending' ? record.wardenApproval : null)
+    || 'Pending'
+
+/**
+ * Overall decision: the first Parent OR Principal decision is final (server field `approvalStatus`).
+ * Legacy rows without it fall back to the individual approval columns.
+ */
+export const getHostelApprovalStatus = (record) => {
+    if (APPROVAL_STATUSES.includes(record?.approvalStatus)) return record.approvalStatus
+    if (record?.parentApproval === 'Approved' || record?.parentApproval === 'Rejected') return record.parentApproval
+    return getHostelPrincipalApproval(record)
+}
+
+/** Outing is cleared for gate when Parent OR Principal has approved. */
+export const isHostelOutingApproved = (record) => getHostelApprovalStatus(record) === 'Approved'
+
+/** Hostel outing passes for the signed-in parent's own children (server-filtered). */
+export const fetchParentHostelGatePasses = async () => {
+    const rows = await listParentHostelGatePassesApi()
+    return Array.isArray(rows) ? rows : []
+}
+
+/**
+ * Parent or Principal decision on hostel leave/outing / gate pass.
+ * Either approval alone is sufficient; the other field may stay Pending.
+ */
+export const decideHostelGatePassApproval = async (id, { actor = 'principal', status, remark = '' } = {}) => {
+    if (!APPROVAL_STATUSES.includes(status) || status === 'Pending') {
+        return { success: false, message: 'Choose Approved or Rejected.' }
+    }
+    if (frontOfficeApiOn()) {
+        try {
+            const record = await decideFrontOfficeItem(COLLECTION, id, { decision: status, remark })
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error?.message || 'Could not record the decision.' }
+        }
+    }
+    const existing = getHostelGatePassById(id)
+    if (!existing) return { success: false, message: 'Hostel gate pass not found.' }
+
+    const field = actor === 'parent' ? 'parentApproval' : 'principalApproval'
+    const current = getHostelApprovalStatus(existing)
+    if (current !== 'Pending') {
+        return { success: false, message: `This outing already has a final decision (${current}).` }
+    }
+
+    const next = {
+        ...existing,
+        parentApproval: existing.parentApproval || 'Pending',
+        principalApproval: getHostelPrincipalApproval(existing),
+        [field]: status,
+        [`${field}DecidedAt`]: new Date().toISOString(),
+    }
+    // Drop orphan warden field from the write payload so UI stops requiring it.
+    delete next.wardenApproval
+
+    return updateHostelGatePass(id, next)
+}
+
+export const addHostelGatePass = async (payload) => {
     const built = buildRecordPayload(payload)
     if (!built.success) return built
+
+    if (frontOfficeApiOn()) {
+        try {
+            const record = await createFrontOfficeItem(COLLECTION, built.data)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error?.message || 'Could not save hostel gate pass.' }
+        }
+    }
 
     const id = nextGatePassId()
     const record = {
@@ -142,13 +234,25 @@ export const addHostelGatePass = (payload) => {
     return { success: true, record }
 }
 
-export const updateHostelGatePass = (id, payload) => {
+export const updateHostelGatePass = async (id, payload) => {
+    const existing = getHostelGatePassById(id)
+    if (!existing) return { success: false, message: 'Gate pass not found.' }
+
+    const built = buildRecordPayload(payload, existing)
+    if (!built.success) return built
+
+    if (frontOfficeApiOn()) {
+        try {
+            const record = await updateFrontOfficeItem(COLLECTION, id, { ...built.data, id, gatePassId: id })
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error?.message || 'Could not update hostel gate pass.' }
+        }
+    }
+
     const records = readRecords()
     const index = records.findIndex((record) => record.id === id)
     if (index < 0) return { success: false, message: 'Gate pass not found.' }
-
-    const built = buildRecordPayload(payload, records[index])
-    if (!built.success) return built
 
     records[index] = {
         ...records[index],
@@ -159,7 +263,15 @@ export const updateHostelGatePass = (id, payload) => {
     return { success: true, record: records[index] }
 }
 
-export const deleteHostelGatePass = (id) => {
+export const deleteHostelGatePass = async (id) => {
+    if (frontOfficeApiOn()) {
+        try {
+            await deleteFrontOfficeItem(COLLECTION, id)
+            return { success: true }
+        } catch (error) {
+            return { success: false, message: error?.message || 'Could not delete hostel gate pass.' }
+        }
+    }
     writeRecords(readRecords().filter((record) => record.id !== id))
     return { success: true }
 }

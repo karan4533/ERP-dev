@@ -1,53 +1,95 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
+import { Download, EllipsisIcon } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import ListPagination from '../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../Common/useListPagination'
+import { emptyListMessage } from '../../../Common/listPagination'
+import { filterListRows } from '../../../Common/listFiltering'
 import {
     TC_STATUSES,
     getAllTcRequests,
+    getPendingManagerNocCount,
     getPendingPrmCount,
+    hydrateTcRequestsFromApi,
     statusBadgeColor,
 } from '../../../Common/TcRequest/tcRequestData'
+import { canUseTcApi } from '../../../services/tcApi'
 
 const TcRequestList = () => {
     const location = useLocation()
-    const [requests, setRequests] = useState([])
-    const [search, setSearch] = useState('')
+    const [requests, setRequests] = useState(() => (canUseTcApi() ? [] : getAllTcRequests()))
     const [statusFilter, setStatusFilter] = useState('')
+    const [search, setSearch] = useState('')
     const [exportModal, setExportModal] = useState(false)
+    const [loadError, setLoadError] = useState('')
 
     useEffect(() => {
-        setRequests(getAllTcRequests())
+        if (!canUseTcApi()) {
+            setRequests(getAllTcRequests())
+            return undefined
+        }
+        let active = true
+        hydrateTcRequestsFromApi()
+            .then((rows) => {
+                if (active) {
+                    setRequests(rows)
+                    setLoadError('')
+                }
+            })
+            .catch((error) => {
+                if (active) setLoadError(error?.message || 'TC requests could not be loaded.')
+            })
+        return () => {
+            active = false
+        }
     }, [location.key])
 
-    const pendingCount = useMemo(() => getPendingPrmCount(), [requests])
+    const pendingCount = useMemo(
+        () => requests.filter((row) => row.status === 'Pending PRM Review').length || getPendingPrmCount(),
+        [requests],
+    )
+    const pendingNocCount = useMemo(
+        () => requests.filter((row) => row.status === 'Pending Manager NOCs').length || getPendingManagerNocCount(),
+        [requests],
+    )
 
-    const filteredRequests = useMemo(() => {
-        const query = search.trim().toLowerCase()
-        return requests.filter((request) => {
-            if (statusFilter && request.status !== statusFilter) return false
-            if (!query) return true
-            return [
-                request.requestId,
-                request.studentName,
-                request.admissionNumber,
-                request.classSection,
-                request.transferTo,
-                request.reason,
-            ].some((field) => String(field || '').toLowerCase().includes(query))
-        })
-    }, [requests, statusFilter, search])
+    const filteredRequests = useMemo(
+        () => filterListRows(requests, {
+            search,
+            searchKeys: ['requestId', 'id', 'studentName', 'admissionNumber', 'classSection', 'requestedOn', 'status'],
+            equals: { status: statusFilter },
+        }),
+        [requests, search, statusFilter],
+    )
+    const pagination = useListPagination(filteredRequests, { resetKey: `${search}|${statusFilter}` })
 
     return (
         <section className='space-y-6'>
             <div>
                 <h1 className='text-2xl font-semibold text-black'>TC Requests</h1>
                 <p className='text-sm text-[#667085] mt-1'>
-                    Review Transfer Certificate requests from students and parents. Forward verified requests to Super Admin for approval.
+                    Review Transfer Certificate requests. Manager NOCs run first when required; then PRM forwards to MD / Super Admin for final approval.
                 </p>
+                {loadError ? <p className='text-sm text-[#B42318] mt-2'>{loadError}</p> : null}
             </div>
 
+            <div className='flex flex-wrap gap-3'>
+            {pendingNocCount > 0 ? (
+                <button
+                    type='button'
+                    onClick={() => setStatusFilter(statusFilter === 'Pending Manager NOCs' ? '' : 'Pending Manager NOCs')}
+                    className={`text-left w-full sm:w-auto rounded-xl border px-4 py-3 transition-all cursor-pointer ${
+                        statusFilter === 'Pending Manager NOCs'
+                            ? 'border-[#9C27B0] bg-[#9C27B008] ring-2 ring-[#9C27B0]'
+                            : 'border-[#E4E7EC] hover:border-[#9C27B0] bg-white'
+                    }`}
+                >
+                    <p className='text-sm font-medium text-[#808080]'>Pending manager NOCs</p>
+                    <p className='text-2xl font-bold text-[#0C1E5B] mt-1'>{pendingNocCount}</p>
+                </button>
+            ) : null}
             {pendingCount > 0 ? (
                 <button
                     type='button'
@@ -62,6 +104,7 @@ const TcRequestList = () => {
                     <p className='text-2xl font-bold text-[#0C1E5B] mt-1'>{pendingCount}</p>
                 </button>
             ) : null}
+            </div>
 
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
@@ -71,8 +114,8 @@ const TcRequestList = () => {
                             type='text'
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder='Request ID, student name, admission no...'
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full focus:outline-none focus:border-[#515DEF]'
+                            placeholder='Request ID, student name...'
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         />
                     </div>
                     <div className='flex flex-col gap-y-2'>
@@ -88,6 +131,18 @@ const TcRequestList = () => {
                             ))}
                         </select>
                     </div>
+                    <div className='flex items-end'>
+                        <button
+                            type='button'
+                            onClick={() => {
+                                setSearch('')
+                                setStatusFilter('')
+                            }}
+                            className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
+                        >
+                            Clear Filters
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -101,53 +156,62 @@ const TcRequestList = () => {
                 </div>
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap'>
                             <tr>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Request ID</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Student</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Transfer To</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Requested By</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Requested On</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRequests.map((request) => (
-                                <tr key={request.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{request.requestId}</td>
-                                    <td className='px-2 py-4'>{request.studentName}</td>
-                                    <td className='px-2 py-4'>{request.classSection}</td>
-                                    <td className='px-2 py-4'>{request.transferTo}</td>
-                                    <td className='px-2 py-4'>{request.requestedBy}</td>
-                                    <td className='px-2 py-4'>{request.requestedOn}</td>
-                                    <td className='px-2 py-4'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[request.status]}`}>
-                                            {request.status}
-                                        </span>
-                                    </td>
-                                    <td className='px-2 py-4 text-center rounded-e-lg'>
-                                        <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                            <NavLink to={`/front-office/tc-request/view/${request.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
-                                        </Dropdown>
-                                    </td>
+                            {filteredRequests.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className='px-2 py-8 text-center text-[#667085]'>{emptyListMessage(requests.length)}</td>
                                 </tr>
-                            ))}
+                            ) : (
+                                pagination.rows.map((request) => (
+                                    <tr key={request.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                        <td className='px-2 py-4 text-[#667085]'>{request.requestId || request.id}</td>
+                                        <td className='px-2 py-4 text-[#667085]'>{request.studentName}</td>
+                                        <td className='px-2 py-4 text-[#667085]'>{request.classSection}</td>
+                                        <td className='px-2 py-4 text-[#667085]'>{request.requestedOn}</td>
+                                        <td className='px-2 py-4'>
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[request.status] || ''}`}>
+                                                {request.status}
+                                            </span>
+                                        </td>
+                                        <td className='px-2 py-4 text-center'>
+                                            <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
+                                                <NavLink to={`/front-office/tc-request/view/${request.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                    View
+                                                </NavLink>
+                                            </Dropdown>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
+                <ListPagination pagination={pagination} showPageSize />
             </div>
 
-            <div className='flex justify-between items-center px-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {filteredRequests.length} of {filteredRequests.length} entries</p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>1</button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'><ChevronRight size={16} /></button>
-                </div>
-            </div>
-
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='tc-requests'
+                rows={filteredRequests.map((r) => ({
+                    requestId: r.requestId,
+                    studentName: r.studentName,
+                    admissionNumber: r.admissionNumber,
+                    status: r.status,
+                    requestedOn: r.requestedOn || r.appliedOn,
+                }))}
+                exportDescription={<>You are exporting {filteredRequests.length} record{filteredRequests.length === 1 ? '' : 's'}.</>}
+            />
         </section>
     )
 }

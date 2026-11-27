@@ -1,6 +1,5 @@
-import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
-import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
+import { staffCommonRoutes } from '../Common/staffCommonRoutes'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/QualityAuditor/Dashboard/Dashboard'
 import MyAudits from '../Pages/QualityAuditor/AuditManagement/MyAudits/MyAudits'
@@ -28,17 +27,14 @@ import PendingActionsReport from '../Pages/QualityAuditor/Reports/ActionsReports
 import ClosedActionsReport from '../Pages/QualityAuditor/Reports/ActionsReports/ClosedActionsReport'
 import { AuditComponentsPage, SharedDeviationsPage } from '../Common/demoDomain/WorkflowScreens'
 
-const Placeholder = ({ title }) => (
-    <div className='bg-white rounded-2xl shadow-md p-8 text-center'>
-        <h2 className='text-xl font-semibold text-black'>{title}</h2>
-        <p className='text-sm text-[#667085] mt-2'>This page will be implemented next.</p>
-    </div>
-)
+import CommunicationPage from '../Common/Communication/CommunicationPage'
+import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
 
 const QualityAuditorRoutes = () => {
     return (
         <ReactRoutes>
             <Route path="/quality-auditor/dashboard" element={<Dashboard />} />
+            {TaskManagementRoutes({ basePath: '/quality-auditor' })}
 
             <Route path="/quality-auditor/audit-management/my-audits" element={<MyAudits />} />
             <Route path="/quality-auditor/audit-management/my-audits/view/:id" element={<ViewMyAudit />} />
@@ -67,13 +63,14 @@ const QualityAuditorRoutes = () => {
             <Route path="/quality-auditor/reports/pending-actions" element={<PendingActionsReport />} />
             <Route path="/quality-auditor/reports/closed-actions" element={<ClosedActionsReport />} />
             <Route path="/quality-auditor/reports" element={<Navigate to="/quality-auditor/reports/audit-reports" replace />} />
-            <Route path="/quality-auditor/communication" element={<Placeholder title="Communication" />} />
+            <Route path="/quality-auditor/communication" element={<Navigate to="/quality-auditor/communication/inbox" replace />} />
+            <Route path="/quality-auditor/communication/inbox" element={<CommunicationPage roleKey="qualityAuditor" />} />
+            <Route path="/quality-auditor/communication/inbox/:conversationId" element={<CommunicationPage roleKey="qualityAuditor" />} />
             <Route path="/quality-auditor/components" element={<AuditComponentsPage />} />
             <Route path="/quality-auditor/shared-deviations" element={<SharedDeviationsPage />} />
 
-                        <Route path="/quality-auditor/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
-            {EnterpriseOperationsRoutes({ basePath: '/quality-auditor', role: 'qualityauditor' })}
             <Route path="*" element={<Navigate to="/quality-auditor/dashboard" replace />} />
+            {staffCommonRoutes('/quality-auditor', 'qualityAuditor', 'Quality Auditor', { communication: false, leaveKey: 'qualityauditor' })}
         </ReactRoutes>
     )
 }

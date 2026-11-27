@@ -15,6 +15,7 @@ const EditHostelGatePass = () => {
     const [formData, setFormData] = useState(null)
     const [errors, setErrors] = useState({})
     const [notFound, setNotFound] = useState(false)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         const record = getHostelGatePassById(id)
@@ -26,19 +27,24 @@ const EditHostelGatePass = () => {
         setFormData(toHostelGatePassFormState(record))
     }, [id])
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const validationErrors = validateHostelGatePassForm(formData)
         setErrors(validationErrors)
         if (Object.keys(validationErrors).length > 0) return
 
-        const result = updateHostelGatePass(id, formData)
-        if (!result.success) {
-            toast.error(result.message)
-            return
-        }
+        setSaving(true)
+        try {
+            const result = await updateHostelGatePass(id, formData)
+            if (!result.success) {
+                toast.error(result.message || 'Could not update hostel gate pass.')
+                return
+            }
 
-        toast.success('Hostel gate pass updated successfully.')
-        navigate('/front-office/hostel-gate-pass-list')
+            toast.success('Hostel gate pass updated successfully.')
+            navigate('/front-office/hostel-gate-pass-list')
+        } finally {
+            setSaving(false)
+        }
     }
 
     if (notFound) {
@@ -75,10 +81,11 @@ const EditHostelGatePass = () => {
                 </button>
                 <button
                     type='button'
+                    disabled={saving}
                     onClick={handleSave}
-                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
+                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'
                 >
-                    Update Gate Pass
+                    {saving ? 'Saving…' : 'Update Gate Pass'}
                 </button>
             </div>
         </section>

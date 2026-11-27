@@ -71,7 +71,7 @@ const formatJoiningDate = (isoDate) => {
     })
 }
 
-const buildEmployeeDetailFromUser = (user, listItem) => ({
+export const buildEmployeeDetailFromUser = (user, listItem) => ({
     ...listItem,
     profileImage: user.profileImage || null,
     userId: user.id,

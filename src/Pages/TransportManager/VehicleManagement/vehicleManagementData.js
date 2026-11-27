@@ -1,3 +1,6 @@
+import { liveArray } from '../../../Common/RBAC/liveArray'
+import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
+
 export const VEHICLE_CATEGORIES = ['Bus', 'Car']
 
 export const BUS_TYPES = [
@@ -11,7 +14,25 @@ export const CAR_TYPES = ['Crysta', 'Innova', 'Scorpio', 'Honda City', 'Kia']
 
 export const VEHICLE_TYPES = [...BUS_TYPES, ...CAR_TYPES]
 
-export const VEHICLES = [
+const DEFAULT_VEHICLES = [
+    {
+        id: 'VEH-ROUTE1',
+        vehicleNumber: 'TN58BB3769',
+        vehicleType: 'School Bus (45 Seater)',
+        capacity: 45,
+        gpsImei: '355710090439063',
+        imei: '355710090439063',
+        driverName: '',
+        driverContact: '',
+        conductorName: '',
+        studentStrength: '',
+        staffStrength: '',
+        currentOdometer: '',
+        category: 'Bus',
+        insuranceExpiryDate: '',
+        lastServiceDate: '',
+        nextServiceDate: '',
+    },
     {
         id: 'VEH-1001',
         vehicleNumber: 'TN-09-AB-4521',
@@ -103,79 +124,58 @@ export const VEHICLES = [
         insuranceExpiryDate: '19-01-2027',
         lastServiceDate: '11-05-2026',
         nextServiceDate: '11-08-2026',
-        fcExpiryDate: '20-11-2027',
-        rcNumber: 'TN-09-IN-2202',
-        permitNumber: 'PRM-TN09-2202',
-        permitExpiryDate: '15-05-2028',
-        fastagId: 'FTAG-IND-883411',
-        puccExpiryDate: '30-10-2026'
-    },
-    {
-        id: 'VEH-1008',
-        vehicleNumber: 'TN-09-SC-3303',
-        vehicleType: 'Scorpio',
-        category: 'Car',
-        capacity: 7,
-        driverName: 'Gopalakrishnan V.',
-        driverContact: '9000013303',
-        conductorName: '—',
-        studentStrength: 5,
-        staffStrength: 1,
-        currentOdometer: 18540,
-        insuranceExpiryDate: '05-04-2027',
-        lastServiceDate: '15-05-2026',
-        nextServiceDate: '15-08-2026',
-        fcExpiryDate: '10-09-2027',
-        rcNumber: 'TN-09-SC-3303',
-        permitNumber: 'PRM-TN09-3303',
-        permitExpiryDate: '12-04-2028',
-        fastagId: 'FTAG-IND-994522',
-        puccExpiryDate: '18-12-2026'
-    },
-    {
-        id: 'VEH-1009',
-        vehicleNumber: 'TN-09-HC-4404',
-        vehicleType: 'Honda City',
-        category: 'Car',
-        capacity: 5,
-        driverName: 'Raghavan S.',
-        driverContact: '9000014404',
-        conductorName: '—',
-        studentStrength: 0,
-        staffStrength: 2,
-        currentOdometer: 14200,
-        insuranceExpiryDate: '25-06-2027',
-        lastServiceDate: '20-04-2026',
-        nextServiceDate: '20-07-2026',
-        fcExpiryDate: '15-03-2028',
-        rcNumber: 'TN-09-HC-4404',
-        permitNumber: 'PRM-TN09-4404',
-        permitExpiryDate: '20-06-2028',
-        fastagId: 'FTAG-IND-112233',
-        puccExpiryDate: '10-11-2026'
-    },
-    {
-        id: 'VEH-1010',
-        vehicleNumber: 'TN-09-KA-5505',
-        vehicleType: 'Kia',
-        category: 'Car',
-        capacity: 7,
-        driverName: 'Saravanan M.',
-        driverContact: '9000015505',
-        conductorName: '—',
-        studentStrength: 4,
-        staffStrength: 1,
-        currentOdometer: 9800,
-        insuranceExpiryDate: '14-09-2027',
-        lastServiceDate: '01-06-2026',
-        nextServiceDate: '01-09-2026',
-        fcExpiryDate: '14-09-2028',
-        rcNumber: 'TN-09-KA-5505',
-        permitNumber: 'PRM-TN09-5505',
-        permitExpiryDate: '14-09-2028',
-        fastagId: 'FTAG-IND-445566',
-        puccExpiryDate: '15-01-2027'
     },
 ]
 
-export const getVehicleById = (id) => VEHICLES.find((vehicle) => vehicle.id === id) ?? null
+export const getVehicleById = (id) => getVehicles().find((vehicle) => vehicle.id === id) ?? null
+
+export const VEHICLES_STORAGE_KEY = 'schoolerp-transport-vehicles-v1'
+
+export function getVehicles() {
+    return getTransportRows(VEHICLES_STORAGE_KEY, DEFAULT_VEHICLES)
+}
+
+export function saveVehicles(rows) {
+    return saveTransportRows(VEHICLES_STORAGE_KEY, rows)
+}
+
+export function hydrateVehiclesFromApi() {
+    return hydrateTransportRows(VEHICLES_STORAGE_KEY)
+}
+
+export function getVehicleOptions() {
+    return getVehicles().map((vehicle) => ({
+        id: vehicle.id,
+        vehicleNumber: vehicle.vehicleNumber,
+        label: vehicle.vehicleNumber,
+        vehicleType: vehicle.vehicleType,
+        driverName: vehicle.driverName,
+        driverContact: vehicle.driverContact,
+        category: vehicle.category,
+        gpsImei: vehicle.gpsImei || vehicle.imei || '',
+        imei: vehicle.gpsImei || vehicle.imei || '',
+    }))
+}
+
+export async function upsertVehicle(vehicle) {
+    const rows = getVehicles()
+    const nextId = vehicle.id || nextPrefixedId(rows, 'VEH-')
+    const record = { ...vehicle, id: nextId }
+    const idx = rows.findIndex((row) => row.id === nextId)
+    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? record : row)) : [...rows, record]
+    const result = await saveVehicles(next)
+    return { ...result, record }
+}
+
+export async function deleteVehicle(id) {
+    const rows = getVehicles()
+    const next = rows.filter((row) => row.id !== id)
+    if (next.length === rows.length) {
+        return { success: false, message: 'Vehicle not found.' }
+    }
+    return saveVehicles(next)
+}
+
+/** Prefer getVehicles() after hydrate — empty in API mode via getTransportRows. */
+export const VEHICLES = liveArray(getVehicles)
+

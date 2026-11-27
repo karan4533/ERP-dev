@@ -2,15 +2,48 @@ import React, { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
-import { getResultSummaries, CLASSES, SECTIONS, SUBJECTS, EXAM_NAMES } from './resultSummaryData'
+import {
+    getResultSummaries,
+    hydrateResultSummariesFromApi,
+    CLASSES,
+    SECTIONS,
+    SUBJECTS,
+    EXAM_NAMES,
+} from './resultSummaryData'
+import { canUseExamsApi } from '../../../../services/examsApi'
 
 const ResultSummary = () => {
     const location = useLocation()
     const [records, setRecords] = useState(() => getResultSummaries())
     const [exportModal, setExportModal] = useState(false)
+    const [loading, setLoading] = useState(canUseExamsApi())
+    const [error, setError] = useState('')
 
     useEffect(() => {
-        setRecords(getResultSummaries())
+        let cancelled = false
+        if (!canUseExamsApi()) {
+            setRecords(getResultSummaries())
+            setLoading(false)
+            return undefined
+        }
+        setLoading(true)
+        hydrateResultSummariesFromApi()
+            .then((rows) => {
+                if (!cancelled) {
+                    setRecords(rows)
+                    setError('')
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setRecords(getResultSummaries())
+                    setError(err?.message || 'Could not load result summaries from campus marks.')
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => { cancelled = true }
     }, [location.pathname])
 
     return (
@@ -66,6 +99,8 @@ const ResultSummary = () => {
                         </select>
                     </div>
                 </div>
+                {loading && <p className='mt-4 text-sm text-[#667085]'>Loading campus result summaries…</p>}
+                {error && <p className='mt-4 text-sm text-[#B42318]'>{error}</p>}
             </div>
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
@@ -147,7 +182,13 @@ const ResultSummary = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='result-summary'
+                rows={Array.isArray(records) ? records : []}
+                exportDescription={<>You are exporting {Array.isArray(records) ? records.length : 0} record(s).</>}
+            />
         </section>
     )
 }

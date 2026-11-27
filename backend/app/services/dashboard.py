@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.deps import permission_codes_for
-from app.models import Announcement, Escalation, HrEmployee, LeaveRequest, Notification, Student, TcRequest
+from app.models import Announcement, Escalation, HrEmployee, LeaveRequest, Student, TcRequest
 from app.services.errors import fail
 
 
@@ -35,13 +35,9 @@ def snapshot(db: Session, actor: User) -> dict:
             TcRequest.campus_id == campus, TcRequest.status == "Pending Super Admin Approval"
         )
     ) or 0
-    unread = db.scalar(
-        select(func.count()).select_from(Notification).where(
-            Notification.campus_id == campus,
-            Notification.read_at.is_(None),
-            (Notification.user_id == actor.id) | (Notification.user_id.is_(None)),
-        )
-    ) or 0
+    from app.services.approvals import list_notifications
+
+    unread = len(list_notifications(db, actor, unread_only=True))
     announcements = db.scalar(
         select(func.count()).select_from(Announcement).where(
             Announcement.campus_id == campus, Announcement.announcement_date >= month_start

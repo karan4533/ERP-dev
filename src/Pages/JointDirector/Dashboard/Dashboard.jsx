@@ -1,215 +1,445 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import ReactECharts from 'echarts-for-react'
 import {
-    EnterpriseKpiCard,
-    EnterpriseTrendChart,
-    EnterpriseBreakdownCard,
-    EnterpriseBarChart,
-    EnterpriseDonutChart,
-    HierarchyFilterBar
-} from '../../../Common/ui'
-import {
-    LayoutDashboard,
+    Users,
+    Building2,
     ClipboardCheck,
-    AlertTriangle,
     ShieldAlert,
+    ClipboardList,
+    Rss,
+    AlertTriangle,
+    Monitor,
     Bus,
-    Ticket,
+    LayoutDashboard,
+    UtensilsCrossed,
     Package,
-    ArrowRight
+    Sparkles,
+    Ticket,
 } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { ROLES } from '../../../constants/roles'
 import {
+    KPI_CARDS,
+    DEPARTMENT_SUMMARIES,
     PENDING_APPROVALS,
     CRITICAL_ALERTS,
-    priorityBadgeColor
+    RECENT_ESCALATIONS,
+    priorityBadgeColor,
+    OPERATIONS_TREND,
+    APPROVALS_BY_DEPARTMENT,
+    ESCALATIONS_BY_PRIORITY,
+    ALERTS_BY_DEPARTMENT,
+    DEPARTMENT_WORKLOAD,
+    CHART_COLORS,
 } from './dashboardData'
+import { emptyJdDashboardView, loadLiveJdDashboard } from './liveDashboardLoader'
+
+const KPI_ICONS = {
+    'Total Employees': Users,
+    'Active Departments': Building2,
+    'Pending Approvals': ClipboardCheck,
+    'Open Escalations': ShieldAlert,
+    'Pending Tasks': ClipboardList,
+    'Active Announcements': Rss,
+    'Critical Inventory Alerts': AlertTriangle,
+    'Critical IT Issues': Monitor,
+    'Vehicle Maintenance Due': Bus,
+}
+
+const DEPT_ICONS = {
+    Canteen: UtensilsCrossed,
+    'Stationery Store': Package,
+    Housekeeping: Sparkles,
+    'IT Support': Ticket,
+    Transport: Bus,
+}
+
+const Panel = ({ title, children, className = '' }) => (
+    <div className={`bg-white rounded-2xl shadow-md p-4 h-full ${className}`}>
+        <h3 className='text-lg font-semibold text-black mb-4'>{title}</h3>
+        {children}
+    </div>
+)
+
+const Widget = ({ title, children }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4 h-full'>
+        <h3 className='text-lg font-semibold text-black mb-4'>{title}</h3>
+        <div className="relative overflow-x-auto">{children}</div>
+    </div>
+)
+
+const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
+const tdClass = 'px-2 py-3 text-[#667085] text-sm'
+
+const EmptyTableRow = ({ cols, label = 'No records' }) => (
+    <tr>
+        <td colSpan={cols} className={`${tdClass} text-center py-6 text-[#98A2B3]`}>{label}</td>
+    </tr>
+)
 
 const Dashboard = () => {
-    const [filterState, setFilterState] = useState({
-        campus: 'All Campuses',
-        department: 'Operations & Logistics',
-        team: 'All Teams / Wings',
-        period: 'Today',
-    })
+    const [view, setView] = useState(() => emptyJdDashboardView())
+
+    useEffect(() => {
+        let active = true
+        loadLiveJdDashboard(ROLES.JOINT_DIRECTOR).then((next) => {
+            if (active) setView(next)
+        })
+        return () => { active = false }
+    }, [])
+
+    const kpiCards = view.kpiCards?.length ? view.kpiCards : KPI_CARDS
+    const departmentSummaries = view.departmentSummaries?.length ? view.departmentSummaries : DEPARTMENT_SUMMARIES
+    const pendingApprovals = view.pendingApprovals ?? PENDING_APPROVALS
+    const criticalAlerts = view.criticalAlerts ?? CRITICAL_ALERTS
+    const recentEscalations = view.recentEscalations ?? RECENT_ESCALATIONS
+    const operationsTrend = view.operationsTrend ?? OPERATIONS_TREND
+    const approvalsByDepartment = view.approvalsByDepartment ?? APPROVALS_BY_DEPARTMENT
+    const escalationsByPriority = view.escalationsByPriority ?? ESCALATIONS_BY_PRIORITY
+    const alertsByDepartment = view.alertsByDepartment ?? ALERTS_BY_DEPARTMENT
+    const departmentWorkload = view.departmentWorkload ?? DEPARTMENT_WORKLOAD
+
+    const operationsTrendOption = useMemo(() => ({
+        tooltip: { trigger: 'axis' },
+        legend: {
+            data: ['Pending Approvals', 'Escalations', 'Tasks'],
+            bottom: 0,
+            textStyle: { color: '#667085', fontSize: 12 },
+        },
+        grid: { left: 48, right: 24, top: 24, bottom: 48 },
+        xAxis: {
+            type: 'category',
+            data: operationsTrend.labels,
+            axisLine: { lineStyle: { color: '#E0E0E0' } },
+            axisLabel: { color: '#667085', fontSize: 11 },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#667085', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#F2F4F7' } },
+        },
+        series: [
+            {
+                name: 'Pending Approvals',
+                type: 'line',
+                smooth: true,
+                data: operationsTrend.approvals,
+                areaStyle: { color: 'rgba(81, 93, 239, 0.1)' },
+                lineStyle: { color: CHART_COLORS.primary, width: 2 },
+                itemStyle: { color: CHART_COLORS.primary },
+                symbol: 'circle',
+                symbolSize: 6,
+            },
+            {
+                name: 'Escalations',
+                type: 'line',
+                smooth: true,
+                data: operationsTrend.escalations,
+                lineStyle: { color: CHART_COLORS.danger, width: 2 },
+                itemStyle: { color: CHART_COLORS.danger },
+                symbol: 'circle',
+                symbolSize: 6,
+            },
+            {
+                name: 'Tasks',
+                type: 'line',
+                smooth: true,
+                data: operationsTrend.tasks,
+                lineStyle: { color: CHART_COLORS.success, width: 2 },
+                itemStyle: { color: CHART_COLORS.success },
+                symbol: 'circle',
+                symbolSize: 6,
+            },
+        ],
+    }), [operationsTrend])
+
+    const escalationsPieOption = useMemo(() => ({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: {
+            orient: 'vertical',
+            right: 0,
+            top: 'center',
+            textStyle: { color: '#667085', fontSize: 12 },
+        },
+        series: [{
+            type: 'pie',
+            radius: ['48%', '72%'],
+            center: ['38%', '50%'],
+            avoidLabelOverlap: true,
+            itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+            label: { show: false },
+            data: (escalationsByPriority.filter((item) => item.value > 0).length
+                ? escalationsByPriority.filter((item) => item.value > 0)
+                : [{ name: 'None', value: 0 }]
+            ).map((item, index) => ({
+                ...item,
+                itemStyle: {
+                    color: [CHART_COLORS.danger, CHART_COLORS.warning, CHART_COLORS.info, CHART_COLORS.palette[5]][index],
+                },
+            })),
+        }],
+    }), [escalationsByPriority])
+
+    const approvalsBarOption = useMemo(() => ({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: (params) => {
+                const val = params[0]?.value ?? 0
+                return `${params[0]?.name}<br/>₹${val.toLocaleString('en-IN')}`
+            },
+        },
+        grid: { left: 16, right: 16, top: 16, bottom: 48 },
+        xAxis: {
+            type: 'category',
+            data: approvalsByDepartment.map((d) => d.department),
+            axisLabel: { color: '#667085', fontSize: 10, rotate: 20 },
+            axisLine: { lineStyle: { color: '#E0E0E0' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: {
+                color: '#667085',
+                fontSize: 11,
+                formatter: (v) => `₹${(v / 1000).toFixed(0)}k`,
+            },
+            splitLine: { lineStyle: { color: '#F2F4F7' } },
+        },
+        series: [{
+            type: 'bar',
+            data: approvalsByDepartment.map((d) => d.amount),
+            barWidth: 28,
+            itemStyle: {
+                color: CHART_COLORS.primary,
+                borderRadius: [4, 4, 0, 0],
+            },
+        }],
+    }), [approvalsByDepartment])
+
+    const alertsBarOption = useMemo(() => ({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: 100, right: 16, top: 8, bottom: 8 },
+        xAxis: {
+            type: 'value',
+            axisLabel: { color: '#667085', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#F2F4F7' } },
+        },
+        yAxis: {
+            type: 'category',
+            data: alertsByDepartment.map((d) => d.department).reverse(),
+            axisLabel: { color: '#667085', fontSize: 11 },
+            axisLine: { show: false },
+            axisTick: { show: false },
+        },
+        series: [{
+            type: 'bar',
+            data: alertsByDepartment.map((d) => d.count).reverse(),
+            barWidth: 14,
+            itemStyle: { color: CHART_COLORS.danger, borderRadius: [0, 4, 4, 0] },
+        }],
+    }), [alertsByDepartment])
+
+    const departmentWorkloadOption = useMemo(() => ({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: {
+            data: ['Pending Tasks', 'Open Tickets', 'Low Stock'],
+            bottom: 0,
+            textStyle: { color: '#667085', fontSize: 12 },
+        },
+        grid: { left: 48, right: 16, top: 24, bottom: 48 },
+        xAxis: {
+            type: 'category',
+            data: departmentWorkload.map((d) => d.department),
+            axisLabel: { color: '#667085', fontSize: 10, rotate: 15 },
+            axisLine: { lineStyle: { color: '#E0E0E0' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#667085', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#F2F4F7' } },
+        },
+        series: [
+            {
+                name: 'Pending Tasks',
+                type: 'bar',
+                stack: 'total',
+                data: departmentWorkload.map((d) => d.pendingTasks),
+                itemStyle: { color: CHART_COLORS.primary },
+            },
+            {
+                name: 'Open Tickets',
+                type: 'bar',
+                stack: 'total',
+                data: departmentWorkload.map((d) => d.openTickets),
+                itemStyle: { color: CHART_COLORS.info },
+            },
+            {
+                name: 'Low Stock',
+                type: 'bar',
+                stack: 'total',
+                data: departmentWorkload.map((d) => d.lowStock),
+                itemStyle: { color: CHART_COLORS.warning },
+            },
+        ],
+    }), [departmentWorkload])
 
     return (
-        <div className='space-y-6 pb-6 font-inter'>
-            {/* Header: Title + Context */}
-            <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
-                <div>
-                    <div className='flex items-center gap-2'>
-                        <h1 className='text-2xl font-bold tracking-tight text-slate-900'>
-                            Operations Command Center
-                        </h1>
-                        <span className='rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-100'>
-                            Joint Director Workspace
-                        </span>
+        <section className='space-y-6'>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex items-center gap-3'>
+                    <div className='p-2.5 rounded-xl bg-[#515DEF]/10 text-[#515DEF]'>
+                        <LayoutDashboard size={22} />
                     </div>
-                    <p className='mt-1 text-xs text-slate-500'>
-                        Live operational intelligence across Transport, Stationery Stores, IT Helpdesk, Campus Maintenance, CCTV, and Physical File Room.
-                    </p>
-                </div>
-            </div>
-
-            {/* Hierarchy Drilldown Filter Bar */}
-            <HierarchyFilterBar
-                onFilterChange={setFilterState}
-                showCampus={true}
-                showDepartment={true}
-                showTeam={false}
-            />
-
-            {/* 4 Soft Pastel Blue KPI Cards in Grid (Reference Design Layout) */}
-            <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'>
-                <EnterpriseKpiCard
-                    title='Total Operations Staff'
-                    value='248'
-                    change='+3.4%'
-                    isPositive={true}
-                    context='Across 12 non-academic operational units'
-                />
-                <EnterpriseKpiCard
-                    title='Vehicle Fleet Readiness'
-                    value='22 / 22'
-                    change='100%'
-                    isPositive={true}
-                    context='All 18 student routes active & on-time'
-                />
-                <EnterpriseKpiCard
-                    title='Pending Approvals'
-                    value='14'
-                    change='₹2.4L'
-                    isPositive={false}
-                    context='5 purchase requisitions awaiting sign-off'
-                />
-                <EnterpriseKpiCard
-                    title='Active Escalations & Tickets'
-                    value='23'
-                    change='-6'
-                    isPositive={true}
-                    context='3 critical IT tickets in SLA queue'
-                />
-            </div>
-
-            {/* Second Row: 2/3 Dual-Spline Trend Chart + 1/3 Workload Breakdown Card */}
-            <div className='grid grid-cols-1 gap-6 lg:grid-cols-3'>
-                <div className='lg:col-span-2'>
-                    <EnterpriseTrendChart
-                        tabs={['Operations Workload', 'Ticket Resolution Rate', 'Fleet Fuel Trends']}
-                        categories={['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']}
-                        dataByTab={{
-                            'Operations Workload': {
-                                current: [24, 38, 42, 35, 48, 28, 14],
-                                previous: [20, 30, 36, 32, 40, 24, 10],
-                            },
-                            'Ticket Resolution Rate': {
-                                current: [88, 92, 94, 91, 95, 96, 98],
-                                previous: [82, 85, 86, 88, 89, 90, 92],
-                            },
-                            'Fleet Fuel Trends': {
-                                current: [140, 160, 155, 170, 165, 120, 40],
-                                previous: [135, 150, 148, 162, 158, 110, 35],
-                            },
-                        }}
-                        height={280}
-                    />
-                </div>
-
-                <div className='lg:col-span-1'>
-                    <EnterpriseBreakdownCard
-                        title='Department Workload Level'
-                        items={[
-                            { label: 'Transport & Fleet', level: 3, value: '94%' },
-                            { label: 'Campus Maintenance', level: 3, value: '88%' },
-                            { label: 'Stationery Store', level: 2, value: '76%' },
-                            { label: 'IT Support & Systems', level: 2, value: '68%' },
-                            { label: 'Security & Gate Pass', level: 2, value: '62%' },
-                            { label: 'Housekeeping Services', level: 1, value: '54%' },
-                        ]}
-                    />
-                </div>
-            </div>
-
-            {/* Third Row: 1/2 Rounded Vertical Bar Chart + 1/2 Donut Distribution */}
-            <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
-                <EnterpriseBarChart
-                    title='Open Work Orders by Sub-Department'
-                    categories={['Transport', 'Maintenance', 'Store', 'IT Support', 'CCTV/Sec', 'Housekeeping']}
-                    data={[12, 18, 9, 7, 5, 14]}
-                    barColor='#BAE6FD'
-                    height={230}
-                    unit=''
-                />
-
-                <EnterpriseDonutChart
-                    title='Operations Expenditure Distribution'
-                    data={[
-                        { name: 'Transport Fleet & Fuel', value: 38.5, color: '#1E40AF' },
-                        { name: 'Campus Maintenance (EB/DG)', value: 27.2, color: '#3B82F6' },
-                        { name: 'Stationery & Stores', value: 18.1, color: '#93C5FD' },
-                        { name: 'IT Infrastructure', value: 16.2, color: '#64748B' },
-                    ]}
-                    height={230}
-                />
-            </div>
-
-            {/* Priority Queues: Approvals & Critical Alerts */}
-            <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
-                <div className='rounded-[1.25rem] border border-slate-200/80 bg-white p-5 shadow-xs'>
-                    <div className='flex items-center justify-between border-b border-slate-100 pb-3 mb-3'>
-                        <div className='flex items-center gap-2'>
-                            <ClipboardCheck size={16} className='text-blue-600' />
-                            <h3 className='text-sm font-semibold text-slate-900'>Pending Purchase & Replenishment Requisitions</h3>
-                        </div>
-                        <NavLink to='/joint-director/approvals' className='text-xs font-semibold text-blue-600 hover:underline'>
-                            View All
-                        </NavLink>
+                    <div>
+                        <h2 className='text-xl font-semibold text-black'>Joint Director Dashboard</h2>
+                        <p className='text-sm text-[#667085] mt-0.5'>Cross-department overview of operations, approvals, and critical alerts.</p>
                     </div>
+                </div>
+            </div>
 
-                    <div className='space-y-3'>
-                        {PENDING_APPROVALS.map((item) => (
-                            <div key={item.requestId} className='flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs'>
-                                <div>
-                                    <p className='font-semibold text-slate-800'>{item.department} · {item.type}</p>
-                                    <p className='text-slate-400 mt-0.5'>{item.requestId}</p>
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4'>
+                {kpiCards.map((card) => {
+                    const Icon = KPI_ICONS[card.label] ?? ClipboardList
+                    return (
+                        <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
+                            <div className='flex items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='text-xs text-[#808080]'>{card.label}</p>
+                                    <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
+                                    <p className='text-xs text-[#667085] mt-1'>{card.sub}</p>
                                 </div>
-                                <div className='text-right'>
-                                    <p className='font-bold text-slate-900'>{item.amount}</p>
-                                    <span className='text-[10px] text-amber-600 font-semibold'>Awaiting Sign-off</span>
+                                <div className='p-2 rounded-xl bg-[#515DEF]/10 text-[#515DEF] shrink-0'>
+                                    <Icon size={18} />
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className='rounded-[1.25rem] border border-slate-200/80 bg-white p-5 shadow-xs'>
-                    <div className='flex items-center justify-between border-b border-slate-100 pb-3 mb-3'>
-                        <div className='flex items-center gap-2'>
-                            <ShieldAlert size={16} className='text-red-500' />
-                            <h3 className='text-sm font-semibold text-slate-900'>Critical Operational Alerts</h3>
                         </div>
-                        <span className='rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600'>
-                            Immediate Action
-                        </span>
-                    </div>
+                    )
+                })}
+            </div>
 
-                    <div className='space-y-3'>
-                        {CRITICAL_ALERTS.map((alert) => (
-                            <div key={alert.department} className='rounded-xl border border-red-100 bg-red-50/30 p-3 text-xs'>
-                                <div className='flex items-center justify-between'>
-                                    <span className='font-semibold text-slate-800'>{alert.department}</span>
-                                    <span className='rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700'>
-                                        {alert.priority}
-                                    </span>
+            <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+                <Panel title="Weekly Operations Trend" className="lg:col-span-2">
+                    <ReactECharts option={operationsTrendOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
+                </Panel>
+                <Panel title="Escalations by Priority">
+                    <ReactECharts option={escalationsPieOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
+                </Panel>
+            </div>
+
+            <div>
+                <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>Department Summary</h3>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4'>
+                    {departmentSummaries.map((dept) => {
+                        const Icon = DEPT_ICONS[dept.department] ?? Building2
+                        return (
+                            <div key={dept.department} className='bg-white rounded-2xl shadow-md p-4'>
+                                <div className='flex items-center gap-2 mb-4'>
+                                    <div className='p-2 rounded-lg bg-[#515DEF]/10 text-[#515DEF]'>
+                                        <Icon size={16} />
+                                    </div>
+                                    <h4 className='text-sm font-semibold text-[#1E1E1E]'>{dept.department}</h4>
                                 </div>
-                                <p className='mt-1 text-slate-600'>{alert.issue}</p>
-                                <p className='mt-1 text-[10px] text-slate-400'>{alert.action}</p>
+                                <div className='space-y-3'>
+                                    {dept.metrics.map((metric) => (
+                                        <div key={metric.label} className='flex justify-between items-center gap-2'>
+                                            <span className='text-xs text-[#808080]'>{metric.label}</span>
+                                            <span className='text-sm font-semibold text-[#1E1E1E]'>{metric.value}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        ))}
-                    </div>
+                        )
+                    })}
                 </div>
             </div>
-        </div>
+
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                <Panel title="Department Workload Comparison">
+                    <ReactECharts option={departmentWorkloadOption} style={{ height: 320 }} opts={{ renderer: 'svg' }} />
+                </Panel>
+                <Panel title="Pending Approval Amounts by Department">
+                    <ReactECharts option={approvalsBarOption} style={{ height: 320 }} opts={{ renderer: 'svg' }} />
+                </Panel>
+            </div>
+
+            <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+                <Panel title="Critical Alerts by Department" className="lg:col-span-1">
+                    <ReactECharts option={alertsBarOption} style={{ height: 260 }} opts={{ renderer: 'svg' }} />
+                </Panel>
+
+                <Widget title="Pending Approvals">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Request ID</th>
+                                <th className={thClass}>Department</th>
+                                <th className={thClass}>Type</th>
+                                <th className={`${thClass} rounded-e-lg`}>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pendingApprovals.length === 0 ? (
+                                <EmptyTableRow cols={4} />
+                            ) : pendingApprovals.map((row) => (
+                                <tr key={row.requestId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.requestId}</td>
+                                    <td className={tdClass}>{row.department}</td>
+                                    <td className={tdClass}>{row.type}</td>
+                                    <td className={`${tdClass} whitespace-nowrap`}>{row.amount}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
+
+                <Widget title="Recent Escalations">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Escalation ID</th>
+                                <th className={thClass}>Department</th>
+                                <th className={`${thClass} rounded-e-lg`}>Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentEscalations.length === 0 ? (
+                                <EmptyTableRow cols={3} />
+                            ) : recentEscalations.map((row) => (
+                                <tr key={row.escalationId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.escalationId}</td>
+                                    <td className={tdClass}>{row.department}</td>
+                                    <td className={tdClass}>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${priorityBadgeColor[row.priority] || priorityBadgeColor.Medium}`}>
+                                            {row.priority}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
+            </div>
+
+            <Widget title="Critical Alerts">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                        <tr>
+                            <th className={`${thClass} rounded-s-lg`}>Department</th>
+                            <th className={`${thClass} rounded-e-lg`}>Alert</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {criticalAlerts.length === 0 ? (
+                            <EmptyTableRow cols={2} />
+                        ) : criticalAlerts.map((row) => (
+                            <tr key={`${row.department}-${row.alert}`} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                <td className={`${tdClass} font-medium text-[#1E1E1E] whitespace-nowrap`}>{row.department}</td>
+                                <td className={`${tdClass} text-[#FF5722]`}>{row.alert}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </Widget>
+        </section>
     )
 }
 

@@ -1,22 +1,39 @@
 import noProfile from '../../../../assets/images/no-profile.png'
 import { CLASS_LEVEL_OPTIONS } from '../../Class/ClassDetails/classDetailsOptions'
+import { isApiAdmissionsEnabled } from '../../../../services/apiClient'
+import {
+    convertEnquiryApi,
+    createEnquiryApi,
+    getEnquiryApi,
+    listEnquiriesApi,
+    updateEnquiryApi,
+} from '../../../../services/admissionsApi'
+import { isPathUnder } from '../../../../utils/pathPrefix'
 
 const STORAGE_KEY = 'schoolerp-admin-admission-enquiries'
+const apiAdmissionsEnabled = () => isApiAdmissionsEnabled()
 export const ROUTE_BASE = '/admin/front-office/admission-enquiry'
 export const FRONT_OFFICE_ROUTE_BASE = '/front-office/admission-enquiry'
+export const PRO_ENQUIRY_ROUTE_BASE = '/pro/enquiries'
 
-export const getEnquiryRouteBase = (pathname = '') =>
-    pathname.startsWith('/front-office') ? FRONT_OFFICE_ROUTE_BASE : ROUTE_BASE
+export const getEnquiryRouteBase = (pathname = '') => {
+    if (isPathUnder(pathname, '/pro')) return PRO_ENQUIRY_ROUTE_BASE
+    if (pathname.startsWith('/front-office')) return FRONT_OFFICE_ROUTE_BASE
+    return ROUTE_BASE
+}
 
-export const getAddAdmissionPath = (pathname = '') =>
-    pathname.startsWith('/front-office')
-        ? '/front-office/add-admission'
-        : '/admin/front-office/add-admission'
+export const getAddAdmissionPath = (pathname = '') => {
+    // PRO portal is enquiry-focused; conversion still uses Front Office / Admin admission screens when opened from those portals.
+    if (pathname.startsWith('/front-office')) return '/front-office/add-admission'
+    if (isPathUnder(pathname, '/pro')) return '/pro/enquiries'
+    return '/admin/front-office/add-admission'
+}
 
-export const getAdmissionListPath = (pathname = '') =>
-    pathname.startsWith('/front-office')
-        ? '/front-office/admission-list'
-        : '/admin/front-office/admission-list'
+export const getAdmissionListPath = (pathname = '') => {
+    if (pathname.startsWith('/front-office')) return '/front-office/admission-list'
+    if (isPathUnder(pathname, '/pro')) return '/pro/enquiries'
+    return '/admin/front-office/admission-list'
+}
 
 export const isAdminFrontOfficePath = (pathname = '') =>
     pathname.startsWith('/admin/front-office')
@@ -63,13 +80,13 @@ export const DEFAULT_ENQUIRY_FORM = {
     nextFollowUpDate: null,
     assignedTo: '',
     reference: '',
-    referredTeacher: '',
     source: '',
     className: '',
     numberOfChild: '',
     city: '',
     state: '',
     profileImage: '',
+    profileImageFileId: null,
     status: 'Active',
 }
 
@@ -86,7 +103,13 @@ const formatDate = (date) => {
 const parseStoredDate = (value) => {
     if (!value) return null
     if (value instanceof Date) return value
-    const [day, month, year] = String(value).split('-').map(Number)
+    const raw = String(value)
+    // ISO yyyy-mm-dd from API
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        const date = new Date(raw)
+        return Number.isNaN(date.getTime()) ? null : date
+    }
+    const [day, month, year] = raw.split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
@@ -108,10 +131,28 @@ const saveEnquiries = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
-export const getAllAdmissionEnquiries = () => loadEnquiries()
+export const getAllAdmissionEnquiries = async () => {
+    if (apiAdmissionsEnabled()) {
+        try {
+            return await listEnquiriesApi()
+        } catch (error) {
+            console.error(error)
+            return []
+        }
+    }
+    return loadEnquiries()
+}
 
-export const getAdmissionEnquiryById = (id) =>
-    loadEnquiries().find((item) => item.id === id) ?? null
+export const getAdmissionEnquiryById = async (id) => {
+    if (apiAdmissionsEnabled()) {
+        try {
+            return await getEnquiryApi(id)
+        } catch {
+            return null
+        }
+    }
+    return loadEnquiries().find((item) => item.id === id) ?? null
+}
 
 export const generateEnquiryId = () => {
     const records = loadEnquiries()
@@ -122,13 +163,37 @@ export const generateEnquiryId = () => {
     return `AE-${String(max + 1).padStart(4, '0')}`
 }
 
-export const createAdmissionEnquiry = (payload) => {
+/** Required on every save (the backend enforces the same three). `id` is the form control to focus. */
+export const ENQUIRY_REQUIRED_FIELDS = [
+    { field: 'name', id: 'name', label: 'Name' },
+    { field: 'mobileNumber', id: 'mobileNumber', label: 'Mobile Number' },
+    { field: 'className', id: 'className', label: 'Class' },
+]
+
+export const getMissingEnquiryFields = (payload) =>
+    ENQUIRY_REQUIRED_FIELDS.filter(({ field }) => !String(payload?.[field] ?? '').trim())
+
+const missingEnquiryResult = (missing) => ({
+    success: false,
+    missing,
+    message: `Please fill in the required field${missing.length > 1 ? 's' : ''}: ${missing.map((m) => m.label).join(', ')}.`,
+})
+
+export const createAdmissionEnquiry = async (payload) => {
     const name = String(payload.name || '').trim()
     const mobileNumber = String(payload.mobileNumber || '').trim()
 
-    if (!name) return { success: false, message: 'Name is required.' }
-    if (!mobileNumber) return { success: false, message: 'Mobile number is required.' }
-    if (!payload.className) return { success: false, message: 'Class is required.' }
+    const missing = getMissingEnquiryFields(payload)
+    if (missing.length) return missingEnquiryResult(missing)
+
+    if (apiAdmissionsEnabled()) {
+        try {
+            const record = await createEnquiryApi(payload)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to save enquiry.' }
+        }
+    }
 
     const records = loadEnquiries()
     const record = {
@@ -144,7 +209,6 @@ export const createAdmissionEnquiry = (payload) => {
         nextFollowUpDate: formatDate(payload.nextFollowUpDate),
         assignedTo: String(payload.assignedTo || '').trim(),
         reference: payload.reference || '',
-        referredTeacher: String(payload.referredTeacher || '').trim(),
         source: payload.source || '',
         className: payload.className || '',
         numberOfChild: String(payload.numberOfChild || '').trim(),
@@ -159,17 +223,25 @@ export const createAdmissionEnquiry = (payload) => {
     return { success: true, record }
 }
 
-export const updateAdmissionEnquiry = (id, payload) => {
-    const records = loadEnquiries()
-    const index = records.findIndex((item) => item.id === id)
-    if (index < 0) return { success: false, message: 'Enquiry not found.' }
-
+export const updateAdmissionEnquiry = async (id, payload) => {
     const name = String(payload.name || '').trim()
     const mobileNumber = String(payload.mobileNumber || '').trim()
 
-    if (!name) return { success: false, message: 'Name is required.' }
-    if (!mobileNumber) return { success: false, message: 'Mobile number is required.' }
-    if (!payload.className) return { success: false, message: 'Class is required.' }
+    const missing = getMissingEnquiryFields(payload)
+    if (missing.length) return missingEnquiryResult(missing)
+
+    if (apiAdmissionsEnabled()) {
+        try {
+            const record = await updateEnquiryApi(id, payload)
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to update enquiry.' }
+        }
+    }
+
+    const records = loadEnquiries()
+    const index = records.findIndex((item) => String(item.id) === String(id))
+    if (index < 0) return { success: false, message: 'Enquiry not found.' }
 
     records[index] = {
         ...records[index],
@@ -184,7 +256,6 @@ export const updateAdmissionEnquiry = (id, payload) => {
         nextFollowUpDate: formatDate(payload.nextFollowUpDate),
         assignedTo: String(payload.assignedTo || '').trim(),
         reference: payload.reference || '',
-        referredTeacher: String(payload.referredTeacher || '').trim(),
         source: payload.source || '',
         className: payload.className || '',
         numberOfChild: String(payload.numberOfChild || '').trim(),
@@ -199,12 +270,21 @@ export const updateAdmissionEnquiry = (id, payload) => {
     return { success: true, record: records[index] }
 }
 
-export const updateAdmissionEnquiryStatus = (id, status) => {
+export const updateAdmissionEnquiryStatus = async (id, status) => {
     if (!STATUS_OPTIONS.includes(status)) {
         return { success: false, message: 'Invalid status.' }
     }
+    if (apiAdmissionsEnabled()) {
+        try {
+            const current = await getEnquiryApi(id)
+            const record = await updateEnquiryApi(id, { ...current, status })
+            return { success: true, record }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to update status.' }
+        }
+    }
     const records = loadEnquiries()
-    const index = records.findIndex((item) => item.id === id)
+    const index = records.findIndex((item) => String(item.id) === String(id))
     if (index < 0) return { success: false, message: 'Enquiry not found.' }
 
     records[index] = { ...records[index], status }
@@ -212,8 +292,32 @@ export const updateAdmissionEnquiryStatus = (id, status) => {
     return { success: true, record: records[index] }
 }
 
-export const deleteAdmissionEnquiry = (id) => {
-    const records = loadEnquiries().filter((item) => item.id !== id)
+export const convertEnquiryToAdmission = async (id) => {
+    if (apiAdmissionsEnabled()) {
+        try {
+            const admission = await convertEnquiryApi(id)
+            return { success: true, admission }
+        } catch (error) {
+            return { success: false, message: error.message || 'Convert failed.' }
+        }
+    }
+    const statusResult = await updateAdmissionEnquiryStatus(id, 'Success')
+    if (!statusResult.success) return statusResult
+    return { success: true, admission: null, enquiry: statusResult.record }
+}
+
+export const deleteAdmissionEnquiry = async (id) => {
+    if (apiAdmissionsEnabled()) {
+        // Backend has no hard-delete yet — soft-close as In Active
+        try {
+            const current = await getEnquiryApi(id)
+            await updateEnquiryApi(id, { ...current, status: 'In Active' })
+            return { success: true }
+        } catch (error) {
+            return { success: false, message: error.message || 'Failed to delete enquiry.' }
+        }
+    }
+    const records = loadEnquiries().filter((item) => String(item.id) !== String(id))
     saveEnquiries(records)
     return { success: true }
 }
@@ -230,7 +334,6 @@ export const filterAdmissionEnquiries = (records, { search = '', status = '' } =
             item.email,
             item.className,
             item.source,
-            item.assignedTo,
             item.city,
             item.state,
             item.id,

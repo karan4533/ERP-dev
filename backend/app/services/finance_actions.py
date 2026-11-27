@@ -20,10 +20,23 @@ from app.services.integrations import notify, payments
 _TRANSPORT_FEE_ROLES = {
     "transportmanager",
     "accounthead",
+    "financemanager",
     "finance_assistant",
+    "accountassistant",
     "admin",
     "superadmin",
     "managing_director",
+}
+# Desk collection records money received in person, so only the Finance desk may do it. Admin, Super Admin
+# and the Managing Director hold every permission code but are not the collecting desk.
+DESK_COLLECTOR_ROLES = {"accounthead", "financemanager", "finance_assistant", "accountassistant"}
+_PAYMENT_INTENT_COLLECTION = "payment-intent"
+_LEDGER_STATUS_FOR_CHEQUE = {
+    "CLEARED": "Issued",
+    "BOUNCED": "Bounced",
+    "CANCELLED": "Cancelled",
+    "RECEIVED": "Held",
+    "PDC": "Held",
 }
 
 
@@ -329,7 +342,132 @@ def _seq(data: dict) -> dict:
 
 
 def _save(db: Session, actor: User, data: dict) -> dict:
-    return fin.save_state(db, actor, {"data": data})
+    return fin.save_state(db, actor, {"data": data}, server_authored=True)
+
+
+def _require_desk_collector(db: Session, actor: User) -> str:
+    code = role_code_for(db, actor)
+    if code not in DESK_COLLECTOR_ROLES:
+        fail(403, "forbidden", "Only the Finance desk (Account Head, Finance Manager or Account Assistant) can record fee payments.")
+    return code
+
+
+def _receipt_source(db: Session | None, actor: User | None, channel: str, **extra) -> dict:
+    return {
+        "channel": channel,
+        "verifiedBy": "server",
+        "recordedByUserId": str(actor.id) if actor is not None else "",
+        "recordedByEmail": (actor.email or "") if actor is not None else "",
+        "recordedByRole": role_code_for(db, actor) if (db is not None and actor is not None) else "",
+        "recordedAt": _now(),
+        **{key: value for key, value in extra.items() if value is not None},
+    }
+
+
+def _ledger_row(db: Session, campus_id, receipt_id: str) -> FinanceRecord | None:
+    return db.scalar(
+        select(FinanceRecord).where(
+            FinanceRecord.campus_id == campus_id,
+            FinanceRecord.collection == fin.RECEIPT_LEDGER_COLLECTION,
+            FinanceRecord.public_id == receipt_id,
+        )
+    )
+
+
+def _record_receipt_ledger(db: Session, campus_id, receipt: dict, *, actor_id=None) -> None:
+    """Server-only copy of an issued receipt (committed with the snapshot save that follows)."""
+    receipt_id = str(receipt.get("id") or "")
+    if not receipt_id or _ledger_row(db, campus_id, receipt_id) is not None:
+        return
+    body = {
+        "receiptId": receipt_id,
+        "receiptNo": receipt.get("receiptNo"),
+        "studentId": str(receipt.get("studentId") or ""),
+        "admissionNo": str(receipt.get("admissionNo") or ""),
+        "feeHeads": list(receipt.get("feeHeads") or []),
+        "amountPaid": float(receipt.get("amountPaid") or 0),
+        "paymentMode": receipt.get("paymentMode"),
+        "paymentDate": receipt.get("paymentDate"),
+        "status": receipt.get("status"),
+        "transactionId": receipt.get("transactionId"),
+        "installmentIds": list(receipt.get("installmentIds") or []),
+        "source": dict(receipt.get("receiptSource") or {}),
+    }
+    db.add(FinanceRecord(campus_id=campus_id, collection=fin.RECEIPT_LEDGER_COLLECTION, public_id=receipt_id, body=body))
+    source = body["source"]
+    write_audit(
+        db,
+        action="FEE_RECEIPT_ISSUED",
+        entity_type="fee_receipt",
+        entity_id=str(receipt.get("receiptNo") or receipt_id),
+        actor_id=actor_id,
+        campus_id=campus_id,
+        details=(
+            f"channel={source.get('channel')};amount={body['amountPaid']:.2f};status={body['status']};"
+            f"student={body['studentId']};by={source.get('recordedByEmail') or source.get('recordedBy') or ''}"
+        ),
+    )
+
+
+def _set_ledger_status(db: Session, campus_id, receipt_id: str, status: str, *, by: str) -> None:
+    row = _ledger_row(db, campus_id, receipt_id)
+    if row is None:
+        return
+    body = dict(row.body or {})
+    history = list(body.get("statusHistory") or [])
+    history.append({"from": body.get("status"), "to": status, "at": _now(), "by": by})
+    body["status"] = status
+    body["statusHistory"] = history
+    row.body = body
+    flag_modified(row, "body")
+
+
+def _payment_intent(db: Session, campus_id, reference: str) -> FinanceRecord | None:
+    if not reference:
+        return None
+    return db.scalar(
+        select(FinanceRecord).where(
+            FinanceRecord.campus_id == campus_id,
+            FinanceRecord.collection == _PAYMENT_INTENT_COLLECTION,
+            FinanceRecord.public_id == reference,
+        )
+    )
+
+
+def _mark_intent_paid(intent: FinanceRecord, link: dict, settled: dict | None) -> None:
+    body = dict(intent.body or {})
+    body.update(
+        {
+            "status": "PAID",
+            "paidAt": link.get("paidAt") or _now(),
+            "providerPaymentId": link.get("providerPaymentId"),
+            "confirmedVia": link.get("confirmedVia"),
+            "receiptId": (settled or {}).get("receipt", {}).get("id"),
+            "receiptNo": (settled or {}).get("receipt", {}).get("receiptNo"),
+        }
+    )
+    intent.body = body
+    flag_modified(intent, "body")
+
+
+def _apply_intent_to_link(link: dict, intent: FinanceRecord) -> dict:
+    """The snapshot link is editable by Finance data saves; the server intent decides what is paid."""
+    body = dict(intent.body or {})
+    link["studentId"] = body.get("studentId")
+    link["amount"] = float(body.get("amount") or 0)
+    link["installmentIds"] = list(body.get("installmentIds") or [])
+    link["gateway"] = body.get("gateway") or link.get("gateway")
+    link["providerOrderId"] = body.get("providerOrderId")
+    return body
+
+
+def _amount_matches(paise, amount: float) -> bool:
+    if paise in (None, ""):
+        return True
+    try:
+        return int(paise) == int(round(float(amount) * 100))
+    except (TypeError, ValueError):
+        return False
 
 
 def _parse_iso_date(value) -> date | None:
@@ -429,49 +567,27 @@ def _live_payable(row: dict, fine_rules: list | None, as_of: date | None = None)
 
 
 def pay_my_fees(db: Session, actor: User, payload: dict) -> dict:
-    """
-    Parent/student self-service payment for linked children / self only.
-    Reuses collect_payment, then returns a scoped my-fees snapshot for the portal.
-    """
-    from app.deps import role_code_for
+    """Parent/student portal payments settle only through the payment gateway.
 
+    A portal request saying "paid by UPI" is not proof of payment, so this route never issues a receipt;
+    the portal uses gateway-intent and gateway-confirm (signature or provider verified) instead.
+    """
     code = role_code_for(db, actor)
     if code not in {"parent", "student"}:
         fail(403, "forbidden", "Parent or student role required.")
-
     student_id = str(payload.get("studentId") or "")
     allowed = fin._child_student_ids_for_actor(db, actor)
     if not student_id or student_id not in allowed:
         fail(403, "forbidden", "You can only pay fees for your linked student.")
-
-    mode = str(payload.get("paymentMode") or "UPI").upper()
-    # Desk cash/cheque collection stays with Account Head; portal pays online-style modes.
-    if mode in {"CASH", "CHEQUE"}:
-        fail(400, "validation_error", "Use UPI, card, or payment gateway for online fee payment.")
-
-    result = collect_payment(
-        db,
-        actor,
-        {
-            **payload,
-            "studentId": student_id,
-            "paymentMode": mode,
-            "collectedBy": payload.get("collectedBy") or actor.email,
-            "narration": payload.get("narration") or f"Online fee payment — {actor.email}",
-        },
+    fail(
+        403,
+        "gateway_required",
+        "Online fee payments must go through the payment gateway so the payment can be verified.",
     )
-    scoped = fin.get_my_fees(db, actor)
-    return {
-        "success": True,
-        "transaction": result.get("transaction"),
-        "receipt": result.get("receipt"),
-        "state": scoped,
-    }
 
 
-def collect_payment(db: Session, actor: User, payload: dict) -> dict:
-    state = fin.get_state(db, actor)
-    data = dict(state["data"])
+def _apply_collection(data: dict, payload: dict, *, actor_email: str, source: dict) -> tuple[dict, dict]:
+    """Apply one fee collection to the snapshot ``data`` in place; returns (transaction, receipt)."""
     students = list(data.get("students") or [])
     installments = list(data.get("installments") or [])
     transactions = list(data.get("transactions") or [])
@@ -531,6 +647,10 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
     pay_ref = details.get("paymentReference") or f"PAY-{seq['pay']:04d}"
     txn_no = f"TXN-{seq['txn']:04d}"
     voucher_no = f"JV-{seq['voucher']:04d}"
+    # The sequence is part of the editable snapshot; never hand out a receipt number twice.
+    used_receipt_numbers = {str(row.get("receiptNo") or "") for row in receipts if isinstance(row, dict)}
+    while f"REC-{seq['rec']:04d}" in used_receipt_numbers:
+        seq["rec"] += 1
     receipt_no = f"REC-{seq['rec']:04d}"
     holds = mode == "CHEQUE"
     status = "PENDING_CLEARANCE" if holds else "POSTED"
@@ -573,7 +693,7 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
         "paymentReference": pay_ref,
         "installmentIds": [a.get("installmentId") for a in allocations],
         "allocations": allocations,
-        "createdBy": payload.get("collectedBy") or actor.email,
+        "createdBy": payload.get("collectedBy") or actor_email,
         "createdAt": _now(),
         "narration": payload.get("narration") or f"Fee collection — {student.get('name')}",
     }
@@ -583,6 +703,7 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
         "id": f"RCP-{txn_id}",
         "receiptNo": receipt_no,
         "studentId": student_id,
+        "admissionNo": student.get("admissionNo") or student.get("admissionNumber") or "",
         "academicYear": student.get("academicYear") or "",
         "paymentDate": iso_date,
         "feeHeads": fee_heads,
@@ -595,6 +716,7 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
         "installmentIds": transaction["installmentIds"],
         "reprintCount": 0,
         "collectedBy": transaction["createdBy"],
+        "receiptSource": source,
     }
     receipts.insert(0, receipt)
 
@@ -622,7 +744,7 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
         {
             "id": f"AUD-{uuid4().hex[:8]}",
             "performedAt": _now(),
-            "performedBy": actor.email,
+            "performedBy": actor_email,
             "action": "FEE_PAYMENT_COLLECTED",
             "entity": "FinanceTransaction",
             "entityId": txn_id,
@@ -638,11 +760,95 @@ def collect_payment(db: Session, actor: User, payload: dict) -> dict:
     data["receipts"] = receipts
     data["cheques"] = cheques
     data["auditLog"] = audit
+    return transaction, receipt
+
+
+def _notify_fee_paid(db: Session, campus_id, student_id, receipt: dict) -> None:
+    """In-app confirmation + best-effort WhatsApp receipt to the parent phone."""
+    from uuid import UUID
+
+    from app.models import Admission, Guardian, Notification, Student
+    from app.services.integrations.notify import notify_event
+
+    try:
+        sid = UUID(str(student_id))
+    except (TypeError, ValueError):
+        return
+    student = db.get(Student, sid)
+    if student is None or student.campus_id != campus_id:
+        return
+    receipt_no = str(receipt.get("receiptNo") or "")
+    heads = ", ".join(receipt.get("feeHeads") or []) or "School fees"
+    amount_label = _inr_label(receipt.get("amountPaid") or 0)
+
+    if student.parent_user_id:
+        already = db.scalar(
+            select(Notification.id).where(
+                Notification.user_id == student.parent_user_id,
+                Notification.entity_type == "fee_receipt",
+                Notification.entity_id == receipt_no,
+            )
+        )
+        if already is None:
+            db.add(
+                Notification(
+                    campus_id=campus_id,
+                    user_id=student.parent_user_id,
+                    title=f"Payment received — {amount_label}",
+                    body=f"{student.full_name}: {heads}. Receipt {receipt_no} ({_display_date(receipt.get('paymentDate'))}).",
+                    entity_type="fee_receipt",
+                    entity_id=receipt_no,
+                )
+            )
+            db.commit()
+
+    phone = ""
+    guardian = db.scalar(
+        select(Guardian).where(Guardian.student_id == student.id).order_by(Guardian.created_at.asc())
+    )
+    if guardian and guardian.phone:
+        phone = str(guardian.phone).strip()
+    if not phone and student.admission_id:
+        admission = db.get(Admission, student.admission_id)
+        if admission is not None:
+            phone = str(admission.parent_mobile_number or admission.mobile_number or "").strip()
+    if not phone:
+        return
+    try:
+        from app.services.integrations import whatsapp_events as wa
+
+        text, params = wa.fee_receipt_message(
+            student_name=student.full_name or "",
+            receipt_no=receipt_no,
+            amount_label=amount_label,
+        )
+        notify_event(
+            event_key=f"fee-receipt-whatsapp:{receipt_no}:{phone}",
+            subject="Payment received",
+            body=text,
+            phone=phone,
+            event=wa.EVENT_FEE_RECEIPT,
+            template_params=params,
+        )
+    except Exception:
+        pass
+
+
+def collect_payment(db: Session, actor: User, payload: dict) -> dict:
+    _require_desk_collector(db, actor)
+    state = fin.get_state(db, actor)
+    data = dict(state["data"])
+    source = _receipt_source(db, actor, "desk_collection", paymentMode=payload.get("paymentMode") or "CASH")
+    transaction, receipt = _apply_collection(data, payload, actor_email=actor.email, source=source)
+    _record_receipt_ledger(db, actor.campus_id, receipt, actor_id=actor.id)
     saved = _save(db, actor, data)
+    if transaction.get("status") == "POSTED":
+        _notify_fee_paid(db, actor.campus_id, transaction.get("studentId"), receipt)
     return {"success": True, "transaction": transaction, "receipt": receipt, "state": saved}
 
 
 def settle_cheque(db: Session, actor: User, payload: dict) -> dict:
+    _require_desk_collector(db, actor)
     state = fin.get_state(db, actor)
     data = dict(state["data"])
     cheques = list(data.get("cheques") or [])
@@ -669,7 +875,10 @@ def settle_cheque(db: Session, actor: User, payload: dict) -> dict:
                 txn["status"] = "REVERSED"
             txn["chequeDetails"] = {**(txn.get("chequeDetails") or {}), "status": next_status}
 
-    if next_status == "CLEARED":
+    # A cheque moved CLEARED -> RECEIVED -> CLEARED must not pay its instalments twice.
+    newly_cleared = next_status == "CLEARED" and old != "CLEARED" and not cheque.get("allocationsApplied")
+    if newly_cleared:
+        cheque["allocationsApplied"] = True
         for alloc in cheque.get("installmentAllocations") or []:
             row = next((i for i in installments if i.get("id") == alloc.get("installmentId")), None)
             if not row:
@@ -707,12 +916,22 @@ def settle_cheque(db: Session, actor: User, payload: dict) -> dict:
             "reason": payload.get("reason"),
         },
     )
+    if old != next_status:
+        for receipt in receipts:
+            if receipt.get("transactionId") == cheque.get("transactionId"):
+                _set_ledger_status(
+                    db, actor.campus_id, str(receipt.get("id") or ""), _LEDGER_STATUS_FOR_CHEQUE[next_status], by=actor.email
+                )
     data["cheques"] = cheques
     data["transactions"] = transactions
     data["receipts"] = receipts
     data["installments"] = installments
     data["auditLog"] = audit
     saved = _save(db, actor, data)
+    if newly_cleared:
+        receipt = next((r for r in receipts if r.get("transactionId") == cheque.get("transactionId")), None)
+        if receipt is not None:
+            _notify_fee_paid(db, actor.campus_id, cheque.get("studentId"), receipt)
     return {"success": True, "cheque": cheque, "state": saved}
 
 
@@ -773,16 +992,27 @@ def send_receipt(db: Session, actor: User, payload: dict) -> dict:
         )
         delivery = notify.send_email(to=to, subject=subject, body=text, html_body=html)
     else:
+        from app.services.integrations import whatsapp_events as wa
+
         to_phone = payload.get("to") or student.get("guardianPhone") or student.get("phone") or ""
-        text = tpl.fee_receipt_whatsapp(
-            school_name=school,
+        text, params = wa.fee_receipt_message(
+            student_name=student_name,
             receipt_no=str(receipt_no),
             amount_label=amount_label,
-            student_name=student_name,
         )
-        delivery = notify.send_whatsapp(to_phone=to_phone, text=text)
+        delivery = notify.send_whatsapp(
+            to_phone=to_phone,
+            text=text,
+            event=wa.EVENT_FEE_RECEIPT,
+            template_params=params,
+        )
 
+    # Finance UI / older clients still key off legacyStatus for unconfigured WhatsApp.
+    delivery = dict(delivery or {})
     status = delivery.get("status") or "NOT_CONFIGURED"
+    if channel == "whatsapp" and status == "NOT_CONFIGURED":
+        status = delivery.get("legacyStatus") or "queued_stub"
+        delivery["status"] = status
     delivered = bool(delivery.get("delivered"))
     comm = dict(receipt.get("communication") or {})
     comm[channel] = delivered
@@ -809,7 +1039,108 @@ def send_receipt(db: Session, actor: User, payload: dict) -> dict:
     return {"success": True, "receipt": receipt, "delivery": delivery, "state": saved}
 
 
+def _assert_gateway_student_access(db: Session, actor: User, student_id: str) -> None:
+    """Parents/students may only create or confirm intents for linked children / self."""
+    code = role_code_for(db, actor)
+    if code not in {"parent", "student"}:
+        return
+    allowed = fin._child_student_ids_for_actor(db, actor)
+    if not student_id or str(student_id) not in allowed:
+        fail(403, "forbidden", "You can only pay fees for your linked student.")
+
+
+def send_payment_link(db: Session, actor: User, payload: dict) -> dict:
+    """Send an existing payment link via WhatsApp or email to the parent/guardian."""
+    from app.core.config import settings
+    from app.services.integrations import templates as tpl
+
+    state = fin.get_state(db, actor)
+    data = dict(state["data"])
+    links = list(data.get("paymentLinks") or [])
+    students = list(data.get("students") or [])
+    audit = list(data.get("auditLog") or [])
+    link_id = str(payload.get("linkId") or payload.get("id") or "").strip()
+    reference = str(payload.get("reference") or "").strip()
+    channel = (payload.get("channel") or "whatsapp").lower()
+    if channel not in {"email", "whatsapp"}:
+        fail(400, "validation_error", "channel must be email or whatsapp.")
+    link = next(
+        (
+            row
+            for row in links
+            if str(row.get("id")) == link_id
+            or (reference and str(row.get("reference")) == reference)
+        ),
+        None,
+    )
+    if link is None:
+        fail(404, "not_found", "Payment link not found.")
+
+    student = next((s for s in students if str(s.get("id")) == str(link.get("studentId"))), None) or {}
+    student_name = str(student.get("name") or student.get("shortName") or "")
+    amount_label = _inr_label(link.get("amount") or 0)
+    school = settings.school_display_name
+    url = str(link.get("url") or "")
+    ref = str(link.get("reference") or reference)
+
+    if channel == "email":
+        to = payload.get("to") or student.get("guardianEmail") or student.get("email") or ""
+        subject = f"{school} — Fee payment link {ref}"
+        body = (
+            f"Dear Parent/Guardian,\n\n"
+            f"Please pay school fees for {student_name or 'your child'}.\n"
+            f"Amount: {amount_label}\n"
+            f"Reference: {ref}\n"
+            f"Pay here: {url}\n\n"
+            f"— {school}\n"
+        )
+        delivery = notify.send_email(to=to, subject=subject, body=body)
+    else:
+        from app.services.integrations import whatsapp_events as wa
+
+        to_phone = payload.get("to") or student.get("guardianPhone") or student.get("phone") or ""
+        text, params = wa.payment_link_message(
+            student_name=student_name,
+            amount_label=amount_label,
+            reference=ref,
+            url=url,
+        )
+        delivery = notify.send_whatsapp(
+            to_phone=to_phone,
+            text=text,
+            event=wa.EVENT_PAYMENT_LINK,
+            template_params=params,
+        )
+
+    delivery = dict(delivery or {})
+    status = delivery.get("status") or "NOT_CONFIGURED"
+    if channel == "whatsapp" and status == "NOT_CONFIGURED":
+        status = delivery.get("legacyStatus") or "queued_stub"
+        delivery["status"] = status
+    link[f"last{channel.title()}At"] = _now()
+    link[f"{channel}Status"] = status
+    audit.insert(
+        0,
+        {
+            "id": f"AUD-{uuid4().hex[:8]}",
+            "performedAt": _now(),
+            "performedBy": actor.email,
+            "action": f"PAYMENT_LINK_SEND_{status.upper()}",
+            "entity": "PaymentLink",
+            "entityId": link.get("id"),
+            "newValue": ref,
+            "reason": delivery.get("message") or status,
+        },
+    )
+    data["paymentLinks"] = links
+    data["auditLog"] = audit
+    saved = _save(db, actor, data)
+    return {"success": True, "link": link, "delivery": delivery, "state": saved}
+
+
 def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
+    student_id = str(payload.get("studentId") or "")
+    _assert_gateway_student_access(db, actor, student_id)
     state = fin.get_state(db, actor)
     data = dict(state["data"])
     links = list(data.get("paymentLinks") or [])
@@ -817,16 +1148,31 @@ def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
     seq = _seq(data)
     seq["link"] += 1
     reference = f"PAY-{seq['link']:04d}"
-    amount = float(payload.get("amount") or 0)
+    # The sequence lives in the editable snapshot, so skip any reference the server already used.
+    while _payment_intent(db, actor.campus_id, reference) is not None:
+        seq["link"] += 1
+        reference = f"PAY-{seq['link']:04d}"
+    try:
+        amount = float(payload.get("amount") or 0)
+    except (TypeError, ValueError):
+        fail(400, "validation_error", "Amount must be a number.")
+    if not math.isfinite(amount) or amount < 1:
+        fail(400, "validation_error", "Amount must be at least ₹1 for online payment.")
     provider = payments.create_payment_intent(
         amount=amount,
         reference=reference,
-        student_id=payload.get("studentId"),
+        student_id=student_id or payload.get("studentId"),
     )
+    if str(provider.get("status") or "").upper() in {"FAILED", "NOT_CONFIGURED"}:
+        fail(
+            503 if provider.get("status") == "NOT_CONFIGURED" else 502,
+            str(provider.get("status") or "gateway_error").lower(),
+            provider.get("message") or "Could not create payment order.",
+        )
     link = {
         "id": f"LNK-{reference}",
         "reference": reference,
-        "studentId": payload.get("studentId"),
+        "studentId": student_id or payload.get("studentId"),
         "amount": amount,
         "installmentIds": payload.get("installmentIds") or [],
         "url": provider.get("url") or f"/student/payment/fees-payment?ref={reference}",
@@ -837,6 +1183,27 @@ def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
         "createdAt": _now(),
     }
     links.insert(0, link)
+    db.add(
+        FinanceRecord(
+            campus_id=actor.campus_id,
+            collection=_PAYMENT_INTENT_COLLECTION,
+            public_id=reference,
+            body={
+                "reference": reference,
+                "linkId": link["id"],
+                "studentId": link["studentId"],
+                "amount": amount,
+                "installmentIds": list(link["installmentIds"]),
+                "gateway": link["gateway"],
+                "providerOrderId": link.get("providerOrderId"),
+                "status": "OPEN",
+                "createdByUserId": str(actor.id),
+                "createdByEmail": actor.email or "",
+                "createdByRole": role_code_for(db, actor),
+                "createdAt": link["createdAt"],
+            },
+        )
+    )
     audit.insert(
         0,
         {
@@ -853,7 +1220,86 @@ def create_gateway_intent(db: Session, actor: User, payload: dict) -> dict:
     data["paymentLinks"] = links
     data["auditLog"] = audit
     saved = _save(db, actor, data)
-    return {"success": True, "intent": link, "state": saved}
+    code = role_code_for(db, actor)
+    out_state = fin.get_my_fees(db, actor) if code in {"parent", "student"} else saved
+    return {"success": True, "intent": link, "state": out_state}
+
+
+def _settle_gateway_link(data: dict, link: dict, *, actor_email: str, source: dict) -> dict | None:
+    """Turn a verified gateway payment into a fee collection (instalments, receipt, books) once.
+
+    The link amount is applied to its instalments in order, capped at each live balance. Anything
+    that cannot be applied (instalments settled at the desk meanwhile) is recorded on the link for
+    manual reconciliation instead of being dropped.
+    """
+    if link.get("settledTransactionId"):
+        return None
+    installments = list(data.get("installments") or [])
+    fine_rules = list(data.get("fineRules") or [])
+    as_of = datetime.now(timezone.utc).date()
+    student_id = str(link.get("studentId") or "")
+    remaining = round(float(link.get("amount") or 0), 2)
+    allocations: list[dict] = []
+    for installment_id in link.get("installmentIds") or []:
+        if remaining <= 0.009:
+            break
+        row = next((i for i in installments if i.get("id") == installment_id), None)
+        if row is None or str(row.get("studentId") or "") != student_id:
+            continue
+        if str(row.get("status") or "").upper() in {"PAID", "WAIVED", "CANCELLED"}:
+            continue
+        _, _, balance = _live_payable(row, fine_rules, as_of)
+        take = round(min(balance, remaining), 2)
+        if take <= 0:
+            continue
+        allocations.append({"installmentId": installment_id, "amount": take})
+        remaining = round(remaining - take, 2)
+
+    audit = list(data.get("auditLog") or [])
+    if not allocations:
+        link["unallocatedAmount"] = round(float(link.get("amount") or 0), 2)
+        audit.insert(0, {
+            "id": f"AUD-{uuid4().hex[:8]}",
+            "performedAt": _now(),
+            "performedBy": actor_email,
+            "action": "GATEWAY_PAYMENT_UNALLOCATED",
+            "entity": "PaymentLink",
+            "entityId": link.get("id"),
+            "newValue": str(link["unallocatedAmount"]),
+            "reason": "No unpaid instalments left on this link; reconcile manually.",
+        })
+        data["auditLog"] = audit
+        return None
+
+    transaction, receipt = _apply_collection(
+        data,
+        {
+            "studentId": student_id,
+            "allocations": allocations,
+            "paymentMode": "PAYMENT_GATEWAY",
+            "paymentDate": as_of.isoformat(),
+            "details": {"paymentReference": link.get("providerPaymentId") or link.get("reference")},
+            "collectedBy": "Payment gateway",
+            "narration": f"Online payment {link.get('reference')}",
+        },
+        actor_email=actor_email,
+        source=source,
+    )
+    link["settledTransactionId"] = transaction["id"]
+    link["receiptNo"] = receipt["receiptNo"]
+    if remaining > 0.009:
+        link["unallocatedAmount"] = remaining
+        data["auditLog"].insert(0, {
+            "id": f"AUD-{uuid4().hex[:8]}",
+            "performedAt": _now(),
+            "performedBy": actor_email,
+            "action": "GATEWAY_PAYMENT_UNALLOCATED",
+            "entity": "PaymentLink",
+            "entityId": link.get("id"),
+            "newValue": str(remaining),
+            "reason": "Part of the payment exceeded the instalment balances; reconcile manually.",
+        })
+    return {"transaction": transaction, "receipt": receipt}
 
 
 def confirm_gateway_payment(db: Session, actor: User, payload: dict) -> dict:
@@ -869,27 +1315,107 @@ def confirm_gateway_payment(db: Session, actor: User, payload: dict) -> dict:
     link = next((row for row in links if row.get("reference") == reference or row.get("id") == payload.get("linkId")), None)
     if link is None:
         fail(404, "not_found", "Payment link not found.")
-    if str(link.get("status") or "").upper() == "PAID":
-        return {"success": True, "skipped": True, "reason": "already_paid", "intent": link, "state": state}
+    intent = _payment_intent(db, actor.campus_id, str(link.get("reference") or ""))
+    if intent is None:
+        fail(409, "unknown_payment_intent", "This payment link was not created by the payment service, so it cannot be confirmed.")
+    intent_body = _apply_intent_to_link(link, intent)
+    _assert_gateway_student_access(db, actor, str(link.get("studentId") or ""))
+    if str(intent_body.get("status") or "").upper() == "PAID" or str(link.get("status") or "").upper() == "PAID":
+        # Portal actors get a scoped snapshot so the UI can refresh balances.
+        code = role_code_for(db, actor)
+        out_state = fin.get_my_fees(db, actor) if code in {"parent", "student"} else state
+        return {"success": True, "skipped": True, "reason": "already_paid", "intent": link, "state": out_state}
+
+    from app.core.config import settings
 
     gateway = str(link.get("gateway") or "stub").lower()
     if gateway in {"stub", ""} or str(link.get("status") or "") == "NOT_CONFIGURED":
-        fail(
-            503,
-            "NOT_CONFIGURED",
-            "Payment gateway is NOT_CONFIGURED. Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET before confirming payment.",
-        )
-    if gateway != "razorpay":
+        # Production must not mark stub intents paid. Local development / demo may, so campus
+        # click-through and finance action tests can exercise the PAID path without Razorpay keys.
+        if not (settings.is_development or settings.demo_integrations):
+            fail(
+                503,
+                "NOT_CONFIGURED",
+                "Payment gateway is NOT_CONFIGURED. Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET before confirming payment.",
+            )
+        link["confirmedVia"] = "stub"
+        link["providerPaymentId"] = payload.get("stubToken") or payments.stub_confirm_token()
+    elif gateway == "razorpay":
+        order_id = link.get("providerOrderId")
+        if payload.get("razorpay_order_id") and payload.get("razorpay_order_id") != order_id:
+            fail(400, "order_mismatch", "This payment belongs to a different payment order.")
+        payment_id = payload.get("razorpay_payment_id")
+        signature = payload.get("razorpay_signature")
+        sync_from_provider = bool(payload.get("syncFromProvider"))
+        if payment_id and signature and order_id:
+            if not payments.verify_razorpay_signature(order_id=order_id, payment_id=payment_id, signature=signature):
+                fail(400, "invalid_signature", "Razorpay signature verification failed.")
+            link["providerPaymentId"] = payment_id
+            link["confirmedVia"] = "signature"
+        elif sync_from_provider or (order_id and not payment_id):
+            # Checkout sometimes closes after Success without firing the JS handler.
+            # Recover by asking Razorpay whether this order was captured (server-side keys).
+            if not order_id:
+                fail(400, "validation_error", "razorpay_order_id is required to sync payment.")
+            captured = payments.fetch_captured_payment_for_order(order_id)
+            if not captured:
+                # Stale OPEN link after dues were already settled (or a newer unpaid attempt) —
+                # abandon so the student UI banner does not stick forever.
+                installments = list(data.get("installments") or [])
+                fine_rules = list(data.get("fineRules") or [])
+                as_of = datetime.now(timezone.utc).date()
+                ids = link.get("installmentIds") or []
+                still_due = False
+                for installment_id in ids:
+                    row = next((i for i in installments if i.get("id") == installment_id), None)
+                    if row is None:
+                        continue
+                    _, _, balance = _live_payable(row, fine_rules, as_of)
+                    if balance > 0.009:
+                        still_due = True
+                        break
+                if ids and not still_due:
+                    link["status"] = "ABANDONED"
+                    link["abandonedAt"] = _now()
+                    link["abandonReason"] = "Instalments already settled; no capture on this order."
+                    audit.insert(
+                        0,
+                        {
+                            "id": f"AUD-{uuid4().hex[:8]}",
+                            "performedAt": _now(),
+                            "performedBy": actor.email,
+                            "action": "PAYMENT_GATEWAY_ABANDONED",
+                            "entity": "PaymentLink",
+                            "entityId": link["id"],
+                            "newValue": order_id,
+                            "reason": link["abandonReason"],
+                        },
+                    )
+                    data["paymentLinks"] = links
+                    data["auditLog"] = audit
+                    saved = _save(db, actor, data)
+                    code = role_code_for(db, actor)
+                    out_state = fin.get_my_fees(db, actor) if code in {"parent", "student"} else saved
+                    return {
+                        "success": True,
+                        "skipped": True,
+                        "reason": "abandoned_stale",
+                        "intent": link,
+                        "state": out_state,
+                    }
+                fail(
+                    409,
+                    "payment_pending",
+                    "No captured Razorpay payment found for this order yet. Wait a moment and retry sync.",
+                )
+            if not _amount_matches(captured.get("amount"), link["amount"]):
+                fail(409, "amount_mismatch", "The captured payment amount does not match this payment order.")
+            link["providerPaymentId"] = captured.get("id")
+            link["confirmedVia"] = "provider_sync"
+        else:
+            fail(400, "validation_error", "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required.")
+    else:
         fail(400, "validation_error", f"Unsupported gateway: {gateway}")
-    order_id = payload.get("razorpay_order_id") or link.get("providerOrderId")
-    payment_id = payload.get("razorpay_payment_id")
-    signature = payload.get("razorpay_signature")
-    if not order_id or not payment_id or not signature:
-        fail(400, "validation_error", "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required.")
-    if not payments.verify_razorpay_signature(order_id=order_id, payment_id=payment_id, signature=signature):
-        fail(400, "invalid_signature", "Razorpay signature verification failed.")
-    link["providerPaymentId"] = payment_id
-    link["confirmedVia"] = "signature"
 
     link["status"] = "PAID"
     link["paidAt"] = _now()
@@ -908,6 +1434,20 @@ def confirm_gateway_payment(db: Session, actor: User, payload: dict) -> dict:
     )
     data["paymentLinks"] = links
     data["auditLog"] = audit
+    source = _receipt_source(
+        db,
+        actor,
+        "online_gateway",
+        gateway=gateway,
+        confirmedVia=link.get("confirmedVia"),
+        providerPaymentId=link.get("providerPaymentId"),
+        providerOrderId=link.get("providerOrderId"),
+        paymentReference=link.get("reference"),
+    )
+    settled = _settle_gateway_link(data, link, actor_email=actor.email, source=source)
+    if settled:
+        _record_receipt_ledger(db, actor.campus_id, settled["receipt"], actor_id=actor.id)
+    _mark_intent_paid(intent, link, settled)
     write_audit(
         db,
         action="PAYMENT_GATEWAY_CONFIRMED",
@@ -918,7 +1458,17 @@ def confirm_gateway_payment(db: Session, actor: User, payload: dict) -> dict:
         details=link.get("reference"),
     )
     saved = _save(db, actor, data)
-    return {"success": True, "intent": link, "state": saved}
+    if settled:
+        _notify_fee_paid(db, actor.campus_id, link.get("studentId"), settled["receipt"])
+    code = role_code_for(db, actor)
+    out_state = fin.get_my_fees(db, actor) if code in {"parent", "student"} else saved
+    return {
+        "success": True,
+        "intent": link,
+        "receipt": settled["receipt"] if settled else None,
+        "transaction": settled["transaction"] if settled else None,
+        "state": out_state,
+    }
 
 
 def apply_razorpay_webhook(db: Session, *, raw_body: bytes, signature: str, payload: dict) -> dict:
@@ -940,14 +1490,30 @@ def apply_razorpay_webhook(db: Session, *, raw_body: bytes, signature: str, payl
     if not order_id:
         fail(400, "validation_error", "Webhook payment entity missing order_id.")
 
-    snapshots = db.scalars(select(FinanceRecord).where(FinanceRecord.collection == "snapshot")).all()
+    intents = db.scalars(select(FinanceRecord).where(FinanceRecord.collection == _PAYMENT_INTENT_COLLECTION)).all()
+    intent = next((item for item in intents if str((item.body or {}).get("providerOrderId") or "") == order_id), None)
+    if intent is None:
+        fail(404, "not_found", "No payment order created by this school matches this Razorpay order.")
+    if str((intent.body or {}).get("status") or "").upper() == "PAID":
+        return {"success": True, "skipped": True, "reason": "already_paid", "reference": (intent.body or {}).get("reference")}
+    if not _amount_matches(entity.get("amount"), float((intent.body or {}).get("amount") or 0)):
+        fail(409, "amount_mismatch", "The captured payment amount does not match this payment order.")
+
+    snapshots = db.scalars(
+        select(FinanceRecord).where(
+            FinanceRecord.collection == "snapshot",
+            FinanceRecord.campus_id == intent.campus_id,
+        )
+    ).all()
 
     for row in snapshots:
         body = dict(row.body or {})
         links = list(body.get("paymentLinks") or [])
-        link = next((item for item in links if str(item.get("providerOrderId") or "") == order_id), None)
+        reference = str((intent.body or {}).get("reference") or "")
+        link = next((item for item in links if str(item.get("reference") or "") == reference), None)
         if link is None:
             continue
+        _apply_intent_to_link(link, intent)
         if str(link.get("status") or "").upper() == "PAID":
             return {"success": True, "skipped": True, "reason": "already_paid", "reference": link.get("reference")}
         link["status"] = "PAID"
@@ -970,6 +1536,21 @@ def apply_razorpay_webhook(db: Session, *, raw_body: bytes, signature: str, payl
             },
         )
         body["auditLog"] = audit
+        source = _receipt_source(
+            None,
+            None,
+            "online_gateway",
+            gateway="razorpay",
+            confirmedVia="webhook",
+            providerPaymentId=link.get("providerPaymentId"),
+            providerOrderId=order_id,
+            paymentReference=link.get("reference"),
+            recordedBy="razorpay-webhook",
+        )
+        settled = _settle_gateway_link(body, link, actor_email="razorpay-webhook", source=source)
+        if settled:
+            _record_receipt_ledger(db, row.campus_id, settled["receipt"])
+        _mark_intent_paid(intent, link, settled)
         row.body = body
         flag_modified(row, "body")
         write_audit(
@@ -981,6 +1562,8 @@ def apply_razorpay_webhook(db: Session, *, raw_body: bytes, signature: str, payl
             details=link.get("reference"),
         )
         db.commit()
+        if settled:
+            _notify_fee_paid(db, row.campus_id, link.get("studentId"), settled["receipt"])
         # Signature-verified webhook path — liveVerified only when not in demo outbox mode.
         return {
             "success": True,

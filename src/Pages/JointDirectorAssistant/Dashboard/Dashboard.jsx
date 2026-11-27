@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
     Users,
@@ -16,6 +16,7 @@ import {
     Sparkles,
     Ticket,
 } from 'lucide-react'
+import { ROLES } from '../../../constants/roles'
 import {
     KPI_CARDS,
     DEPARTMENT_SUMMARIES,
@@ -30,6 +31,7 @@ import {
     DEPARTMENT_WORKLOAD,
     CHART_COLORS,
 } from './dashboardData'
+import { emptyJdDashboardView, loadLiveJdDashboard } from '../../JointDirector/Dashboard/liveDashboardLoader'
 
 const KPI_ICONS = {
     'Total Employees': Users,
@@ -68,7 +70,34 @@ const Widget = ({ title, children }) => (
 const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
 const tdClass = 'px-2 py-3 text-[#667085] text-sm'
 
+const EmptyTableRow = ({ cols, label = 'No records' }) => (
+    <tr>
+        <td colSpan={cols} className={`${tdClass} text-center py-6 text-[#98A2B3]`}>{label}</td>
+    </tr>
+)
+
 const Dashboard = () => {
+    const [view, setView] = useState(() => emptyJdDashboardView())
+
+    useEffect(() => {
+        let active = true
+        loadLiveJdDashboard(ROLES.JOINT_DIRECTOR_ASSISTANT).then((next) => {
+            if (active) setView(next)
+        })
+        return () => { active = false }
+    }, [])
+
+    const kpiCards = view.kpiCards?.length ? view.kpiCards : KPI_CARDS
+    const departmentSummaries = view.departmentSummaries?.length ? view.departmentSummaries : DEPARTMENT_SUMMARIES
+    const pendingApprovals = view.pendingApprovals ?? PENDING_APPROVALS
+    const criticalAlerts = view.criticalAlerts ?? CRITICAL_ALERTS
+    const recentEscalations = view.recentEscalations ?? RECENT_ESCALATIONS
+    const operationsTrend = view.operationsTrend ?? OPERATIONS_TREND
+    const approvalsByDepartment = view.approvalsByDepartment ?? APPROVALS_BY_DEPARTMENT
+    const escalationsByPriority = view.escalationsByPriority ?? ESCALATIONS_BY_PRIORITY
+    const alertsByDepartment = view.alertsByDepartment ?? ALERTS_BY_DEPARTMENT
+    const departmentWorkload = view.departmentWorkload ?? DEPARTMENT_WORKLOAD
+
     const operationsTrendOption = useMemo(() => ({
         tooltip: { trigger: 'axis' },
         legend: {
@@ -79,7 +108,7 @@ const Dashboard = () => {
         grid: { left: 48, right: 24, top: 24, bottom: 48 },
         xAxis: {
             type: 'category',
-            data: OPERATIONS_TREND.labels,
+            data: operationsTrend.labels,
             axisLine: { lineStyle: { color: '#E0E0E0' } },
             axisLabel: { color: '#667085', fontSize: 11 },
         },
@@ -93,7 +122,7 @@ const Dashboard = () => {
                 name: 'Pending Approvals',
                 type: 'line',
                 smooth: true,
-                data: OPERATIONS_TREND.approvals,
+                data: operationsTrend.approvals,
                 areaStyle: { color: 'rgba(81, 93, 239, 0.1)' },
                 lineStyle: { color: CHART_COLORS.primary, width: 2 },
                 itemStyle: { color: CHART_COLORS.primary },
@@ -104,7 +133,7 @@ const Dashboard = () => {
                 name: 'Escalations',
                 type: 'line',
                 smooth: true,
-                data: OPERATIONS_TREND.escalations,
+                data: operationsTrend.escalations,
                 lineStyle: { color: CHART_COLORS.danger, width: 2 },
                 itemStyle: { color: CHART_COLORS.danger },
                 symbol: 'circle',
@@ -114,14 +143,14 @@ const Dashboard = () => {
                 name: 'Tasks',
                 type: 'line',
                 smooth: true,
-                data: OPERATIONS_TREND.tasks,
+                data: operationsTrend.tasks,
                 lineStyle: { color: CHART_COLORS.success, width: 2 },
                 itemStyle: { color: CHART_COLORS.success },
                 symbol: 'circle',
                 symbolSize: 6,
             },
         ],
-    }), [])
+    }), [operationsTrend])
 
     const escalationsPieOption = useMemo(() => ({
         tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
@@ -138,14 +167,17 @@ const Dashboard = () => {
             avoidLabelOverlap: true,
             itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
             label: { show: false },
-            data: ESCALATIONS_BY_PRIORITY.filter((item) => item.value > 0).map((item, index) => ({
+            data: (escalationsByPriority.filter((item) => item.value > 0).length
+                ? escalationsByPriority.filter((item) => item.value > 0)
+                : [{ name: 'None', value: 0 }]
+            ).map((item, index) => ({
                 ...item,
                 itemStyle: {
                     color: [CHART_COLORS.danger, CHART_COLORS.warning, CHART_COLORS.info, CHART_COLORS.palette[5]][index],
                 },
             })),
         }],
-    }), [])
+    }), [escalationsByPriority])
 
     const approvalsBarOption = useMemo(() => ({
         tooltip: {
@@ -159,7 +191,7 @@ const Dashboard = () => {
         grid: { left: 16, right: 16, top: 16, bottom: 48 },
         xAxis: {
             type: 'category',
-            data: APPROVALS_BY_DEPARTMENT.map((d) => d.department),
+            data: approvalsByDepartment.map((d) => d.department),
             axisLabel: { color: '#667085', fontSize: 10, rotate: 20 },
             axisLine: { lineStyle: { color: '#E0E0E0' } },
         },
@@ -174,14 +206,14 @@ const Dashboard = () => {
         },
         series: [{
             type: 'bar',
-            data: APPROVALS_BY_DEPARTMENT.map((d) => d.amount),
+            data: approvalsByDepartment.map((d) => d.amount),
             barWidth: 28,
             itemStyle: {
                 color: CHART_COLORS.primary,
                 borderRadius: [4, 4, 0, 0],
             },
         }],
-    }), [])
+    }), [approvalsByDepartment])
 
     const alertsBarOption = useMemo(() => ({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -193,18 +225,18 @@ const Dashboard = () => {
         },
         yAxis: {
             type: 'category',
-            data: ALERTS_BY_DEPARTMENT.map((d) => d.department).reverse(),
+            data: alertsByDepartment.map((d) => d.department).reverse(),
             axisLabel: { color: '#667085', fontSize: 11 },
             axisLine: { show: false },
             axisTick: { show: false },
         },
         series: [{
             type: 'bar',
-            data: ALERTS_BY_DEPARTMENT.map((d) => d.count).reverse(),
+            data: alertsByDepartment.map((d) => d.count).reverse(),
             barWidth: 14,
             itemStyle: { color: CHART_COLORS.danger, borderRadius: [0, 4, 4, 0] },
         }],
-    }), [])
+    }), [alertsByDepartment])
 
     const departmentWorkloadOption = useMemo(() => ({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -216,7 +248,7 @@ const Dashboard = () => {
         grid: { left: 48, right: 16, top: 24, bottom: 48 },
         xAxis: {
             type: 'category',
-            data: DEPARTMENT_WORKLOAD.map((d) => d.department),
+            data: departmentWorkload.map((d) => d.department),
             axisLabel: { color: '#667085', fontSize: 10, rotate: 15 },
             axisLine: { lineStyle: { color: '#E0E0E0' } },
         },
@@ -230,25 +262,25 @@ const Dashboard = () => {
                 name: 'Pending Tasks',
                 type: 'bar',
                 stack: 'total',
-                data: DEPARTMENT_WORKLOAD.map((d) => d.pendingTasks),
+                data: departmentWorkload.map((d) => d.pendingTasks),
                 itemStyle: { color: CHART_COLORS.primary },
             },
             {
                 name: 'Open Tickets',
                 type: 'bar',
                 stack: 'total',
-                data: DEPARTMENT_WORKLOAD.map((d) => d.openTickets),
+                data: departmentWorkload.map((d) => d.openTickets),
                 itemStyle: { color: CHART_COLORS.info },
             },
             {
                 name: 'Low Stock',
                 type: 'bar',
                 stack: 'total',
-                data: DEPARTMENT_WORKLOAD.map((d) => d.lowStock),
+                data: departmentWorkload.map((d) => d.lowStock),
                 itemStyle: { color: CHART_COLORS.warning },
             },
         ],
-    }), [])
+    }), [departmentWorkload])
 
     return (
         <section className='space-y-6'>
@@ -259,13 +291,13 @@ const Dashboard = () => {
                     </div>
                     <div>
                         <h2 className='text-xl font-semibold text-black'>Joint Director Assistant Dashboard</h2>
-                        <p className='text-sm text-[#667085] mt-0.5'>Office overview of department operations, pending requests, and alerts for coordination support.</p>
+                        <p className='text-sm text-[#667085] mt-0.5'>Cross-department overview of operations, approvals, and critical alerts.</p>
                     </div>
                 </div>
             </div>
 
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4'>
-                {KPI_CARDS.map((card) => {
+                {kpiCards.map((card) => {
                     const Icon = KPI_ICONS[card.label] ?? ClipboardList
                     return (
                         <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
@@ -296,7 +328,7 @@ const Dashboard = () => {
             <div>
                 <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>Department Summary</h3>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4'>
-                    {DEPARTMENT_SUMMARIES.map((dept) => {
+                    {departmentSummaries.map((dept) => {
                         const Icon = DEPT_ICONS[dept.department] ?? Building2
                         return (
                             <div key={dept.department} className='bg-white rounded-2xl shadow-md p-4'>
@@ -345,7 +377,9 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {PENDING_APPROVALS.map((row) => (
+                            {pendingApprovals.length === 0 ? (
+                                <EmptyTableRow cols={4} />
+                            ) : pendingApprovals.map((row) => (
                                 <tr key={row.requestId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
                                     <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.requestId}</td>
                                     <td className={tdClass}>{row.department}</td>
@@ -367,12 +401,14 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {RECENT_ESCALATIONS.map((row) => (
+                            {recentEscalations.length === 0 ? (
+                                <EmptyTableRow cols={3} />
+                            ) : recentEscalations.map((row) => (
                                 <tr key={row.escalationId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
                                     <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.escalationId}</td>
                                     <td className={tdClass}>{row.department}</td>
                                     <td className={tdClass}>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${priorityBadgeColor[row.priority]}`}>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${priorityBadgeColor[row.priority] || priorityBadgeColor.Medium}`}>
                                             {row.priority}
                                         </span>
                                     </td>
@@ -392,7 +428,9 @@ const Dashboard = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {CRITICAL_ALERTS.map((row) => (
+                        {criticalAlerts.length === 0 ? (
+                            <EmptyTableRow cols={2} />
+                        ) : criticalAlerts.map((row) => (
                             <tr key={`${row.department}-${row.alert}`} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
                                 <td className={`${tdClass} font-medium text-[#1E1E1E] whitespace-nowrap`}>{row.department}</td>
                                 <td className={`${tdClass} text-[#FF5722]`}>{row.alert}</td>

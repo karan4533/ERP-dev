@@ -1,51 +1,62 @@
 import React from 'react'
+import { useSearchParams } from 'react-router-dom'
 import ViewEmployeeDetails from '../Components/ViewEmployeeDetails'
+import { SEED } from '../../../HR/domain/hrSeed'
 
-const MOCK_EMPLOYEE = {
-    profileImage: null,
-    employeeId: 'LIB-1001',
-    firstName: 'Sandy',
-    middleName: 'K.',
-    lastName: 'Selva',
-    gender: 'Male',
-    dateOfBirth: '20-12-1996',
-    bloodGroup: 'B+',
-    address: {
-        address: '12, Anna Nagar, Main Road',
-        country: 'India',
-        state: 'Tamil Nadu',
-        city: 'Pudukkottai',
-        zipCode: '622001',
-    },
-    contact: {
-        mobileNumber: '+91 99440 76993',
-        alternativeNumber: '+91 98765 43210',
-        email: 'san@gmail.com',
-    },
-    professionalInfo: {
-        qualification: 'M.Lib.Sc, B.Ed.',
-        designation: 'Senior Librarian',
-        department: 'Library',
-        yearsOfExperience: '8 Years',
-        previousOrganization: 'District Central Library, Pudukkottai',
-        joiningDate: '2018-06-01',
-    },
-    employmentInfo: {
-        employeeType: 'Full-time',
-        salary: '₹42,000 / month',
-        workShift: 'Morning (8:00 AM – 3:00 PM)',
-        assignedArea: 'Central Library & Digital Resource Centre',
-        reportingTo: 'Principal',
-    },
+const ViewLibrarian = () => {
+    const [params] = useSearchParams()
+    const id = params.get('id') || params.get('employeeId')
+    const libRows = SEED.employees.filter(
+        (row) => row.role === 'librarian' || /librarian/i.test(row.designation || ''),
+    )
+    const row = libRows.find((item) => item.id === id) || libRows[0]
+    const nameParts = String(row?.name || 'Staff').trim().split(/\s+/)
+    const employee = {
+        profileImage: null,
+        employeeId: row?.id || '—',
+        firstName: nameParts[0] || '',
+        middleName: nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '',
+        lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
+        gender: row?.gender || '—',
+        dateOfBirth: row?.dateOfBirth || '—',
+        bloodGroup: '—',
+        address: {
+            address: row?.address || 'Queen Mira International School, Madurai',
+            country: 'India',
+            state: 'Tamil Nadu',
+            city: 'Madurai',
+            zipCode: '',
+        },
+        contact: {
+            mobileNumber: row?.contact || '—',
+            alternativeNumber: '',
+            email: row?.email || '—',
+        },
+        professionalInfo: {
+            qualification: row?.qualification || '—',
+            designation: row?.designation || 'Librarian',
+            department: row?.department || 'Library',
+            yearsOfExperience: row?.experience || '—',
+            previousOrganization: '—',
+            joiningDate: row?.joiningDate || '—',
+        },
+        employmentInfo: {
+            employeeType: row?.employmentType || 'Full Time',
+            salary: '—',
+            workShift: '—',
+            assignedArea: row?.designation || 'Library',
+            reportingTo: row?.reportingManager || '—',
+        },
+    }
+
+    return (
+        <ViewEmployeeDetails
+            listPath="/principal/employees-management/librarians"
+            idLabel="LIB-ID"
+            roleTitle="Librarian"
+            employee={employee}
+        />
+    )
 }
-
-const ViewLibrarian = () => (
-    <ViewEmployeeDetails
-        listPath="/principal/employees-management/librarians"
-        idLabel="LIB-ID"
-        roleTitle="Librarian"
-        employee={MOCK_EMPLOYEE}
-    />
-)
 
 export default ViewLibrarian

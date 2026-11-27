@@ -529,7 +529,34 @@ const StarRatings = ({ view = 'som' }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename={isSom ? 'super-admin-star-of-month' : 'super-admin-star-of-year'}
+                title={isSom ? 'Star of the Month' : 'Star of the Year'}
+                rows={(isSom ? somRatings : filteredSoyRatings).map((row) => (
+                    isStudent
+                        ? {
+                            student_id: row.studentId,
+                            student_name: row.studentName,
+                            class_section: row.classSection,
+                            rating: row.rating,
+                            month: row.month,
+                            academic_year: row.academicYear,
+                        }
+                        : {
+                            employee_id: row.employeeId,
+                            employee_name: row.employeeName,
+                            department: row.department,
+                            rating: row.rating,
+                            month: row.month,
+                            employee_type: row.employeeType,
+                        }
+                ))}
+                exportDescription={
+                    <>You are exporting {(isSom ? somRatings : filteredSoyRatings).length} record(s).</>
+                }
+            />
         </section>
     )
 }

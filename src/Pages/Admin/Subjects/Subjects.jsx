@@ -1,186 +1,164 @@
-import React, { useState } from 'react'
-import { NavLink } from 'react-router-dom';
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from "lucide-react";
-import mo_user from "../../../assets/images/no-profile.png"
-import Dropdown from '../../../Common/CommonComponents/Dropdown';
-import ExportModal from '../../../Common/CommonComponents/ExportModal';
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
-import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { NavLink } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import {
+    canUseClassDetailsApi,
+    listSubjects,
+} from '../../../services/classDetailsApi'
 
 const Subjects = () => {
+    const apiMode = canUseClassDetailsApi()
+    const [status, setStatus] = useState(apiMode ? 'loading' : 'idle')
+    const [rows, setRows] = useState([])
+    const [error, setError] = useState('')
+    const [search, setSearch] = useState('')
+    const [reloadKey, setReloadKey] = useState(0)
 
-    const [fromDate, setFromDate] = useState(new Date());
-    const [toDate, setToDate] = useState(new Date());
-    const [exportModal, setExportModal] = useState(false);
-    const [editRequestModal, setEditRequestModal] = useState(false);
-    const [deleteRequestModal, setDeleteRequestModal] = useState(false);
+    const reload = useCallback(() => setReloadKey((key) => key + 1), [])
+
+    useEffect(() => {
+        if (!apiMode) {
+            setStatus('offline')
+            setRows([])
+            return undefined
+        }
+        let cancelled = false
+        setStatus('loading')
+        listSubjects()
+            .then((list) => {
+                if (cancelled) return
+                setRows(list)
+                setError('')
+                setStatus('ready')
+            })
+            .catch((loadError) => {
+                if (cancelled) return
+                setStatus('error')
+                setError(loadError?.message || 'Could not load subjects.')
+            })
+        return () => { cancelled = true }
+    }, [apiMode, reloadKey])
+
+    const filtered = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        if (!query) return rows
+        return rows.filter((row) => (
+            row.name.toLowerCase().includes(query)
+            || row.code.toLowerCase().includes(query)
+        ))
+    }, [rows, search])
 
     return (
         <section>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
-                    <select name="" id="" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value="">From Beginning</option>
-                    </select>
+                    <button
+                        type='button'
+                        onClick={() => {
+                            setSearch('')
+                            reload()
+                        }}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
+                    >
+                        Clear Filters
+                    </button>
+                    <NavLink
+                        to='/admin/class/add-subjects'
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer inline-flex items-center gap-2 justify-center'
+                    >
+                        <Plus size={16} />
+                        Add Subject
+                    </NavLink>
                 </div>
+
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
-                        <label htmlFor="search" className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type="text" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
+                        <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
+                        <input
+                            id='search'
+                            type='text'
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder='Subject name or code'
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        />
                     </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor="status" className='text-base font-medium text-[#808080]'>Status</label>
-                        <select name="" id="" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
-                            <option value="">All</option>
-                        </select>
+                </div>
+
+                {!apiMode && (
+                    <p className='mt-6 text-sm text-[#980E0F]'>
+                        Sign in with API auth enabled to manage campus subjects (`/masters/subjects`).
+                    </p>
+                )}
+                {status === 'loading' && <p className='mt-6 text-sm text-[#667085]'>Loading subjects…</p>}
+                {status === 'error' && (
+                    <div className='mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700'>
+                        {error}
+                        <button type='button' className='ml-3 underline' onClick={reload}>Retry</button>
                     </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
+                )}
 
-                        <div className='relative w-full'>
-                            <DatePicker
-                                selected={fromDate}
-                                onChange={(date) => setFromDate(date)}
-                                isClearable={true}
-                                showMonthYearDropdown={true}
-                                scrollableMonthYearDropdown={true}
-                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
-                            />
-
-                            <Calendar
-                                size={16}
-                                className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none'
-                            />
+                {apiMode && status === 'ready' && (
+                    <div className='mt-8'>
+                        <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
+                            <h2 className='text-xl font-medium text-black'>Subjects List</h2>
+                            <button
+                                type='button'
+                                onClick={() => {
+                                    reload()
+                                    toast.info('Subjects refreshed.')
+                                }}
+                                className='text-sm text-[#515DEF] underline'
+                            >
+                                Refresh
+                            </button>
+                        </div>
+                        <div className='relative overflow-x-auto'>
+                            <table className='w-full text-sm text-left'>
+                                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                                    <tr>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Code</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Subject Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filtered.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={2} className='px-2 py-8 text-center text-[#667085]'>
+                                                No subjects yet. Add one to use it in timetables and exams.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filtered.map((row) => (
+                                            <tr key={row.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                                <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{row.code}</td>
+                                                <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-e-lg'>{row.name}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className='flex justify-between items-center px-2 mt-4'>
+                            <p className='text-sm font-medium text-[#515DEF]'>
+                                Showing {filtered.length} of {rows.length} entries
+                            </p>
+                            <div className='flex justify-center gap-x-2'>
+                                <span className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] rounded-full'>
+                                    <ChevronLeft size={16} />
+                                </span>
+                                <span className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full'>
+                                    1
+                                </span>
+                                <span className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] rounded-full'>
+                                    <ChevronRight size={16} />
+                                </span>
+                            </div>
                         </div>
                     </div>
-
-                    <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>To</label>
-
-                        <div className='relative'>
-                            <DatePicker
-                                selected={toDate}
-                                onChange={(date) => setToDate(date)}
-                                isClearable={true}
-                                showMonthYearDropdown={true}
-                                scrollableMonthYearDropdown={true}
-                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
-                            />
-
-                            <Calendar
-                                size={16}
-                                className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none'
-                            />
-                        </div>
-                    </div>
-                </div>
+                )}
             </div>
-
-
-            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Subjects List</h2>
-                    <div className='flex gap-x-2'>
-                        <NavLink to="/admin/class/add-subjects" className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                            <Plus size={16} />
-                            Add New Subject
-                        </NavLink>
-                        <button onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                            <Download size={16} />
-                            Export
-                        </button>
-                    </div>
-                </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select name="" id="" className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value="10">10</option>
-                        <option value="20">20</option>
-                        <option value="30">30</option>
-                        <option value="40">40</option>
-                        <option value="50">50</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
-                <div className="relative overflow-x-auto">
-                    <table className="w-full text-sm text-left rtl:text-right">
-                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
-                            <tr className='rounded-lg'>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg">Book Image</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Subject Name</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Subject Code</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Education Board</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Subject Type</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Assigned Teacher</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Class</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg">Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            <tr className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
-                                <td className="px-2 py-4 object-cover flex justify-center rounded-s-lg">
-                                    <img src={mo_user} alt="no-profile-image" className='w-9 h-9' />
-                                </td>
-                                <td className="px-2 py-4">Tamil</td>
-                                <td className="px-2 py-4">TAM1001</td>
-                                <td className="px-2 py-4">Matriculation</td>
-                                <td className="px-2 py-4">Theory</td>
-                                <td className="px-2 py-4">Sandy Selva</td>
-                                <td className="px-2 py-4">12th</td>
-                                <td className="px-2 py-4 text-center rounded-e-lg">
-                                    <Dropdown
-                                        buttonContent={<EllipsisIcon size={16} className='text-black' />}
-                                    >
-                                        <button className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                            View
-                                        </button>
-                                        <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                            Edit
-                                        </button>
-                                        <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                            Delete
-                                        </button>
-                                    </Dropdown>
-
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Pagination */}
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to 10 of 20 entries</p>
-
-                <div className="flex justify-center gap-x-2 flex-wrap">
-                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
-                        <ChevronLeft size={16} />
-                    </button>
-
-                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
-                        1
-                    </button>
-
-                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
-                        2
-                    </button>
-
-                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
-
         </section>
     )
 }

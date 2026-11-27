@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const VIEW_FILTERS = [
     { key: 'all', label: 'All Views' },
     { key: 'canteen', label: 'Canteen Inventory', sub: 'Low stock food items' },
@@ -13,7 +14,7 @@ export const ALERT_TYPES = ['Low Stock', 'Expiring Warranty']
 
 export const STATUS_OPTIONS = ['Normal', 'Critical']
 
-export const ASSETS_INVENTORY = [
+const DEFAULT_ASSETS_INVENTORY = [
     {
         id: 'AI-CM-001',
         viewType: 'canteen',
@@ -255,7 +256,19 @@ export const alertBadgeColor = {
 }
 
 export const getAssetById = (id) =>
-    ASSETS_INVENTORY.find((item) => item.id === id) ?? null
+    getJdAssets().find((item) => item.id === id) ?? null
 
 export const getViewFilter = (key) =>
     VIEW_FILTERS.find((view) => view.key === key)
+export const ASSETS_STORAGE_KEY = 'schoolerp-jd-assets-v1'
+export function getJdAssets() {
+    return ensureCampusSeed('schoolerp-jd-assets-v1', DEFAULT_ASSETS_INVENTORY)
+}
+export function saveJdAssets(rows) {
+    return saveCampusJson('schoolerp-jd-assets-v1', rows)
+}
+export function hydrateJdAssetsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-assets-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-assets-v1', DEFAULT_ASSETS_INVENTORY)
+}
+export const ASSETS_INVENTORY = DEFAULT_ASSETS_INVENTORY

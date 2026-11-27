@@ -1,32 +1,32 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { REQUESTS, approvalStatusBadgeColor, stageBadgeColor } from './requestsData'
-
-const parseDmy = (value) => {
-    const [day, month, year] = String(value || '').split('-').map(Number)
-    return year ? new Date(year, month - 1, day) : null
-}
+import { filterListRows } from '../../../Common/listFiltering'
+import { getRequests, hydrateRequestsFromApi, approvalStatusBadgeColor, stageBadgeColor } from './requestsData'
 
 const RequestsApprovalsList = () => {
+    const [requests, setRequests] = useState(() => getRequests())
+    useEffect(() => {
+        hydrateRequestsFromApi().finally(() => setRequests(getRequests()))
+    }, [])
+
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
     const [requestType, setRequestType] = useState('')
     const [approvalStatus, setApprovalStatus] = useState('')
     const [exportModal, setExportModal] = useState(false)
-    const visible = REQUESTS.filter((request) => {
-        const date = parseDmy(request.submittedDate)
-        const query = search.trim().toLowerCase()
-        return (!query || `${request.requestId} ${request.title} ${request.vendor}`.toLowerCase().includes(query))
-            && (!requestType || request.requestType === requestType)
-            && (!approvalStatus || request.approvalStatus === approvalStatus)
-            && (!fromDate || (date && date >= fromDate))
-            && (!toDate || (date && date <= toDate))
+    const visible = filterListRows(requests, {
+        search,
+        searchKeys: ['requestId', 'title', 'vendor', 'requestType'],
+        equals: { requestType, approvalStatus },
+        fromDate,
+        toDate,
+        dateKeys: ['submittedDate'],
     })
 
     return (
@@ -149,7 +149,7 @@ const RequestsApprovalsList = () => {
             </div>
 
             <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {REQUESTS.length} of {REQUESTS.length} entries</p>
+                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {requests.length} of {requests.length} entries</p>
                 <div className="flex justify-center gap-x-2">
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer"><ChevronLeft size={16} /></button>
                     <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] border border-[#E2E8F0] rounded-full cursor-pointer">1</button>
@@ -157,7 +157,14 @@ const RequestsApprovalsList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='requestsapprovalslist'
+                title='RequestsApprovalsList'
+                rows={Array.isArray(requests) ? requests : []}
+                exportDescription={<>You are exporting {Array.isArray(requests) ? requests.length : 0} record(s).</>}
+            />
         </section>
     )
 }

@@ -1,413 +1,353 @@
-import React, { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import {
-    Search,
-    RotateCcw,
-    Download,
-    Eye,
-    ChevronLeft,
-    ChevronRight,
-    Users,
-    UserCheck,
-    GraduationCap,
-    UserX,
-} from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink } from 'react-router-dom'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
+import Dropdown from '../CommonComponents/Dropdown'
 import ExportModal from '../CommonComponents/ExportModal'
-import {
-    getIntegratedStudentsList,
-    DEFAULT_ACADEMIC_YEARS,
-    CURRENT_ACADEMIC_YEAR,
-    STUDENT_DEPARTMENTS,
-} from './userDatabaseIntegrator'
-import mo_user from '../../assets/images/no-profile.png'
+import { hydrateEnrolledStudentsFromApi } from '../StudentDatabase/enrolledStudentsData'
+import { getStudentProfileImage, getStudentsList } from '../StudentDatabase/studentDatabaseData'
+import { isApiStudentsEnabled } from '../../services/apiClient'
 
-const statusBadgeClasses = {
-    Active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    Graduated: 'bg-blue-50 text-blue-700 border-blue-200',
-    Withdrawn: 'bg-slate-100 text-slate-700 border-slate-300',
-    Promoted: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+const parseLooseDate = (value) => {
+    if (!value || value === '—') return null
+    const direct = new Date(value)
+    if (!Number.isNaN(direct.getTime())) return direct
+    const parts = String(value).match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+    if (!parts) return null
+    const parsed = new Date(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]))
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const PAGE_SIZE = 10
+
+const classLabel = (student) => {
+    const cls = String(student.className || '').trim()
+    const section = String(student.section || '').trim()
+    if (student.classSection) return student.classSection
+    return cls && section ? `${cls}-${section}` : cls || '—'
 }
 
 const StudentDatabaseListView = ({
-    routeBase = '/front-office/student-management',
+    routeBase,
     title = 'Student Database',
+    emptyMessage = 'No enrolled students yet. Enroll a student from the Admission List to see them here.',
     renderExtraActions,
 }) => {
-    const navigate = useNavigate()
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
-    const [academicYear, setAcademicYear] = useState(CURRENT_ACADEMIC_YEAR)
-    const [department, setDepartment] = useState('')
-    const [className, setClassName] = useState('')
-    const [section, setSection] = useState('')
-    const [status, setStatus] = useState('')
+    const [statusFilter, setStatusFilter] = useState('')
+    const [classFilter, setClassFilter] = useState('')
+    const [sectionFilter, setSectionFilter] = useState('')
+    const [genderFilter, setGenderFilter] = useState('')
+    const [page, setPage] = useState(1)
     const [exportModal, setExportModal] = useState(false)
-    const [currentPage, setCurrentPage] = useState(1)
-    const itemsPerPage = 10
+    const [rows, setRows] = useState(() => getStudentsList())
+    const [loading, setLoading] = useState(isApiStudentsEnabled())
 
-    // Fetch integrated students from central aggregator
-    const students = useMemo(() => {
-        return getIntegratedStudentsList({
-            search,
-            academicYear,
-            department,
-            className,
-            section,
-            status,
+    useEffect(() => {
+        let cancelled = false
+        if (!isApiStudentsEnabled()) {
+            setRows(getStudentsList())
+            setLoading(false)
+            return undefined
+        }
+        setLoading(true)
+        hydrateEnrolledStudentsFromApi()
+            .then(() => {
+                if (!cancelled) setRows(getStudentsList())
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    const statusOptions = useMemo(() => {
+        const values = new Set()
+        rows.forEach((row) => {
+            const status = String(row.status || '').trim()
+            if (status && status !== '—') values.add(status)
         })
-    }, [search, academicYear, department, className, section, status])
+        return Array.from(values).sort()
+    }, [rows])
 
-    // KPI Summary
-    const totalStudents = students.length
-    const activeCount = useMemo(() => students.filter((s) => s.currentStatus === 'Active').length, [students])
-    const graduatedCount = useMemo(() => students.filter((s) => s.currentStatus === 'Graduated').length, [students])
-    const withdrawnCount = useMemo(() => students.filter((s) => s.currentStatus === 'Withdrawn').length, [students])
+    const classOptions = useMemo(() => {
+        const values = new Set(rows.map((row) => String(row.className || '').trim()).filter(Boolean))
+        return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    }, [rows])
 
-    // Pagination
-    const totalPages = Math.max(1, Math.ceil(students.length / itemsPerPage))
-    const paginatedStudents = useMemo(() => {
-        const start = (currentPage - 1) * itemsPerPage
-        return students.slice(start, start + itemsPerPage)
-    }, [students, currentPage])
+    const sectionOptions = useMemo(() => {
+        const values = new Set(
+            rows
+                .filter((row) => !classFilter || String(row.className || '').trim() === classFilter)
+                .map((row) => String(row.section || '').trim())
+                .filter(Boolean),
+        )
+        return Array.from(values).sort()
+    }, [rows, classFilter])
 
-    const handleClearFilters = () => {
+    const genderOptions = useMemo(() => {
+        const values = new Set(rows.map((row) => String(row.gender || '').trim()).filter((v) => v && v !== '—'))
+        return Array.from(values).sort()
+    }, [rows])
+
+    const filteredRows = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        const fromTime = fromDate ? new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime() : null
+        const toTime = toDate ? new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999).getTime() : null
+
+        return rows.filter((student) => {
+            if (statusFilter && String(student.status || '') !== statusFilter) return false
+            if (classFilter && String(student.className || '').trim() !== classFilter) return false
+            if (sectionFilter && String(student.section || '').trim() !== sectionFilter) return false
+            if (genderFilter && String(student.gender || '').trim() !== genderFilter) return false
+            if (query) {
+                const haystack = `${student.admissionNumber} ${student.name} ${student.email} ${student.mobileNumber}`.toLowerCase()
+                if (!haystack.includes(query)) return false
+            }
+            if (fromTime != null || toTime != null) {
+                const dob = parseLooseDate(student.dateOfBirth)
+                if (!dob) return false
+                const t = dob.getTime()
+                if (fromTime != null && t < fromTime) return false
+                if (toTime != null && t > toTime) return false
+            }
+            return true
+        })
+    }, [rows, search, statusFilter, classFilter, sectionFilter, genderFilter, fromDate, toDate])
+
+    const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
+    const currentPage = Math.min(page, pageCount)
+    const pageRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+    const withPageReset = (setter) => (value) => {
+        setter(value)
+        setPage(1)
+    }
+
+    const clearFilters = () => {
         setSearch('')
-        setAcademicYear(CURRENT_ACADEMIC_YEAR)
-        setDepartment('')
-        setClassName('')
-        setSection('')
-        setStatus('')
-        setCurrentPage(1)
+        setStatusFilter('')
+        setClassFilter('')
+        setSectionFilter('')
+        setGenderFilter('')
+        setFromDate(null)
+        setToDate(null)
+        setPage(1)
     }
 
     return (
-        <section className='space-y-6'>
-            {/* Header with Title and Export */}
-            <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
-                <div>
-                    <h1 className='text-2xl font-bold text-slate-900'>{title}</h1>
-                    <p className='text-sm text-slate-500 mt-0.5'>
-                        Centralized student information and historical records across all academic programs.
-                    </p>
+        <section>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
+                    <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
                 </div>
-                <div className='flex items-center gap-2'>
-                    <button
-                        type='button'
-                        onClick={() => setExportModal(true)}
-                        className='inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm transition-colors cursor-pointer'
-                    >
+                <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 lg:mt-8 mt-2'>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='student-search' className='text-base font-medium text-[#808080]'>Search</label>
+                        <input
+                            id='student-search'
+                            type='text'
+                            value={search}
+                            onChange={(e) => withPageReset(setSearch)(e.target.value)}
+                            placeholder='Admission no, name...'
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        />
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='student-class-filter' className='text-base font-medium text-[#808080]'>Class</label>
+                        <select
+                            id='student-class-filter'
+                            value={classFilter}
+                            onChange={(e) => {
+                                withPageReset(setClassFilter)(e.target.value)
+                                setSectionFilter('')
+                            }}
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            {classOptions.map((value) => (
+                                <option key={value} value={value}>{value}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='student-section-filter' className='text-base font-medium text-[#808080]'>Section</label>
+                        <select
+                            id='student-section-filter'
+                            value={sectionFilter}
+                            onChange={(e) => withPageReset(setSectionFilter)(e.target.value)}
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            {sectionOptions.map((value) => (
+                                <option key={value} value={value}>{value}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='student-gender-filter' className='text-base font-medium text-[#808080]'>Gender</label>
+                        <select
+                            id='student-gender-filter'
+                            value={genderFilter}
+                            onChange={(e) => withPageReset(setGenderFilter)(e.target.value)}
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            {genderOptions.map((value) => (
+                                <option key={value} value={value}>{value}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='student-status-filter' className='text-base font-medium text-[#808080]'>Status</label>
+                        <select
+                            id='student-status-filter'
+                            value={statusFilter}
+                            onChange={(e) => withPageReset(setStatusFilter)(e.target.value)}
+                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            {statusOptions.map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>Date of birth from</label>
+                        <div className='relative'>
+                            <DatePicker selected={fromDate} onChange={withPageReset(setFromDate)} isClearable showMonthYearDropdown scrollableMonthYearDropdown placeholderText='DOB from' className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>Date of birth to</label>
+                        <div className='relative'>
+                            <DatePicker selected={toDate} onChange={withPageReset(setToDate)} isClearable showMonthYearDropdown scrollableMonthYearDropdown placeholderText='DOB to' className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none' />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
+                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
+                    <h2 className='text-xl font-medium text-black'>{title}</h2>
+                    <button type='button' onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
                         <Download size={16} />
                         Export
                     </button>
-                    {renderExtraActions && renderExtraActions()}
                 </div>
-            </div>
-
-            {/* Quick KPI Count Strip */}
-            <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
-                <div className='bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3'>
-                    <div className='p-2 bg-indigo-50 text-indigo-600 rounded-lg'>
-                        <Users size={18} />
-                    </div>
-                    <div>
-                        <div className='text-xs text-slate-500 font-medium'>Total Listed</div>
-                        <div className='text-lg font-bold text-slate-900'>{totalStudents}</div>
-                    </div>
-                </div>
-                <div className='bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3'>
-                    <div className='p-2 bg-emerald-50 text-emerald-600 rounded-lg'>
-                        <UserCheck size={18} />
-                    </div>
-                    <div>
-                        <div className='text-xs text-slate-500 font-medium'>Active Enrolled</div>
-                        <div className='text-lg font-bold text-emerald-700'>{activeCount}</div>
-                    </div>
-                </div>
-                <div className='bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3'>
-                    <div className='p-2 bg-blue-50 text-blue-600 rounded-lg'>
-                        <GraduationCap size={18} />
-                    </div>
-                    <div>
-                        <div className='text-xs text-slate-500 font-medium'>Graduated</div>
-                        <div className='text-lg font-bold text-blue-700'>{graduatedCount}</div>
-                    </div>
-                </div>
-                <div className='bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3'>
-                    <div className='p-2 bg-slate-100 text-slate-600 rounded-lg'>
-                        <UserX size={18} />
-                    </div>
-                    <div>
-                        <div className='text-xs text-slate-500 font-medium'>Withdrawn</div>
-                        <div className='text-lg font-bold text-slate-700'>{withdrawnCount}</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Filter Control Bar */}
-            <div className='bg-white rounded-2xl shadow-xs border border-slate-200 p-4'>
-                <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3'>
-                    {/* Search */}
-                    <div className='lg:col-span-2'>
-                        <label className='block text-xs font-semibold text-slate-600 uppercase mb-1'>Search Student</label>
-                        <div className='relative'>
-                            <input
-                                type='text'
-                                value={search}
-                                onChange={(e) => {
-                                    setSearch(e.target.value)
-                                    setCurrentPage(1)
-                                }}
-                                placeholder='Search by Name, Student ID, or Admission No...'
-                                className='w-full text-sm text-slate-800 border border-slate-300 rounded-lg pl-9 pr-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none'
-                            />
-                            <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none' />
-                        </div>
-                    </div>
-
-                    {/* Academic Year */}
-                    <div>
-                        <label className='block text-xs font-semibold text-slate-600 uppercase mb-1'>Academic Year</label>
-                        <select
-                            value={academicYear}
-                            onChange={(e) => {
-                                setAcademicYear(e.target.value)
-                                setCurrentPage(1)
-                            }}
-                            className='w-full text-sm text-slate-800 border border-slate-300 rounded-lg px-2.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white'
-                        >
-                            {DEFAULT_ACADEMIC_YEARS.map((yr) => (
-                                <option key={yr} value={yr}>
-                                    {yr}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Department */}
-                    <div>
-                        <label className='block text-xs font-semibold text-slate-600 uppercase mb-1'>Department</label>
-                        <select
-                            value={department}
-                            onChange={(e) => {
-                                setDepartment(e.target.value)
-                                setCurrentPage(1)
-                            }}
-                            className='w-full text-sm text-slate-800 border border-slate-300 rounded-lg px-2.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white'
-                        >
-                            <option value=''>All Departments</option>
-                            {STUDENT_DEPARTMENTS.map((dept) => (
-                                <option key={dept} value={dept}>
-                                    {dept.split('(')[0].trim()}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Class & Section */}
-                    <div>
-                        <label className='block text-xs font-semibold text-slate-600 uppercase mb-1'>Class & Section</label>
-                        <div className='flex gap-1'>
-                            <select
-                                value={className}
-                                onChange={(e) => {
-                                    setClassName(e.target.value)
-                                    setCurrentPage(1)
-                                }}
-                                className='w-2/3 text-sm text-slate-800 border border-slate-300 rounded-lg px-1.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white'
-                            >
-                                <option value=''>All Class</option>
-                                <option value='10'>Grade 10</option>
-                                <option value='9'>Grade 9</option>
-                                <option value='8'>Grade 8</option>
-                                <option value='7'>Grade 7</option>
-                                <option value='6'>Grade 6</option>
-                            </select>
-                            <select
-                                value={section}
-                                onChange={(e) => {
-                                    setSection(e.target.value)
-                                    setCurrentPage(1)
-                                }}
-                                className='w-1/3 text-sm text-slate-800 border border-slate-300 rounded-lg px-1 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white'
-                            >
-                                <option value=''>Sec</option>
-                                <option value='A'>A</option>
-                                <option value='B'>B</option>
-                                <option value='C'>C</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Current Status */}
-                    <div>
-                        <label className='block text-xs font-semibold text-slate-600 uppercase mb-1'>Status</label>
-                        <div className='flex gap-1.5'>
-                            <select
-                                value={status}
-                                onChange={(e) => {
-                                    setStatus(e.target.value)
-                                    setCurrentPage(1)
-                                }}
-                                className='w-full text-sm text-slate-800 border border-slate-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white'
-                            >
-                                <option value=''>All Statuses</option>
-                                <option value='Active'>Active</option>
-                                <option value='Graduated'>Graduated</option>
-                                <option value='Withdrawn'>Withdrawn</option>
-                            </select>
-                            <button
-                                type='button'
-                                onClick={handleClearFilters}
-                                title='Reset Filters'
-                                className='px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center justify-center shrink-0'
-                            >
-                                <RotateCcw size={15} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Compact Student Directory Table */}
-            <div className='bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden'>
-                <div className='overflow-x-auto'>
+                <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left'>
-                        <thead className='text-xs uppercase bg-slate-100 text-slate-700 font-semibold border-b border-slate-200'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
                             <tr>
-                                <th scope='col' className='px-4 py-3 text-center w-14'>Profile Photo</th>
-                                <th scope='col' className='px-4 py-3'>Name</th>
-                                <th scope='col' className='px-4 py-3'>Unique ID</th>
-                                <th scope='col' className='px-4 py-3'>Class / Section</th>
-                                <th scope='col' className='px-4 py-3'>Department</th>
-                                <th scope='col' className='px-4 py-3 text-center'>Current Status</th>
-                                <th scope='col' className='px-4 py-3 text-center'>Attendance</th>
-                                <th scope='col' className='px-4 py-3 text-right'>Action</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Profile</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Admission Number</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Name</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Gender</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Email</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Mobile Number</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Date Of Birth</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Country</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>State</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>City</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-slate-100'>
-                            {paginatedStudents.length === 0 ? (
+                        <tbody>
+                            {loading && (
                                 <tr>
-                                    <td colSpan={8} className='px-4 py-12 text-center text-slate-500'>
-                                        <Users size={32} className='mx-auto text-slate-300 mb-2' />
-                                        No students found matching your search criteria.
+                                    <td colSpan={12} className='px-2 py-10 text-center text-[#667085]'>
+                                        Loading students…
                                     </td>
                                 </tr>
-                            ) : (
-                                paginatedStudents.map((student) => (
-                                    <tr key={student.id} className='hover:bg-slate-50 transition-colors'>
-                                        {/* Profile Photo */}
-                                        <td className='px-4 py-3 text-center'>
-                                            <img
-                                                src={student.profilePhoto || mo_user}
-                                                alt={student.name}
-                                                className='w-10 h-10 rounded-full object-cover ring-1 ring-slate-200 mx-auto'
-                                            />
-                                        </td>
-
-                                        {/* Student Name */}
-                                        <td className='px-4 py-3'>
-                                            <Link
-                                                to={`${routeBase}/view/${student.id}`}
-                                                className='font-semibold text-slate-900 hover:text-indigo-600 transition-colors'
-                                            >
-                                                {student.name}
-                                            </Link>
-                                            <div className='text-xs text-slate-500 mt-0.5'>
-                                                Adm: {student.admissionNumber}
-                                            </div>
-                                        </td>
-
-                                        {/* Unique ID */}
-                                        <td className='px-4 py-3 font-mono text-xs font-medium text-slate-700'>
-                                            {student.studentId}
-                                        </td>
-
-                                        {/* Class / Section */}
-                                        <td className='px-4 py-3 font-medium text-slate-800'>
-                                            {student.classSection}
-                                        </td>
-
-                                        {/* Department */}
-                                        <td className='px-4 py-3 text-xs text-slate-600'>
-                                            {student.department.split('(')[0].trim()}
-                                        </td>
-
-                                        {/* Current Status */}
-                                        <td className='px-4 py-3 text-center'>
-                                            <span
-                                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                                                    statusBadgeClasses[student.currentStatus] || statusBadgeClasses.Active
-                                                }`}
-                                            >
-                                                {student.currentStatus}
-                                            </span>
-                                        </td>
-
-                                        {/* Attendance */}
-                                        <td className='px-4 py-3 text-center'>
-                                            <span
-                                                className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold ${
-                                                    student.attendanceValue >= 90
-                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                        : student.attendanceValue >= 80
-                                                        ? 'bg-amber-50 text-amber-700'
-                                                        : 'bg-rose-50 text-rose-700'
-                                                }`}
-                                            >
-                                                {student.attendancePercentage}
-                                            </span>
-                                        </td>
-
-                                        {/* Action */}
-                                        <td className='px-4 py-3 text-right'>
-                                            <Link
-                                                to={`${routeBase}/view/${student.id}`}
-                                                className='inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer'
-                                            >
-                                                <Eye size={14} />
-                                                View Profile
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))
                             )}
+                            {!loading && filteredRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={12} className='px-2 py-10 text-center text-[#667085]'>
+                                        {rows.length === 0
+                                            ? emptyMessage
+                                            : 'No students match the current filters.'}
+                                    </td>
+                                </tr>
+                            )}
+                            {!loading && pageRows.map((student) => (
+                                <tr key={student.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                    <td className='px-2 py-4 flex justify-center rounded-s-lg'>
+                                        <img src={getStudentProfileImage(student)} alt='' className='w-9 h-9 rounded-full object-cover' />
+                                    </td>
+                                    <td className='px-2 py-4'>{student.admissionNumber}</td>
+                                    <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{student.name}</td>
+                                    <td className='px-2 py-4 whitespace-nowrap'>{classLabel(student)}</td>
+                                    <td className='px-2 py-4'>{student.gender}</td>
+                                    <td className='px-2 py-4'>{student.email}</td>
+                                    <td className='px-2 py-4'>{student.mobileNumber}</td>
+                                    <td className='px-2 py-4'>{student.dateOfBirth}</td>
+                                    <td className='px-2 py-4'>{student.country}</td>
+                                    <td className='px-2 py-4'>{student.state}</td>
+                                    <td className='px-2 py-4'>{student.city}</td>
+                                    <td className='px-2 py-4 text-center rounded-e-lg'>
+                                        <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
+                                            <NavLink to={`${routeBase}/view/${student.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
+                                            {renderExtraActions?.(student)}
+                                        </Dropdown>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
+            </div>
 
-                {/* Table Footer with Pagination */}
-                <div className='flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-200 bg-slate-50'>
-                    <div className='text-xs text-slate-600'>
-                        Showing <span className='font-semibold'>{students.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                        <span className='font-semibold'>{Math.min(currentPage * itemsPerPage, students.length)}</span> of{' '}
-                        <span className='font-semibold'>{students.length}</span> students
-                    </div>
-                    {totalPages > 1 && (
-                        <div className='flex items-center gap-1.5'>
-                            <button
-                                type='button'
-                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className='p-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-                            >
-                                <ChevronLeft size={16} />
-                            </button>
-                            <span className='px-3 py-1 text-xs font-semibold text-slate-700'>
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <button
-                                type='button'
-                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                                className='p-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-                            >
-                                <ChevronRight size={16} />
-                            </button>
-                        </div>
-                    )}
+            <div className='flex justify-between items-center px-4 mt-4'>
+                <p className='text-sm font-medium text-[#515DEF]'>
+                    {loading || filteredRows.length === 0
+                        ? 'Showing 0 entries'
+                        : `Showing ${(currentPage - 1) * PAGE_SIZE + 1} to ${(currentPage - 1) * PAGE_SIZE + pageRows.length} of ${filteredRows.length} entries`}
+                </p>
+                <div className='flex items-center gap-x-2'>
+                    <button
+                        type='button'
+                        aria-label='Previous page'
+                        disabled={currentPage <= 1}
+                        onClick={() => setPage(currentPage - 1)}
+                        className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <span className='text-sm text-[#515DEF]'>{currentPage} / {pageCount}</span>
+                    <button
+                        type='button'
+                        aria-label='Next page'
+                        disabled={currentPage >= pageCount}
+                        onClick={() => setPage(currentPage + 1)}
+                        className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+                    >
+                        <ChevronRight size={16} />
+                    </button>
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='student-database'
+                rows={filteredRows.map((s) => ({
+                    admissionNumber: s.admissionNumber,
+                    name: s.name,
+                    classSection: classLabel(s),
+                    status: s.status,
+                    mobileNumber: s.mobileNumber,
+                    email: s.email,
+                }))}
+                exportDescription={<>You are exporting {filteredRows.length} record{filteredRows.length === 1 ? '' : 's'}.</>}
+            />
         </section>
     )
 }

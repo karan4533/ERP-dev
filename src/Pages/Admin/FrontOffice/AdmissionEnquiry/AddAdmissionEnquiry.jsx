@@ -23,35 +23,52 @@ const AddAdmissionEnquiry = () => {
         nextFollowUpDate: new Date(),
     })
     const [error, setError] = useState('')
+    const [missingFields, setMissingFields] = useState([])
     const [notFound, setNotFound] = useState(false)
 
     useEffect(() => {
         if (!isEdit) return
-        const record = getAdmissionEnquiryById(id)
-        if (!record) {
-            setNotFound(true)
-            return
+        let cancelled = false
+        ;(async () => {
+            const record = await getAdmissionEnquiryById(id)
+            if (cancelled) return
+            if (!record) {
+                setNotFound(true)
+                return
+            }
+            setNotFound(false)
+            setForm(toFormState(record))
+        })()
+        return () => {
+            cancelled = true
         }
-        setNotFound(false)
-        setForm(toFormState(record))
     }, [id, isEdit])
 
     const updateField = (key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }))
+        if (String(value ?? '').trim()) {
+            setMissingFields((prev) => prev.filter((item) => item.field !== key))
+        }
     }
 
     const handleDiscard = () => {
         navigate(listPath)
     }
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setError('')
+        setMissingFields([])
         const result = isEdit
-            ? updateAdmissionEnquiry(id, form)
-            : createAdmissionEnquiry(form)
+            ? await updateAdmissionEnquiry(id, form)
+            : await createAdmissionEnquiry(form)
 
         if (!result.success) {
             setError(result.message)
+            toast.error(result.message)
+            if (result.missing?.length) {
+                setMissingFields(result.missing)
+                document.getElementById(result.missing[0].id)?.focus()
+            }
             return
         }
 
@@ -84,8 +101,18 @@ const AddAdmissionEnquiry = () => {
                     {isEdit
                         ? 'Update enquiry details and save changes.'
                         : 'New enquiries are saved as Active and appear in the Admission Enquiry list.'}
+                    {' '}Fields marked <span className='text-[#F44336]'>*</span> are required.
                 </p>
-                <AdmissionEnquiryInfo form={form} onChange={updateField} />
+                {error && (
+                    <div role='alert' className='bg-[#FEECEC] text-[#B42318] text-sm rounded-xl px-4 py-3 mt-3'>
+                        {error}
+                    </div>
+                )}
+                <AdmissionEnquiryInfo
+                    form={form}
+                    onChange={updateField}
+                    missing={new Set(missingFields.map((item) => item.field))}
+                />
             </div>
 
             {error && <p className='text-sm text-[#F44336] mt-4'>{error}</p>}

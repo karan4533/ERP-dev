@@ -1,7 +1,21 @@
+import {
+    canUseTcApi,
+    createTcRequestApi,
+    decideTcNocApi,
+    decideTcRequestApi,
+    forwardTcRequestApi,
+    getTcRequestApi,
+    listTcRequestsApi,
+    overrideTcNocApi,
+    rejectTcRequestAtPrmApi,
+} from '../../services/tcApi'
+import { dmyToIso, isoToDmy } from '../../services/documentsApi'
+
 const STORAGE_KEY = 'schoolerp-tc-requests'
 
 export const TC_STATUSES = [
     'Pending PRM Review',
+    'Pending Manager NOCs',
     'Pending Super Admin Approval',
     'Approved',
     'Rejected',
@@ -9,9 +23,11 @@ export const TC_STATUSES = [
 
 export const statusBadgeColor = {
     'Pending PRM Review': 'bg-[#FF980033] text-[#FF9800]',
+    'Pending Manager NOCs': 'bg-[#9C27B033] text-[#9C27B0]',
     'Pending Super Admin Approval': 'bg-[#2196F333] text-[#2196F3]',
     Approved: 'bg-[#4CAF5033] text-[#4CAF50]',
     Rejected: 'bg-[#FF000033] text-[#FF0000]',
+    Pending: 'bg-[#FF980033] text-[#FF9800]',
 }
 
 const SEED_REQUESTS = [
@@ -61,73 +77,80 @@ const SEED_REQUESTS = [
     },
 ]
 
-export const DEFAULT_NOC_CLEARANCES = [
-    {
-        departmentKey: 'finance',
-        department: 'Finance & Accounts',
-        manager: 'Ramesh K. (Account Head)',
-        status: 'Cleared',
-        remarks: 'All term fees, exam fees, and annual dues cleared. 0 balance outstanding.',
-        date: '11-06-2026',
-    },
-    {
-        departmentKey: 'library',
-        department: 'Library Information Center',
-        manager: 'Saraswati N. (Librarian)',
-        status: 'Cleared',
-        remarks: 'All borrowed books returned in good condition. 0 library dues.',
-        date: '11-06-2026',
-    },
-    {
-        departmentKey: 'transport',
-        department: 'Transport Logistics',
-        manager: 'Balwant Singh (Transport Manager)',
-        status: 'Cleared',
-        remarks: 'Bus pass returned. Route 12 fleet fees settled.',
-        date: '12-06-2026',
-    },
-    {
-        departmentKey: 'stores',
-        department: 'Stores & Inventory',
-        manager: 'Prakash Rao (Stationery Store Manager)',
-        status: 'Cleared',
-        remarks: 'Science lab kit and sports uniforms accounted for.',
-        date: '12-06-2026',
-    },
-    {
-        departmentKey: 'academics',
-        department: 'Academics & Examination',
-        manager: 'Sunita Sharma (Academic Coordinator)',
-        status: 'Cleared',
-        remarks: 'Cumulative grade sheet signed. Attendance eligibility certified.',
-        date: '12-06-2026',
-    },
-]
+let apiRequests = []
+
+const mapApiRequest = (row) => ({
+    ...row,
+    nocs: Array.isArray(row.nocs) ? row.nocs : [],
+    pendingNocCount: row.pendingNocCount ?? 0,
+    allNocsComplete: Boolean(row.allNocsComplete),
+    overriddenNocCount: row.overriddenNocCount ?? 0,
+    history: Array.isArray(row.history) ? row.history : [],
+    requestedOn: isoToDmy(row.requestedOn) || row.requestedOn,
+    lastDateOfAttendance: isoToDmy(row.lastDateOfAttendance) || row.lastDateOfAttendance || '—',
+    forwardedOn: isoToDmy(row.forwardedOn) || row.forwardedOn,
+    approvedOn: isoToDmy(row.approvedOn) || row.approvedOn,
+    rejectedOn: isoToDmy(row.rejectedOn) || row.rejectedOn,
+    tcIssuedDate: isoToDmy(row.tcIssuedDate) || row.tcIssuedDate,
+    fromApi: true,
+})
+
+export const hydrateTcRequestsFromApi = async () => {
+    apiRequests = (await listTcRequestsApi()).map(mapApiRequest)
+    try {
+        sessionStorage.removeItem(STORAGE_KEY)
+    } catch {
+        /* ignore */
+    }
+    return apiRequests
+}
+
+export const hydrateTcRequestFromApi = async (ref) => {
+    const mapped = mapApiRequest(await getTcRequestApi(ref))
+    apiRequests = apiRequests.some((item) => item.id === mapped.id)
+        ? apiRequests.map((item) => (item.id === mapped.id ? mapped : item))
+        : [mapped, ...apiRequests]
+    return mapped
+}
+
+export const clearTcRequestMemory = () => {
+    apiRequests = []
+}
+
+export const decideTcRequestViaApi = async (ref, decision, remarks) => {
+    const mapped = mapApiRequest(await decideTcRequestApi(ref, decision, remarks))
+    apiRequests = apiRequests.map((item) => (item.id === mapped.id ? mapped : item))
+    return mapped
+}
+
+export const forwardTcRequestViaApi = async (ref, remarks) => {
+    const mapped = mapApiRequest(await forwardTcRequestApi(ref, remarks))
+    apiRequests = apiRequests.map((item) => (item.id === mapped.id ? mapped : item))
+    return mapped
+}
+
+export const rejectTcRequestAtPrmViaApi = async (ref, remarks) => {
+    const mapped = mapApiRequest(await rejectTcRequestAtPrmApi(ref, remarks))
+    apiRequests = apiRequests.map((item) => (item.id === mapped.id ? mapped : item))
+    return mapped
+}
 
 const loadRequests = () => {
+    if (canUseTcApi()) return [...apiRequests]
     try {
         const stored = sessionStorage.getItem(STORAGE_KEY)
         if (stored) {
-            const parsed = JSON.parse(stored)
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed.map((item) => ({
-                    ...item,
-                    nocClearances: item.nocClearances || DEFAULT_NOC_CLEARANCES,
-                }))
-            }
+            return JSON.parse(stored)
         }
     } catch {
         // ignore parse errors
     }
-    const seeded = SEED_REQUESTS.map((item) => ({
-        ...item,
-        nocClearances: DEFAULT_NOC_CLEARANCES,
-    }))
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(seeded))
-    return seeded
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_REQUESTS))
+    return [...SEED_REQUESTS]
 }
 
 const saveRequests = (requests) => {
+    if (canUseTcApi()) return
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(requests))
 }
 
@@ -145,6 +168,25 @@ export const getPendingPrmCount = () =>
 export const getPendingSuperAdminCount = () =>
     loadRequests().filter((request) => request.status === 'Pending Super Admin Approval').length
 
+export const getPendingManagerNocCount = () =>
+    loadRequests().filter((request) => request.status === 'Pending Manager NOCs').length
+
+export const decideTcNocViaApi = async (ref, decision, remarks) => {
+    const mapped = mapApiRequest(await decideTcNocApi(ref, decision, remarks))
+    apiRequests = apiRequests.map((item) => (item.id === mapped.id ? mapped : item))
+    return mapped
+}
+
+/** Roles the backend allows to override a pending manager NOC (reason mandatory). */
+export const TC_NOC_OVERRIDE_ROLES = ['admin', 'superadmin', 'managing_director']
+export const TC_NOC_OVERRIDE_REASON_MIN = 10
+
+export const overrideTcNocViaApi = async (ref, roleCode, reason) => {
+    const mapped = mapApiRequest(await overrideTcNocApi(ref, roleCode, reason))
+    apiRequests = apiRequests.map((item) => (item.id === mapped.id ? mapped : item))
+    return mapped
+}
+
 const formatToday = () => {
     const now = new Date()
     const day = String(now.getDate()).padStart(2, '0')
@@ -158,7 +200,7 @@ const generateRequestId = (requests) => {
     return `TC-REQ-${String(nextNumber).padStart(3, '0')}`
 }
 
-export const createTcRequest = ({
+export const createTcRequest = async ({
     studentId,
     studentName,
     classSection,
@@ -168,19 +210,33 @@ export const createTcRequest = ({
     lastDateOfAttendance,
     requestedBy,
 }) => {
+    if (canUseTcApi()) {
+        const mapped = mapApiRequest(
+            await createTcRequestApi({
+                studentRef: studentId || admissionNumber,
+                reason,
+                transferTo,
+                lastDateOfAttendance: dmyToIso(lastDateOfAttendance) || null,
+                requestedBy: requestedBy || '',
+            }),
+        )
+        apiRequests = [mapped, ...apiRequests.filter((item) => item.id !== mapped.id)]
+        return mapped
+    }
+
     const requests = loadRequests()
     const requestId = generateRequestId(requests)
     const newRequest = {
         id: requestId,
         requestId,
-        studentId: studentId || `STU-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        studentId,
         studentName,
         classSection,
-        admissionNumber: admissionNumber || `ADM-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        admissionNumber,
         reason,
         transferTo,
         lastDateOfAttendance,
-        requestedBy: requestedBy || 'Parent',
+        requestedBy,
         requestedOn: formatToday(),
         status: 'Pending PRM Review',
         prmRemarks: '',
@@ -191,44 +247,10 @@ export const createTcRequest = ({
         tcNumber: '',
         tcIssuedDate: '',
         tcDocumentName: '',
-        nocClearances: DEFAULT_NOC_CLEARANCES.map((c) => ({
-            ...c,
-            status: 'Pending',
-            remarks: 'Awaiting department verification',
-            date: formatToday(),
-        })),
     }
     requests.unshift(newRequest)
     saveRequests(requests)
     return newRequest
-}
-
-export const updateNocClearance = (id, departmentKey, newStatus, remarks = '') => {
-    const requests = loadRequests()
-    const index = requests.findIndex((request) => request.id === id)
-    if (index === -1) return null
-
-    const req = requests[index]
-    const clearances = (req.nocClearances || DEFAULT_NOC_CLEARANCES).map((c) => {
-        if (c.departmentKey === departmentKey) {
-            return {
-                ...c,
-                status: newStatus,
-                remarks: remarks || (newStatus === 'Cleared' ? 'Verified and clearance approved.' : 'Dues or pending documents to be settled.'),
-                date: formatToday(),
-            }
-        }
-        return c
-    })
-
-    const allCleared = clearances.every((c) => c.status === 'Cleared')
-    requests[index] = {
-        ...req,
-        nocClearances: clearances,
-        allClearancesApproved: allCleared,
-    }
-    saveRequests(requests)
-    return requests[index]
 }
 
 export const forwardTcRequestToSuperAdmin = (id, prmRemarks = '') => {

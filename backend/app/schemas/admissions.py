@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -85,8 +86,9 @@ class AdmissionCreate(BaseModel):
     weight: str | None = None
     medical_history: str | None = None
     mode_of_transport: str | None = None
-    route: str | None = None
-    bus_stop: str | None = None
+    # Typed manually on the form; the columns are VARCHAR(80).
+    route: str | None = Field(default=None, max_length=80)
+    bus_stop: str | None = Field(default=None, max_length=80)
     father_name: str | None = None
     mother_name: str | None = None
     father_occupation: str | None = None
@@ -104,12 +106,17 @@ class AdmissionCreate(BaseModel):
     parent_email: str | None = None
     parent_account_email: str | None = None
     parent_account_password: str | None = None
-    # Optional student portal credentials collected on the admission form (hashed on save).
     student_account_email: str | None = None
     student_account_password: str | None = None
     fees_group: str | None = None
     profile_image_file_id: UUID | None = None
     status: str | None = "Active"
+    # Optional referral (record only). Blank referrer name removes any saved referral.
+    referral_type: Literal["Parent", "Staff", "Other"] | None = None
+    referral_name: str | None = Field(default=None, max_length=160)
+    referral_contact: str | None = Field(default=None, max_length=80)
+    referral_student_admission_no: str | None = Field(default=None, max_length=40)
+    referral_notes: str | None = Field(default=None, max_length=1000)
 
 
 class AdmissionOut(BaseModel):
@@ -163,7 +170,15 @@ class AdmissionOut(BaseModel):
     parent_email: str | None = None
     parent_account_email: str | None = None
     student_account_email: str | None = None
+    # Whether a temporary portal password is saved (the hash itself is never returned).
+    has_parent_account_password: bool = False
+    has_student_account_password: bool = False
     fees_group: str | None = None
+    referral_type: str | None = None
+    referral_name: str | None = None
+    referral_contact: str | None = None
+    referral_student_admission_no: str | None = None
+    referral_notes: str | None = None
     status: str
     enrolled_student_id: UUID | None = None
     enrolled_at: datetime | None = None

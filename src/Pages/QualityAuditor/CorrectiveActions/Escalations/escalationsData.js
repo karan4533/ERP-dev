@@ -1,5 +1,6 @@
 import { DEPARTMENTS, PRIORITIES } from '../../Observations/observationsData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, PRIORITIES }
 
 export const ESCALATION_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Resolved', 'Closed']
@@ -57,7 +58,7 @@ const buildEscalation = ({
 const DEFAULT_ESCALATIONS = [
     buildEscalation({
         escalationId: 'ESC-PA-2026-006',
-        observationId: 'OBS-PA-2026-014',
+        observationId: 'OBS-QA-2026-014',
         observationTitle: 'Food storage temperature log missing',
         department: 'Canteen',
         escalatedTo: 'Joint Director Audit',
@@ -69,7 +70,7 @@ const DEFAULT_ESCALATIONS = [
     }),
     buildEscalation({
         escalationId: 'ESC-PA-2026-005',
-        observationId: 'OBS-PA-2026-011',
+        observationId: 'OBS-QA-2026-011',
         observationTitle: 'Fire extinguisher expired on Bus TN-12-AB-4521',
         department: 'Transport',
         escalatedTo: 'Principal',
@@ -81,7 +82,7 @@ const DEFAULT_ESCALATIONS = [
     }),
     buildEscalation({
         escalationId: 'ESC-PA-2026-004',
-        observationId: 'OBS-PA-2026-013',
+        observationId: 'OBS-QA-2026-013',
         observationTitle: 'Petty cash voucher unsigned',
         department: 'Finance',
         escalatedTo: 'Department Head',
@@ -93,7 +94,7 @@ const DEFAULT_ESCALATIONS = [
     }),
     buildEscalation({
         escalationId: 'ESC-PA-2026-003',
-        observationId: 'OBS-PA-2026-012',
+        observationId: 'OBS-QA-2026-012',
         observationTitle: 'Corridor cleaning schedule not displayed',
         department: 'Housekeeping',
         escalatedTo: 'Department Head',
@@ -105,7 +106,7 @@ const DEFAULT_ESCALATIONS = [
     }),
     buildEscalation({
         escalationId: 'ESC-PA-2026-002',
-        observationId: 'OBS-PA-2026-009',
+        observationId: 'OBS-QA-2026-009',
         observationTitle: 'Backup verification log incomplete',
         department: 'IT Support',
         escalatedTo: 'Admin',
@@ -117,7 +118,7 @@ const DEFAULT_ESCALATIONS = [
     }),
     buildEscalation({
         escalationId: 'ESC-PA-2026-001',
-        observationId: 'OBS-PA-2026-007',
+        observationId: 'OBS-QA-2026-007',
         observationTitle: 'Staff hygiene compliance below standard',
         department: 'Canteen',
         escalatedTo: 'Joint Director Audit',
@@ -129,7 +130,7 @@ const DEFAULT_ESCALATIONS = [
     }),
     buildEscalation({
         escalationId: 'ESC-PA-2025-012',
-        observationId: 'OBS-PA-2026-003',
+        observationId: 'OBS-QA-2026-003',
         observationTitle: 'Answer script register incomplete',
         department: 'Academic',
         escalatedTo: 'Principal',
@@ -142,13 +143,13 @@ const DEFAULT_ESCALATIONS = [
 ]
 
 export const saveEscalations = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
 }
 
 export const getEscalations = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+    if (stored) return stored
     } catch {
         /* ignore */
     }
@@ -196,3 +197,6 @@ export const createEscalation = (form) => {
     saveEscalations(next)
     return record
 }
+
+export const hydrateFromApi = (seed = DEFAULT_ESCALATIONS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

@@ -4,16 +4,58 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.passwords import password_policy_message
 from app.core.security import hash_password
-from app.models import Admission, AdmissionEnquiry, Guardian, Role, Student, User
+from app.deps import role_code_for
+from app.models import Admission, AdmissionEnquiry, AdmissionReferral, FinanceRecord, Guardian, Role, Student, User
 from app.schemas.admissions import AdmissionCreate, EnrollAdmissionIn, EnquiryCreate
 from app.services.audit import write_audit
 from app.services.errors import fail
+from app.services.finance import RECEIPT_LEDGER_COLLECTION
+_REJECTED_RECEIPT_STATUSES = {
+    "held",
+    "cancelled",
+    "canceled",
+    "void",
+    "failed",
+    "pending",
+    "pending_clearance",
+    "rejected",
+}
+# Only settled receipts count; anything else (held cheque, pending gateway, unknown) does not.
+_SETTLED_RECEIPT_STATUSES = {"issued", "paid", "cleared", "success", "successful", "completed", "generated", "verified"}
+# Waiving the registration fee is a Finance decision, checked by role code (Admin holds every permission).
+FEE_WAIVER_ROLES = {"accounthead", "financemanager", "superadmin", "managing_director"}
+_FEE_WAIVER_COLLECTION = "admission-fee-waiver"
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _whatsapp_parent(
+    phone: str | None,
+    text: str,
+    *,
+    event_key: str,
+    event: str,
+    template_params: list[str] | None = None,
+) -> None:
+    """Best-effort AskEva/WhatsApp notify. Never raises into the admission flow."""
+    try:
+        from app.services.integrations.notify import notify_event
+
+        notify_event(
+            event_key=event_key,
+            subject="",
+            body=text,
+            phone=phone,
+            event=event,
+            template_params=template_params,
+        )
+    except Exception:
+        pass
 
 
 def _file_url(file_id: UUID | None) -> str | None:
@@ -106,11 +148,68 @@ def admission_to_out(row: Admission) -> dict:
         "has_parent_account_password": bool(row.parent_pending_password_hash),
         "has_student_account_password": bool(row.student_pending_password_hash),
         "fees_group": row.fees_group,
+        **_referral_out(row.referral),
         "status": row.status,
         "enrolled_student_id": row.enrolled_student_id,
         "enrolled_at": row.enrolled_at,
         "created_at": row.created_at,
     }
+
+
+def _referral_out(ref: AdmissionReferral | None) -> dict:
+    return {
+        "referral_type": ref.referrer_type if ref else None,
+        "referral_name": ref.referrer_name if ref else None,
+        "referral_contact": ref.referrer_contact if ref else None,
+        "referral_student_admission_no": ref.referrer_student_admission_no if ref else None,
+        "referral_notes": ref.notes if ref else None,
+    }
+
+
+def _apply_referral(row: Admission, payload: AdmissionCreate) -> None:
+    # Clients that do not send referral fields leave any saved referral untouched.
+    if "referral_name" not in payload.model_fields_set:
+        return
+    name = (payload.referral_name or "").strip()
+    if not name:
+        row.referral = None
+        return
+    clean = lambda value: (value or "").strip() or None  # noqa: E731
+    ref = row.referral or AdmissionReferral(campus_id=row.campus_id)
+    ref.referrer_type = payload.referral_type or "Other"
+    ref.referrer_name = name
+    ref.referrer_contact = clean(payload.referral_contact)
+    ref.referrer_student_admission_no = clean(payload.referral_student_admission_no)
+    ref.notes = clean(payload.referral_notes)
+    ref.updated_at = _utcnow()
+    row.referral = ref
+
+
+def list_referrals(db: Session, actor: User) -> list[dict]:
+    """Referred admissions for the Account Head to apply any bonus manually."""
+    rows = db.scalars(
+        select(AdmissionReferral)
+        .join(Admission, Admission.id == AdmissionReferral.admission_id)
+        .where(AdmissionReferral.campus_id == actor.campus_id)
+        .order_by(AdmissionReferral.created_at.desc())
+    ).all()
+    return [
+        {
+            "id": str(ref.id),
+            "admissionId": str(ref.admission_id),
+            "admissionCode": ref.admission.admission_code,
+            "studentName": _full_name(ref.admission),
+            "className": ref.admission.class_name,
+            "admissionStatus": ref.admission.status,
+            "referrerType": ref.referrer_type,
+            "referrerName": ref.referrer_name,
+            "referrerContact": ref.referrer_contact,
+            "referrerStudentAdmissionNo": ref.referrer_student_admission_no,
+            "notes": ref.notes,
+            "createdAt": ref.created_at.isoformat(),
+        }
+        for ref in rows
+    ]
 
 
 def _code_max_suffix(codes: list[str | None], prefix: str) -> int:
@@ -221,6 +320,23 @@ def create_enquiry(db: Session, actor: User, payload: EnquiryCreate) -> dict:
     )
     db.commit()
     db.refresh(row)
+    try:
+        from app.services.integrations import whatsapp_events as wa
+
+        text, params = wa.enquiry_message(
+            student_name=name,
+            class_name=class_name,
+            enquiry_code=row.enquiry_code or "",
+        )
+        _whatsapp_parent(
+            mobile,
+            text,
+            event_key=f"enquiry-created:{row.id}",
+            event=wa.EVENT_ENQUIRY,
+            template_params=params,
+        )
+    except Exception:
+        pass
     return enquiry_to_out(row)
 
 
@@ -355,6 +471,36 @@ def _store_pending_password(row: Admission, *, field: str, password: str | None,
     setattr(row, field, hash_password(plain))
 
 
+JUNIOR_STUDENT_LOGIN_MESSAGE = (
+    "Student portal login is only for Grade {min_grade} and above. "
+    "Younger children use the parent login; clear the student login fields."
+)
+
+
+def student_login_allowed(class_name: str | None) -> bool:
+    """Pre-primary and grades below the configured minimum use the parent login only."""
+    from app.core.config import settings
+    from app.services.placement import school_grade
+
+    grade = school_grade(class_name)
+    return grade is None or grade >= settings.student_login_min_grade
+
+
+def _reject_junior_student_login(
+    class_name: str | None,
+    email: str | None,
+    password: str | None,
+    *,
+    password_hash: str | None = None,
+) -> None:
+    from app.core.config import settings
+
+    # Match account-creation resolution: plain password OR a saved pending hash counts as login material.
+    if (email or "").strip() or (password or "").strip() or (password_hash or "").strip():
+        if not student_login_allowed(class_name):
+            fail(400, "validation_error", JUNIOR_STUDENT_LOGIN_MESSAGE.format(min_grade=settings.student_login_min_grade))
+
+
 def _apply_admission_fields(row: Admission, payload: AdmissionCreate) -> None:
     data = payload.model_dump(exclude_unset=False)
     skip = {"parent_account_password", "student_account_password"}
@@ -395,6 +541,7 @@ def create_admission(db: Session, actor: User, payload: AdmissionCreate) -> dict
         fail(400, "validation_error", "Mobile number is required.")
     if not class_name:
         fail(400, "validation_error", "Class is required.")
+    _reject_junior_student_login(class_name, payload.student_account_email, payload.student_account_password)
 
     if payload.enquiry_id:
         _get_enquiry(db, actor, payload.enquiry_id)
@@ -405,6 +552,7 @@ def create_admission(db: Session, actor: User, payload: AdmissionCreate) -> dict
         status=payload.status or "Active",
     )
     _apply_admission_fields(row, payload)
+    _apply_referral(row, payload)
     row.first_name = first
     row.mobile_number = mobile
     row.class_name = class_name
@@ -428,6 +576,24 @@ def create_admission(db: Session, actor: User, payload: AdmissionCreate) -> dict
     )
     db.commit()
     db.refresh(row)
+    try:
+        from app.services.integrations import whatsapp_events as wa
+
+        notify_phone = (row.parent_mobile_number or row.mobile_number or mobile or "").strip()
+        text, params = wa.admission_message(
+            student_name=_full_name(row),
+            class_name=class_name,
+            admission_code=row.admission_code or "",
+        )
+        _whatsapp_parent(
+            notify_phone,
+            text,
+            event_key=f"admission-created:{row.id}",
+            event=wa.EVENT_ADMISSION,
+            template_params=params,
+        )
+    except Exception:
+        pass
     return admission_to_out(row)
 
 
@@ -440,7 +606,9 @@ def update_admission(db: Session, actor: User, admission_id: UUID, payload: Admi
     class_name = (payload.class_name or row.class_name or "").strip()
     if not first or not mobile or not class_name:
         fail(400, "validation_error", "First name, mobile number, and class are required.")
+    _reject_junior_student_login(class_name, payload.student_account_email, payload.student_account_password)
     _apply_admission_fields(row, payload)
+    _apply_referral(row, payload)
     row.first_name = first
     row.mobile_number = mobile
     row.class_name = class_name
@@ -478,8 +646,26 @@ def _ensure_portal_user(
     if skip or not email:
         return None, False
     email = email.strip().lower()
+    role = db.scalar(select(Role).where(Role.code == role_code))
+    if role is None:
+        fail(500, "config_error", f"{label} role is not seeded.")
     existing = db.scalar(select(User).where(User.email == email))
     if existing is not None:
+        # Linking a child to a staff (or otherwise non-portal) account would leave the family
+        # without a working login, so the email must already be a login of the same role.
+        if existing.role_id != role.id:
+            fail(
+                409,
+                "email_in_use",
+                f"{email} is already used by another account that is not a {label.lower()} login. "
+                f"Use a different {label.lower()} email.",
+            )
+        if not existing.is_active:
+            fail(
+                409,
+                "account_inactive",
+                f"The {label.lower()} login {email} is deactivated. Reactivate it or use a different email.",
+            )
         return existing, False
 
     resolved_hash = (password_hash or "").strip() or None
@@ -495,9 +681,6 @@ def _ensure_portal_user(
             "validation_error",
             f"{label} password is required. Save it under Account Information on the admission, then enroll.",
         )
-    role = db.scalar(select(Role).where(Role.code == role_code))
-    if role is None:
-        fail(500, "config_error", f"{label} role is not seeded.")
     user = User(
         campus_id=actor.campus_id,
         role_id=role.id,
@@ -553,21 +736,202 @@ def _ensure_student_user(
     )
 
 
+def _registration_fee_required_amount(row: Admission) -> float | None:
+    """Numeric registration fee due; None when the field holds text that is not an amount."""
+    raw = str(row.registration_fees or "").strip()
+    if not raw:
+        return 0.0
+    normalized = raw.replace("₹", "").replace(",", "").replace(" ", "")
+    try:
+        return max(float(normalized), 0.0)
+    except ValueError:
+        return None
+
+
+def _registration_fee_amount_clear(row: Admission) -> bool:
+    # Words like "waived" or "free" typed into the fee field are not a waiver; only a zero amount is.
+    return _registration_fee_required_amount(row) == 0.0
+
+
+def _trusted_receipt_source(source: dict) -> bool:
+    if str(source.get("verifiedBy") or "") != "server":
+        return False
+    channel = str(source.get("channel") or "")
+    if channel == "desk_collection":
+        return True
+    if channel == "online_gateway":
+        # Stub confirmations exist only for local click-through; they are never proof of payment elsewhere.
+        if str(source.get("confirmedVia") or "") == "stub":
+            return bool(settings.is_development or settings.demo_integrations)
+        return True
+    return False
+
+
+def _has_verified_admission_fee_receipt(db: Session, campus_id, row: Admission) -> bool:
+    """Match a server-issued Finance receipt to this admission.
+
+    Only the server receipt ledger is read: the Finance snapshot is editable by Finance data saves, so a
+    receipt there is not proof of payment on its own.
+    """
+    admission_code = (row.admission_code or "").strip().lower()
+    if not admission_code:
+        return False
+    ledger = db.scalars(
+        select(FinanceRecord).where(
+            FinanceRecord.campus_id == campus_id,
+            FinanceRecord.collection == RECEIPT_LEDGER_COLLECTION,
+        )
+    ).all()
+    required = _registration_fee_required_amount(row)
+    paid_total = 0.0
+    for entry in ledger:
+        receipt = dict(entry.body or {})
+        if not _trusted_receipt_source(dict(receipt.get("source") or {})):
+            continue
+        status = str(receipt.get("status") or "").strip().lower().replace(" ", "_")
+        if status in _REJECTED_RECEIPT_STATUSES or status not in _SETTLED_RECEIPT_STATUSES:
+            continue
+        try:
+            amount = float(receipt.get("amountPaid") or 0)
+        except (TypeError, ValueError):
+            continue
+        if amount <= 0:
+            continue
+        heads = " ".join(str(head) for head in (receipt.get("feeHeads") or [])).lower()
+        if "admission" not in heads and "registration" not in heads:
+            continue
+
+        # Ownership by identifier only — a similar student name is never enough.
+        receipt_student_id = str(receipt.get("studentId") or "").strip().lower()
+        receipt_admission = str(receipt.get("admissionNo") or "").strip().lower()
+        if receipt_admission == admission_code or receipt_student_id == admission_code:
+            paid_total += amount
+    if paid_total <= 0:
+        return False
+    # Unparseable fee text cannot be compared; a settled admission receipt for this student is then required.
+    return required is None or paid_total >= required
+
+
+def _finance_fee_waiver(db: Session, campus_id, admission_id) -> FinanceRecord | None:
+    return db.scalar(
+        select(FinanceRecord).where(
+            FinanceRecord.campus_id == campus_id,
+            FinanceRecord.collection == _FEE_WAIVER_COLLECTION,
+            FinanceRecord.public_id == str(admission_id),
+        )
+    )
+
+
+def list_fee_pending_admissions(db: Session, actor: User) -> list[dict]:
+    """Not-yet-enrolled admissions whose registration fee is not cleared — Finance's waiver queue."""
+    if role_code_for(db, actor) not in FEE_WAIVER_ROLES:
+        fail(403, "forbidden", "Only Finance can review registration-fee waivers.")
+    rows = db.scalars(
+        select(Admission)
+        .where(Admission.campus_id == actor.campus_id, Admission.status != "Enrolled")
+        .order_by(Admission.created_at.desc())
+    ).all()
+    out = []
+    for row in rows:
+        if _registration_fee_cleared(db, actor, row):
+            continue
+        out.append(
+            {
+                "id": str(row.id),
+                "admissionCode": row.admission_code,
+                "studentName": _full_name(row),
+                "className": row.class_name,
+                "registrationFees": row.registration_fees or "",
+                "admissionDate": row.admission_date.isoformat() if row.admission_date else "",
+            }
+        )
+    return out
+
+
+def waive_registration_fee(db: Session, actor: User, admission_id: UUID, body: dict) -> dict:
+    """Finance records a registration-fee waiver; the admission form cannot grant one."""
+    code = role_code_for(db, actor)
+    if code not in FEE_WAIVER_ROLES:
+        fail(403, "forbidden", "Only Finance (Account Head / Finance Manager) can waive the registration fee.")
+    row = _get_admission(db, actor, admission_id)
+    if row.status == "Enrolled":
+        fail(409, "already_enrolled", "This admission is already enrolled.")
+    reason = str((body or {}).get("reason") or "").strip()
+    if len(reason) < 3:
+        fail(422, "reason_required", "A reason is required to waive the registration fee.")
+    if len(reason) > 500:
+        fail(422, "reason_too_long", "Reason can be at most 500 characters.")
+    existing = _finance_fee_waiver(db, actor.campus_id, row.id)
+    if existing is not None:
+        return {**dict(existing.body or {}), "idempotent": True}
+    record = {
+        "admissionId": str(row.id),
+        "admissionCode": row.admission_code,
+        "reason": reason,
+        "waivedByUserId": str(actor.id),
+        "waivedByEmail": actor.email or "",
+        "waivedByRole": code,
+        "waivedAt": _utcnow().isoformat(),
+    }
+    db.add(FinanceRecord(campus_id=actor.campus_id, collection=_FEE_WAIVER_COLLECTION, public_id=str(row.id), body=record))
+    write_audit(
+        db,
+        action="ADMISSION_FEE_WAIVED",
+        entity_type="admission",
+        entity_id=str(row.id),
+        actor_id=actor.id,
+        campus_id=actor.campus_id,
+        details=reason,
+    )
+    db.commit()
+    return record
+
+
+def _registration_fee_cleared(db: Session, actor: User, row: Admission) -> bool:
+    """Zero fee, a Finance-recorded waiver, or a settled Finance receipt for this admission.
+
+    The RegFeeStatus token on fees_group (Paid / Waived) is editable by Admissions and is never trusted.
+    """
+    if _registration_fee_amount_clear(row):
+        return True
+    if _finance_fee_waiver(db, actor.campus_id, row.id) is not None:
+        return True
+    return _has_verified_admission_fee_receipt(db, actor.campus_id, row)
+
+
 def enroll_admission(db: Session, actor: User, admission_id: UUID, payload: EnrollAdmissionIn) -> dict:
     row = _get_admission(db, actor, admission_id)
     if row.status == "Enrolled" and row.enrolled_student_id:
         fail(409, "already_enrolled", "This admission is already enrolled.")
+    if not _registration_fee_cleared(db, actor, row):
+        fail(
+            409,
+            "fee_pending",
+            "Registration / admission fee must be zero, waived by Finance, or backed by a settled Finance receipt for this admission before enrolment.",
+        )
 
     parent_email = payload.parent_account_email or row.parent_account_email
     raw_student_email = payload.student_account_email or row.student_account_email
     student_email = (raw_student_email or "").strip().lower() or None
-    has_student_secret = bool(
-        (payload.student_account_password or "").strip()
-        or (row.student_pending_password_hash or "").strip()
+    # Student portal login is optional: create/link only when an email AND a password (or a
+    # pending hash saved on the admission) are available. Email alone must not fail enroll.
+    student_password = (payload.student_account_password or "").strip() or None
+    student_password_hash = (row.student_pending_password_hash or "").strip() or None
+    if not payload.skip_student_account:
+        # Same resolved values as _ensure_student_user below (not payload-only).
+        _reject_junior_student_login(
+            row.class_name,
+            student_email,
+            student_password,
+            password_hash=student_password_hash,
+        )
+    # Older admissions may still carry a student login for a junior class: enrol without it.
+    skip_student = (
+        payload.skip_student_account
+        or not student_login_allowed(row.class_name)
+        or not student_email
+        or not (student_password or student_password_hash)
     )
-    # Student portal login is optional: skip when requested, when no email is set,
-    # or when an email is present without a password/pending hash (do not crash enroll).
-    skip_student = payload.skip_student_account or not student_email or not has_student_secret
     parent_user, parent_created = _ensure_parent_user(
         db,
         actor,
@@ -580,8 +944,8 @@ def enroll_admission(db: Session, actor: User, admission_id: UUID, payload: Enro
         db,
         actor,
         email=student_email,
-        password=payload.student_account_password,
-        password_hash=row.student_pending_password_hash,
+        password=student_password,
+        password_hash=student_password_hash,
         skip=skip_student,
     )
 
@@ -649,6 +1013,23 @@ def enroll_admission(db: Session, actor: User, admission_id: UUID, payload: Enro
     db.commit()
     db.refresh(row)
     db.refresh(student)
+    try:
+        from app.services.integrations import whatsapp_events as wa
+
+        text, params = wa.enrollment_message(
+            student_name=student.full_name,
+            class_name=student.class_name or row.class_name or "",
+            admission_code=row.admission_code or "",
+        )
+        _whatsapp_parent(
+            guardian_phone,
+            text,
+            event_key=f"student-enrolled:{student.id}",
+            event=wa.EVENT_ENROLLMENT,
+            template_params=params,
+        )
+    except Exception:
+        pass
     return {
         "admission": admission_to_out(row),
         "student_id": student.id,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload } from 'lucide-react'
+import FileUploadField from '../../CommonComponents/FileUploadField'
 import {
     ACADEMIC_YEAR_OPTIONS,
     MONTH_OPTIONS,
@@ -9,6 +10,7 @@ import {
     SECTION_OPTIONS,
     SUBJECT_OPTIONS,
 } from '../lessonPlanApprovalData'
+import { canUseLessonPlansApi } from '../../../services/lessonPlansApi'
 import { PLANNING_COLUMNS, emptyPlanningRow } from '../lessonPlanTemplate'
 
 const inputClass = 'text-sm text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-2 w-full bg-white'
@@ -23,6 +25,7 @@ const toDisplayDate = (value) => {
 
 const LessonPlanEntryForm = ({ submitterName, submitterRole, successPath }) => {
     const navigate = useNavigate()
+    const apiMode = canUseLessonPlansApi()
     const [header, setHeader] = useState({
         subject: '',
         className: '',
@@ -36,6 +39,7 @@ const LessonPlanEntryForm = ({ submitterName, submitterRole, successPath }) => {
         chapterName: '',
         attachmentName: '',
     })
+    const [pendingFiles, setPendingFiles] = useState([])
     const [rows, setRows] = useState([emptyPlanningRow()])
     const [summary, setSummary] = useState({
         specialAttention: '',
@@ -53,20 +57,26 @@ const LessonPlanEntryForm = ({ submitterName, submitterRole, successPath }) => {
     const setHeaderField = (key, value) => setHeader((current) => ({ ...current, [key]: value }))
     const updateRow = (id, key, value) => setRows((current) => current.map((row) => (row.id === id ? { ...row, [key]: value } : row)))
 
-    const submit = () => {
+    const submit = async () => {
         if (!header.subject || !header.className || !header.section || !header.academicYear || !header.month || !header.weekNo || !header.fromDate || !header.toDate) return
         if (!rows.length) return
-        addLessonPlan({
-            ...header,
-            ...summary,
-            fromDate: toDisplayDate(header.fromDate),
-            toDate: toDisplayDate(header.toDate),
-            planningRows: rows,
-            attachment: header.attachmentName,
-            submitterName,
-            submitterRole,
-        })
-        navigate(successPath)
+        try {
+            await addLessonPlan({
+                ...header,
+                ...summary,
+                fromDate: toDisplayDate(header.fromDate),
+                toDate: toDisplayDate(header.toDate),
+                planningRows: rows,
+                attachment: apiMode ? (pendingFiles[0]?.name || '') : header.attachmentName,
+                pendingFiles: apiMode ? pendingFiles : [],
+                submitterName,
+                submitterRole,
+            })
+            navigate(successPath)
+        } catch (error) {
+            console.error(error)
+            window.alert(error?.message || 'Could not submit lesson plan.')
+        }
     }
 
     return (
@@ -89,12 +99,26 @@ const LessonPlanEntryForm = ({ submitterName, submitterRole, successPath }) => {
                     <label className='text-sm'>Planning To<input type='date' className={inputClass} value={header.toDate} onChange={(e) => setHeaderField('toDate', e.target.value)} /></label>
                     <label className='text-sm'>Number of Sessions<input className={inputClass} value={header.numberOfSessions} onChange={(e) => setHeaderField('numberOfSessions', e.target.value)} /></label>
                     <label className='text-sm md:col-span-2'>Chapter No. and Name<input className={inputClass} value={header.chapterName} onChange={(e) => setHeaderField('chapterName', e.target.value)} /></label>
-                    <label className='text-sm'>Attachment
-                        <span className='mt-1 flex items-center gap-2 border border-dashed border-[#515DEF] rounded-md px-3 py-2 text-[#515DEF] cursor-pointer'>
-                            <Upload size={16} />{header.attachmentName || 'Choose file'}
-                            <input type='file' className='hidden' onChange={(e) => setHeaderField('attachmentName', e.target.files?.[0]?.name || '')} />
-                        </span>
-                    </label>
+                    {apiMode ? (
+                        <div className='text-sm md:col-span-1'>
+                            <FileUploadField
+                                label='Attachment'
+                                deferred
+                                pendingFiles={pendingFiles}
+                                onPendingChange={setPendingFiles}
+                                multiple={false}
+                                maxFiles={1}
+                                hint='PDF, PNG, JPG, Word or Excel · uploads after draft is created'
+                            />
+                        </div>
+                    ) : (
+                        <label className='text-sm'>Attachment
+                            <span className='mt-1 flex items-center gap-2 border border-dashed border-[#515DEF] rounded-md px-3 py-2 text-[#515DEF] cursor-pointer'>
+                                <Upload size={16} />{header.attachmentName || 'Choose file'}
+                                <input type='file' className='hidden' onChange={(e) => setHeaderField('attachmentName', e.target.files?.[0]?.name || '')} />
+                            </span>
+                        </label>
+                    )}
                 </div>
             </div>
 

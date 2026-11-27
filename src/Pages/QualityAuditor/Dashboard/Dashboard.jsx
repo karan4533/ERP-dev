@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
     LayoutDashboard,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import {
     KPI_CARDS,
+    hydrateAuditorDashboardFromApi,
     MONTHLY_COMPLIANCE_TREND,
     DEPARTMENT_COMPLIANCE,
     OBSERVATION_STATUS,
@@ -42,7 +43,42 @@ const Panel = ({ title, children, className = '' }) => (
     </div>
 )
 
+const EmptyHint = ({ label }) => (
+    <p className='text-sm text-[#667085] py-8 text-center'>{label}</p>
+)
+
 const Dashboard = () => {
+    const [kpiCards, setKpiCards] = useState(KPI_CARDS)
+    const [monthlyTrend, setMonthlyTrend] = useState(MONTHLY_COMPLIANCE_TREND)
+    const [departmentCompliance, setDepartmentCompliance] = useState(DEPARTMENT_COMPLIANCE)
+    const [observationStatus, setObservationStatus] = useState(OBSERVATION_STATUS)
+    const [auditCompletion, setAuditCompletion] = useState(AUDIT_COMPLETION)
+    const [upcomingAudits, setUpcomingAudits] = useState(UPCOMING_AUDITS_CALENDAR)
+    const [recentActivity, setRecentActivity] = useState(RECENT_ACTIVITY)
+
+    useEffect(() => {
+        let active = true
+        hydrateAuditorDashboardFromApi().then((next) => {
+            if (!active || !next) return
+            setKpiCards(next.kpiCards)
+            const panels = next.panels || {}
+            if (panels.monthlyComplianceTrend) setMonthlyTrend(panels.monthlyComplianceTrend)
+            if (panels.departmentCompliance) setDepartmentCompliance(panels.departmentCompliance)
+            if (panels.observationStatus) setObservationStatus(panels.observationStatus)
+            if (panels.auditCompletion) setAuditCompletion(panels.auditCompletion)
+            if (panels.upcomingAuditsCalendar) setUpcomingAudits(panels.upcomingAuditsCalendar)
+            if (panels.recentActivity) setRecentActivity(panels.recentActivity)
+        })
+        return () => { active = false }
+    }, [])
+
+    const yMin = useMemo(() => {
+        const values = monthlyTrend.values || []
+        const positive = values.filter((v) => Number(v) > 0)
+        if (!positive.length) return 0
+        return Math.max(0, Math.min(...positive) - 5)
+    }, [monthlyTrend])
+
     const monthlyComplianceOption = useMemo(() => ({
         tooltip: {
             trigger: 'axis',
@@ -51,13 +87,13 @@ const Dashboard = () => {
         grid: { left: 48, right: 24, top: 24, bottom: 32 },
         xAxis: {
             type: 'category',
-            data: MONTHLY_COMPLIANCE_TREND.labels,
+            data: monthlyTrend.labels,
             axisLine: { lineStyle: { color: '#E0E0E0' } },
             axisLabel: { color: '#667085', fontSize: 11 },
         },
         yAxis: {
             type: 'value',
-            min: 80,
+            min: yMin,
             max: 100,
             axisLabel: { color: '#667085', fontSize: 11, formatter: '{value}%' },
             splitLine: { lineStyle: { color: '#F2F4F7' } },
@@ -66,7 +102,7 @@ const Dashboard = () => {
             name: 'Compliance',
             type: 'line',
             smooth: true,
-            data: MONTHLY_COMPLIANCE_TREND.values,
+            data: monthlyTrend.values,
             areaStyle: { color: 'rgba(81, 93, 239, 0.12)' },
             lineStyle: { color: CHART_COLORS.primary, width: 2 },
             itemStyle: { color: CHART_COLORS.primary },
@@ -80,7 +116,7 @@ const Dashboard = () => {
                 fontSize: 11,
             },
         }],
-    }), [])
+    }), [monthlyTrend, yMin])
 
     const departmentComplianceOption = useMemo(() => ({
         tooltip: {
@@ -91,7 +127,7 @@ const Dashboard = () => {
         grid: { left: 48, right: 24, top: 16, bottom: 48 },
         xAxis: {
             type: 'category',
-            data: DEPARTMENT_COMPLIANCE.map((item) => item.department),
+            data: departmentCompliance.map((item) => item.department),
             axisLabel: { color: '#667085', fontSize: 10, rotate: 30 },
             axisLine: { lineStyle: { color: '#E0E0E0' } },
         },
@@ -103,7 +139,7 @@ const Dashboard = () => {
         },
         series: [{
             type: 'bar',
-            data: DEPARTMENT_COMPLIANCE.map((item) => item.compliance),
+            data: departmentCompliance.map((item) => item.compliance),
             barWidth: 28,
             itemStyle: {
                 color: CHART_COLORS.primary,
@@ -117,7 +153,7 @@ const Dashboard = () => {
                 fontSize: 10,
             },
         }],
-    }), [])
+    }), [departmentCompliance])
 
     const observationStatusOption = useMemo(() => ({
         tooltip: {
@@ -140,13 +176,13 @@ const Dashboard = () => {
             emphasis: {
                 label: { show: true, fontSize: 12, fontWeight: 'bold' },
             },
-            data: OBSERVATION_STATUS.map((item, index) => ({
+            data: observationStatus.map((item, index) => ({
                 name: item.name,
                 value: item.value,
                 itemStyle: { color: CHART_COLORS.pie[index % CHART_COLORS.pie.length] },
             })),
         }],
-    }), [])
+    }), [observationStatus])
 
     const auditCompletionOption = useMemo(() => ({
         series: [{
@@ -189,11 +225,11 @@ const Dashboard = () => {
                 formatter: '{value}%',
             },
             data: [{
-                value: AUDIT_COMPLETION.percentage,
-                name: `${AUDIT_COMPLETION.completed} of ${AUDIT_COMPLETION.total} audits`,
+                value: auditCompletion.percentage,
+                name: `${auditCompletion.completed} of ${auditCompletion.total} audits`,
             }],
         }],
-    }), [])
+    }), [auditCompletion])
 
     return (
         <section className='space-y-6'>
@@ -212,7 +248,7 @@ const Dashboard = () => {
             </div>
 
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                {KPI_CARDS.map((card) => {
+                {kpiCards.map((card) => {
                     const Icon = KPI_ICONS[card.label] ?? ClipboardList
                     return (
                         <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
@@ -236,7 +272,11 @@ const Dashboard = () => {
                     <ReactECharts option={monthlyComplianceOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
                 </Panel>
                 <Panel title='Department-wise Compliance'>
-                    <ReactECharts option={departmentComplianceOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
+                    {departmentCompliance.length ? (
+                        <ReactECharts option={departmentComplianceOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
+                    ) : (
+                        <EmptyHint label='No department compliance data yet.' />
+                    )}
                 </Panel>
                 <Panel title='Observation Status'>
                     <ReactECharts option={observationStatusOption} style={{ height: 300 }} opts={{ renderer: 'svg' }} />
@@ -253,7 +293,10 @@ const Dashboard = () => {
                         <h3 className='text-lg font-semibold text-black'>Upcoming Audits Calendar</h3>
                     </div>
                     <div className='space-y-3'>
-                        {UPCOMING_AUDITS_CALENDAR.map((item) => (
+                        {upcomingAudits.length === 0 && (
+                            <EmptyHint label='No upcoming audits scheduled.' />
+                        )}
+                        {upcomingAudits.map((item) => (
                             <div
                                 key={item.auditId}
                                 className='flex gap-4 p-3 rounded-xl border border-[#f2f4f7] hover:bg-[#f9f9ff] transition-colors'
@@ -261,7 +304,7 @@ const Dashboard = () => {
                                 <div className='shrink-0 text-center min-w-[52px] px-2 py-1.5 rounded-lg bg-[#515DEF]/10'>
                                     <p className='text-xs font-medium text-[#515DEF]'>{item.day}</p>
                                     <p className='text-sm font-semibold text-[#1E1E1E] mt-0.5'>{item.date.split('-')[0]}</p>
-                                    <p className='text-[10px] text-[#667085]'>Jun</p>
+                                    <p className='text-[10px] text-[#667085]'>{item.month || ''}</p>
                                 </div>
                                 <div className='min-w-0 flex-1'>
                                     <p className='text-sm font-semibold text-[#1E1E1E]'>{item.auditType}</p>
@@ -278,17 +321,20 @@ const Dashboard = () => {
                 <div className='bg-white rounded-2xl shadow-md p-4 h-full'>
                     <h3 className='text-lg font-semibold text-black mb-4'>Recent Activity</h3>
                     <div className='space-y-4'>
-                        {RECENT_ACTIVITY.map((item, index) => (
+                        {recentActivity.length === 0 && (
+                            <EmptyHint label='No recent activity yet.' />
+                        )}
+                        {recentActivity.map((item, index) => (
                             <div key={item.id} className='flex gap-3'>
                                 <div className='flex flex-col items-center shrink-0'>
                                     <div className='size-2.5 rounded-full bg-[#515DEF] mt-1.5' />
-                                    {index < RECENT_ACTIVITY.length - 1 && (
+                                    {index < recentActivity.length - 1 && (
                                         <div className='w-px flex-1 bg-[#E0E0E0] mt-1 min-h-[40px]' />
                                     )}
                                 </div>
                                 <div className='pb-2 min-w-0 flex-1'>
                                     <div className='flex flex-wrap items-center gap-2 mb-1'>
-                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold whitespace-nowrap ${activityTypeBadgeColor[item.type]}`}>
+                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold whitespace-nowrap ${activityTypeBadgeColor[item.type] || 'bg-[#66708533] text-[#667085]'}`}>
                                             {item.type}
                                         </span>
                                         <span className='text-xs text-[#808080]'>{item.date} · {item.time}</span>

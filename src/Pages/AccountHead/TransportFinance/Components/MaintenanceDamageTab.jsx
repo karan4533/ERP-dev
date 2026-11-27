@@ -1,55 +1,206 @@
-import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
-import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Download, Plus, Search } from 'lucide-react'
 import {
     DAMAGE_BREAKDOWN,
     MAINTENANCE_RECORDS,
     MAINTENANCE_SPEND,
     MAINTENANCE_SUMMARY,
+    maintenanceStatusBadgeColor,
+    maintenanceTypeBadgeColor,
 } from '../transportFinanceData'
-import { Panel, SummaryCards } from './TransportShared'
+import {
+    Panel,
+    SummaryCards,
+    TableCard,
+    TablePagination,
+    tdClass,
+    thClass,
+} from './TransportShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency } from '../../financeDomain/financeHelpers'
+import {
+    getServiceExpenses,
+    hydrateTransportExpensesFromApi,
+} from '../../../TransportManager/TransportExpenses/transportExpensesData'
+import { mapServiceExpensesToFinanceRows } from '../../../TransportManager/RequestApprovals/transportApprovalFinanceBridge'
 
-const TYPE_FILTERS = ['All types', 'Routine', 'Repair', 'Damage', 'Interior']
-const STATUS_FILTERS = ['All statuses', 'Completed', 'In Progress', 'Pending Approval']
+const MaintenanceDamageTab = ({ onLogDamage }) => {
+    const { financePersistence, transportMaintenance, syncTransportOpsIntoFinance } = useFinance()
+    const apiLive = Boolean(financePersistence?.apiEnabled)
+    const [opsServiceRows, setOpsServiceRows] = useState(() => mapServiceExpensesToFinanceRows(getServiceExpenses()))
 
-const MaintenanceDamageTab = ({ maintenanceRecords = MAINTENANCE_RECORDS, onLogDamage }) => {
-    const [query, setQuery] = useState('')
-    const [type, setType] = useState(TYPE_FILTERS[0])
-    const [status, setStatus] = useState(STATUS_FILTERS[0])
-    const rows = useMemo(() => maintenanceRecords.filter((row) => {
-        if (type !== TYPE_FILTERS[0] && row.type !== type) return false
-        if (status !== STATUS_FILTERS[0] && row.status !== status) return false
-        const normalizedQuery = query.trim().toLowerCase()
-        if (!normalizedQuery) return true
-        return [row.vehicle, row.description, row.vendor, row.cost, row.status].join(' ').toLowerCase().includes(normalizedQuery)
-    }), [maintenanceRecords, query, status, type])
-    const columns = [
-        { key: 'vehicle', label: 'Vehicle', required: true, render: (row) => <span className='font-mono text-xs font-semibold'>{row.vehicle}</span> },
-        { key: 'date', label: 'Date' },
-        { key: 'description', label: 'Description', required: true },
-        { key: 'type', label: 'Type' },
-        { key: 'vendor', label: 'Vendor / garage' },
-        { key: 'cost', label: 'Cost', render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{row.cost}</span> },
-        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    ]
+    useEffect(() => {
+        hydrateTransportExpensesFromApi().finally(() => {
+            setOpsServiceRows(mapServiceExpensesToFinanceRows(getServiceExpenses()))
+        })
+        syncTransportOpsIntoFinance?.().catch(() => {})
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount sync
+    }, [])
+
+    const records = useMemo(() => {
+        const snapshot = transportMaintenance?.length
+            ? transportMaintenance
+            : (apiLive ? [] : MAINTENANCE_RECORDS)
+        const byId = new Map()
+        ;[...opsServiceRows, ...snapshot].forEach((row) => {
+            const key = row.linkedRequestId || row.id
+            if (!byId.has(key)) byId.set(key, row)
+        })
+        return [...byId.values()]
+    }, [apiLive, opsServiceRows, transportMaintenance])
+
+    const summary = useMemo(() => {
+        const total = records.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+        const damage = records.filter((row) => /damage/i.test(row.type || '')).length
+        const vehicles = new Set(records.map((row) => row.vehicle).filter(Boolean)).size
+        return [
+            { label: 'Records on snapshot', value: String(records.length), sub: apiLive ? 'transportMaintenance' : 'Local + snapshot', iconTone: 'info' },
+            { label: 'Logged spend', value: formatCurrency(total), sub: 'Sum of costs', iconTone: 'success' },
+            { label: 'Damage rows', value: String(damage), sub: 'Type = Damage', iconTone: 'warning' },
+            { label: 'Vehicles tracked', value: String(vehicles), sub: 'Distinct reg. nos', iconTone: 'info' },
+        ]
+    }, [apiLive, records])
+
+    const spendByVehicle = useMemo(() => {
+        const map = new Map()
+        records.forEach((row) => {
+            const key = row.vehicle || '—'
+            map.set(key, (map.get(key) || 0) + (Number(row.amount) || 0))
+        })
+        const rows = [...map.entries()].map(([vehicle, amount]) => ({ vehicle, amount, value: amount }))
+        const max = Math.max(...rows.map((row) => row.amount), 1)
+        return rows.map((row) => ({
+            ...row,
+            amount: formatCurrency(row.amount),
+            value: Math.round((row.value / max) * 100),
+            warn: row.value === max && rows.length > 1,
+        }))
+    }, [records])
 
     return (
-        <div className='space-y-5'>
-            <IntegrationNotice state='demo' title='Sample maintenance evidence' description='Charts and seed records are reference data. New records are session-only drafts and do not post expenses, upload evidence or enter an approval queue.' />
-            <SummaryCards cards={MAINTENANCE_SUMMARY} />
-            <div className='grid grid-cols-1 gap-5 lg:grid-cols-2'>
-                <Panel title='Maintenance spend by vehicle' action={<button type='button' disabled title='Full reporting requires the transport reporting API.' className='text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Report unavailable</button>}>
-                    <div className='space-y-4'>{MAINTENANCE_SPEND.map((item) => <div key={item.vehicle}><div className='mb-1.5 flex items-center justify-between text-sm'><span className='text-[var(--erp-slate)]'>{item.vehicle}</span><span className='font-semibold text-[var(--erp-ink)]'>{item.amount}</span></div><div className='h-2 overflow-hidden rounded-full bg-[var(--erp-line)]'><div className={`h-full rounded-full ${item.warn ? 'bg-[var(--erp-red)]' : 'bg-[var(--erp-indigo)]'}`} style={{ width: `${item.value}%` }} /></div></div>)}</div>
+        <div className='space-y-6'>
+            {apiLive ? (
+                <p className='text-sm text-[#667085] bg-[#F8FAFC] border border-[#E4E7EC] rounded-xl px-4 py-3'>
+                    Maintenance & damage rows persist on campus finance snapshot (`transportMaintenance`) and post cash expense lines to Day Book / GL.
+                </p>
+            ) : (
+                <p className='text-sm text-[#B8860B] bg-[#FFF8E7] border border-[#F5E6B8] rounded-xl px-4 py-3'>
+                    OFFLINE DEMO — seed rows show until you log live maintenance records.
+                </p>
+            )}
+            <SummaryCards cards={apiLive || records.length ? summary : MAINTENANCE_SUMMARY} />
+
+            {!apiLive && !transportMaintenance?.length && (
+                <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                    <Panel title='Maintenance spend by vehicle'>
+                        <div className='space-y-4'>
+                            {MAINTENANCE_SPEND.map((item) => (
+                                <div key={item.vehicle}>
+                                    <div className='flex items-center justify-between text-sm mb-1.5'>
+                                        <span className='text-[#667085]'>{item.vehicle}</span>
+                                        <span className='font-semibold text-[#1E1E1E]'>{item.amount}</span>
+                                    </div>
+                                    <div className='h-2 rounded-full bg-[#EDEEF5] overflow-hidden'>
+                                        <div
+                                            className={`h-full rounded-full ${item.warn ? 'bg-[#FF5722]' : 'bg-[#515DEF]'}`}
+                                            style={{ width: `${item.value}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Panel>
+                    <Panel title='Damage breakdown'>
+                        <div className='space-y-3'>
+                            {DAMAGE_BREAKDOWN.map((item) => (
+                                <div key={item.label} className='flex items-center justify-between text-sm'>
+                                    <span className='text-[#667085]'>{item.label}</span>
+                                    <span className='font-semibold text-[#1E1E1E]'>{item.amount}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </Panel>
+                </div>
+            )}
+
+            {spendByVehicle.length > 0 && (
+                <Panel title='Maintenance spend by vehicle (snapshot)'>
+                    <div className='space-y-4'>
+                        {spendByVehicle.map((item) => (
+                            <div key={item.vehicle}>
+                                <div className='flex items-center justify-between text-sm mb-1.5'>
+                                    <span className='text-[#667085]'>{item.vehicle}</span>
+                                    <span className='font-semibold text-[#1E1E1E]'>{item.amount}</span>
+                                </div>
+                                <div className='h-2 rounded-full bg-[#EDEEF5] overflow-hidden'>
+                                    <div
+                                        className={`h-full rounded-full ${item.warn ? 'bg-[#FF5722]' : 'bg-[#515DEF]'}`}
+                                        style={{ width: `${item.value}%` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </Panel>
-                <Panel title='Damage report breakdown'>
-                    <div className='space-y-3'>{DAMAGE_BREAKDOWN.map((item) => <div key={item.label} className='flex items-center justify-between gap-3 text-sm'><span className='text-[var(--erp-slate)]'>{item.label}</span><span className='font-semibold text-[var(--erp-ink)]'>{item.amount} <span className='font-normal text-[var(--erp-muted)]'>({item.cases} cases)</span></span></div>)}</div>
-                </Panel>
-            </div>
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='maintenance-register-title'>
-                <div className='flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5'><div><h3 id='maintenance-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>Maintenance & damage register</h3><p className='mt-1 text-sm text-[var(--erp-slate)]'>Review service evidence and approval state.</p></div><button type='button' onClick={onLogDamage} className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'><Plus aria-hidden='true' size={16} /> Add local record</button></div>
-                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search maintenance records' searchPlaceholder='Vehicle, vendor or description…' resultCount={rows.length} onReset={() => { setQuery(''); setType(TYPE_FILTERS[0]); setStatus(STATUS_FILTERS[0]) }} filters={<><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Type<select value={type} onChange={(event) => setType(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{TYPE_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status<select value={status} onChange={(event) => setStatus(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{STATUS_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label></>} />
-                <DataTable caption='Maintenance and damage register' rows={rows} columns={columns} rowKey='id' emptyTitle='No maintenance records found' emptyDescription='Reset the filters to review available records.' renderActions={() => <button type='button' disabled title='Record detail and approval require the connected transport API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Review unavailable</button>} />
-            </section>
+            )}
+
+            <TableCard
+                title='Maintenance & damage records'
+                filters={(
+                    <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
+                        <div className='relative min-w-[160px]'>
+                            <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
+                            <input type='text' placeholder='Search vehicle...' className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2' />
+                        </div>
+                        <button
+                            type='button'
+                            onClick={onLogDamage}
+                            className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer'
+                        >
+                            <Plus size={16} />
+                            Log damage
+                        </button>
+                        <button type='button' className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md cursor-pointer'>
+                            <Download size={16} />
+                            Export
+                        </button>
+                    </div>
+                )}
+                footer={<TablePagination summary={`${records.length} records`} />}
+            >
+                <table className='w-full text-sm text-left mt-4'>
+                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                        <tr>
+                            <th className={`${thClass} rounded-s-lg`}>Vehicle</th>
+                            <th className={thClass}>Type</th>
+                            <th className={thClass}>Date</th>
+                            <th className={thClass}>Status</th>
+                            <th className={`${thClass} rounded-e-lg`}>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {records.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className={`${tdClass} text-[#667085]`}>
+                                    No maintenance records yet. Use Log damage to write to the finance API.
+                                </td>
+                            </tr>
+                        ) : records.map((row) => (
+                            <tr key={row.id} className='border-b border-[#f2f4f7]'>
+                                <td className={`${tdClass} rounded-s-lg`}>{row.vehicle}</td>
+                                <td className={tdClass}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${maintenanceTypeBadgeColor[row.type] || ''}`}>{row.type}</span>
+                                </td>
+                                <td className={tdClass}>{row.date || '—'}</td>
+                                <td className={tdClass}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${maintenanceStatusBadgeColor[row.status] || 'bg-[#515DEF33] text-[#515DEF]'}`}>{row.status}</span>
+                                </td>
+                                <td className={`${tdClass} rounded-e-lg font-semibold`}>{row.cost || formatCurrency(row.amount)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </TableCard>
         </div>
     )
 }

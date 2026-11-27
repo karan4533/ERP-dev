@@ -1,10 +1,13 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import StarRatingInput from './Components/StarRatingInput'
 import {
     ACADEMIC_YEAR_MONTHS,
+    ACADEMIC_YEARS,
     EMPLOYEE_TYPE_OPTIONS,
     RATING_CATEGORY,
+    addSomRating,
     getEmployeesByType,
 } from './starRatingsData'
 
@@ -31,6 +34,25 @@ const AddRatings = () => {
     }
 
     const handleSave = () => {
+        if (!selectedEmployee) {
+            toast.error('Select an employee.')
+            return
+        }
+        if (!rating || rating < 1) {
+            toast.error('Choose a 1–3 star rating.')
+            return
+        }
+        const row = addSomRating({
+            month,
+            academicYear: ACADEMIC_YEARS[0],
+            employeeType,
+            employeeId: selectedEmployee.id,
+            employeeName: selectedEmployee.name,
+            department: selectedEmployee.department,
+            rating,
+            description,
+        })
+        toast.success(`Saved ${row.ratingId} for ${row.employeeName} (${row.month}).`)
         navigate('/director/star-ratings/star-of-month')
     }
 

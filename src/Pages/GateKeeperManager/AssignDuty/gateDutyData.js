@@ -45,10 +45,13 @@ export function hydrateGateDutyAssignmentsFromApi() {
 export async function upsertGateDutyAssignment(payload) {
     const rows = getGateDutyAssignments()
     const id = String(payload.id || payload.dutyId || `DUT-${Date.now()}`).trim()
+    const assigneeEmail = String(payload.assigneeEmail || payload.email || '').trim().toLowerCase()
     const record = {
         ...payload,
         id,
         dutyId: payload.dutyId || id,
+        assigneeEmail,
+        email: assigneeEmail,
         status: payload.status || 'Assigned',
         assignedBy: payload.assignedBy || 'Gate Keeper Manager',
     }
@@ -60,15 +63,19 @@ export async function upsertGateDutyAssignment(payload) {
     return { ...result, record }
 }
 
-/** Duties visible to a signed-in gate keeper (match name or employee id when known). */
-export function getMyGateDuties({ gateKeeperName = '', employeeId = '' } = {}) {
+/** Duties visible to a signed-in gate keeper (prefer email; name is fallback for offline demo). */
+export function getMyGateDuties({ gateKeeperName = '', employeeId = '', email = '' } = {}) {
     const rows = getGateDutyAssignments()
     const name = String(gateKeeperName || '').trim().toLowerCase()
-    const emp = String(employeeId || '').trim().toLowerCase()
-    if (!name && !emp) return rows
+    const emp = String(employeeId || email || '').trim().toLowerCase()
+    const mail = String(email || employeeId || '').trim().toLowerCase()
+    if (!name && !emp && !mail) return []
     return rows.filter((row) => {
         const rowName = String(row.gateKeeperName || '').trim().toLowerCase()
         const rowEmp = String(row.employeeId || '').trim().toLowerCase()
-        return (name && rowName === name) || (emp && rowEmp === emp) || (!name && !emp)
+        const rowMail = String(row.assigneeEmail || row.email || '').trim().toLowerCase()
+        return (mail && (rowMail === mail || rowEmp === mail))
+            || (emp && (rowEmp === emp || rowMail === emp))
+            || (name && rowName === name)
     })
 }

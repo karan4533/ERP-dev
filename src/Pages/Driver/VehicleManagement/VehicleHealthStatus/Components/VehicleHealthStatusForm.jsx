@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar } from 'lucide-react'
 import {
     CONDITION_OPTIONS,
     FUEL_LEVEL_OPTIONS,
-    VEHICLE_NUMBERS,
 } from '../vehicleHealthStatusData'
 
 const inputClass =
@@ -21,9 +20,37 @@ const parseDate = (value) => {
     return new Date(year, month - 1, day)
 }
 
-const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
+const formatDate = (date) => {
+    if (!date) return ''
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    return `${day}-${month}-${date.getFullYear()}`
+}
+
+const VehicleHealthStatusForm = ({ record, readOnly = false, onChange }) => {
     const [lastServiceDate, setLastServiceDate] = useState(() => parseDate(record?.lastServiceDate))
     const [nextServiceDate, setNextServiceDate] = useState(() => parseDate(record?.nextServiceDate))
+    const [vehicleNumber, setVehicleNumber] = useState(record?.vehicleNumber || '')
+    const [odometerReading, setOdometerReading] = useState(record?.odometerReading || '')
+    const [fuelLevel, setFuelLevel] = useState(record?.fuelLevel || '')
+    const [tyreCondition, setTyreCondition] = useState(record?.tyreCondition || '')
+    const [batteryStatus, setBatteryStatus] = useState(record?.batteryStatus || '')
+    const [engineStatus, setEngineStatus] = useState(record?.engineStatus || '')
+    const [remarks, setRemarks] = useState(record?.remarks || '')
+
+    useEffect(() => {
+        onChange?.({
+            vehicleNumber,
+            lastServiceDate: formatDate(lastServiceDate),
+            nextServiceDate: formatDate(nextServiceDate),
+            odometerReading,
+            fuelLevel,
+            tyreCondition,
+            batteryStatus,
+            engineStatus,
+            remarks,
+        })
+    }, [onChange, vehicleNumber, lastServiceDate, nextServiceDate, odometerReading, fuelLevel, tyreCondition, batteryStatus, engineStatus, remarks])
 
     const renderField = (label, content) => (
         <div className='flex flex-col gap-y-2'>
@@ -52,12 +79,13 @@ const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:mt-8 mt-2'>
             {renderField(
                 'Vehicle Number:',
-                <select defaultValue={record?.vehicleNumber ?? ''} className={selectClass}>
-                    <option value=''>--Select--</option>
-                    {VEHICLE_NUMBERS.map((number) => (
-                        <option key={number} value={number}>{number}</option>
-                    ))}
-                </select>,
+                <input
+                    type='text'
+                    value={vehicleNumber}
+                    onChange={(event) => setVehicleNumber(event.target.value)}
+                    placeholder='Assigned vehicle number'
+                    className={inputClass}
+                />,
             )}
             {renderField(
                 'Last Service Date:',
@@ -91,14 +119,15 @@ const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
                 'Odometer Reading:',
                 <input
                     type='text'
-                    defaultValue={record?.odometerReading ?? ''}
+                    value={odometerReading}
+                    onChange={(event) => setOdometerReading(event.target.value)}
                     placeholder='e.g. 45,250 KM'
                     className={inputClass}
                 />,
             )}
             {renderField(
                 'Fuel Level:',
-                <select defaultValue={record?.fuelLevel ?? ''} className={selectClass}>
+                <select value={fuelLevel} onChange={(event) => setFuelLevel(event.target.value)} className={selectClass}>
                     <option value=''>--Select--</option>
                     {FUEL_LEVEL_OPTIONS.map((level) => (
                         <option key={level} value={level}>{level}</option>
@@ -107,7 +136,7 @@ const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
             )}
             {renderField(
                 'Tyre Condition:',
-                <select defaultValue={record?.tyreCondition ?? ''} className={selectClass}>
+                <select value={tyreCondition} onChange={(event) => setTyreCondition(event.target.value)} className={selectClass}>
                     <option value=''>--Select--</option>
                     {CONDITION_OPTIONS.map((option) => (
                         <option key={option} value={option}>{option}</option>
@@ -116,7 +145,7 @@ const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
             )}
             {renderField(
                 'Battery Status:',
-                <select defaultValue={record?.batteryStatus ?? ''} className={selectClass}>
+                <select value={batteryStatus} onChange={(event) => setBatteryStatus(event.target.value)} className={selectClass}>
                     <option value=''>--Select--</option>
                     {CONDITION_OPTIONS.map((option) => (
                         <option key={option} value={option}>{option}</option>
@@ -125,7 +154,7 @@ const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
             )}
             {renderField(
                 'Engine Status:',
-                <select defaultValue={record?.engineStatus ?? ''} className={selectClass}>
+                <select value={engineStatus} onChange={(event) => setEngineStatus(event.target.value)} className={selectClass}>
                     <option value=''>--Select--</option>
                     {CONDITION_OPTIONS.map((option) => (
                         <option key={option} value={option}>{option}</option>
@@ -136,7 +165,8 @@ const VehicleHealthStatusForm = ({ record, readOnly = false }) => {
                 'Remarks:',
                 <input
                     type='text'
-                    defaultValue={record?.remarks ?? ''}
+                    value={remarks}
+                    onChange={(event) => setRemarks(event.target.value)}
                     placeholder='Enter remarks'
                     className={inputClass}
                 />,

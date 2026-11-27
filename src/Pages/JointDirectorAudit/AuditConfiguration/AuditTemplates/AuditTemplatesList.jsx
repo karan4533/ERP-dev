@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     Archive,
     ChevronLeft,
@@ -13,9 +13,12 @@ import {
 } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import { filterListRows } from '../../../../Common/listFiltering'
 import AuditTemplateFormModal from './AuditTemplateFormModal'
 import {
-    AUDIT_TEMPLATES,
+    getAuditTemplates,
+    hydrateAuditTemplatesFromApi,
+    saveAuditTemplates,
     TEMPLATE_AUDIT_CATEGORIES,
     TEMPLATE_DEPARTMENTS,
     TEMPLATE_STATUS_OPTIONS,
@@ -29,7 +32,19 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const AuditTemplatesList = () => {
-    const [templates, setTemplates] = useState(AUDIT_TEMPLATES)
+    const [templates, setTemplates] = useState(() => getAuditTemplates())
+
+    useEffect(() => {
+        hydrateAuditTemplatesFromApi().finally(() => setTemplates(getAuditTemplates()))
+    }, [])
+
+    const commitTemplates = (updater) => {
+        setTemplates((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater
+            saveAuditTemplates(next)
+            return next
+        })
+    }
     const [search, setSearch] = useState('')
     const [department, setDepartment] = useState('')
     const [auditType, setAuditType] = useState('')
@@ -38,18 +53,19 @@ const AuditTemplatesList = () => {
     const [exportModal, setExportModal] = useState(false)
     const [formModal, setFormModal] = useState({ open: false, mode: 'create', template: null, templateId: null })
 
-    const filteredTemplates = useMemo(() => templates.filter((template) => {
-        const searchValue = search.trim().toLowerCase()
-        const matchesSearch = !searchValue
-            || template.id.toLowerCase().includes(searchValue)
-            || template.templateName.toLowerCase().includes(searchValue)
-        const matchesDepartment = !department || template.department === department
-        const matchesAuditType = !auditType || template.auditCategory === auditType
-        const matchesStatus = !status || template.status === status
-        const matchesVersion = !version || version === 'All Versions' || template.version === version
-
-        return matchesSearch && matchesDepartment && matchesAuditType && matchesStatus && matchesVersion
-    }), [templates, search, department, auditType, status, version])
+    const filteredTemplates = useMemo(
+        () => filterListRows(templates, {
+            search,
+            searchKeys: ['id', 'templateName'],
+            equals: {
+                department,
+                auditCategory: auditType,
+                status,
+                version: version === 'All Versions' ? '' : version,
+            },
+        }),
+        [templates, search, department, auditType, status, version],
+    )
 
     const clearFilters = () => {
         setSearch('')
@@ -103,7 +119,7 @@ const AuditTemplatesList = () => {
         const today = formatToday()
 
         if (existingId) {
-            setTemplates((prev) => prev.map((template) => (
+            commitTemplates((prev) => prev.map((template) => (
                 template.id === existingId
                     ? {
                         ...template,
@@ -119,7 +135,7 @@ const AuditTemplatesList = () => {
             return
         }
 
-        setTemplates((prev) => [
+        commitTemplates((prev) => [
             {
                 id: createTemplateId(prev),
                 templateName: formData.templateName,
@@ -151,7 +167,7 @@ const AuditTemplatesList = () => {
     }
 
     const handleDuplicate = (template) => {
-        setTemplates((prev) => [
+        commitTemplates((prev) => [
             {
                 ...template,
                 id: createTemplateId(prev),
@@ -168,7 +184,7 @@ const AuditTemplatesList = () => {
     }
 
     const handlePublishRow = (templateId) => {
-        setTemplates((prev) => prev.map((template) => (
+        commitTemplates((prev) => prev.map((template) => (
             template.id === templateId
                 ? { ...template, status: 'Published', updatedOn: formatToday() }
                 : template
@@ -176,7 +192,7 @@ const AuditTemplatesList = () => {
     }
 
     const handleArchive = (templateId) => {
-        setTemplates((prev) => prev.map((template) => (
+        commitTemplates((prev) => prev.map((template) => (
             template.id === templateId
                 ? { ...template, status: 'Archived', updatedOn: formatToday() }
                 : template
@@ -410,7 +426,14 @@ const AuditTemplatesList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='audittemplateslist'
+                title='AuditTemplatesList'
+                rows={Array.isArray(filteredTemplates) ? filteredTemplates : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredTemplates) ? filteredTemplates.length : 0} record(s).</>}
+            />
             <AuditTemplateFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

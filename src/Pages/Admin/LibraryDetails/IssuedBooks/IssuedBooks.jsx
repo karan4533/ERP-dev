@@ -9,6 +9,10 @@ import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal';
 
+const EXPORT_ROWS = [
+    {book_image: '', book_id: 'BOK1001', admission_number: 'STU1909', book_name: 'Mathematics', issued_to: 'Student', name: 'Sandy', issued_date: '20-05-2026', return_date: '25-05-2026', late_fees: '₹ 50', return_comment: 'No Issues', status: 'Success'},
+]
+
 const IssuedBooks = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -260,7 +264,14 @@ const IssuedBooks = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='issued-books'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

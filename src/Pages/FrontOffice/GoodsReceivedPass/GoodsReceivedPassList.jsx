@@ -1,31 +1,34 @@
-import React, { useMemo, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus, Printer } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { useAuth } from '../../../Context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
+import { filterListRows } from '../../../Common/listFiltering'
+import { toast } from 'react-toastify'
 import {
     STATUS_OPTIONS,
     deleteGoodsReceivedPass,
     formatDisplayTime,
+    getGoodsReceivedPassPaths,
     getGoodsReceivedPasses,
+    hydrateGoodsReceivedPassesFromApi,
     statusBadgeColor,
 } from './goodsReceivedPassData'
-
-const parseDate = (value) => {
-    if (!value) return null
-    const [day, month, year] = value.split('-').map(Number)
-    if (!day || !month || !year) return null
-    return new Date(year, month - 1, day)
-}
+import { frontOfficeApiOn } from '../frontOfficeStore'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 
 const GoodsReceivedPassList = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
-    const [records, setRecords] = useState(() => getGoodsReceivedPasses())
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
+    const paths = getGoodsReceivedPassPaths()
+    const location = useLocation()
+    const [records, setRecords] = useState(() => (frontOfficeApiOn() ? [] : getGoodsReceivedPasses()))
+    const [loading, setLoading] = useState(() => frontOfficeApiOn())
+    const [loadError, setLoadError] = useState('')
+    const [deleting, setDeleting] = useState(false)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [fromDate, setFromDate] = useState(null)
@@ -36,25 +39,41 @@ const GoodsReceivedPassList = () => {
     const [deleteModal, setDeleteModal] = useState(false)
     const [selectedId, setSelectedId] = useState(null)
 
-    const filteredRecords = useMemo(() => {
-        return records.filter((record) => {
-            const query = search.trim().toLowerCase()
-            const matchesSearch =
-                !query ||
-                record.grNo.toLowerCase().includes(query) ||
-                record.supplierName.toLowerCase().includes(query) ||
-                record.billNo.toLowerCase().includes(query) ||
-                record.createdBy.toLowerCase().includes(query)
+    useEffect(() => {
+        if (!frontOfficeApiOn()) return undefined
+        let active = true
+        hydrateGoodsReceivedPassesFromApi()
+            .then((rows) => {
+                if (active) {
+                    setRecords(rows)
+                    setLoadError('')
+                }
+            })
+            .catch((error) => {
+                if (active) {
+                    setRecords([])
+                    setLoadError(error?.message || 'Could not load goods received passes.')
+                }
+            })
+            .finally(() => {
+                if (active) setLoading(false)
+            })
+        return () => {
+            active = false
+        }
+    }, [location.key])
 
-            const matchesStatus = !statusFilter || record.status === statusFilter
-
-            const recordDate = parseDate(record.date)
-            const matchesFrom = !fromDate || (recordDate && recordDate >= fromDate)
-            const matchesTo = !toDate || (recordDate && recordDate <= toDate)
-
-            return matchesSearch && matchesStatus && matchesFrom && matchesTo
-        })
-    }, [records, search, statusFilter, fromDate, toDate])
+    const filteredRecords = useMemo(
+        () => filterListRows(records, {
+            search,
+            searchKeys: ['grNo', 'id', 'supplierName', 'billNo', 'createdBy'],
+            equals: { status: statusFilter },
+            fromDate,
+            toDate,
+            dateKeys: ['date'],
+        }),
+        [records, search, statusFilter, fromDate, toDate],
+    )
 
     const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize))
     const paginatedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -67,16 +86,25 @@ const GoodsReceivedPassList = () => {
         setCurrentPage(1)
     }
 
-    const handleDelete = () => {
-        if (!selectedId) return
-        deleteGoodsReceivedPass(selectedId)
-        setRecords(getGoodsReceivedPasses())
-        setDeleteModal(false)
-        setSelectedId(null)
+    const handleDelete = async () => {
+        if (!showDelete || !selectedId || deleting) return
+        setDeleting(true)
+        try {
+            await deleteGoodsReceivedPass(selectedId)
+            setRecords(getGoodsReceivedPasses())
+            setDeleteModal(false)
+            setSelectedId(null)
+            toast.success('Goods received pass deleted.')
+        } catch (error) {
+            toast.error(error?.message || 'Could not delete goods received pass.')
+        } finally {
+            setDeleting(false)
+        }
     }
 
     return (
         <section>
+            {loadError ? <p className='text-sm text-[#B42318] mb-3'>{loadError}</p> : null}
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>Clear Filters</button>
@@ -115,10 +143,12 @@ const GoodsReceivedPassList = () => {
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
                     <h2 className='text-xl font-medium text-black'>Goods Received Pass List</h2>
                     <div className='flex gap-x-2'>
-                        <NavLink to='/front-office/add-goods-received-pass' className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
-                            <Plus size={16} />
-                            Add Goods Received Pass
-                        </NavLink>
+                        {paths.add ? (
+                            <NavLink to={paths.add} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
+                                <Plus size={16} />
+                                Add Goods Received Pass
+                            </NavLink>
+                        ) : null}
                         <button type='button' onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'>
                             <Download size={16} />
                             Export
@@ -152,12 +182,14 @@ const GoodsReceivedPassList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {paginatedRecords.length === 0 ? (
-                                <tr><td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>No goods received pass records found.</td></tr>
+                            {loading ? (
+                                <tr><td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>Loading goods received passes…</td></tr>
+                            ) : paginatedRecords.length === 0 ? (
+                                <tr><td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>{loadError ? 'Goods received passes could not be loaded.' : 'No goods received pass records found.'}</td></tr>
                             ) : (
                                 paginatedRecords.map((record) => (
                                     <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.grNo}</td>
+                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.grNo || record.id}</td>
                                         <td className='px-2 py-4'>{record.date}</td>
                                         <td className='px-2 py-4'>{formatDisplayTime(record.time, record.timePeriod)}</td>
                                         <td className='px-2 py-4'>{record.paymentType}</td>
@@ -170,12 +202,14 @@ const GoodsReceivedPassList = () => {
                                         <td className='px-2 py-4'>{record.createdBy}</td>
                                         <td className='px-2 py-4 text-center rounded-e-lg'>
                                             <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                                <NavLink to={`/front-office/goods-received-pass/view/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
-                                                <NavLink to={`/front-office/goods-received-pass/edit/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Edit</NavLink>
-                                                {canDelete && (
+                                                <NavLink to={paths.view(record.id)} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
+                                                {paths.edit ? (
+                                                    <NavLink to={paths.edit(record.id)} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Edit</NavLink>
+                                                ) : null}
+                                                {showDelete ? (
                                                     <button type='button' onClick={() => { setSelectedId(record.id); setDeleteModal(true) }} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Delete</button>
-                                                )}
-                                                <NavLink to={`/front-office/goods-received-pass/view/${record.id}?print=1`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'><span className='inline-flex items-center gap-1'><Printer size={14} /> Print</span></NavLink>
+                                                ) : null}
+                                                <NavLink to={`${paths.view(record.id)}?print=1`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'><span className='inline-flex items-center gap-1'><Printer size={14} /> Print</span></NavLink>
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -197,9 +231,22 @@ const GoodsReceivedPassList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'} {statusFilter && <span className='text-[#515DEF]'>( Filtered: {statusFilter} )</span>}</>} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='goods-received-passes'
+                rows={filteredRecords.map((r) => ({
+                    id: r.id || r.publicId,
+                    supplierName: r.supplierName,
+                    billNo: r.billNo,
+                    date: r.date,
+                    paymentType: r.paymentType,
+                    status: r.status,
+                }))}
+                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'} {statusFilter && <span className='text-[#515DEF]'>( Filtered: {statusFilter} )</span>}</>}
+            />
 
-            {canDelete && deleteModal && (
+            {deleteModal && (
                 <div className='fixed inset-0 z-500 flex items-center justify-center'>
                     <div className='absolute inset-0 bg-black/40' onClick={() => setDeleteModal(false)} />
                     <div className='relative z-10 w-full max-w-md rounded-xl bg-white shadow-lg p-6'>
@@ -207,7 +254,7 @@ const GoodsReceivedPassList = () => {
                         <p className='text-sm text-[#667085] mt-2'>This action cannot be undone.</p>
                         <div className='flex gap-3 mt-6'>
                             <button type='button' onClick={() => setDeleteModal(false)} className='flex-1 rounded-md border border-[#D9D9D9] px-4 py-2 text-sm text-[#667085] hover:bg-[#F9FAFB] cursor-pointer'>Cancel</button>
-                            <button type='button' onClick={handleDelete} className='flex-1 rounded-md bg-[#FF0000] px-4 py-2 text-sm text-white hover:opacity-90 cursor-pointer'>Delete</button>
+                            <button type='button' onClick={handleDelete} disabled={deleting} className='flex-1 rounded-md bg-[#FF0000] px-4 py-2 text-sm text-white hover:opacity-90 cursor-pointer disabled:opacity-60'>{deleting ? 'Deleting…' : 'Delete'}</button>
                         </div>
                     </div>
                 </div>

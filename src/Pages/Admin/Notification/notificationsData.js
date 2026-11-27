@@ -72,6 +72,44 @@ export const NOTIFICATIONS = [
     },
 ]
 
+// What the server's notification kinds are called on this screen.
+const TYPE_BY_ENTITY = {
+    announcement: 'Announcement',
+    calendar_event: 'Event',
+    payment_link: 'Payment',
+}
+
+const POSTED_BY_ENTITY = {
+    announcement: 'Announcements',
+    calendar_event: 'Calendar',
+    escalation: 'Escalation Management',
+    leave_request: 'Leave Request',
+    task: 'Task Management',
+    lesson_plan: 'Lesson Plans',
+    tc_request: 'TC Request Approval',
+    payment_link: 'Accounts Office',
+    approval: 'Approvals',
+}
+
+const toDmy = (iso) => {
+    const stamp = new Date(iso)
+    if (Number.isNaN(stamp.getTime())) return '—'
+    const pad = (value) => String(value).padStart(2, '0')
+    return `${pad(stamp.getDate())}-${pad(stamp.getMonth() + 1)}-${stamp.getFullYear()}`
+}
+
+/** One notification from `GET /notifications`, in the shape the cards on this screen read. */
+export const mapServerNotification = (row) => ({
+    id: row.id,
+    type: TYPE_BY_ENTITY[row.entityType] ?? 'General',
+    title: row.title,
+    message: row.body || row.title,
+    relatedDate: toDmy(row.createdAt),
+    notificationDate: toDmy(row.createdAt),
+    postedBy: POSTED_BY_ENTITY[row.entityType] ?? 'System',
+    isRead: Boolean(row.read),
+})
+
 export const filterNotifications = (items, filters) =>
     items.filter((item) => {
         const search = filters.search.trim().toLowerCase()

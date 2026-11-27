@@ -1,8 +1,10 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import mo_user from '../../../assets/images/no-profile.png'
 import { getStudentFullProfileById } from './studentFullProfileData'
+import { ensureEnrolledStudentDetailFromApi } from '../../../Common/StudentDatabase/enrolledStudentsData'
+import { isApiStudentsEnabled } from '../../../services/apiClient'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -21,9 +23,48 @@ const Field = ({ label, value }) => (
 const ViewStudentFullDetails = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const a = getStudentFullProfileById(id)
+    const [a, setA] = useState(() => getStudentFullProfileById(id))
+    const [loading, setLoading] = useState(isApiStudentsEnabled())
+    const [error, setError] = useState('')
 
-    if (!a) {
+    useEffect(() => {
+        let cancelled = false
+        if (!isApiStudentsEnabled()) {
+            setA(getStudentFullProfileById(id))
+            setLoading(false)
+            return undefined
+        }
+        setLoading(true)
+        setError('')
+        ensureEnrolledStudentDetailFromApi(id)
+            .then(() => {
+                if (!cancelled) setA(getStudentFullProfileById(id))
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setA(null)
+                    setError(err.message || 'Could not load student.')
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [id])
+
+    if (loading) {
+        return (
+            <section className='space-y-6'>
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading student…
+                </div>
+            </section>
+        )
+    }
+
+    if (error || !a) {
         return (
             <section className='space-y-6'>
                 <button
@@ -35,20 +76,20 @@ const ViewStudentFullDetails = () => {
                     Back to list
                 </button>
                 <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                    Student record not found or could not be loaded.
+                    {error || 'Student record not found, or outside your grade band.'}
                 </div>
             </section>
         )
     }
 
-    const addr = a.address
-    const contact = a.contact
-    const transport = a.transport
-    const parent = a.parent
-    const parentAddr = parent.address
-    const parentContact = parent.contact
+    const addr = a.address || {}
+    const contact = a.contact || {}
+    const transport = a.transport || {}
+    const parent = a.parent || {}
+    const parentAddr = parent.address || {}
+    const parentContact = parent.contact || {}
 
-    const displayName = [a.firstName, a.middleName, a.lastName].filter(Boolean).join(' ')
+    const displayName = [a.firstName, a.middleName, a.lastName].filter(Boolean).join(' ') || 'Student'
 
     return (
         <section className='space-y-6'>
@@ -118,10 +159,10 @@ const ViewStudentFullDetails = () => {
                 </div>
             </Section>
 
-            <Section title='Student address'>
+            <Section title='Address'>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <div className='lg:col-span-3'>
-                        <Field label='Street / full address' value={addr.address} />
+                        <Field label='Address' value={addr.address} />
                     </div>
                     <Field label='Country' value={addr.country} />
                     <Field label='State' value={addr.state} />
@@ -130,7 +171,7 @@ const ViewStudentFullDetails = () => {
                 </div>
             </Section>
 
-            <Section title='Student contact'>
+            <Section title='Contact'>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <Field label='Mobile number' value={contact.mobileNumber} />
                     <Field label='Alternative number' value={contact.alternativeNumber} />
@@ -140,12 +181,13 @@ const ViewStudentFullDetails = () => {
 
             <Section title='Transport'>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                    <Field label='Route list' value={transport.routeList} />
+                    <Field label='Mode of transport' value={transport.modeOfTransport} />
+                    <Field label='Route' value={transport.routeList} />
                     <Field label='Bus stop' value={transport.busStop} />
                 </div>
             </Section>
 
-            <Section title='Parent / guardian'>
+            <Section title='Parent information'>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <Field label='Father name' value={parent.fatherName} />
                     <Field label='Mother name' value={parent.motherName} />
@@ -154,26 +196,16 @@ const ViewStudentFullDetails = () => {
                     <Field label='Father yearly income' value={parent.fatherYearlyIncome} />
                     <Field label='Mother yearly income' value={parent.motherYearlyIncome} />
                     <Field label='Siblings' value={parent.siblings} />
-                </div>
-            </Section>
-
-            <Section title='Parent address'>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <div className='lg:col-span-3'>
-                        <Field label='Street / full address' value={parentAddr.address} />
+                        <Field label='Parent address' value={parentAddr.address} />
                     </div>
-                    <Field label='Country' value={parentAddr.country} />
-                    <Field label='State' value={parentAddr.state} />
-                    <Field label='City' value={parentAddr.city} />
-                    <Field label='Zip code' value={parentAddr.zipCode} />
-                </div>
-            </Section>
-
-            <Section title='Parent contact'>
-                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                    <Field label='Mobile number' value={parentContact.mobileNumber} />
-                    <Field label='Alternative number' value={parentContact.alternativeNumber} />
-                    <Field label='Email' value={parentContact.email} />
+                    <Field label='Parent country' value={parentAddr.country} />
+                    <Field label='Parent state' value={parentAddr.state} />
+                    <Field label='Parent city' value={parentAddr.city} />
+                    <Field label='Parent zip' value={parentAddr.zipCode} />
+                    <Field label='Parent mobile' value={parentContact.mobileNumber} />
+                    <Field label='Parent alt mobile' value={parentContact.alternativeNumber} />
+                    <Field label='Parent email' value={parentContact.email} />
                 </div>
             </Section>
         </section>

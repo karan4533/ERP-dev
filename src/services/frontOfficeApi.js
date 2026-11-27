@@ -24,3 +24,13 @@ export const updateFrontOfficeRecordApi = (collection, id, body) =>
 
 export const deleteFrontOfficeRecordApi = (collection, id) =>
     apiRequest(`/front-office/${enc(collection)}/${enc(id)}`, { method: 'DELETE' })
+
+/** Parent / Principal approval decision — only approval fields change on the server. */
+export const decideFrontOfficeRecordApi = (collection, id, { decision, remark = '' }) =>
+    apiRequest(`/front-office/${enc(collection)}/${enc(id)}/decision`, {
+        method: 'POST',
+        body: { decision, remark },
+    })
+
+/** Hostel outing passes for the signed-in parent's linked children. */
+export const listParentHostelGatePassesApi = () => apiRequest('/front-office/parent/hostel-gate-passes')

@@ -1,10 +1,77 @@
 import React from 'react'
 import { Star } from 'lucide-react'
-import { parseRating, QUALITY_RATING_MAX } from '../executeAuditData'
+import {
+    CHECKLIST_RESPONSE_OPTIONS,
+    normalizeResponseType,
+    parseRating,
+    QUALITY_RATING_MAX,
+} from '../executeAuditData'
+
+const inputClass =
+    'text-sm text-[#1E1E1E] border border-[#E0E0E0] rounded-lg px-3 py-2 w-full max-w-md focus:border-[#515DEF] outline-none'
 
 const ResponseControl = ({ parameter, value, onChange }) => {
-    const rating = parseRating(value.response) ?? 0
+    const kind = normalizeResponseType(parameter?.responseType)
+    const update = (response) => onChange({ ...value, response })
 
+    if (kind === 'date') {
+        return (
+            <input
+                type='date'
+                value={String(value.response || '')}
+                onChange={(e) => update(e.target.value)}
+                className={inputClass}
+                aria-label={`Date for ${parameter.label}`}
+            />
+        )
+    }
+
+    if (kind === 'place') {
+        return (
+            <input
+                type='text'
+                value={String(value.response || '')}
+                onChange={(e) => update(e.target.value)}
+                placeholder='Enter place / location'
+                className={inputClass}
+                aria-label={`Place for ${parameter.label}`}
+            />
+        )
+    }
+
+    if (kind === 'text') {
+        return (
+            <textarea
+                value={String(value.response || '')}
+                onChange={(e) => update(e.target.value)}
+                placeholder='Enter remarks'
+                className={`${inputClass} min-h-[72px] resize-y`}
+                aria-label={`Remarks for ${parameter.label}`}
+            />
+        )
+    }
+
+    if (kind === 'yes_no') {
+        return (
+            <div className='flex flex-wrap gap-4' role='radiogroup' aria-label={`Response for ${parameter.label}`}>
+                {CHECKLIST_RESPONSE_OPTIONS.map((option) => (
+                    <label key={option} className='inline-flex items-center gap-2 cursor-pointer group'>
+                        <input
+                            type='radio'
+                            name={`${parameter.id}-response`}
+                            value={option}
+                            checked={value.response === option}
+                            onChange={() => update(option)}
+                            className='size-4 accent-[#515DEF]'
+                        />
+                        <span className='text-sm text-[#667085] group-hover:text-[#1E1E1E]'>{option}</span>
+                    </label>
+                ))}
+            </div>
+        )
+    }
+
+    const rating = parseRating(value.response) ?? 0
     const setRating = (stars) => onChange({ ...value, response: stars })
 
     return (

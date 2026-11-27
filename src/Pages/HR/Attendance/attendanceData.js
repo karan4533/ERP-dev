@@ -1,3 +1,5 @@
+import { SEED } from '../domain/hrSeed'
+
 export const ATTENDANCE_STATUSES = ['Present', 'Absent', 'Late', 'Half Day', 'On Duty']
 
 export const attendanceStatusBadgeColor = {
@@ -8,85 +10,17 @@ export const attendanceStatusBadgeColor = {
     'On Duty': 'bg-[#66708533] text-[#667085]',
 }
 
-export const ATTENDANCE_RECORDS = [
-    {
-        id: 'ATT-2026-0412',
-        employee: 'Priya Sharma',
-        employeeId: 'EMP-2026-001',
-        date: '04-07-2026',
-        checkIn: '08:02 AM',
-        checkOut: '04:15 PM',
-        workingHours: '8h 13m',
-        status: 'Present',
-    },
-    {
-        id: 'ATT-2026-0411',
-        employee: 'Rahul Mehta',
-        employeeId: 'EMP-2026-002',
-        date: '04-07-2026',
-        checkIn: '08:45 AM',
-        checkOut: '04:30 PM',
-        workingHours: '7h 45m',
-        status: 'Late',
-    },
-    {
-        id: 'ATT-2026-0410',
-        employee: 'Anita Desai',
-        employeeId: 'EMP-2026-003',
-        date: '04-07-2026',
-        checkIn: '—',
-        checkOut: '—',
-        workingHours: '—',
-        status: 'On Duty',
-    },
-    {
-        id: 'ATT-2026-0409',
-        employee: 'Vikram Singh',
-        employeeId: 'EMP-2026-004',
-        date: '04-07-2026',
-        checkIn: '07:55 AM',
-        checkOut: '04:00 PM',
-        workingHours: '8h 05m',
-        status: 'Present',
-    },
-    {
-        id: 'ATT-2026-0408',
-        employee: 'Sneha Patel',
-        employeeId: 'EMP-2026-005',
-        date: '04-07-2026',
-        checkIn: '08:10 AM',
-        checkOut: '12:30 PM',
-        workingHours: '4h 20m',
-        status: 'Half Day',
-    },
-    {
-        id: 'ATT-2026-0407',
-        employee: 'Arjun Nair',
-        employeeId: 'EMP-2026-006',
-        date: '04-07-2026',
-        checkIn: '—',
-        checkOut: '—',
-        workingHours: '—',
-        status: 'Absent',
-    },
-    {
-        id: 'ATT-2026-0406',
-        employee: 'Priya Sharma',
-        employeeId: 'EMP-2026-001',
-        date: '03-07-2026',
-        checkIn: '08:00 AM',
-        checkOut: '04:10 PM',
-        workingHours: '8h 10m',
-        status: 'Present',
-    },
-    {
-        id: 'ATT-2026-0405',
-        employee: 'Rahul Mehta',
-        employeeId: 'EMP-2026-002',
-        date: '03-07-2026',
-        checkIn: '08:05 AM',
-        checkOut: '04:20 PM',
-        workingHours: '8h 15m',
-        status: 'Present',
-    },
-]
+const sample = SEED.employees.slice(0, 6)
+const statuses = ['Present', 'Late', 'On Duty', 'Present', 'Half Day', 'Absent']
+
+/** Sample rows keyed to Queen Mira EMP-QMIS-* staff (cleared Delhi demo IDs). */
+export const ATTENDANCE_RECORDS = sample.map((row, index) => ({
+    id: `ATT-QMIS-${String(index + 1).padStart(4, '0')}`,
+    employee: row.name,
+    employeeId: row.id,
+    date: '28-10-2026',
+    checkIn: statuses[index] === 'Absent' || statuses[index] === 'On Duty' ? '—' : '08:05 AM',
+    checkOut: statuses[index] === 'Absent' || statuses[index] === 'On Duty' ? '—' : statuses[index] === 'Half Day' ? '12:30 PM' : '04:15 PM',
+    workingHours: statuses[index] === 'Absent' || statuses[index] === 'On Duty' ? '—' : statuses[index] === 'Half Day' ? '4h 25m' : '8h 10m',
+    status: statuses[index],
+}))

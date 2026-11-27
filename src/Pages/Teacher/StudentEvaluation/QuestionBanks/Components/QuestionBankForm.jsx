@@ -1,17 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, Upload } from 'lucide-react'
-import {
-    CLASSES,
-    SECTIONS,
-    SUBJECTS,
-    EXAM_TYPES,
-    COGNITIVE_LEVELS,
-    DIFFICULTY_LEVELS,
-    QUESTION_TYPES,
-    formatDate,
-} from '../questionBanksData'
+import { useAssignedClassSectionSubject } from '../../../../../Common/Teacher/useAssignedClassSectionSubject'
+import { CLASSES, SECTIONS, SUBJECTS, EXAM_TYPES, formatDate } from '../questionBanksData'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
@@ -25,6 +17,32 @@ const textareaClass =
 const QuestionBankForm = ({ onSubmit }) => {
     const [uploadDate, setUploadDate] = useState(new Date())
     const [fileName, setFileName] = useState('')
+    const [className, setClassName] = useState('')
+    const [section, setSection] = useState('')
+    const [subject, setSubject] = useState('')
+
+    const {
+        assignments,
+        classOptions,
+        sectionOptions,
+        subjectOptions,
+        applyClassChange,
+        applySectionChange,
+    } = useAssignedClassSectionSubject({
+        className,
+        section,
+        fallbackClasses: CLASSES,
+        fallbackSections: SECTIONS,
+        fallbackSubjects: SUBJECTS,
+    })
+
+    useEffect(() => {
+        if (!assignments.ready || className || !classOptions[0]) return
+        const next = applyClassChange(classOptions[0], { section, subject })
+        setClassName(next.className)
+        setSection(next.section)
+        setSubject(next.subject)
+    }, [assignments.ready, classOptions, className, section, subject, applyClassChange])
 
     const handleSubmit = (event) => {
         event.preventDefault()
@@ -32,13 +50,9 @@ const QuestionBankForm = ({ onSubmit }) => {
         const formData = new FormData(form)
 
         onSubmit({
-            subject: formData.get('subject'),
-            className: formData.get('className'),
-            section: formData.get('section'),
-            chapterName: formData.get('chapterName'),
-            cognitiveLevel: formData.get('cognitiveLevel'),
-            difficulty: formData.get('difficulty'),
-            questionType: formData.get('questionType'),
+            subject,
+            className,
+            section,
             paperTitle: formData.get('paperTitle'),
             description: formData.get('description'),
             examType: formData.get('examType'),
@@ -50,71 +64,82 @@ const QuestionBankForm = ({ onSubmit }) => {
     return (
         <form id='question-bank-form' onSubmit={handleSubmit}>
             <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:mt-8 mt-2'>
-                <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='subject' className='text-base font-medium text-[#1E1E1E]'>Subject:</label>
-                    <select id='subject' name='subject' required className={selectClass}>
-                        <option value=''>--Select--</option>
-                        {SUBJECTS.map((subject) => (
-                            <option key={subject} value={subject}>{subject}</option>
-                        ))}
-                    </select>
-                </div>
+                {!assignments.ready ? (
+                    <p className='text-sm text-[#667085] sm:col-span-2 lg:col-span-3'>Loading your assigned classes…</p>
+                ) : null}
+                {assignments.emptyReason && assignments.ready ? (
+                    <p className='text-sm text-[#E65100] sm:col-span-2 lg:col-span-3'>{assignments.emptyReason}</p>
+                ) : null}
                 <div className='flex flex-col gap-y-2'>
                     <label htmlFor='class-name' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
-                    <select id='class-name' name='className' required className={selectClass}>
-                        <option value=''>--Select--</option>
-                        {CLASSES.map((item) => (
+                    <select
+                        id='class-name'
+                        name='className'
+                        required
+                        value={className}
+                        disabled={!classOptions.length}
+                        onChange={(event) => {
+                            const next = applyClassChange(event.target.value, { section, subject })
+                            setClassName(next.className)
+                            setSection(next.section)
+                            setSubject(next.subject)
+                        }}
+                        className={selectClass}
+                    >
+                        <option value=''>{classOptions.length ? '--Select--' : 'No assigned classes'}</option>
+                        {classOptions.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2'>
                     <label htmlFor='section' className='text-base font-medium text-[#1E1E1E]'>Section:</label>
-                    <select id='section' name='section' required className={selectClass}>
-                        <option value=''>--Select--</option>
-                        {SECTIONS.map((item) => (
+                    <select
+                        id='section'
+                        name='section'
+                        required
+                        value={section}
+                        disabled={!sectionOptions.length}
+                        onChange={(event) => {
+                            const next = applySectionChange(event.target.value, { className, subject })
+                            setSection(next.section)
+                            setSubject(next.subject)
+                        }}
+                        className={selectClass}
+                    >
+                        <option value=''>{sectionOptions.length ? '--Select--' : 'Select class first'}</option>
+                        {sectionOptions.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='chapter-name' className='text-base font-medium text-[#1E1E1E]'>Chapter / Unit Name:</label>
-                    <input type='text' id='chapter-name' name='chapterName' required placeholder='e.g. Unit 3: Trigonometric Identities' className={inputClass} />
-                </div>
-                <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='cognitive-level' className='text-base font-medium text-[#1E1E1E]'>Cognitive Level (Bloom’s Taxonomy):</label>
-                    <select id='cognitive-level' name='cognitiveLevel' required className={selectClass}>
-                        {COGNITIVE_LEVELS.map((level) => (
-                            <option key={level} value={level}>{level}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='difficulty' className='text-base font-medium text-[#1E1E1E]'>Difficulty Level:</label>
-                    <select id='difficulty' name='difficulty' required className={selectClass}>
-                        {DIFFICULTY_LEVELS.map((diff) => (
-                            <option key={diff} value={diff}>{diff}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='question-type' className='text-base font-medium text-[#1E1E1E]'>Question Type:</label>
-                    <select id='question-type' name='questionType' required className={selectClass}>
-                        {QUESTION_TYPES.map((type) => (
-                            <option key={type} value={type}>{type}</option>
+                    <label htmlFor='subject' className='text-base font-medium text-[#1E1E1E]'>Subject:</label>
+                    <select
+                        id='subject'
+                        name='subject'
+                        required
+                        value={subject}
+                        disabled={!subjectOptions.length}
+                        onChange={(event) => setSubject(event.target.value)}
+                        className={selectClass}
+                    >
+                        <option value=''>{subjectOptions.length ? '--Select--' : 'No subjects'}</option>
+                        {subjectOptions.map((item) => (
+                            <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2 lg:col-span-2'>
-                    <label htmlFor='paper-title' className='text-base font-medium text-[#1E1E1E]'>Paper / Question Title:</label>
+                    <label htmlFor='paper-title' className='text-base font-medium text-[#1E1E1E]'>Paper Title:</label>
                     <input type='text' id='paper-title' name='paperTitle' required placeholder='e.g. Quadratic Equations — Question Paper' className={inputClass} />
                 </div>
                 <div className='flex flex-col gap-y-2 lg:col-span-3'>
-                    <label htmlFor='description' className='text-base font-medium text-[#1E1E1E]'>Description &amp; Question Text:</label>
-                    <textarea id='description' name='description' required placeholder='Enter question details, marking rubric, or instructions...' className={textareaClass} />
+                    <label htmlFor='description' className='text-base font-medium text-[#1E1E1E]'>Description:</label>
+                    <textarea id='description' name='description' required placeholder='Brief description of the question bank...' className={textareaClass} />
                 </div>
                 <div className='flex flex-col gap-y-2'>
-                    <label htmlFor='exam-type' className='text-base font-medium text-[#1E1E1E]'>Exam Tracker:</label>
+                    <label htmlFor='exam-type' className='text-base font-medium text-[#1E1E1E]'>Exam Type:</label>
                     <select id='exam-type' name='examType' required className={selectClass}>
                         <option value=''>--Select--</option>
                         {EXAM_TYPES.map((type) => (
@@ -136,20 +161,20 @@ const QuestionBankForm = ({ onSubmit }) => {
                     </div>
                 </div>
                 <div className='flex flex-col gap-y-2 lg:col-span-3'>
-                    <label htmlFor='upload-document' className='text-base font-medium text-[#1E1E1E]'>Upload Document / Diagram Image:</label>
+                    <label htmlFor='upload-document' className='text-base font-medium text-[#1E1E1E]'>Upload Document:</label>
                     <label
                         htmlFor='upload-document'
                         className='flex items-center justify-center gap-2 border border-dashed border-[#D9D9D9] rounded-md px-4 py-6 cursor-pointer hover:border-[#515DEF] transition-colors'
                     >
                         <Upload size={20} className='text-[#808080]' />
                         <span className='text-sm text-[#808080]'>
-                            {fileName || 'Choose document (PDF, DOCX) or diagram image (PNG, JPG, SVG)'}
+                            {fileName || 'Choose file (PDF, DOC, DOCX)'}
                         </span>
                         <input
                             type='file'
                             id='upload-document'
                             className='hidden'
-                            accept='.pdf,.doc,.docx,.png,.jpg,.jpeg,.svg'
+                            accept='.pdf,.doc,.docx'
                             onChange={(event) => setFileName(event.target.files?.[0]?.name ?? '')}
                         />
                     </label>

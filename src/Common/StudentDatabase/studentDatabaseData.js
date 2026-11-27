@@ -1,6 +1,7 @@
 import noProfile from '../../assets/images/no-profile.png'
 import { getAdmissionById } from '../../Pages/Admin/FrontOffice/AdminssionList/admissionListData'
 import { liveArray } from '../RBAC/liveArray'
+import { isApiStudentsEnabled } from '../../services/apiClient'
 import {
     getAllEnrolledStudents,
     getEnrolledStudentById,
@@ -13,10 +14,19 @@ const displayValue = (value) => {
     return text || '—'
 }
 
+const isPromise = (value) => typeof value?.then === 'function'
+
+/**
+ * This mapper is synchronous and is called once per row, so it must never reach the network.
+ * With the students API on, the server already returns what the screens need on the student
+ * row (list) and in `admissionSnapshot` (detail from /students/{id}). Looking the admission up
+ * again would request /admissions/{id} per student, which Principal and Director are not allowed
+ * to read, and in API mode it only yields a Promise, never the record.
+ */
 const resolveAdmissionSource = (record) => {
-    if (record.admissionId) {
+    if (!isApiStudentsEnabled() && record.admissionId) {
         const liveAdmission = getAdmissionById(record.admissionId)
-        if (liveAdmission) return liveAdmission
+        if (liveAdmission && !isPromise(liveAdmission)) return liveAdmission
     }
     return record.admissionSnapshot || record
 }
@@ -92,6 +102,9 @@ const toListRow = (record) => {
         id: record.id,
         admissionNumber: admission.admissionNumber || record.admissionNumber || '—',
         name: record.name || '—',
+        className: record.className || admission.className || '',
+        section: record.section || '',
+        classSection: record.classSection || '',
         gender: admission.gender || record.gender || '—',
         email: admission.email || record.email || '—',
         mobileNumber: admission.mobileNumber || record.mobileNumber || '—',
@@ -99,6 +112,7 @@ const toListRow = (record) => {
         country: admission.country || record.country || '—',
         state: admission.state || record.state || '—',
         city: admission.city || record.city || '—',
+        status: record.status || admission.status || 'Active',
         profileImage: admission.profileImage || record.profileImage || null,
     }
 }
@@ -115,7 +129,8 @@ export const getStudentById = (id) => {
 
     const admission = resolveAdmissionSource(record)
 
-    if (record.admissionId && admission && !record.admissionSnapshot) {
+    // Local mode only: in API mode the snapshot comes from the server and is never written back.
+    if (!isApiStudentsEnabled() && record.admissionId && admission && !record.admissionSnapshot) {
         updateEnrolledStudentRecord(record.id, { admissionSnapshot: { ...admission } })
     }
 

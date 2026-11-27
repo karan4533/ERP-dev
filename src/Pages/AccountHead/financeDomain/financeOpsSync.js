@@ -51,7 +51,7 @@ export function mapOpsRequestToFinanceApproval(row) {
     const amount = amountLabel(row)
     const raisedBy = row.reportedBy || row.driverName || 'Transport Manager'
     return {
-        id: `APR-${requestId.replace(/\W/g, '')}` || `APR-${Date.now()}`,
+        id: requestId ? `APR-${requestId.replace(/\W/g, '')}` : `APR-${Date.now()}`,
         linkedRequestId: requestId,
         raisedBy,
         initials: initialsOf(raisedBy),

@@ -1,3 +1,13 @@
+import {
+    MD_APPROVAL_STATUS,
+    approveActivityViaApi,
+    getActivities,
+    hydrateActivitiesFromApi,
+} from '../../../Common/Activities/activitiesData'
+import { getActivityViewPath } from '../../../Common/Activities/activityConfigs'
+import { getAccessToken, isApiAuthEnabled, isDemoLoginEnabled } from '../../../services/apiClient'
+import { canUseActivitiesApi } from '../../../services/activitiesApi'
+
 const STORAGE_KEY = 'schoolerp-super-admin-approvals'
 
 export const ROUTE_BASE = '/super-admin/approvals'
@@ -7,6 +17,7 @@ export const REQUESTED_TO = 'Super Admin'
 export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected']
 
 export const REQUEST_CATEGORIES = [
+    'Activity Approval',
     'Finance Request',
     'Data Change Request',
     'HR Request',
@@ -15,7 +26,27 @@ export const REQUEST_CATEGORIES = [
     'Policy Change Request',
 ]
 
+const ACTIVITY_TYPE_LABEL = {
+    cultural: 'Cultural',
+    sports: 'Sports',
+    competition: 'Competition',
+}
+
 export const PRIORITY_LEVELS = ['High', 'Normal', 'Low']
+
+/**
+ * ASA-04 (audit §13): Finance/HR/procurement/etc. rows in this module are demo seeds only.
+ * Live Super Admin decisions are Activity Approvals via POST /activities/{id}/approval.
+ * Demo seeds are shown only when API auth is off or explicit demo logins are enabled.
+ */
+export const DEMO_APPROVAL_SEEDS_NOTICE =
+    'Demo sample — not a live workflow. Decisions here are not saved on the server. Live Super Admin approvals are Activity Approvals only.'
+
+export const includeDemoApprovalSeeds = () => {
+    // Never paint demo SA-APR rows when a real API session exists.
+    if (isApiAuthEnabled() && getAccessToken()) return false
+    return !isApiAuthEnabled() || isDemoLoginEnabled()
+}
 
 export const statusBadgeColor = {
     Pending: 'bg-[#FF980033] text-[#FF9800]',
@@ -24,6 +55,7 @@ export const statusBadgeColor = {
 }
 
 export const categoryBadgeColor = {
+    'Activity Approval': 'bg-[#0C1E5B33] text-[#0C1E5B]',
     'Finance Request': 'bg-[#515DEF33] text-[#515DEF]',
     'Data Change Request': 'bg-[#2196F333] text-[#2196F3]',
     'HR Request': 'bg-[#9C27B033] text-[#9C27B0]',
@@ -60,6 +92,8 @@ const SEED_REQUESTS = [
             supportingDoc: 'fuel_forecast_q3.xlsx',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-002',
@@ -85,6 +119,8 @@ const SEED_REQUESTS = [
             changeReason: 'Board-mandated fee revision and route cost adjustment.',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-003',
@@ -107,6 +143,8 @@ const SEED_REQUESTS = [
             supportingDoc: 'hr_bonus_schedule.pdf',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-004',
@@ -132,6 +170,8 @@ const SEED_REQUESTS = [
             changeReason: 'Duplicate record created during branch transfer import.',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-005',
@@ -154,6 +194,8 @@ const SEED_REQUESTS = [
             quoteRef: 'QT-IT-2026-044',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-006',
@@ -176,6 +218,8 @@ const SEED_REQUESTS = [
             requestedIncrease: '₹70,000',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-007',
@@ -198,6 +242,8 @@ const SEED_REQUESTS = [
             effectiveFrom: '01-09-2026',
         },
         superAdminRemarks: '',
+        source: 'demo',
+        isDemo: true,
     },
     {
         id: 'SA-APR-008',
@@ -220,123 +266,97 @@ const SEED_REQUESTS = [
             justification: 'Fleet expansion requires secondary approver for route and maintenance requests.',
         },
         superAdminRemarks: '',
-    },
-    {
-        id: 'SA-APR-009',
-        requestId: 'SA-APR-009',
-        category: 'Finance Request',
-        requestDate: '04-08-2026',
-        requestedBy: 'Account Head',
-        role: 'Account Head',
-        department: 'Finance',
-        title: 'Fee waiver batch — scholarship students',
-        amount: '₹1,25,000',
-        priority: 'Normal',
-        status: 'Approved',
-        requestedTo: REQUESTED_TO,
-        description: 'Partial fee waiver for 8 scholarship students as per committee recommendation.',
-        financeDetails: {
-            expenseType: 'Fee Concession',
-            fiscalPeriod: 'Term 2 2026',
-            paymentMode: 'Fee Adjustment',
-            supportingDoc: 'scholarship_waiver_list.pdf',
-        },
-        superAdminRemarks: 'Approved per scholarship committee minutes dated 02-08-2026.',
-    },
-    {
-        id: 'SA-APR-010',
-        requestId: 'SA-APR-010',
-        category: 'Data Change Request',
-        requestDate: '03-08-2026',
-        requestedBy: 'Transport Manager',
-        role: 'Transport Manager',
-        department: 'Transport',
-        title: 'Route 5 pickup time revision',
-        amount: null,
-        priority: 'Normal',
-        status: 'Approved',
-        requestedTo: REQUESTED_TO,
-        description: 'Permanent schedule change for Route 5 after municipal road work completion.',
-        dataChangeDetails: {
-            module: 'Route Management',
-            recordId: 'RT-1001',
-            recordName: 'Route 5 — North Campus',
-            fieldChanged: 'Pickup Time',
-            oldValue: '06:45 AM',
-            newValue: '06:40 AM',
-            changeReason: 'Road work completed; earlier pickup improves on-time arrival.',
-        },
-        superAdminRemarks: 'Approved. Notify parents via communication module.',
-    },
-    {
-        id: 'SA-APR-011',
-        requestId: 'SA-APR-011',
-        category: 'Procurement Request',
-        requestDate: '02-08-2026',
-        requestedBy: 'Canteen Manager',
-        role: 'Canteen Manager',
-        department: 'Canteen',
-        title: 'Commercial kitchen equipment upgrade',
-        amount: '₹52,000',
-        priority: 'Normal',
-        status: 'Rejected',
-        requestedTo: REQUESTED_TO,
-        description: 'Replacement of food warmers and prep counter for exam-week service expansion.',
-        procurementDetails: {
-            vendor: 'Kitchen Pro Supplies',
-            items: '2 × Food warmers, 1 × Prep counter',
-            deliveryDate: '20-08-2026',
-            quoteRef: 'QT-CAN-2026-018',
-        },
-        superAdminRemarks: 'Deferred to next quarter capital plan — resubmit with revised quote.',
-    },
-    {
-        id: 'SA-APR-012',
-        requestId: 'SA-APR-012',
-        category: 'Budget Request',
-        requestDate: '01-08-2026',
-        requestedBy: 'Joint Director',
-        role: 'Joint Director',
-        department: 'Operations',
-        title: 'Auditorium renovation phase 2',
-        amount: '₹18,50,000',
-        priority: 'High',
-        status: 'Rejected',
-        requestedTo: REQUESTED_TO,
-        description: 'Phase 2 renovation including seating, acoustic panels, and AV upgrade.',
-        budgetDetails: {
-            budgetHead: 'Infrastructure — Auditorium',
-            fiscalYear: '2026–27',
-            previousAllocation: '₹12,00,000',
-            requestedIncrease: '₹6,50,000',
-        },
-        superAdminRemarks: 'Rejected — submit phased plan with vendor comparison and trust board note.',
+        source: 'demo',
+        isDemo: true,
     },
 ]
 
 const loadRequests = () => {
     try {
         const stored = sessionStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed.map((row) => ({ ...row, source: row.source || 'demo', isDemo: true }))
+            }
+        }
     } catch {
         /* ignore */
     }
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_REQUESTS))
-    return [...SEED_REQUESTS]
+    return SEED_REQUESTS.map((row) => ({ ...row }))
 }
 
 const saveRequests = (requests) => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(requests))
 }
 
-export const getAllApprovalRequests = () => loadRequests()
+/** Map a pending (or decided) activity into the Super Admin Approvals row shape. */
+export const activityToApprovalRequest = (activity) => {
+    const typeLabel = ACTIVITY_TYPE_LABEL[activity.type] || 'Activity'
+    return {
+        id: activity.id,
+        requestId: activity.id,
+        category: 'Activity Approval',
+        requestDate: activity.submittedDate || activity.eventDate || '—',
+        requestedBy: activity.submittedBy || 'Admin',
+        role: 'Administrator',
+        department: typeLabel,
+        title: activity.eventName || `${typeLabel} activity`,
+        amount: null,
+        priority: 'High',
+        status: activity.mdApprovalStatus || MD_APPROVAL_STATUS.PENDING,
+        requestedTo: REQUESTED_TO,
+        description: activity.description || '',
+        source: 'activity',
+        isDemo: false,
+        activityType: activity.type,
+        viewPath: getActivityViewPath(activity.type, 'superadmin', activity.id),
+        superAdminRemarks: '',
+    }
+}
 
-export const getApprovalRequestById = (id) =>
-    loadRequests().find((request) => request.id === id) ?? null
+export const getPendingActivityApprovals = () =>
+    getActivities()
+        .filter((item) => item.mdApprovalStatus === MD_APPROVAL_STATUS.PENDING)
+        .map(activityToApprovalRequest)
+
+/** All live activity rows as approval records (pending + decided) for Super Admin oversight. */
+export const getLiveActivityApprovals = () =>
+    getActivities().map(activityToApprovalRequest)
+
+/** Live activity approvals; demo seeds only when includeDemoApprovalSeeds(). */
+export const getAllApprovalRequests = () => {
+    const live = getLiveActivityApprovals()
+    if (!includeDemoApprovalSeeds()) return live
+    const seeded = loadRequests()
+    const liveIds = new Set(live.map((row) => row.id))
+    return [...live, ...seeded.filter((row) => !liveIds.has(row.id))]
+}
+
+/** Pull activities from API when signed in, then rebuild the merged list. */
+export const hydrateApprovalsFromApi = async () => {
+    if (canUseActivitiesApi()) {
+        await Promise.all([
+            hydrateActivitiesFromApi('cultural'),
+            hydrateActivitiesFromApi('sports'),
+            hydrateActivitiesFromApi('competition'),
+        ])
+    }
+    return getAllApprovalRequests()
+}
+
+export const getApprovalRequestById = (id) => {
+    const activity = getActivities().find((item) => item.id === id)
+    if (activity) return activityToApprovalRequest(activity)
+    if (!includeDemoApprovalSeeds()) return null
+    return loadRequests().find((request) => request.id === id) ?? null
+}
 
 export const getPendingApprovalCount = () =>
-    loadRequests().filter((request) => request.status === 'Pending').length
+    getAllApprovalRequests().filter((request) => request.status === 'Pending').length
 
+/** Local-only mutation for demo seeds — never use for live Activity Approvals. */
 export const updateApprovalRequestStatus = (id, status, superAdminRemarks = '') => {
     const requests = loadRequests()
     const index = requests.findIndex((request) => request.id === id)
@@ -346,11 +366,56 @@ export const updateApprovalRequestStatus = (id, status, superAdminRemarks = '') 
         ...requests[index],
         status,
         superAdminRemarks: superAdminRemarks || requests[index].superAdminRemarks,
-        decidedAt: new Date().toISOString(),
-        decidedBy: 'Super Admin',
+        source: 'demo',
+        isDemo: true,
     }
     saveRequests(requests)
     return requests[index]
+}
+
+/**
+ * Decide an approval. Activity rows → POST /activities/{id}/approval (success only after API).
+ * Demo seeds → refused under API auth; local-only when demo seeds are explicitly allowed.
+ */
+export const decideApprovalRequestViaApi = async (request, status, superAdminRemarks = '') => {
+    const isActivity =
+        request?.source === 'activity'
+        || request?.category === 'Activity Approval'
+        || Boolean(request?.activityType)
+
+    if (isActivity) {
+        if (!canUseActivitiesApi()) {
+            return {
+                success: false,
+                message: 'Activities API is not available. Cannot decide this approval on the server.',
+            }
+        }
+        if (status !== MD_APPROVAL_STATUS.APPROVED && status !== MD_APPROVAL_STATUS.REJECTED) {
+            return { success: false, message: 'Status must be Approved or Rejected.' }
+        }
+        try {
+            const mapped = await approveActivityViaApi(request.id, status)
+            const next = activityToApprovalRequest(mapped)
+            if (superAdminRemarks) next.superAdminRemarks = superAdminRemarks
+            return { success: true, request: next, persistedOnServer: true }
+        } catch (error) {
+            return {
+                success: false,
+                message: error?.message || 'Could not save the activity decision on the server.',
+            }
+        }
+    }
+
+    if (isApiAuthEnabled() && !isDemoLoginEnabled()) {
+        return {
+            success: false,
+            message: DEMO_APPROVAL_SEEDS_NOTICE,
+        }
+    }
+
+    const updated = updateApprovalRequestStatus(request.id, status, superAdminRemarks)
+    if (!updated) return { success: false, message: 'Demo approval request not found.' }
+    return { success: true, request: updated, persistedOnServer: false }
 }
 
 export const filterApprovalRequests = (
@@ -387,3 +452,6 @@ export const getApprovalSummary = (records = getAllApprovalRequests()) => ({
 })
 
 export const formatAmount = (amount) => amount ?? '—'
+
+export const liveApprovalCategories = () =>
+    includeDemoApprovalSeeds() ? REQUEST_CATEGORIES : ['Activity Approval']

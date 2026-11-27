@@ -16,6 +16,7 @@ from app.api.v1.endpoints.documents import router as documents_router
 from app.api.v1.endpoints.front_office import router as front_office_router
 from app.api.v1.endpoints.academics_collections import router as academics_collections_router
 from app.api.v1.endpoints.ops_collections import router as ops_collections_router
+from app.api.v1.endpoints.library import router as library_router
 from app.api.v1.endpoints.campus_audit_collections import router as campus_audit_collections_router
 from app.api.v1.endpoints.protrack import router as protrack_router
 from app.api.v1.endpoints.geo import router as geo_router
@@ -28,29 +29,40 @@ from app.api.v1.endpoints.masters import router as masters_router
 from app.api.v1.endpoints.parents import router as parents_router
 from app.api.v1.endpoints.students import router as students_router
 from app.api.v1.endpoints.attendance import router as attendance_router
+from app.api.v1.endpoints.substitute_duties import router as substitute_duties_router
 from app.api.v1.endpoints.approvals import router as approvals_router
 from app.api.v1.endpoints.lesson_plans import router as lesson_plans_router
 from app.api.v1.endpoints.exams import router as exams_router
 from app.api.v1.endpoints.escalations import router as escalations_router
 from app.api.v1.endpoints.leave import router as leave_router
-from app.api.v1.endpoints.substitute_duties import router as substitute_duties_router
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.models import Base
 from app.services.admissions_migrate import ensure_admissions_schema
+from app.services.attendance_migrate import ensure_attendance_schema
+from app.services.attendance_scheduler import start_attendance_auto_sync, stop_attendance_auto_sync
+from app.services.communication_migrate import ensure_communication_schema
 from app.services.exams_migrate import ensure_exams_schema
 from app.services.hr_migrate import ensure_hr_employee_columns
 from app.services.masters_migrate import ensure_masters_schema
 from app.services.schema_check import warn_if_schema_behind
 from app.services.seed import seed_reference_data
+from app.services.tc_migrate import ensure_tc_schema
 
 
 def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
+    # Soft-managed tables: create_all must not hard-fail startup when the prod DB role
+    # cannot CREATE. ensure_tc_schema (try/except) + Alembic 0024 own this table.
+    _soft_schema_tables = frozenset({"tc_request_nocs"})
+    create_tables = [t for t in Base.metadata.sorted_tables if t.name not in _soft_schema_tables]
+    Base.metadata.create_all(bind=engine, tables=create_tables)
     ensure_hr_employee_columns()
     ensure_admissions_schema()
     ensure_masters_schema()
     ensure_exams_schema()
+    ensure_attendance_schema()
+    ensure_communication_schema()
+    ensure_tc_schema()
     warn_if_schema_behind()
     db = SessionLocal()
     try:
@@ -62,7 +74,11 @@ def init_db() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    yield
+    auto_sync = start_attendance_auto_sync()
+    try:
+        yield
+    finally:
+        await stop_attendance_auto_sync(auto_sync)
 
 
 app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
@@ -81,11 +97,11 @@ app.include_router(admissions_router)
 app.include_router(parents_router)
 app.include_router(students_router)
 app.include_router(attendance_router)
+app.include_router(substitute_duties_router)
 app.include_router(approvals_router)
 app.include_router(lesson_plans_router)
 app.include_router(exams_router)
 app.include_router(leave_router)
-app.include_router(substitute_duties_router)
 app.include_router(escalations_router)
 app.include_router(finance_router)
 app.include_router(hr_router)
@@ -100,6 +116,7 @@ app.include_router(dashboard_router)
 app.include_router(front_office_router)
 app.include_router(academics_collections_router)
 app.include_router(ops_collections_router)
+app.include_router(library_router)
 app.include_router(campus_audit_collections_router)
 app.include_router(protrack_router)
 app.include_router(geo_router)

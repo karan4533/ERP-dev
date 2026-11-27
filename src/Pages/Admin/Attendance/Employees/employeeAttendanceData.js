@@ -5,6 +5,10 @@ export const STATUS_OPTIONS = ['Present', 'Absent']
 export const statusBadgeColor = {
     Present: 'bg-[#4CAF5033] text-[#4CAF50]',
     Absent: 'bg-[#FF000033] text-[#FF0000]',
+    // Statuses HR attendance records can carry in addition to Present / Absent.
+    Late: 'bg-[#FF980033] text-[#E65100]',
+    Leave: 'bg-[#2196F333] text-[#1565C0]',
+    Permission: 'bg-[#9C27B033] text-[#6A1B9A]',
 }
 
 export const EMPLOYEE_ATTENDANCE = [

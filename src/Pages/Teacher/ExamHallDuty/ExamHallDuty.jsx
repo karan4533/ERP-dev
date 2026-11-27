@@ -147,7 +147,14 @@ const ExamHallDuty = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='exam-hall-duty'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {Array.isArray(EXAM_HALL_DUTY_LIST) ? EXAM_HALL_DUTY_LIST.length : 0} record(s).</>}
+            />
         </section>
     )
 }

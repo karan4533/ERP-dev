@@ -85,7 +85,23 @@ const ClosedActionsReport = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                rows={records}
+                columns={[
+                    { key: 'observationId', label: 'Observation ID' },
+                    { key: 'observation', label: 'Observation' },
+                    { key: 'department', label: 'Department' },
+                    { key: 'closedBy', label: 'Closed By' },
+                    { key: 'closedDate', label: 'Closed Date' },
+                    { key: 'daysTaken', label: 'Days Taken' },
+                    { key: 'status', label: 'Status' },
+                ]}
+                filename='quality-closed-actions-report'
+                title='Closed Actions'
+                exportDescription={<>You are exporting {records.length} closed action(s).</>}
+            />
         </section>
     )
 }

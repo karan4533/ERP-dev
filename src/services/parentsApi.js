@@ -11,5 +11,9 @@ export async function listMyChildrenApi() {
         classSection: row.classSection || row.className || '',
         rollNumber: row.rollNumber || '',
         admissionNumber: row.admissionNumber || '',
+        // Portal pages hide timetable / attendance until placementStatus is 'placed'.
+        placementStatus: row.placementStatus || '',
+        classTeacherEmail: row.classTeacherEmail || '',
+        sectionId: row.sectionId || null,
     }))
 }

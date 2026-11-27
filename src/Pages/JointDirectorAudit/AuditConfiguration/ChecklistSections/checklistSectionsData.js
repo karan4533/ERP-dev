@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 import { AUDIT_TEMPLATES } from '../AuditTemplates/auditTemplatesData'
 
 export const TEMPLATE_OPTIONS = AUDIT_TEMPLATES.map((template) => ({
@@ -20,7 +21,7 @@ export const DEFAULT_SECTION_FORM = {
     active: true,
 }
 
-export const CHECKLIST_SECTIONS = [
+const DEFAULT_CHECKLIST_SECTIONS = [
     {
         id: 'SEC-2026-001',
         templateId: 'TPL-2026-004',
@@ -126,3 +127,15 @@ export const getSectionStatus = (active) => (active ? 'Active' : 'Inactive')
 export const getTemplateName = (templateId) => (
     TEMPLATE_OPTIONS.find((template) => template.id === templateId)?.name ?? ''
 )
+export const CHECKLIST_SECTIONS_STORAGE_KEY = 'schoolerp-jd-audit-checklist-sections-v1'
+export function getChecklistSections() {
+    return ensureCampusSeed('schoolerp-jd-audit-checklist-sections-v1', DEFAULT_CHECKLIST_SECTIONS)
+}
+export function saveChecklistSections(rows) {
+    return saveCampusJson('schoolerp-jd-audit-checklist-sections-v1', rows)
+}
+export function hydrateChecklistSectionsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-checklist-sections-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-checklist-sections-v1', DEFAULT_CHECKLIST_SECTIONS)
+}
+export const CHECKLIST_SECTIONS = DEFAULT_CHECKLIST_SECTIONS

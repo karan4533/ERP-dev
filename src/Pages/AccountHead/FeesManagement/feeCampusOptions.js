@@ -20,6 +20,14 @@ export const isAllClassesFee = (className) => {
     return value === 'all classes' || value === 'all' || value === '*'
 }
 
+/**
+ * Route transport fees are a tariff, not a bill: only students enrolled on the route are charged,
+ * by the Transport Manager enrollment bridge. They must not be expanded onto every student.
+ */
+export const isRouteBilledFee = (structure) => (
+    Boolean(String(structure?.routeId || '').trim()) || structure?.source === 'transport-route-fee'
+)
+
 /** Full class list for Define / filters — never shrink to only classes that already have a fee row. */
 export const buildCampusClassOptions = ({ students = [], feeStructures = [] } = {}) => {
     const fromStudents = students.map((row) => String(row.className || '').trim()).filter(Boolean)

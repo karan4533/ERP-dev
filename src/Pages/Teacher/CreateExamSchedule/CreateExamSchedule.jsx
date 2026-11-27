@@ -7,19 +7,21 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 import ExamTimeTableModal from './Components/ExamTimeTableModal'
 import {
     getExamSchedules,
+    hydrateExamSchedulesFromApi,
     APPROVAL_STATUSES,
     approvalBadgeColor,
     CLASSES,
 } from './createExamScheduleData'
-import { useAuth } from '../../../context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
+import { canUseClassDetailsApi, loadClassDirectory } from '../../../services/classDetailsApi'
 
 const CreateExamSchedule = () => {
     const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
+    const showDelete = canShowDeleteOption(role)
     const location = useLocation()
     const [schedules, setSchedules] = useState(() => getExamSchedules())
     const [fromDate, setFromDate] = useState(new Date())
@@ -28,13 +30,39 @@ const CreateExamSchedule = () => {
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
     const [timeTableModal, setTimeTableModal] = useState(null)
+    const [classOptions, setClassOptions] = useState(CLASSES)
 
     useEffect(() => {
-        setSchedules(getExamSchedules())
+        let cancelled = false
+        hydrateExamSchedulesFromApi()
+            .then((rows) => {
+                if (!cancelled) setSchedules(rows)
+            })
+            .catch(() => {
+                if (!cancelled) setSchedules(getExamSchedules())
+            })
+        return () => { cancelled = true }
     }, [location.pathname])
+
+    useEffect(() => {
+        if (!canUseClassDetailsApi()) return undefined
+        let cancelled = false
+        loadClassDirectory()
+            .then((directory) => {
+                if (cancelled) return
+                const names = (directory?.records || []).map((row) => row.className).filter(Boolean)
+                if (names.length) setClassOptions(names)
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [])
 
     return (
         <section>
+            <p className='mb-3 rounded-md border border-[#FEC84B] bg-[#FFFAEB] px-3 py-2 text-sm text-[#93370D]'>
+                Official examination timetables are created by the Principal or Coordinator and approved by the Director.
+                Teachers can view campus schedules here; create/submit requires <span className='font-medium'>exams.write</span>.
+            </p>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
@@ -53,7 +81,7 @@ const CreateExamSchedule = () => {
                         <label htmlFor='class-filter' className='text-base font-medium text-[#808080]'>Class</label>
                         <select id='class-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
-                            {CLASSES.map((item) => (
+                            {classOptions.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -100,13 +128,15 @@ const CreateExamSchedule = () => {
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <div className='flex items-center gap-3'>
-                        <h2 className='text-xl font-medium text-black'>Exam Schedule List</h2>
-                        <span className='inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 border border-slate-200'>
-                            Read Only
-                        </span>
-                    </div>
+                    <h2 className='text-xl font-medium text-black'>Exam Schedule List</h2>
                     <div className='flex gap-x-2'>
+                        <NavLink
+                            to='/teacher/examination/create-schedule/add'
+                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                        >
+                            <Plus size={16} />
+                            Create Schedule
+                        </NavLink>
                         <button
                             type='button'
                             onClick={() => setExportModal(true)}
@@ -175,11 +205,9 @@ const CreateExamSchedule = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            {canDelete && (
-                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                    Delete
-                                                </button>
-                                            )}
+                                            <button type='button' onClick={() => { if (showDelete) setDeleteRequestModal(true) }} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                Delete
+                                            </button>
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -206,9 +234,15 @@ const CreateExamSchedule = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='create-exam-schedule'
+                rows={Array.isArray(schedules) ? schedules : []}
+                exportDescription={<>You are exporting {Array.isArray(schedules) ? schedules.length : 0} record(s).</>}
+            />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
             <ExamTimeTableModal
                 open={Boolean(timeTableModal)}
                 onClose={() => setTimeTableModal(null)}

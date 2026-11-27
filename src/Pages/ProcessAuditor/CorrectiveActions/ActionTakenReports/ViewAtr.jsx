@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
@@ -7,7 +7,7 @@ import {
     VerificationDetailsSection,
     AtrStatusTimeline,
 } from './Components/AtrSections'
-import { getAtrById, statusBadgeColor } from './atrData'
+import { getAtrById, getAtrLoadState, hydrateFromApi, statusBadgeColor } from './atrData'
 import AuditReviewPanel from '../../../../Common/AuditReview/AuditReviewPanel'
 
 const Field = ({ label, value }) => (
@@ -20,7 +20,33 @@ const Field = ({ label, value }) => (
 const ViewAtr = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const record = getAtrById(id)
+    const [record, setRecord] = useState(() => getAtrById(id))
+    const [loadState, setLoadState] = useState(() => getAtrLoadState())
+
+    useEffect(() => {
+        let active = true
+        hydrateFromApi().finally(() => {
+            if (!active) return
+            setRecord(getAtrById(id))
+            setLoadState(getAtrLoadState())
+        })
+        return () => {
+            active = false
+        }
+    }, [id])
+
+    const pending = loadState.api && (loadState.status === 'idle' || loadState.status === 'loading')
+    if (!record && (pending || (loadState.api && loadState.status === 'failed'))) {
+        return (
+            <section className='space-y-6'>
+                <div className={`bg-white rounded-2xl shadow-md p-8 text-center ${pending ? 'text-[#667085]' : 'text-[#B42318]'}`}>
+                    {pending
+                        ? 'Loading action taken report…'
+                        : `Could not load action taken reports from the server${loadState.error ? `: ${loadState.error}` : ''}. Refresh to try again.`}
+                </div>
+            </section>
+        )
+    }
 
     if (!record) {
         return (

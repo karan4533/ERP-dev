@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.deps import require_permission
 from app.models import User
 from app.services import exams as svc
+from app.services import report_cards
 
 router = APIRouter(prefix="/api/v1", tags=["exams"])
 
@@ -18,13 +19,25 @@ class ExamTypeIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
 
 
+class ExamTimelineIn(BaseModel):
+    id: str | None = None
+    day: str | None = None
+    subject: str | None = None
+    examDate: str | None = None
+    startTime: str | None = None
+    endTime: str | None = None
+
+
 class ExamIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     examType: str
     className: str = Field(min_length=1, max_length=40)
     academicYear: str | None = Field(default=None, max_length=40)
+    section: str | None = Field(default=None, max_length=40)
+    teacherName: str | None = Field(default=None, max_length=120)
     startDate: date
     endDate: date
+    timelines: list[ExamTimelineIn] | None = None
 
 
 class WeightIn(BaseModel):
@@ -52,6 +65,11 @@ class BatchIn(BaseModel):
 
 
 class EntriesIn(BaseModel):
+    entries: list[EntryIn]
+
+
+class CorrectionIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
     entries: list[EntryIn]
 
 
@@ -83,6 +101,9 @@ def create_exam_route(
         start_date=body.startDate,
         end_date=body.endDate,
         academic_year=body.academicYear,
+        timelines=[row.model_dump() for row in (body.timelines or [])],
+        section=body.section,
+        teacher_name=body.teacherName,
     )
 
 
@@ -121,6 +142,9 @@ def update_exam_route(
         start_date=body.startDate,
         end_date=body.endDate,
         academic_year=body.academicYear,
+        timelines=[row.model_dump() for row in body.timelines] if body.timelines is not None else None,
+        section=body.section,
+        teacher_name=body.teacherName,
     )
 
 
@@ -216,6 +240,18 @@ def revise_batch_route(
     return svc.revise_batch(db, user, batch_id)
 
 
+@router.post("/marks-batches/{batch_id}/request-correction", status_code=201)
+def request_correction_route(
+    batch_id: UUID,
+    body: CorrectionIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("marks.write")),
+) -> dict:
+    return svc.request_correction(
+        db, user, batch_id, reason=body.reason, entries=[e.model_dump() for e in body.entries]
+    )
+
+
 # ---- student results (parents via their child) ------------------------------
 
 
@@ -224,3 +260,39 @@ def student_results_route(
     student_id: UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("results.read"))
 ) -> dict:
     return svc.student_results(db, user, student_id)
+
+
+def _codes(value: str | None) -> list[str] | None:
+    return [part for part in (value or "").split(",") if part.strip()] or None
+
+
+@router.get("/report-cards/students/{student_id}")
+def report_card_route(
+    student_id: UUID,
+    academic_year: str | None = Query(default=None, alias="academicYear", max_length=40),
+    exam_types: str | None = Query(default=None, alias="examTypes", max_length=400),
+    term: str | None = Query(default=None, max_length=60),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("results.read")),
+) -> dict:
+    """Term report card from published marks: subject totals, grades and overall result."""
+    return report_cards.student_report_card(
+        db, user, student_id, academic_year=academic_year, exam_types=_codes(exam_types), term=term
+    )
+
+
+@router.get("/results/analytics")
+def class_analytics_route(
+    class_name: str = Query(alias="className", min_length=1, max_length=40),
+    section: str | None = Query(default=None, max_length=16),
+    exam_id: UUID | None = Query(default=None, alias="examId"),
+    academic_year: str | None = Query(default=None, alias="academicYear", max_length=40),
+    exam_types: str | None = Query(default=None, alias="examTypes", max_length=400),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("results.read")),
+) -> dict:
+    """Grade-wise performance over published marks, scoped to the caller's classes."""
+    return report_cards.class_performance(
+        db, user, class_name=class_name, section=section, exam_id=exam_id,
+        academic_year=academic_year, exam_types=_codes(exam_types),
+    )

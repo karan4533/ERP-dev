@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -7,36 +7,64 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
     PASS_CATEGORIES,
-    ROUTE_BASE,
     filterGatePasses,
     getAllGatePasses,
+    getGatePassRouteBase,
     getGatePassStatusOptions,
+    hydrateAllGatePassesFromApi,
     passCategoryBadgeColor,
     statusBadgeColor,
 } from './gatePassData'
+import { frontOfficeApiOn } from '../../FrontOffice/frontOfficeStore'
 
 const GatePassList = () => {
-    const [records] = useState(() => getAllGatePasses())
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const routeBase = getGatePassRouteBase()
+    const [records, setRecords] = useState(() => (frontOfficeApiOn() ? [] : getAllGatePasses()))
+    const [loading, setLoading] = useState(true)
+    const [loadError, setLoadError] = useState('')
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('')
     const [passCategory, setPassCategory] = useState('')
     const [exportModal, setExportModal] = useState(false)
 
+    useEffect(() => {
+        let active = true
+        hydrateAllGatePassesFromApi()
+            .then((rows) => {
+                if (active) {
+                    setRecords(rows)
+                    setLoadError('')
+                }
+            })
+            .catch((error) => {
+                if (active) {
+                    setRecords([])
+                    setLoadError(error?.message || 'Could not load gate passes.')
+                }
+            })
+            .finally(() => {
+                if (active) setLoading(false)
+            })
+        return () => {
+            active = false
+        }
+    }, [])
+
     const statusOptions = useMemo(() => getGatePassStatusOptions(records), [records])
 
     const filteredRecords = useMemo(
-        () => filterGatePasses(records, { search, status, passCategory }),
-        [records, search, status, passCategory],
+        () => filterGatePasses(records, { search, status, passCategory, fromDate, toDate }),
+        [records, search, status, passCategory, fromDate, toDate],
     )
 
     const clearFilters = () => {
         setSearch('')
         setStatus('')
         setPassCategory('')
-        setFromDate(new Date())
-        setToDate(new Date())
+        setFromDate(null)
+        setToDate(null)
     }
 
     return (
@@ -127,7 +155,12 @@ const GatePassList = () => {
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Gate Pass List</h2>
+                    <div>
+                        <h2 className='text-xl font-medium text-black'>Gate Pass List</h2>
+                        <p className='text-sm text-[#667085] mt-1'>
+                            Student, hostel, and material passes from Front Office — same records across the ERP.
+                        </p>
+                    </div>
                     <button
                         type='button'
                         onClick={() => setExportModal(true)}
@@ -152,7 +185,19 @@ const GatePassList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRecords.length === 0 ? (
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
+                                        Loading gate passes…
+                                    </td>
+                                </tr>
+                            ) : loadError ? (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-8 text-center text-[#B42318]'>
+                                        {loadError}
+                                    </td>
+                                </tr>
+                            ) : filteredRecords.length === 0 ? (
                                 <tr>
                                     <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
                                         No gate passes found.
@@ -179,7 +224,7 @@ const GatePassList = () => {
                                         <td className='px-2 py-4 text-center rounded-e-lg'>
                                             <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
                                                 <NavLink
-                                                    to={`${ROUTE_BASE}/view/${record.id}`}
+                                                    to={`${routeBase}/view/${record.id}`}
                                                     className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                 >
                                                     View
@@ -211,7 +256,22 @@ const GatePassList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename="super-admin-gate-passes"
+                title="Gate Pass List"
+                rows={filteredRecords.map((row) => ({
+                    pass_id: row.passId,
+                    date: row.date,
+                    subject: row.subjectName,
+                    detail: row.subjectDetail,
+                    category: row.passCategory,
+                    status: row.status,
+                    created_by: row.createdBy,
+                }))}
+                exportDescription={<>You are exporting {filteredRecords.length} record(s).</>}
+            />
         </section>
     )
 }

@@ -18,3 +18,12 @@ export const rejectTcRequestAtPrmApi = (ref, remarks) =>
 
 export const decideTcRequestApi = (ref, decision, remarks) =>
     apiRequest(`/tc-requests/${enc(ref)}/decide`, { method: 'POST', body: { decision, remarks: remarks || '' } })
+
+export const decideTcNocApi = (ref, decision, remarks) =>
+    apiRequest(`/tc-requests/${enc(ref)}/noc`, { method: 'POST', body: { decision, remarks: remarks || '' } })
+
+export const overrideTcNocApi = (ref, roleCode, reason) =>
+    apiRequest(`/tc-requests/${enc(ref)}/noc/${enc(roleCode)}/override`, {
+        method: 'POST',
+        body: { reason: reason || '' },
+    })

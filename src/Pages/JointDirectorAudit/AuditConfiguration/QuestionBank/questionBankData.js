@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 import { AUDIT_TEMPLATES } from '../AuditTemplates/auditTemplatesData'
 import { CHECKLIST_SECTIONS } from '../ChecklistSections/checklistSectionsData'
 
@@ -49,7 +50,7 @@ export const getSectionMeta = (sectionId) => (
 
 export const getQuestionStatus = (active) => (active ? 'Active' : 'Inactive')
 
-export const QUESTION_BANK = [
+const DEFAULT_QUESTIONS = [
     {
         id: 'QN-2026-001',
         sectionId: 'SEC-2026-001',
@@ -269,3 +270,16 @@ export const createQuestionId = (questions) => {
     }, 0)
     return `QN-2026-${String(max + 1).padStart(3, '0')}`
 }
+export const QUESTIONS_STORAGE_KEY = 'schoolerp-jd-audit-question-bank-v1'
+export function getAuditQuestions() {
+    return ensureCampusSeed('schoolerp-jd-audit-question-bank-v1', DEFAULT_QUESTIONS)
+}
+export function saveAuditQuestions(rows) {
+    return saveCampusJson('schoolerp-jd-audit-question-bank-v1', rows)
+}
+export function hydrateAuditQuestionsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-question-bank-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-question-bank-v1', DEFAULT_QUESTIONS)
+}
+export const QUESTIONS = DEFAULT_QUESTIONS
+export const QUESTION_BANK = DEFAULT_QUESTIONS

@@ -1,6 +1,7 @@
+from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -107,6 +108,24 @@ def list_enrolled_students_route(
     return svc.list_enrolled_students(db, user)
 
 
+@router.get("/referrals")
+def list_referrals_route(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_any("admissions.write", "finance.write")),
+) -> list[dict]:
+    """Referred admissions (record only); the Account Head applies any bonus manually."""
+    return svc.list_referrals(db, user)
+
+
+@router.get("/fee-pending")
+def list_fee_pending_route(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("finance.write")),
+) -> list[dict]:
+    """Admissions waiting on a registration fee receipt or Finance waiver (Finance roles only)."""
+    return svc.list_fee_pending_admissions(db, user)
+
+
 @router.get("/{admission_id}", response_model=AdmissionOut)
 def get_admission_route(
     admission_id: UUID,
@@ -134,3 +153,14 @@ def enroll_admission_route(
     user: User = Depends(require_permission("admissions.write")),
 ):
     return svc.enroll_admission(db, user, admission_id, body or EnrollAdmissionIn())
+
+
+@router.post("/{admission_id}/fee-waiver")
+def waive_registration_fee_route(
+    admission_id: UUID,
+    body: dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("finance.write")),
+) -> dict:
+    """Finance-only registration-fee waiver (role-checked: Account Head / Finance Manager / Super Admin / MD)."""
+    return svc.waive_registration_fee(db, user, admission_id, body)

@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { useAuth } from '../../../context/AuthContext'
+import { hydrateDriverProfileSources } from '../driverProfileData'
 import {
-    CLASS_OPTIONS,
-    DAY_OPTIONS,
-    ROUTE_STOPS,
-    SECTION_OPTIONS,
+    getRouteStops,
     filterRouteStops,
 } from './routeStopsData'
 
@@ -13,38 +12,30 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const RouteStops = () => {
+    const { email } = useAuth()
+    const [routeStops, setRouteStops] = useState(() => getRouteStops(email))
     const [search, setSearch] = useState('')
-    const [className, setClassName] = useState('12th')
-    const [section, setSection] = useState('A')
-    const [day, setDay] = useState('Monday')
     const [exportModal, setExportModal] = useState(false)
 
-    const filteredStops = useMemo(() => filterRouteStops({
-        stops: ROUTE_STOPS,
-        search,
-        className,
-        section,
-        day,
-    }), [search, className, section, day])
+    useEffect(() => {
+        hydrateDriverProfileSources().finally(() => setRouteStops(getRouteStops(email)))
+    }, [email])
 
-    const clearFilters = () => {
-        setSearch('')
-        setClassName('')
-        setSection('')
-        setDay('')
-    }
+    const filteredStops = useMemo(() => filterRouteStops({
+        stops: routeStops,
+        search,
+    }), [routeStops, search])
 
     return (
         <section className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-4'>
-                    <button
-                        type='button'
-                        onClick={clearFilters}
-                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all cursor-pointer w-fit'
-                    >
-                        Clear Filters
-                    </button>
+                    <div>
+                        <h2 className='text-lg font-semibold text-[#0C1E5B]'>Route Stops</h2>
+                        <p className='text-sm text-[#667085] mt-1'>
+                            Pickup points from your assigned route ({routeStops.length} stops)
+                        </p>
+                    </div>
                     <div className='flex flex-col gap-y-2 md:max-w-xs w-full'>
                         <label htmlFor='stop-search' className='text-base font-medium text-[#808080]'>Search</label>
                         <input
@@ -55,51 +46,6 @@ const RouteStops = () => {
                             placeholder='Pickup point, landmark...'
                             className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         />
-                    </div>
-                </div>
-
-                <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 lg:mt-8 mt-4'>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='class-filter' className='text-base font-medium text-[#808080]'>Class</label>
-                        <select
-                            id='class-filter'
-                            value={className}
-                            onChange={(event) => setClassName(event.target.value)}
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
-                            <option value=''>All</option>
-                            {CLASS_OPTIONS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='section-filter' className='text-base font-medium text-[#808080]'>Sec</label>
-                        <select
-                            id='section-filter'
-                            value={section}
-                            onChange={(event) => setSection(event.target.value)}
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
-                            <option value=''>All</option>
-                            {SECTION_OPTIONS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='day-filter' className='text-base font-medium text-[#808080]'>Day</label>
-                        <select
-                            id='day-filter'
-                            value={day}
-                            onChange={(event) => setDay(event.target.value)}
-                            className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
-                            <option value=''>All</option>
-                            {DAY_OPTIONS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
                     </div>
                 </div>
             </div>
@@ -117,32 +63,23 @@ const RouteStops = () => {
                     </button>
                 </div>
 
-                <div className='flex gap-x-2 items-center mb-4'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md text-sm'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                    </select>
-                    <span className='text-sm text-[#515DEF]'>Entries Per Page</span>
-                </div>
-
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left min-w-[800px]'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
                             <tr>
                                 <th className={`${thClass} rounded-s-lg text-center`}>Stop No</th>
                                 <th className={thClass}>Pickup Point</th>
-                                <th className={thClass}>Arrival Time</th>
-                                <th className={thClass}>Departure Time</th>
+                                <th className={thClass}>Pick Up Time</th>
+                                <th className={thClass}>Drop Time</th>
                                 <th className={`${thClass} text-center`}>Students Boarding</th>
-                                <th className={`${thClass} rounded-e-lg`}>Landmark</th>
+                                <th className={`${thClass} rounded-e-lg`}>Landmark / Destination</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredStops.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className='px-2 py-8 text-center text-[#667085]'>
-                                        No route stops found for the selected filters.
+                                        No stops on your assigned route yet. Ask Transport Manager to add stops under Route Management.
                                     </td>
                                 </tr>
                             ) : (
@@ -167,7 +104,7 @@ const RouteStops = () => {
 
                 <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-2'>
                     <p className='text-sm font-medium text-[#515DEF]'>
-                        Showing 1 to {filteredStops.length} of {filteredStops.length} entries
+                        Showing {filteredStops.length} of {routeStops.length} stops
                     </p>
                     <div className='flex items-center gap-2'>
                         <button type='button' className='size-8 flex items-center justify-center rounded-full border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
@@ -183,7 +120,14 @@ const RouteStops = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='routestops'
+                title='RouteStops'
+                rows={Array.isArray(filteredStops) ? filteredStops : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredStops) ? filteredStops.length : 0} record(s).</>}
+            />
         </section>
     )
 }

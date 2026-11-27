@@ -190,6 +190,57 @@ def _student_in_teacher_scope(student: Student, scope: list[dict]) -> bool:
             return True
     return False
 
+
+def staff_student_filter(db: Session, actor: User, role: str):
+    """Predicate for which students a teacher/coordinator may see, or None when the role is not scoped.
+
+    Teachers: class-teacher sections and Teacher Allocation mappings.
+    Coordinators: their grade band, plus any classes they were allocated to teach.
+    """
+    if role == "teacher":
+        scope = _teacher_roster_scope(db, actor)
+        return lambda student: _student_in_teacher_scope(student, scope)
+    if role == "coordinator":
+        from app.services.placement import actor_can_manage_grade, parse_grade
+
+        scope = _teacher_roster_scope(db, actor)
+        return lambda student: actor_can_manage_grade(db, actor, parse_grade(student.class_name)) or (
+            bool(scope) and _student_in_teacher_scope(student, scope)
+        )
+    return None
+
+
+PORTAL_ROLES = {"parent", "student"}
+
+
+def portal_students(db: Session, actor: User, role: str) -> list[Student]:
+    """Students a parent/student login is linked to (empty for every other role)."""
+    if role == "parent":
+        link = Student.parent_user_id == actor.id
+    elif role == "student":
+        link = Student.student_user_id == actor.id
+    else:
+        return []
+    return list(db.scalars(select(Student).where(Student.campus_id == actor.campus_id, link)).all())
+
+
+def class_key(value: str | None) -> str:
+    return _norm_class_key(value)
+
+
+def section_key(value: str | None) -> str:
+    return _norm_section_key(value)
+
+
+def ensure_staff_can_view_student(db: Session, actor: User, student: Student, role: str) -> None:
+    """The student-record rule, shared by every endpoint that returns one student's private data."""
+    allowed = staff_student_filter(db, actor, role)
+    if allowed is None or allowed(student):
+        return
+    if role == "coordinator":
+        fail(403, "forbidden", "This student is outside your grade band and teaching allocations.")
+    fail(403, "forbidden", "This student is outside your assigned classes.")
+
 # Admissions in these statuses are not promoted into the students table.
 _SYNC_SKIP_STATUSES = {
     "rejected",
@@ -453,24 +504,12 @@ def list_parents_for_staff(db: Session, actor: User) -> list[dict]:
 
 def get_student(db: Session, actor: User, student_id: UUID) -> dict:
     from app.deps import role_code_for
-    from app.services.placement import actor_can_manage_grade, parse_grade
 
     student = db.get(Student, student_id)
     if student is None or student.campus_id != actor.campus_id:
         fail(404, "not_found", "Student not found.")
 
-    role = role_code_for(db, actor)
-    if role == "coordinator":
-        grade = parse_grade(student.class_name)
-        in_band = actor_can_manage_grade(db, actor, grade)
-        scope = _teacher_roster_scope(db, actor)
-        in_alloc = bool(scope) and _student_in_teacher_scope(student, scope)
-        if not in_band and not in_alloc:
-            fail(403, "forbidden", "This student is outside your grade band and teaching allocations.")
-    if role == "teacher":
-        scope = _teacher_roster_scope(db, actor)
-        if not _student_in_teacher_scope(student, scope):
-            fail(403, "forbidden", "This student is outside your assigned classes.")
+    ensure_staff_can_view_student(db, actor, student, role_code_for(db, actor))
 
     admission = _admission_for(db, student)
     guardians = db.scalars(

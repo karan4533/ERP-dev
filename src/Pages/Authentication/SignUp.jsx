@@ -1,8 +1,6 @@
 import React from 'react'
 import signin_img from "../../assets/images/signin-img.png"
-import { NavLink } from 'react-router-dom'
 import AuthHeader from './AuthHeader'
-import FeedbackState from '../../Common/ui/FeedbackState'
 
 const SignUp = () => {
     return (
@@ -11,16 +9,16 @@ const SignUp = () => {
 
             <div className="relative z-10 flex-1 grid grid-cols-1 md:grid-cols-2">
                 <div className="flex justify-center items-center md:p-6 p-2">
-                    <FeedbackState
-                        kind='permission'
-                        title='Self-service registration is unavailable'
-                        description='ERP accounts are created through authorized administration and admission workflows. Public sign-up is intentionally disabled.'
-                        className='w-full max-w-lg'
-                        action={<NavLink to='/signin' className='inline-flex min-h-10 items-center rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>Return to Sign In</NavLink>}
-                    />
+                    <div className="w-full max-w-lg flex flex-col gap-y-8 py-8">
+                        {/* <div>
+                            <h1 className='text-4xl font-semibold text-[#313131] md:text-left text-center'>Profile</h1>
+                            <p className='text-base font-medium text-[#313131]/70 mt-4 md:text-left text-center'>Select your correct profile</p>
+                        </div> */}
+
+                    </div>
                 </div>
                 <div className='hidden md:flex justify-center items-center p-6'>
-                    <img src={signin_img} className='w-full max-w-md' alt='School workspace account access' />
+                    <img src={signin_img} className='w-full max-w-md' alt='signin_img' />
                 </div>
             </div>
 

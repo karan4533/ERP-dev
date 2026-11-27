@@ -3,11 +3,14 @@ import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar } from 'lucide-react'
 import { CLASS_LEVEL_OPTIONS } from '../../../Class/ClassDetails/classDetailsOptions'
+import { REGISTRATION_FEE_STATUSES } from '../admissionListData'
 
 const inputClass = 'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
+const invalidClass = 'text-sm font-normal text-[#1E1E1E] border border-[#F44336] rounded-md px-2 py-3 w-full'
 
-const AdmissionInfo = ({ form, onChange }) => {
+const AdmissionInfo = ({ form, onChange, missing = new Set() }) => {
     const update = (key, value) => onChange?.(key, value)
+    const classMissing = missing.has('className')
 
     return (
         <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-6 lg:mt-8 mt-2'>
@@ -25,18 +28,23 @@ const AdmissionInfo = ({ form, onChange }) => {
                 </div>
             </div>
             <div className='flex flex-col gap-y-2'>
-                <label htmlFor='admissionClass' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
+                <label htmlFor='admissionClass' className='text-base font-medium text-[#1E1E1E]'>
+                    Class: <span className='text-[#F44336]'>*</span>
+                </label>
                 <select
                     id='admissionClass'
                     value={form.className}
                     onChange={(e) => update('className', e.target.value)}
-                    className={inputClass}
+                    aria-invalid={classMissing}
+                    aria-describedby={classMissing ? 'admissionClass-error' : undefined}
+                    className={classMissing ? invalidClass : inputClass}
                 >
                     <option value=''>Select Class</option>
                     {CLASS_LEVEL_OPTIONS.map((item) => (
                         <option key={item} value={item}>{item}</option>
                     ))}
                 </select>
+                {classMissing && <p id='admissionClass-error' className='text-xs text-[#F44336]'>Class is required.</p>}
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='registrationFees' className='text-base font-medium text-[#1E1E1E]'>Registration Fees:</label>
@@ -47,6 +55,20 @@ const AdmissionInfo = ({ form, onChange }) => {
                     onChange={(e) => update('registrationFees', e.target.value)}
                     className={inputClass}
                 />
+            </div>
+            <div className='flex flex-col gap-y-2'>
+                <label htmlFor='registrationFeeStatus' className='text-base font-medium text-[#1E1E1E]'>Registration Fee Status:</label>
+                <select
+                    id='registrationFeeStatus'
+                    value={form.registrationFeeStatus || 'Pending'}
+                    onChange={(e) => update('registrationFeeStatus', e.target.value)}
+                    className={inputClass}
+                >
+                    {REGISTRATION_FEE_STATUSES.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                    ))}
+                </select>
+                <p className='text-xs text-[#667085]'>For reference only. Enrolment needs a zero fee, a Finance-recorded waiver, or a settled Finance Admission Fee receipt for this admission.</p>
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='batchStartYear' className='text-base font-medium text-[#1E1E1E]'>Batch Start Year:</label>

@@ -1,32 +1,20 @@
+import {
+    ensureCampusSeed,
+    loadCampusJson,
+    saveCampusJson,
+    usesCampusApiForKey,
+} from '../../services/campusJsonStore'
+
 export function loadJson(key, fallback) {
-    try {
-        const raw = localStorage.getItem(key)
-        if (!raw) return fallback
-        const parsed = JSON.parse(raw)
-        return parsed ?? fallback
-    } catch (error) {
-        console.error(`Failed to read ${key}`, error)
-        return fallback
-    }
+    return loadCampusJson(key, fallback)
 }
 
 export function saveJson(key, value) {
-    try {
-        localStorage.setItem(key, JSON.stringify(value))
-        return true
-    } catch (error) {
-        console.error(`Failed to write ${key}`, error)
-        return false
-    }
+    return saveCampusJson(key, value)
 }
 
 export function ensureSeed(key, seed) {
-    const existing = loadJson(key, null)
-    if (existing == null) {
-        saveJson(key, seed)
-        return structuredClone(seed)
-    }
-    return existing
+    return ensureCampusSeed(key, seed)
 }
 
 export function nextSerial(prefix, items, idField = 'id') {
@@ -36,3 +24,5 @@ export function nextSerial(prefix, items, idField = 'id') {
     }, 0)
     return `${prefix}${String(max + 1).padStart(4, '0')}`
 }
+
+export { usesCampusApiForKey }

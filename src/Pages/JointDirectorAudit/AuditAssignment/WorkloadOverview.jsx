@@ -1,11 +1,5 @@
-import React from 'react'
-import AuditAssignmentPlaceholder from './AuditAssignmentPlaceholder'
+import AssignAudits from './AssignAudits'
 
-const WorkloadOverview = () => (
-    <AuditAssignmentPlaceholder
-        title='Workload Overview'
-        description='Monitor auditor workload and assignment distribution. This section will be implemented next.'
-    />
-)
+const WorkloadOverview = () => <AssignAudits mode='workload' />
 
 export default WorkloadOverview

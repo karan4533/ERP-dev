@@ -7,12 +7,16 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal';
+import { canShowDeleteOption } from '../../../../Common/CommonComponents/approvalGates';
+import { useAuth } from '../../../../context/AuthContext';
 
 const EXPORT_ROWS = [
     {sport_name: 'Cricket', event_type: 'Match', class: '9 - A vs 9 - B', event_date: '15-08-2025', start_time: '10:00 AM', end_time: '11:30 AM', venue: 'Main Building Ground', coach: 'Mr. Kumar', description: 'Class cricket match'},
 ]
 
 const SportsList = () => {
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
 
     const [fromDate, setFromDate] = useState(new Date());
     const [toDate, setToDate] = useState(new Date());
@@ -145,9 +149,11 @@ const SportsList = () => {
                                         <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                             Edit
                                         </button>
+                                        {showDelete ? (
                                         <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                             Delete
                                         </button>
+                                        ) : null}
                                     </Dropdown>
                                 </td>
                             </tr>
@@ -183,7 +189,8 @@ const SportsList = () => {
                 exportModal={exportModal}
                 setExportModal={setExportModal}
                 filename='sports-list'
-                rows={EXPORT_ROWS}
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
                 exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
             />
 

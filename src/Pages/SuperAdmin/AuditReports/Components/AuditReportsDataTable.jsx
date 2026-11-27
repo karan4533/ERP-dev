@@ -29,37 +29,45 @@ const AuditReportsDataTable = ({ title, columns, rows, maxRows }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {displayRows.map((row) => (
-                            <tr
-                                key={row.id ?? row.auditId ?? row.observationId ?? `${row.department}-${row.rank ?? row.riskArea ?? ''}`}
-                                className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'
-                            >
-                                {columns.map((column, index) => {
-                                    const value = row[column.key] ?? '—'
-                                    const badgeClass = column.badgeMap?.[value]
-                                    const colorValue = column.colorKey ? row[column.colorKey] : null
-                                    const displayValue = column.suffix && typeof value === 'number' ? `${value}${column.suffix}` : value
-
-                                    return (
-                                        <td key={column.key} className={`px-2 py-4 ${index === 0 ? 'rounded-s-lg' : ''}`}>
-                                            {column.badge ? (
-                                                <span className={`inline-flex px-2 py-1 rounded-lg text-xs font-semibold ${badgeClass ?? 'bg-[#66708533] text-[#667085]'}`}>
-                                                    {value}
-                                                </span>
-                                            ) : column.colorKey ? (
-                                                <span className='font-semibold' style={{ color: getComplianceColor(colorValue) }}>
-                                                    {displayValue}
-                                                </span>
-                                            ) : column.highlight ? (
-                                                <span className={highlightClass[column.highlight]}>{displayValue}</span>
-                                            ) : (
-                                                displayValue
-                                            )}
-                                        </td>
-                                    )
-                                })}
+                        {displayRows.length === 0 ? (
+                            <tr>
+                                <td colSpan={columns.length} className='px-2 py-10 text-center text-[#667085]'>
+                                    No live records yet.
+                                </td>
                             </tr>
-                        ))}
+                        ) : (
+                            displayRows.map((row) => (
+                                <tr
+                                    key={row.id ?? row.auditId ?? row.observationId ?? `${row.department}-${row.rank ?? row.riskArea ?? ''}`}
+                                    className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'
+                                >
+                                    {columns.map((column, index) => {
+                                        const value = row[column.key] ?? '—'
+                                        const badgeClass = column.badgeMap?.[value]
+                                        const colorValue = column.colorKey ? row[column.colorKey] : null
+                                        const displayValue = column.suffix && typeof value === 'number' ? `${value}${column.suffix}` : value
+
+                                        return (
+                                            <td key={column.key} className={`px-2 py-4 ${index === 0 ? 'rounded-s-lg' : ''}`}>
+                                                {column.badge ? (
+                                                    <span className={`inline-flex px-2 py-1 rounded-lg text-xs font-semibold ${badgeClass ?? 'bg-[#66708533] text-[#667085]'}`}>
+                                                        {value}
+                                                    </span>
+                                                ) : column.colorKey ? (
+                                                    <span className='font-semibold' style={{ color: getComplianceColor(colorValue) }}>
+                                                        {displayValue}
+                                                    </span>
+                                                ) : column.highlight ? (
+                                                    <span className={highlightClass[column.highlight]}>{displayValue}</span>
+                                                ) : (
+                                                    displayValue
+                                                )}
+                                            </td>
+                                        )
+                                    })}
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>

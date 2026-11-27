@@ -176,7 +176,9 @@ const CulturalList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal}
+                unavailableReason='Export is not available on this page yet.'
+            />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

@@ -13,11 +13,12 @@ import {
     DEFAULT_ROUTE_BASE,
     filterStudyMaterials,
     getStudyMaterials,
+    hydrateStudyMaterialsFromApi,
     SECTIONS,
+    STUDY_MATERIALS_UPDATED_EVENT,
     SUBJECTS,
 } from './studyMaterialsData'
-import { useAuth } from '../../../../context/AuthContext'
-import { canRoleDelete } from '../../../../Common/RBAC/actionPermissions'
+import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
 
 export { DEFAULT_ROUTE_BASE }
 
@@ -63,10 +64,19 @@ const StudyMaterialsEmpty = ({ routeBase, viewMode }) => {
 }
 
 const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
     const isStudent = viewMode === 'student'
     const [filters, setFilters] = useState(emptyFilters)
+    const assignments = useTeacherAssignments()
+    const staffFilterOptions = useMemo(() => ({
+        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
+        classes: assignments.classes?.length ? assignments.classes : CLASSES,
+        sections: filters.className
+            ? (assignments.sectionsFor?.(filters.className) || [])
+            : (assignments.assignments?.length
+                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
+                : SECTIONS),
+    }), [assignments, filters.className])
+
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
@@ -116,7 +126,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {SUBJECTS.map((subject) => (
+                            {staffFilterOptions.subjects.map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -126,11 +136,11 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                         <select
                             id='class-filter'
                             value={filters.className}
-                            onChange={(event) => updateFilter('className', event.target.value)}
+                            onChange={(event) => setFilters((current) => ({ ...current, className: event.target.value, section: '' }))}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {CLASSES.map((item) => (
+                            {staffFilterOptions.classes.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -144,7 +154,7 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {SECTIONS.map((item) => (
+                            {staffFilterOptions.sections.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -235,15 +245,13 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                                                     >
                                                         Edit
                                                     </button>
-                                                    {canDelete && (
-                                                        <button
-                                                            type='button'
-                                                            onClick={() => setDeleteRequestModal(true)}
-                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => setDeleteRequestModal(true)}
+                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Delete
+                                                    </button>
                                                 </>
                                             )}
                                         </Dropdown>
@@ -272,9 +280,16 @@ const StudyMaterialsList = ({ items, routeBase, viewMode }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='studymaterials'
+                title='StudyMaterials'
+                rows={Array.isArray(filteredItems) ? filteredItems : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredItems) ? filteredItems.length : 0} record(s).</>}
+            />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </>
     )
 }
@@ -284,7 +299,16 @@ const StudyMaterials = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }
     const [items, setItems] = useState(() => getStudyMaterials())
 
     useEffect(() => {
-        setItems(getStudyMaterials())
+        let cancelled = false
+        hydrateStudyMaterialsFromApi().finally(() => {
+            if (!cancelled) setItems(getStudyMaterials())
+        })
+        const onUpdate = () => setItems(getStudyMaterials())
+        window.addEventListener(STUDY_MATERIALS_UPDATED_EVENT, onUpdate)
+        return () => {
+            cancelled = true
+            window.removeEventListener(STUDY_MATERIALS_UPDATED_EVENT, onUpdate)
+        }
     }, [location.key])
 
     if (items.length === 0) {

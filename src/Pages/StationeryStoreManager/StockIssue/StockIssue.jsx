@@ -67,7 +67,11 @@ const StockIssue = () => {
         <section className='space-y-4'>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <h2 className='text-xl font-semibold text-black'>Stock issue</h2>
-                <p className='text-sm text-[#667085] mt-1'>Issues write to stationery stock-issues and update live inventory quantity.</p>
+                <p className='text-sm text-[#667085] mt-1'>
+                    Uses the same server stock ledger as Issue / Return (live API). Prefer{' '}
+                    <a className='text-[#515DEF] underline' href='/stationery-store-manager/issue-returns/add'>Issue / Return</a>
+                    {' '}for multi-line and returnable tracking.
+                </p>
             </div>
             <form onSubmit={submit} className='bg-white rounded-2xl shadow-md p-4 grid grid-cols-1 md:grid-cols-4 gap-3'>
                 <select value={form.itemName} onChange={(event) => setForm({ ...form, itemName: event.target.value })} className={inputClass}>

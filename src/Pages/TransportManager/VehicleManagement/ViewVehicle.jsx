@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { getVehicleById } from './vehicleManagementData'
+import { ArrowLeft, Pencil } from 'lucide-react'
+import { getVehicleById, hydrateVehiclesFromApi } from './vehicleManagementData'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -22,7 +22,17 @@ const Field = ({ label, value }) => (
 const ViewVehicle = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const vehicle = getVehicleById(id)
+    const [vehicle, setVehicle] = useState(() => getVehicleById(id))
+
+    useEffect(() => {
+        let cancelled = false
+        hydrateVehiclesFromApi().finally(() => {
+            if (!cancelled) setVehicle(getVehicleById(id))
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [id])
 
     return (
         <section className='space-y-6'>
@@ -35,6 +45,16 @@ const ViewVehicle = () => {
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
+                {vehicle && (
+                    <button
+                        type='button'
+                        onClick={() => navigate(`/transport-manager/vehicle-management/edit/${vehicle.id}`)}
+                        className='inline-flex items-center gap-2 text-sm text-white bg-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:opacity-90 transition-colors cursor-pointer'
+                    >
+                        <Pencil size={16} />
+                        Edit Vehicle
+                    </button>
+                )}
             </div>
 
             {!vehicle ? (
@@ -71,36 +91,15 @@ const ViewVehicle = () => {
                             <Field label='Next Service Date' value={vehicle.nextServiceDate} />
                         </div>
                     </Section>
-                    <Section title='Compliance & Maintenance History Documentation'>
+                    <Section title='Compliance history'>
                         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-sm text-[#667085]'>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>FC (Fitness Certificate)</span>
-                                <strong className='text-[#1E293B] block'>{vehicle.fcExpiryDate ? `Valid until ${vehicle.fcExpiryDate}` : 'Valid with renewal on next cycle'}</strong>
-                            </div>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>RC (Registration Certificate)</span>
-                                <strong className='text-[#1E293B] block'>{vehicle.rcNumber || vehicle.vehicleNumber}</strong>
-                            </div>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>Road Permit</span>
-                                <strong className='text-[#1E293B] block'>{vehicle.permitNumber ? `${vehicle.permitNumber} (Exp: ${vehicle.permitExpiryDate || 'Active'})` : 'Institutional permit active'}</strong>
-                            </div>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>Service History</span>
-                                <strong className='text-[#1E293B] block'>Last: {vehicle.lastServiceDate} · Next: {vehicle.nextServiceDate}</strong>
-                            </div>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>FASTag Account</span>
-                                <strong className='text-[#1E293B] block'>{vehicle.fastagId ? `${vehicle.fastagId} (Active)` : 'Active, linked to vehicle'}</strong>
-                            </div>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>PUCC (Pollution)</span>
-                                <strong className='text-[#1E293B] block'>{vehicle.puccExpiryDate ? `Valid until ${vehicle.puccExpiryDate}` : 'Certified & Current'}</strong>
-                            </div>
-                            <div className='p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]'>
-                                <span className='text-xs font-semibold uppercase text-[#64748B] block mb-1'>Insurance Policy</span>
-                                <strong className='text-[#1E293B] block'>Expires {vehicle.insuranceExpiryDate}</strong>
-                            </div>
+                            <p><strong className='text-[#1E1E1E]'>FC:</strong> Valid with fitness renewal on the next service cycle.</p>
+                            <p><strong className='text-[#1E1E1E]'>RC:</strong> Registration current for {vehicle.vehicleNumber}.</p>
+                            <p><strong className='text-[#1E1E1E]'>Permit:</strong> School permit on file.</p>
+                            <p><strong className='text-[#1E1E1E]'>Service:</strong> Last {vehicle.lastServiceDate}, next {vehicle.nextServiceDate}.</p>
+                            <p><strong className='text-[#1E1E1E]'>FASTag:</strong> Active, linked to this vehicle.</p>
+                            <p><strong className='text-[#1E1E1E]'>PUCC:</strong> Current.</p>
+                            <p><strong className='text-[#1E1E1E]'>Insurance:</strong> Expires {vehicle.insuranceExpiryDate}.</p>
                         </div>
                     </Section>
                 </>

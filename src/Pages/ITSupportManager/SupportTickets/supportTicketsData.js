@@ -1,8 +1,40 @@
-export const ISSUE_TYPES = ['Hardware', 'Software', 'Network', 'Printer Maintenance', 'Outside Service Maintenance']
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
+export const ISSUE_TYPES = ['Hardware', 'Software', 'Network']
 
 export const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical']
 
-export const STATUS_OPTIONS = ['Open', 'Pending', 'In Progress', 'Resolved', 'Closed']
+/** Non-Academics PDF §4.5 lifecycle (primary). Legacy Open/Pending/Closed kept for existing rows. */
+export const STATUS_OPTIONS = [
+    'Raised',
+    'Assigned',
+    'In Progress',
+    'Resolved',
+    'Confirmed by Requester',
+    'Open',
+    'Pending',
+    'Closed',
+]
+
+export const PDF_TICKET_STATUSES = [
+    'Raised',
+    'Assigned',
+    'In Progress',
+    'Resolved',
+    'Confirmed by Requester',
+]
+
+export const normalizeTicketStatus = (status) => {
+    const value = String(status || '').trim()
+    if (value === 'Open') return 'Raised'
+    if (value === 'Pending') return 'Assigned'
+    if (value === 'Closed') return 'Confirmed by Requester'
+    return value || 'Raised'
+}
+
+export const isTicketOpenStatus = (status) => {
+    const value = normalizeTicketStatus(status).toLowerCase()
+    return !['resolved', 'confirmed by requester', 'closed', 'completed', 'verified'].includes(value)
+}
 
 export const priorityBadgeColor = {
     Low: 'bg-[#2196F333] text-[#2196F3]',
@@ -12,14 +44,17 @@ export const priorityBadgeColor = {
 }
 
 export const statusBadgeColor = {
+    Raised: 'bg-[#FF980033] text-[#FF9800]',
+    Assigned: 'bg-[#9C27B033] text-[#9C27B0]',
     Open: 'bg-[#FF980033] text-[#FF9800]',
     Pending: 'bg-[#FF980033] text-[#FF9800]',
     'In Progress': 'bg-[#2196F333] text-[#2196F3]',
     Resolved: 'bg-[#4CAF5033] text-[#4CAF50]',
+    'Confirmed by Requester': 'bg-[#4CAF5033] text-[#4CAF50]',
     Closed: 'bg-[#4CAF5033] text-[#4CAF50]',
 }
 
-export const SUPPORT_TICKETS = [
+const DEFAULT_SUPPORT_TICKETS = [
     {
         ticketId: 'TKT-2026-1042',
         requesterName: 'Priya Nair',
@@ -144,3 +179,17 @@ export const getTicketsForAsset = (assetId) =>
 
 export const getTicketById = (id) =>
     SUPPORT_TICKETS.find((entry) => entry.ticketId === id)
+
+export const SUPPORT_TICKETS_STORAGE_KEY = 'schoolerp-it-tickets-v1'
+export function getSupportTickets() {
+    return ensureCampusSeed('schoolerp-it-tickets-v1', DEFAULT_SUPPORT_TICKETS)
+}
+export function saveSupportTickets(rows) {
+    return saveCampusJson('schoolerp-it-tickets-v1', rows)
+}
+export function hydrateSupportTicketsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-it-tickets-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-it-tickets-v1', DEFAULT_SUPPORT_TICKETS)
+}
+export const SUPPORT_TICKETS = DEFAULT_SUPPORT_TICKETS
+

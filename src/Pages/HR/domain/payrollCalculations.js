@@ -1,4 +1,4 @@
-import { PAYROLL_CONFIG } from './payrollConfig.js'
+import { PAYROLL_CONFIG } from './payrollConfig'
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100
 const nonNegative = (value) => Math.max(0, money(value))
@@ -214,9 +214,10 @@ export function buildSalaryRow({ employee, attendance, advances, disciplinaryAct
 }
 
 export function summarizePayroll(rows) {
-    const categories = [...new Set(rows.map((row) => row.category))]
+    const safeRows = Array.isArray(rows) ? rows : []
+    const categories = [...new Set(safeRows.map((row) => row.category))]
     const lines = categories.map((category) => {
-        const items = rows.filter((row) => row.category === category)
+        const items = safeRows.filter((row) => row.category === category)
         return items.reduce((acc, row) => ({
             category,
             count: acc.count + 1,

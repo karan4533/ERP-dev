@@ -8,7 +8,7 @@ import {
     buildPaymentSchedule,
     scheduleToInstallments,
 } from '../FeesManagement/feePaymentSchedule'
-import { isAllClassesFee } from '../FeesManagement/feeCampusOptions'
+import { isAllClassesFee, isRouteBilledFee } from '../FeesManagement/feeCampusOptions'
 
 const classKey = (value) => String(value || '').trim().toLowerCase()
 
@@ -39,7 +39,8 @@ export const applyFeeStructuresToStudents = ({
     startDateByYear = {},
 } = {}) => {
     const activeStructures = (feeStructures || []).filter(
-        (row) => row && row.status !== 'INACTIVE' && row.className && Number(row.amount) > 0,
+        (row) => row && row.status !== 'INACTIVE' && row.className && Number(row.amount) > 0
+            && !isRouteBilledFee(row),
     )
 
     const generated = []

@@ -1,116 +1,399 @@
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { AlertTriangle, ClipboardCheck, IndianRupee, Package, Plus, Rss, ShoppingCart } from 'lucide-react'
-import { DataTable, IntegrationNotice, StatusBadge } from '../../../Common/ui'
+import ReactECharts from 'echarts-for-react'
 import {
-    SUMMARY_CARDS,
-    RECENT_ORDERS,
-    LOW_STOCK_ALERTS,
-    PENDING_REQUESTS,
-    INVENTORY_SUMMARY,
-    TOP_SELLING_ITEMS,
-    RECENT_ANNOUNCEMENTS,
-    QUICK_ACTIONS,
+    ShoppingCart,
+    IndianRupee,
+    Package,
+    AlertTriangle,
+    ClipboardCheck,
+    UtensilsCrossed,
+    TrendingUp,
+    Plus,
+} from 'lucide-react'
+import {
+    getDashboardView,
+    hydrateDashboardFromApi,
+    orderStatusBadgeColor,
+    requestStatusBadgeColor,
 } from './dashboardData'
 
 const CARD_ICONS = {
-    'Orders Today': ShoppingCart,
+    'Menu Items': UtensilsCrossed,
+    'Open Orders': ShoppingCart,
     "Today's Sales": IndianRupee,
     'Inventory Items': Package,
-    'Low Stock Alerts': AlertTriangle,
-    'Pending Approvals': ClipboardCheck,
-    'Active Announcements': Rss,
+    'Low Stock Inventory': AlertTriangle,
+    'Pending Requests': ClipboardCheck,
 }
 
-const orderColumns = [
-    { key: 'orderId', label: 'Order', required: true },
-    { key: 'customer', label: 'Customer', required: true },
-    { key: 'type', label: 'Type' },
-    { key: 'amount', label: 'Amount', required: true },
-    { key: 'status', label: 'Fulfilment', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
-const stockColumns = [
-    { key: 'item', label: 'Item', required: true },
-    { key: 'currentStock', label: 'Current', required: true },
-    { key: 'reorderLevel', label: 'Reorder at', required: true },
-]
-const requestColumns = [
-    { key: 'requestId', label: 'Request', required: true },
-    { key: 'type', label: 'Type', required: true },
-    { key: 'amount', label: 'Amount', required: true },
-    { key: 'status', label: 'Decision', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
-
-const QueuePanel = ({ title, description, action, children }) => (
-    <article className='overflow-hidden rounded-2xl bg-white shadow-md'>
-        <div className='flex flex-col gap-3 border-b border-[var(--erp-line)] p-4 sm:flex-row sm:items-start sm:justify-between'>
-            <div><h3 className='font-semibold text-[var(--erp-ink)]'>{title}</h3><p className='mt-0.5 text-xs text-[var(--erp-muted)]'>{description}</p></div>
+const Panel = ({ title, children, action }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4 h-full'>
+        <div className='flex justify-between items-center mb-4'>
+            <h3 className='text-lg font-semibold text-black'>{title}</h3>
             {action}
         </div>
         {children}
-    </article>
+    </div>
 )
 
-const Dashboard = () => (
-    <section className='space-y-5'>
-        <div className='rounded-2xl bg-white p-4 shadow-md sm:p-5'>
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <div><h2 className='text-xl font-semibold text-[var(--erp-ink)]'>Canteen operations</h2><p className='mt-1 max-w-3xl text-sm text-[var(--erp-slate)]'>Review fulfilment, stock risk and approval work before opening the corresponding operational register.</p></div>
-                <StatusBadge status='Reference dashboard' />
-            </div>
-            <IntegrationNotice
-                state='demo'
-                className='mt-4'
-                title='Reference dashboard'
-                description='KPIs and queues are static frontend samples. Production totals must be calculated from reconciled orders, payments, inventory movements, approvals and publication events with a declared reporting cutoff.'
-            />
-        </div>
+const TableWrapper = ({ children }) => (
+    <div className="relative overflow-x-auto">{children}</div>
+)
 
-        <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6'>
-            {SUMMARY_CARDS.map((card) => {
-                const Icon = CARD_ICONS[card.label] ?? Package
-                return (
-                    <article key={card.label} className='rounded-2xl bg-white p-4 shadow-md'>
-                        <div className='flex items-start justify-between gap-3'>
-                            <div className='min-w-0'><p className='text-xs text-[var(--erp-muted)]'>{card.label}</p><p className='mt-1 text-xl font-semibold text-[var(--erp-ink)]'>{card.value}</p><p className='mt-1 text-xs text-[var(--erp-slate)]'>{card.sub} · sample</p></div>
-                            <span className='rounded-xl bg-[var(--erp-indigo-soft)] p-2 text-[var(--erp-indigo)]'><Icon aria-hidden='true' size={18} /></span>
+const EmptyRow = ({ cols, message }) => (
+    <tr>
+        <td colSpan={cols} className="px-2 py-6 text-center text-[#667085]">{message}</td>
+    </tr>
+)
+
+const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase'
+const tdClass = 'px-2 py-3 text-[#667085]'
+
+const Dashboard = () => {
+    const [salesPeriod, setSalesPeriod] = useState('7')
+    const [view, setView] = useState(() => getDashboardView())
+
+    useEffect(() => {
+        let cancelled = false
+        hydrateDashboardFromApi().finally(() => {
+            if (!cancelled) setView(getDashboardView())
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    const salesData = salesPeriod === '7' ? view.salesChart7 : view.salesChart30
+
+    const salesChartOption = useMemo(() => ({
+        tooltip: { trigger: 'axis' },
+        legend: {
+            data: ['Revenue (₹)', 'Orders Count'],
+            bottom: 0,
+            textStyle: { color: '#667085', fontSize: 12 },
+        },
+        grid: { left: 48, right: 48, top: 24, bottom: 48 },
+        xAxis: {
+            type: 'category',
+            data: salesData.labels,
+            axisLine: { lineStyle: { color: '#E0E0E0' } },
+            axisLabel: { color: '#667085', fontSize: 11 },
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: 'Sales (₹)',
+                nameTextStyle: { color: '#667085', fontSize: 11 },
+                axisLabel: { color: '#667085', fontSize: 11, formatter: (v) => `₹${(v / 1000).toFixed(0)}k` },
+                splitLine: { lineStyle: { color: '#F2F4F7' } },
+            },
+            {
+                type: 'value',
+                name: 'Orders',
+                nameTextStyle: { color: '#667085', fontSize: 11 },
+                axisLabel: { color: '#667085', fontSize: 11 },
+                splitLine: { show: false },
+            },
+        ],
+        series: [
+            {
+                name: 'Revenue (₹)',
+                type: 'line',
+                smooth: true,
+                data: salesData.revenue,
+                areaStyle: { color: 'rgba(81, 93, 239, 0.12)' },
+                lineStyle: { color: '#515DEF', width: 2 },
+                itemStyle: { color: '#515DEF' },
+                symbol: 'circle',
+                symbolSize: 6,
+            },
+            {
+                name: 'Orders Count',
+                type: 'line',
+                smooth: true,
+                yAxisIndex: 1,
+                data: salesData.orders,
+                lineStyle: { color: '#4CAF50', width: 2 },
+                itemStyle: { color: '#4CAF50' },
+                symbol: 'circle',
+                symbolSize: 6,
+            },
+        ],
+    }), [salesData])
+
+    const topSellingChartOption = useMemo(() => ({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: 80, right: 16, top: 8, bottom: 8 },
+        xAxis: {
+            type: 'value',
+            axisLabel: { color: '#667085', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#F2F4F7' } },
+        },
+        yAxis: {
+            type: 'category',
+            data: view.topSellingItems.map((i) => i.item).reverse(),
+            axisLabel: { color: '#667085', fontSize: 11 },
+            axisLine: { show: false },
+            axisTick: { show: false },
+        },
+        series: [{
+            type: 'bar',
+            data: view.topSellingItems.map((i) => i.quantity).reverse(),
+            barWidth: 14,
+            itemStyle: { color: '#515DEF', borderRadius: [0, 4, 4, 0] },
+        }],
+    }), [view.topSellingItems])
+
+    const orderDistributionOption = useMemo(() => ({
+        tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+        legend: {
+            orient: 'vertical',
+            right: 0,
+            top: 'center',
+            textStyle: { color: '#667085', fontSize: 12 },
+        },
+        series: [{
+            type: 'pie',
+            radius: ['50%', '75%'],
+            center: ['35%', '50%'],
+            avoidLabelOverlap: false,
+            padAngle: 2,
+            data: view.orderDistribution.map((d) => ({
+                value: d.value,
+                name: d.name,
+                itemStyle: { color: d.color },
+            })),
+            label: { show: false },
+            labelLine: { show: false },
+        }],
+    }), [view.orderDistribution])
+
+    return (
+        <section className='space-y-6'>
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4'>
+                {view.summaryCards.map((card) => {
+                    const Icon = CARD_ICONS[card.label] ?? Package
+                    return (
+                        <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
+                            <div className='flex items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='text-xs text-[#808080] truncate'>{card.label}</p>
+                                    <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
+                                    <p className={`text-xs mt-1 flex items-center gap-1 ${card.trend === 'up' ? 'text-[#4CAF50]' : card.trend === 'down' ? 'text-[#FF5722]' : 'text-[#667085]'}`}>
+                                        {card.trend === 'up' && <TrendingUp size={12} />}
+                                        {card.sub}
+                                    </p>
+                                </div>
+                                <div className='p-2 rounded-xl bg-[#515DEF]/10 text-[#515DEF] shrink-0'>
+                                    <Icon size={18} />
+                                </div>
+                            </div>
                         </div>
-                    </article>
-                )
-            })}
-        </div>
-
-        <div className='grid grid-cols-1 gap-5 xl:grid-cols-2'>
-            <QueuePanel title='Recent order queue' description='Payment and fulfilment states remain separate.' action={<NavLink to='/canteen-manager/orders' className='text-sm font-semibold text-[var(--erp-indigo)]'>Open orders</NavLink>}>
-                <DataTable caption='Recent order queue' rows={RECENT_ORDERS} columns={orderColumns} rowKey='orderId' />
-            </QueuePanel>
-            <QueuePanel title='Low-stock watchlist' description='Create a governed request before stock reaches the reorder threshold.' action={<NavLink to='/canteen-manager/requests-approvals/add-request' className='text-sm font-semibold text-[var(--erp-indigo)]'>Create request</NavLink>}>
-                <DataTable caption='Low-stock watchlist' rows={LOW_STOCK_ALERTS} columns={stockColumns} rowKey='item' />
-            </QueuePanel>
-            <QueuePanel title='Pending request queue' description='Awaiting an accountable approval decision.' action={<NavLink to='/canteen-manager/requests-approvals' className='text-sm font-semibold text-[var(--erp-indigo)]'>Open requests</NavLink>}>
-                <DataTable caption='Pending request queue' rows={PENDING_REQUESTS} columns={requestColumns} rowKey='requestId' />
-            </QueuePanel>
-            <QueuePanel title='Reference operating context' description='Sample inventory, demand and communications context.'>
-                <div className='grid gap-4 p-4 sm:grid-cols-3'>
-                    {INVENTORY_SUMMARY.map((item) => <div key={item.label} className='rounded-xl border border-[var(--erp-line)] p-3'><p className='text-xs text-[var(--erp-muted)]'>{item.label}</p><p className='mt-1 font-semibold text-[var(--erp-ink)]'>{item.value}</p></div>)}
-                </div>
-                <div className='grid gap-4 border-t border-[var(--erp-line)] p-4 sm:grid-cols-2'>
-                    <div><h4 className='text-sm font-semibold text-[var(--erp-ink)]'>Top-selling samples</h4><ol className='mt-2 space-y-2'>{TOP_SELLING_ITEMS.slice(0, 3).map((item) => <li key={item.item} className='flex justify-between gap-3 text-sm text-[var(--erp-slate)]'><span>{item.item}</span><span>{item.quantity}</span></li>)}</ol></div>
-                    <div><h4 className='text-sm font-semibold text-[var(--erp-ink)]'>Recent announcements</h4><ul className='mt-2 space-y-2'>{RECENT_ANNOUNCEMENTS.map((item) => <li key={item.title} className='text-sm text-[var(--erp-slate)]'><span className='font-medium text-[var(--erp-ink)]'>{item.title}</span><br /><span className='text-xs'>{item.audience} · {item.date}</span></li>)}</ul></div>
-                </div>
-            </QueuePanel>
-        </div>
-
-        <div className='rounded-2xl bg-white p-4 shadow-md'>
-            <h3 className='font-semibold text-[var(--erp-ink)]'>Quick actions</h3>
-            <div className='mt-3 flex flex-wrap gap-2'>
-                {QUICK_ACTIONS.map((action) => (
-                    <NavLink key={action.label} to={action.to} className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-indigo)] hover:bg-[var(--erp-indigo-soft)]'>
-                        <Plus aria-hidden='true' size={16} /> {action.label}
-                    </NavLink>
-                ))}
+                    )
+                })}
             </div>
-        </div>
-    </section>
-)
+
+            <Panel
+                title="Sales Overview"
+                action={
+                    <div className='flex gap-1'>
+                        {[{ key: '7', label: 'Last 7 Days' }, { key: '30', label: 'Last 30 Days' }].map((opt) => (
+                            <button
+                                key={opt.key}
+                                type='button'
+                                onClick={() => setSalesPeriod(opt.key)}
+                                className={`text-xs px-3 py-1.5 rounded-md border transition-all cursor-pointer ${salesPeriod === opt.key ? 'bg-[#515DEF] text-white border-[#515DEF]' : 'bg-white text-[#515DEF] border-[#515DEF] hover:bg-[#515DEF] hover:text-white'}`}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+                }
+            >
+                <p className='text-sm text-[#667085] mb-2'>Daily Sales Trend</p>
+                <ReactECharts option={salesChartOption} style={{ height: 320 }} opts={{ renderer: 'svg' }} />
+            </Panel>
+
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                <Panel title="Recent Orders">
+                    <TableWrapper>
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                                <tr>
+                                    <th className={`${thClass} rounded-s-lg`}>Order ID</th>
+                                    <th className={thClass}>Customer</th>
+                                    <th className={thClass}>Type</th>
+                                    <th className={thClass}>Amount</th>
+                                    <th className={`${thClass} rounded-e-lg`}>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {view.recentOrders.length ? view.recentOrders.map((order) => (
+                                    <tr key={order.orderId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                        <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{order.orderId}</td>
+                                        <td className={tdClass}>{order.customer}</td>
+                                        <td className={tdClass}>{order.type}</td>
+                                        <td className={tdClass}>{order.amount}</td>
+                                        <td className={tdClass}>
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${orderStatusBadgeColor[order.status] || 'bg-[#66708533] text-[#667085]'}`}>
+                                                {order.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )) : <EmptyRow cols={5} message="No orders yet." />}
+                            </tbody>
+                        </table>
+                    </TableWrapper>
+                </Panel>
+
+                <Panel title="Top Selling Menu Items">
+                    {view.topSellingItems.length ? (
+                        <ReactECharts option={topSellingChartOption} style={{ height: 280 }} opts={{ renderer: 'svg' }} />
+                    ) : (
+                        <p className='text-sm text-[#667085] py-8 text-center'>No sold items yet.</p>
+                    )}
+                    <TableWrapper>
+                        <table className="w-full text-sm text-left mt-4">
+                            <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                                <tr>
+                                    <th className={`${thClass} rounded-s-lg`}>Item</th>
+                                    <th className={`${thClass} rounded-e-lg text-right`}>Quantity Sold</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {view.topSellingItems.length ? view.topSellingItems.slice(0, 3).map((row) => (
+                                    <tr key={row.item} className="border-b border-[#f2f4f7]">
+                                        <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.item}</td>
+                                        <td className={`${tdClass} text-right`}>{row.quantity}</td>
+                                    </tr>
+                                )) : <EmptyRow cols={2} message="No sold items yet." />}
+                            </tbody>
+                        </table>
+                    </TableWrapper>
+                </Panel>
+            </div>
+
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                <Panel
+                    title="Low Stock Alerts"
+                    action={
+                        <NavLink to="/canteen-manager/requests-approvals/add-request" className='text-xs bg-[#515DEF] text-white px-3 py-1.5 rounded-md hover:opacity-90 transition-all'>
+                            Create Purchase Request
+                        </NavLink>
+                    }
+                >
+                    <TableWrapper>
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                                <tr>
+                                    <th className={`${thClass} rounded-s-lg`}>Item</th>
+                                    <th className={thClass}>Current Stock</th>
+                                    <th className={`${thClass} rounded-e-lg`}>Reorder Level</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {view.lowStockAlerts.length ? view.lowStockAlerts.map((row) => (
+                                    <tr key={row.id || row.item} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                        <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.item}</td>
+                                        <td className={`${tdClass} text-[#FF5722] font-medium`}>{row.currentStock}</td>
+                                        <td className={tdClass}>{row.reorderLevel}</td>
+                                    </tr>
+                                )) : <EmptyRow cols={3} message="No low-stock items." />}
+                            </tbody>
+                        </table>
+                    </TableWrapper>
+                </Panel>
+
+                <Panel title="Pending Requests & Approvals">
+                    <TableWrapper>
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                                <tr>
+                                    <th className={`${thClass} rounded-s-lg`}>Request ID</th>
+                                    <th className={thClass}>Type</th>
+                                    <th className={thClass}>Amount</th>
+                                    <th className={`${thClass} rounded-e-lg`}>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {view.pendingRequests.length ? view.pendingRequests.map((row) => (
+                                    <tr key={row.requestId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                        <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.requestId}</td>
+                                        <td className={tdClass}>{row.type}</td>
+                                        <td className={tdClass}>{row.amount}</td>
+                                        <td className={tdClass}>
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${requestStatusBadgeColor[row.status] || 'bg-[#66708533] text-[#667085]'}`}>
+                                                {row.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )) : <EmptyRow cols={4} message="No pending requests." />}
+                            </tbody>
+                        </table>
+                    </TableWrapper>
+                </Panel>
+            </div>
+
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                <Panel title="Inventory Summary">
+                    <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6'>
+                        {view.inventorySummary.map((item) => (
+                            <div key={item.label} className='border border-[#EDEEF5] rounded-xl p-4 text-center'>
+                                <p className='text-xs text-[#808080]'>{item.label}</p>
+                                <p className={`text-lg font-semibold mt-1 ${item.color}`}>{item.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <p className='text-sm font-medium text-[#1E1E1E] mb-2'>Order Distribution</p>
+                    {view.orderDistribution.some((d) => d.value > 0) ? (
+                        <ReactECharts option={orderDistributionOption} style={{ height: 220 }} opts={{ renderer: 'svg' }} />
+                    ) : (
+                        <p className='text-sm text-[#667085] py-8 text-center'>No orders to chart yet.</p>
+                    )}
+                </Panel>
+
+                <Panel title="Recent Announcements">
+                    <TableWrapper>
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                                <tr>
+                                    <th className={`${thClass} rounded-s-lg`}>Title</th>
+                                    <th className={thClass}>Audience</th>
+                                    <th className={`${thClass} rounded-e-lg`}>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {view.recentAnnouncements.length ? view.recentAnnouncements.map((row) => (
+                                    <tr key={row.title} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                        <td className={`${tdClass} font-medium text-[#1E1E1E] max-w-[180px] truncate`} title={row.title}>{row.title}</td>
+                                        <td className={tdClass}>{row.audience}</td>
+                                        <td className={tdClass}>{row.date}</td>
+                                    </tr>
+                                )) : <EmptyRow cols={3} message="No announcements yet." />}
+                            </tbody>
+                        </table>
+                    </TableWrapper>
+                </Panel>
+            </div>
+
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <h3 className='text-lg font-semibold text-black mb-4'>Quick Actions</h3>
+                <div className='flex flex-wrap gap-3'>
+                    {view.quickActions.map((action) => (
+                        <NavLink
+                            key={action.label}
+                            to={action.to}
+                            className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-all duration-200'
+                        >
+                            <Plus size={16} />
+                            {action.label}
+                        </NavLink>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
 
 export default Dashboard

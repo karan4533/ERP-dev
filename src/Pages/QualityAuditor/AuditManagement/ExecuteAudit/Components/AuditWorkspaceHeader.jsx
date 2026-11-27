@@ -13,9 +13,36 @@ const statusColors = {
     Closed: 'bg-[#667085]/40 text-white',
 }
 
-const AuditWorkspaceHeader = ({ header, timeline, lastSavedAt }) => {
+const fieldClass =
+    'text-sm text-[#1E1E1E] border border-[#E0E0E0] rounded-lg px-2.5 py-1.5 w-full min-w-[9rem] focus:border-[#515DEF] outline-none bg-white'
+
+const toDateInputValue = (value) => {
+    if (!value) return ''
+    const raw = String(value).trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+    const m = raw.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/)
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`
+    const d = new Date(raw)
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+    return ''
+}
+
+const fromDateInputValue = (iso) => {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-')
+    if (!y || !m || !d) return iso
+    return `${d}-${m}-${y}`
+}
+
+const AuditWorkspaceHeader = ({ header, timeline, lastSavedAt, onHeaderChange, readOnly = false }) => {
     const templateVersion = header.templateVersion ?? header.version?.replace('v', '') ?? '1.2'
     const statusClass = statusColors[header.status] ?? 'bg-white/20 text-white'
+    const locked = readOnly || ['Submitted', 'Closed', 'Approved'].includes(header.status)
+
+    const update = (field, value) => {
+        if (locked || !onHeaderChange) return
+        onHeaderChange({ ...header, [field]: value })
+    }
 
     return (
         <div className='rounded-2xl overflow-hidden shadow-lg border border-[#515DEF]/10'>
@@ -49,7 +76,7 @@ const AuditWorkspaceHeader = ({ header, timeline, lastSavedAt }) => {
                     </span>
                     <span className='inline-flex items-center gap-1.5 text-xs font-medium text-white bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/20'>
                         <Lock size={12} />
-                        Read Only Structure
+                        Checklist structure read-only
                     </span>
                     <span className='inline-flex items-center gap-1.5 text-xs font-medium text-white bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/20'>
                         <RefreshCw size={12} />
@@ -60,11 +87,50 @@ const AuditWorkspaceHeader = ({ header, timeline, lastSavedAt }) => {
                 <AuditTimeline timeline={timeline} layout='horizontal' />
             </div>
 
-            <div className='bg-white px-5 py-3 sm:px-6 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#667085]'>
-                <span><span className='text-[#808080]'>Campus</span> · {header.campus}</span>
-                <span><span className='text-[#808080]'>Building</span> · {header.building}</span>
-                <span><span className='text-[#808080]'>Area</span> · {header.area}</span>
-                <span><span className='text-[#808080]'>Date</span> · {header.auditDate} at {header.auditTime}</span>
+            <div className='bg-white px-5 py-4 sm:px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3'>
+                <label className='block text-xs text-[#808080]'>
+                    Campus
+                    <input
+                        type='text'
+                        value={header.campus ?? ''}
+                        onChange={(e) => update('campus', e.target.value)}
+                        disabled={locked}
+                        className={`${fieldClass} mt-1 disabled:bg-[#F5F6FA]`}
+                        placeholder='Campus'
+                    />
+                </label>
+                <label className='block text-xs text-[#808080]'>
+                    Building
+                    <input
+                        type='text'
+                        value={header.building ?? ''}
+                        onChange={(e) => update('building', e.target.value)}
+                        disabled={locked}
+                        className={`${fieldClass} mt-1 disabled:bg-[#F5F6FA]`}
+                        placeholder='Building'
+                    />
+                </label>
+                <label className='block text-xs text-[#808080]'>
+                    Area
+                    <input
+                        type='text'
+                        value={header.area ?? ''}
+                        onChange={(e) => update('area', e.target.value)}
+                        disabled={locked}
+                        className={`${fieldClass} mt-1 disabled:bg-[#F5F6FA]`}
+                        placeholder='Area / place'
+                    />
+                </label>
+                <label className='block text-xs text-[#808080]'>
+                    Date
+                    <input
+                        type='date'
+                        value={toDateInputValue(header.auditDate)}
+                        onChange={(e) => update('auditDate', fromDateInputValue(e.target.value))}
+                        disabled={locked}
+                        className={`${fieldClass} mt-1 disabled:bg-[#F5F6FA]`}
+                    />
+                </label>
             </div>
         </div>
     )

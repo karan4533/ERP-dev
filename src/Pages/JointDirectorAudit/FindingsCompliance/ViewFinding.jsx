@@ -8,8 +8,6 @@ import {
     Wrench,
     CheckCircle2,
 } from 'lucide-react'
-import { IntegrationNotice, StatusBadge } from '../../../Common/ui'
-import { getFindingLifecycle } from '../../../Common/AuditGovernance/auditGovernanceState'
 import {
     getFindingById,
     severityBadgeColor,
@@ -17,11 +15,11 @@ import {
     complianceBadgeColor,
 } from './findingsComplianceData'
 
-const Section = ({ title, icon, children }) => (
+const Section = ({ title, icon: Icon, children }) => (
     <div className='bg-white rounded-2xl shadow-sm border border-[#EEF0F6] overflow-hidden'>
         <div className='flex items-center gap-3 px-6 py-4 border-b border-[#EEF0F6] bg-linear-to-r from-[#F8F9FF] to-white'>
             <div className='p-2.5 rounded-xl bg-[#515DEF]/10'>
-                {React.createElement(icon, { className: 'w-5 h-5 text-[#515DEF]', 'aria-hidden': true })}
+                <Icon className='w-5 h-5 text-[#515DEF]' />
             </div>
             <h2 className='text-lg font-semibold text-[#0C1E5B]'>{title}</h2>
         </div>
@@ -40,7 +38,6 @@ const ViewFinding = () => {
     const navigate = useNavigate()
     const { id } = useParams()
     const finding = getFindingById(id)
-    const lifecycle = finding ? getFindingLifecycle(finding) : []
 
     if (!finding) {
         return (
@@ -96,24 +93,6 @@ const ViewFinding = () => {
                 </div>
             </div>
 
-            <IntegrationNotice
-                state='demo'
-                title='Governance record preview'
-                description='The record below exposes the intended finding lifecycle. Evidence binaries, auditee RCA/CAPA submissions, immutable timestamps, reviewer signatures and closure approval must come from backend services.'
-            />
-
-            <div className='rounded-2xl border border-[var(--erp-line)] bg-white p-4 shadow-sm' aria-label='Finding lifecycle'>
-                <p className='text-xs font-semibold uppercase tracking-[0.14em] text-[var(--erp-muted)]'>Finding lifecycle</p>
-                <ol className='mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                    {lifecycle.map((item, index) => (
-                        <li key={item.stage} className='rounded-xl border border-[var(--erp-line)] bg-[var(--erp-canvas)] p-3'>
-                            <span className='text-xs font-semibold text-[var(--erp-muted)]'>{index + 1}. {item.stage}</span>
-                            <StatusBadge status={item.status} className='mt-2 w-fit' />
-                        </li>
-                    ))}
-                </ol>
-            </div>
-
             <Section title='Finding Details' icon={FileWarning}>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <Field label='Finding ID' value={finding.id} />
@@ -147,37 +126,16 @@ const ViewFinding = () => {
                 </Section>
             </div>
 
-            <Section title='Root Cause Analysis (RCA)' icon={ShieldCheck}>
-                <div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
-                    <Field label='RCA Status' value={finding.rcaStatus} />
-                    <div className='sm:col-span-2'><Field label='Root Cause' value={finding.rootCause} /></div>
-                </div>
-            </Section>
-
-            <Section title='Corrective & Preventive Action (CAPA)' icon={Wrench}>
+            <Section title='Corrective Action' icon={Wrench}>
                 <div className='grid grid-cols-1 gap-6'>
-                    <Field label='CAPA Status' value={finding.capaStatus} />
                     <Field label='Required Corrective Action' value={finding.correctiveAction} />
                     <Field label='Action Taken' value={finding.actionTaken} />
                 </div>
             </Section>
 
-            <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
-                <Section title='Independent Verification' icon={ShieldCheck}>
-                    <div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
-                        <Field label='Verification Status' value={finding.verificationStatus} />
-                        <Field label='Verified By' value={finding.verifiedBy} />
-                        <Field label='Verified On' value={finding.verifiedOn || 'Not verified'} />
-                    </div>
-                </Section>
-                <Section title='Closure Authority' icon={CheckCircle2}>
-                    <div className='grid grid-cols-1 gap-6'>
-                        <Field label='Closure Status' value={finding.closureStatus} />
-                        <Field label='Authority' value={finding.closureAuthority} />
-                        <Field label='Closure Notes' value={finding.closureNotes} />
-                    </div>
-                </Section>
-            </div>
+            <Section title='Closure' icon={CheckCircle2}>
+                <Field label='Closure Notes' value={finding.closureNotes} />
+            </Section>
         </section>
     )
 }

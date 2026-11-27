@@ -1,8 +1,49 @@
 import React from 'react'
-import { CHECKLIST_RESPONSE_OPTIONS } from '../executeAuditData'
+import { CHECKLIST_RESPONSE_OPTIONS, normalizeResponseType } from '../executeAuditData'
+
+const inputClass =
+    'text-sm text-[#1E1E1E] border border-[#E0E0E0] rounded-lg px-3 py-2 w-full max-w-md focus:border-[#515DEF] outline-none'
 
 const ResponseControl = ({ parameter, value, onChange }) => {
+    const kind = normalizeResponseType(parameter?.responseType)
     const update = (response) => onChange({ ...value, response })
+
+    if (kind === 'date') {
+        return (
+            <input
+                type='date'
+                value={String(value.response || '')}
+                onChange={(e) => update(e.target.value)}
+                className={inputClass}
+                aria-label={`Date for ${parameter.label}`}
+            />
+        )
+    }
+
+    if (kind === 'place') {
+        return (
+            <input
+                type='text'
+                value={String(value.response || '')}
+                onChange={(e) => update(e.target.value)}
+                placeholder='Enter place / location'
+                className={inputClass}
+                aria-label={`Place for ${parameter.label}`}
+            />
+        )
+    }
+
+    if (kind === 'text') {
+        return (
+            <textarea
+                value={String(value.response || '')}
+                onChange={(e) => update(e.target.value)}
+                placeholder='Enter remarks'
+                className={`${inputClass} min-h-[72px] resize-y`}
+                aria-label={`Remarks for ${parameter.label}`}
+            />
+        )
+    }
 
     return (
         <div className='flex flex-wrap gap-4' role='radiogroup' aria-label={`Response for ${parameter.label}`}>

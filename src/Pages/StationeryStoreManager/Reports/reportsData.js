@@ -1,3 +1,6 @@
+import { getInventoryItems, hydrateInventoryItemsFromApi } from '../Inventory/inventoryData'
+import { getIssueReturns, hydrateIssueReturnsFromApi } from '../IssueReturns/issueReturnsData'
+
 export const REPORT_TYPES = [
     'Stock Movement Report',
     'Consumption Report',
@@ -5,33 +8,85 @@ export const REPORT_TYPES = [
     'Low Stock Report',
 ]
 
-export const STOCK_MOVEMENT_REPORT = [
-    { item: 'Blue Ballpoint Pen', openingStock: 470, issued: 120, returned: 15, closingStock: 365 },
-    { item: 'A4 Paper Ream (500 sheets)', openingStock: 48, issued: 42, returned: 2, closingStock: 8 },
-    { item: 'Spiral Notebook — 200 pages', openingStock: 120, issued: 85, returned: 10, closingStock: 45 },
-    { item: 'HP 803 Black Ink Cartridge', openingStock: 30, issued: 8, returned: 2, closingStock: 24 },
-    { item: 'Whiteboard Marker — Black', openingStock: 50, issued: 18, returned: 0, closingStock: 32 },
-]
+const periodLabel = () => new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 
-export const CONSUMPTION_REPORT = [
-    { item: 'Blue Ballpoint Pen', quantityUsed: 120, department: 'Mathematics', period: 'June 2026' },
-    { item: 'A4 Paper Ream (500 sheets)', quantityUsed: 42, department: 'Administration', period: 'June 2026' },
-    { item: 'Whiteboard Marker — Black', quantityUsed: 18, department: 'Science', period: 'June 2026' },
-    { item: 'Stapler Pins (Box of 1000)', quantityUsed: 8, department: 'Front Office', period: 'June 2026' },
-    { item: 'Spiral Notebook — 200 pages', quantityUsed: 75, department: 'Class 10-A', period: 'June 2026' },
-]
+const parseMoney = (value) => Number(String(value ?? '').replace(/[^\d.]/g, '')) || 0
 
-export const EXPENSE_REPORT = [
-    { invoiceNo: 'INV-OM-8821', productName: 'A4 Paper Ream', vendor: 'Office Mart India', amount: '₹5,400', date: '15-03-2026' },
-    { invoiceNo: 'INV-PP-4412', productName: 'Blue Ballpoint Pen', vendor: 'PaperPro Supplies', amount: '₹2,240', date: '02-05-2026' },
-    { invoiceNo: 'INV-PT-1109', productName: 'HP 803 Black Ink Cartridge', vendor: 'PrintTech Solutions', amount: '₹20,400', date: '10-01-2026' },
-    { invoiceNo: 'INV-CW-3301', productName: 'Spiral Notebook — 200 pages', vendor: 'Classmate Wholesale', amount: '₹48,750', date: '08-06-2026' },
-    { invoiceNo: 'INV-CS-7701', productName: 'Whiteboard Marker — Black', vendor: 'Creative Stationers', amount: '₹1,260', date: '01-06-2026' },
-]
+const formatInr = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`
 
-export const LOW_STOCK_REPORT = [
-    { item: 'A4 Paper Ream (500 sheets)', currentQty: 8, reorderLevel: 20 },
-    { item: 'Stapler Pins (Box of 1000)', currentQty: 5, reorderLevel: 15 },
-    { item: 'Spiral Notebook — 200 pages', currentQty: 0, reorderLevel: 50 },
-    { item: 'Blue Ballpoint Pen', currentQty: 45, reorderLevel: 100 },
-]
+const isLowOrOut = (item) => {
+    if (item.status === 'Low Stock' || item.status === 'Out of Stock') return true
+    const qty = Number(item.availableQuantity)
+    const reorder = Number(item.reorderLevel)
+    return Number.isFinite(qty) && Number.isFinite(reorder) && qty <= reorder
+}
+
+export function buildStationeryReports() {
+    const items = getInventoryItems()
+    const movements = getIssueReturns()
+    const period = periodLabel()
+
+    const stockMovement = items.map((item) => {
+        const issued = movements
+            .filter((row) => row.activityType === 'Issue' && row.itemName === item.itemName)
+            .reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+        const returned = movements
+            .filter((row) => row.activityType === 'Return' && row.itemName === item.itemName)
+            .reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+        const closingStock = Number(item.availableQuantity) || 0
+        return {
+            item: item.itemName,
+            openingStock: closingStock - returned + issued,
+            issued,
+            returned,
+            closingStock,
+        }
+    })
+
+    const consumption = movements
+        .filter((row) => row.activityType === 'Issue')
+        .map((row) => ({
+            item: row.itemName,
+            quantityUsed: Number(row.quantity) || 0,
+            department: row.department || '—',
+            period: row.issueDate || period,
+        }))
+
+    const expense = items
+        .filter((item) => item.invoiceNumber)
+        .map((item) => ({
+            invoiceNo: item.invoiceNumber,
+            productName: item.itemName,
+            vendor: item.supplier || '—',
+            amount: item.stockValue || formatInr(parseMoney(item.unitCost) * (Number(item.availableQuantity) || 0)),
+            date: item.purchaseDate || '',
+        }))
+
+    const lowStock = items.filter(isLowOrOut).map((item) => ({
+        item: item.itemName,
+        currentQty: Number(item.availableQuantity) || 0,
+        reorderLevel: Number(item.reorderLevel) || 0,
+    }))
+
+    return {
+        stockMovement,
+        consumption,
+        expense,
+        lowStock,
+    }
+}
+
+export async function hydrateStationeryReportsFromApi() {
+    await Promise.all([
+        hydrateInventoryItemsFromApi(),
+        hydrateIssueReturnsFromApi(),
+    ])
+    return buildStationeryReports()
+}
+
+const FALLBACK = buildStationeryReports()
+
+export const STOCK_MOVEMENT_REPORT = FALLBACK.stockMovement
+export const CONSUMPTION_REPORT = FALLBACK.consumption
+export const EXPENSE_REPORT = FALLBACK.expense
+export const LOW_STOCK_REPORT = FALLBACK.lowStock

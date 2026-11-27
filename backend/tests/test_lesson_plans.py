@@ -14,6 +14,7 @@ from app.models import User
 from app.services import lesson_plans as svc
 
 USERS = {
+    "admin": ("admin@qmis.edu", "admin123"),
     "teacher": ("teacher@qmis.edu", "teacher123"),
     "coordinator": ("coordinator@qmis.edu", "coord123"),
     "principal": ("principal@qmis.edu", "principal123"),
@@ -32,6 +33,18 @@ def _h(client, who: str) -> dict:
     r = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+def _coordinator_band(client, grade_from=1, grade_to=12) -> None:
+    """Coordinators review plans only inside their grade band, so give the demo coordinator one."""
+    options = client.get("/api/v1/masters/class-teacher-options", headers=_h(client, "admin")).json()
+    coordinator_id = next(o["user_id"] for o in options if o["email"] == USERS["coordinator"][0])
+    r = client.put(
+        "/api/v1/students/coordinator-grade-bands",
+        json={"userId": coordinator_id, "gradeFrom": grade_from, "gradeTo": grade_to},
+        headers=_h(client, "principal"),
+    )
+    assert r.status_code == 200, r.text
 
 
 def _create(client, headers, subject="Maths", month="2099-02"):
@@ -83,6 +96,7 @@ def test_full_approval_then_visibility(client):
     teacher = _h(client, "teacher")
     plan = _create(client, teacher, subject="Science").json()
     sub = client.post(f"/api/v1/lesson-plans/{plan['id']}/submit", headers=teacher).json()
+    _coordinator_band(client)
     for who in ("coordinator", "principal", "director"):
         r = client.post(
             f"/api/v1/approvals/{sub['approvalId']}/decide",
@@ -107,6 +121,7 @@ def test_deny_then_revise_creates_new_version(client):
     plan = _create(client, teacher, subject="English").json()
     sub = client.post(f"/api/v1/lesson-plans/{plan['id']}/submit", headers=teacher).json()
     assert client.post(f"/api/v1/lesson-plans/{plan['id']}/revise", headers=teacher).status_code == 409
+    _coordinator_band(client)
     denied = client.post(
         f"/api/v1/approvals/{sub['approvalId']}/decide",
         json={"decision": "deny", "comment": "Add assessment"},

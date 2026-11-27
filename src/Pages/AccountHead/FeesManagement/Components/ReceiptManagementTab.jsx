@@ -1,227 +1,139 @@
 import React, { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
-import {
-    AlertTriangle,
-    Ban,
-    ChevronLeft,
-    ChevronRight,
-    FileText,
-    Filter,
-    MoreVertical,
-    Receipt,
-    Search,
-    TrendingUp,
-} from 'lucide-react'
+import { AlertTriangle, Ban, FileText, Receipt, Search } from 'lucide-react'
+import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import { formatCurrency } from '../../financeDomain/financeHelpers'
+import { receiptStatusBadgeColor } from '../feesManagementData'
 import {
-    RECEIPT_ACTIVITY_LOG,
-    RECEIPT_CLASSES,
-    RECEIPT_DATE_RANGES,
-    RECEIPT_GENERATION_TREND,
-    RECEIPT_PAYMENT_FILTERS,
-    RECEIPT_PAYMENT_MODES,
-    RECEIPT_SUMMARY,
-    RECEIPTS_REGISTER,
-    REPRINT_REQUESTS,
-    receiptStatusBadgeColor,
-    reprintStatusBadgeColor,
-} from '../feesManagementData'
+    buildReceiptRows,
+    matchesSearch,
+    paymentModeShares,
+    receiptsByMonth,
+    summarizeReceipts,
+} from '../feeLiveStats'
 
 const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
+const MODE_COLORS = ['#515DEF', '#4CAF50', '#FF9800', '#FF5722', '#B4C4FF', '#667085']
 
-const ICON_TONES = {
-    info: 'bg-[#515DEF1A] text-[#515DEF]',
-    success: 'bg-[#4CAF501A] text-[#4CAF50]',
-    warning: 'bg-[#FF98001A] text-[#FF9800]',
-    danger: 'bg-[#FF57221A] text-[#FF5722]',
-}
-
-const SUMMARY_ICONS = {
-    'Total Receipts': Receipt,
-    'Generated Today': FileText,
-    'Cancelled Receipts': Ban,
-    'Reprint Requests': AlertTriangle,
-}
-
-const ACTIVITY_DOT = {
-    success: 'bg-[#4CAF50]',
-    info: 'bg-[#515DEF]',
-    danger: 'bg-[#FF5722]',
-}
-
-const Panel = ({ title, action, children, className = '' }) => (
-    <div className={`bg-white rounded-2xl shadow-md p-4 h-full ${className}`}>
-        <div className='flex justify-between items-center mb-4 gap-3'>
-            <h3 className='text-base font-semibold text-[#1E1E1E]'>{title}</h3>
-            {action}
-        </div>
+const Panel = ({ title, children }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4 h-full'>
+        <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>{title}</h3>
         {children}
     </div>
 )
 
-const ReceiptManagementTab = () => {
-    const [paymentPeriod, setPaymentPeriod] = useState('Monthly')
-    const { receipts, students } = useFinance()
-    const liveRows = receipts.map((item) => {
-        const student = students.find((row) => row.id === item.studentId)
-        return {
-            id: item.id,
-            receiptNo: item.receiptNo,
-            student: student?.name ?? 'Student',
-            studentId: student?.admissionNo ?? item.studentId,
-            initials: student?.initials ?? 'ST',
-            avatarColor: 'bg-[#515DEF]',
-            className: item.className || `${student?.className ?? ''}-${student?.section ?? ''}`,
-            feeHeads: (item.feeHeads || []).join(', '),
-            amount: formatCurrency(item.amountPaid),
-            status: item.status === 'Issued' ? 'Generated' : item.status,
-        }
-    })
+const SummaryCard = ({ icon: Icon, tone, label, value, sub }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4'>
+        <div className={`p-2 rounded-xl inline-flex mb-3 ${tone}`}>
+            <Icon size={18} />
+        </div>
+        <p className='text-xs text-[#808080]'>{label}</p>
+        <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{value}</p>
+        {sub && <p className='text-xs text-[#667085] mt-1'>{sub}</p>}
+    </div>
+)
 
-    const generationTrendOption = useMemo(() => ({
+const EXPORT_COLUMNS = [
+    { key: 'receiptNo', label: 'Receipt No' },
+    { key: 'paymentDate', label: 'Payment Date' },
+    { key: 'student', label: 'Student' },
+    { key: 'studentId', label: 'Admission No' },
+    { key: 'className', label: 'Class' },
+    { key: 'feeHeads', label: 'Fee Heads' },
+    { key: 'amountLabel', label: 'Amount' },
+    { key: 'paymentMode', label: 'Payment Mode' },
+    { key: 'source', label: 'Recorded By' },
+    { key: 'status', label: 'Status' },
+]
+
+const ReceiptManagementTab = ({ exportModal, setExportModal }) => {
+    const { receipts, students, financeStatus, financeError } = useFinance()
+    const [search, setSearch] = useState('')
+    const [mode, setMode] = useState('')
+
+    const rows = useMemo(
+        () => buildReceiptRows(receipts, students).map((row) => ({ ...row, amountLabel: formatCurrency(row.amountPaid) })),
+        [receipts, students],
+    )
+    const summary = useMemo(() => summarizeReceipts(receipts), [receipts])
+    const trend = useMemo(() => receiptsByMonth(receipts), [receipts])
+    const modes = useMemo(() => paymentModeShares(receipts), [receipts])
+    const modeOptions = useMemo(() => [...new Set(rows.map((row) => row.paymentMode).filter(Boolean))].sort(), [rows])
+
+    const filtered = useMemo(
+        () => rows.filter((row) => {
+            if (mode && row.paymentMode !== mode) return false
+            return matchesSearch(row, search, ['receiptNo', 'student', 'studentId', 'className', 'feeHeads'])
+        }),
+        [rows, mode, search],
+    )
+
+    const loading = financeStatus === 'loading'
+    const failed = financeStatus === 'error'
+
+    const trendOption = useMemo(() => ({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
         grid: { left: 36, right: 16, top: 16, bottom: 32 },
-        xAxis: {
-            type: 'category',
-            data: RECEIPT_GENERATION_TREND.labels,
-            axisLine: { lineStyle: { color: '#E0E0E0' } },
-            axisLabel: { color: '#667085', fontSize: 11 },
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: '#667085', fontSize: 11 },
-            splitLine: { lineStyle: { color: '#F2F4F7' } },
-        },
-        series: [{
-            type: 'bar',
-            data: RECEIPT_GENERATION_TREND.values.map((value, index) => ({
-                value,
-                itemStyle: {
-                    color: index === RECEIPT_GENERATION_TREND.values.length - 1 ? '#515DEF' : '#B4C4FF',
-                    borderRadius: [4, 4, 0, 0],
-                },
-            })),
-            barWidth: 24,
-        }],
-    }), [])
+        xAxis: { type: 'category', data: trend.labels, axisLabel: { color: '#667085', fontSize: 11 } },
+        yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#667085', fontSize: 11 }, splitLine: { lineStyle: { color: '#F2F4F7' } } },
+        series: [{ type: 'bar', data: trend.values, barWidth: 24, itemStyle: { color: '#515DEF', borderRadius: [4, 4, 0, 0] } }],
+    }), [trend])
 
-    const paymentModesOption = useMemo(() => ({
-        tooltip: { trigger: 'item', formatter: '{b}: {d}%' },
+    const modesOption = useMemo(() => ({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} receipt(s)' },
         series: [{
             type: 'pie',
             radius: ['58%', '78%'],
-            center: ['50%', '50%'],
-            avoidLabelOverlap: true,
             label: { show: false },
             labelLine: { show: false },
-            data: RECEIPT_PAYMENT_MODES.map((mode) => ({
-                value: mode.percent,
-                name: mode.name,
-                itemStyle: { color: mode.color },
-            })),
+            data: modes.map((item, index) => ({ value: item.count, name: item.name, itemStyle: { color: MODE_COLORS[index % MODE_COLORS.length] } })),
         }],
-        graphic: [{
-            type: 'text',
-            left: 'center',
-            top: 'middle',
-            style: {
-                text: '1,022\nTOTAL',
-                textAlign: 'center',
-                fill: '#1E1E1E',
-                fontSize: 13,
-                fontWeight: 700,
-                lineHeight: 18,
-                fontFamily: 'Inter',
-            },
-        }],
-    }), [])
+    }), [modes])
 
     return (
         <div className='space-y-6'>
+            {failed && (
+                <div className='bg-[#FEF3F2] border border-[#FDA29B] text-[#B42318] rounded-xl px-4 py-3 text-sm'>
+                    Could not load finance records from the server{financeError ? `: ${financeError}` : ''}. Receipts are unavailable until it loads.
+                </div>
+            )}
+
             <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4'>
-                {RECEIPT_SUMMARY.map((card) => {
-                    const Icon = SUMMARY_ICONS[card.label] ?? Receipt
-                    return (
-                        <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
-                            <div className='flex items-start justify-between gap-2 mb-3'>
-                                <div className={`p-2 rounded-xl ${ICON_TONES[card.iconTone]}`}>
-                                    <Icon size={18} />
-                                </div>
-                                {card.trend && (
-                                    <span className='inline-flex items-center gap-1 text-xs font-semibold text-[#4CAF50] bg-[#4CAF501A] px-2 py-0.5 rounded-full'>
-                                        <TrendingUp size={12} />
-                                        {card.trend}
-                                    </span>
-                                )}
-                                {card.badge && (
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                        card.badgeTone === 'success'
-                                            ? 'bg-[#4CAF501A] text-[#4CAF50]'
-                                            : card.badgeTone === 'warning'
-                                                ? 'bg-[#FF98001A] text-[#FF9800]'
-                                                : 'bg-[#FF57221A] text-[#FF5722]'
-                                    }`}>
-                                        {card.badge}
-                                    </span>
-                                )}
-                            </div>
-                            <p className='text-xs text-[#808080]'>{card.label}</p>
-                            <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
-                            {card.sub && <p className='text-xs text-[#667085] mt-1'>{card.sub}</p>}
-                        </div>
-                    )
-                })}
+                <SummaryCard icon={Receipt} tone='bg-[#515DEF1A] text-[#515DEF]' label='Total Receipts' value={summary.total} sub={`${formatCurrency(summary.amount)} collected`} />
+                <SummaryCard icon={FileText} tone='bg-[#4CAF501A] text-[#4CAF50]' label='Generated Today' value={summary.today} />
+                <SummaryCard icon={AlertTriangle} tone='bg-[#FF98001A] text-[#FF9800]' label='Held (pending clearance)' value={summary.held} />
+                <SummaryCard icon={Ban} tone='bg-[#FF57221A] text-[#FF5722]' label='Cancelled Receipts' value={summary.cancelled} />
             </div>
 
             <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-                <Panel
-                    title='Receipt Generation Trend'
-                    action={(
-                        <select className='text-xs border border-[#D9D9D9] rounded-md px-2 py-1 text-[#667085]'>
-                            <option>Current Month</option>
-                        </select>
+                <Panel title='Receipts per Month (last 6 months)'>
+                    {summary.total === 0 ? (
+                        <p className='text-sm text-[#667085]'>No receipts recorded yet.</p>
+                    ) : (
+                        <ReactECharts option={trendOption} style={{ height: 240 }} opts={{ renderer: 'svg' }} />
                     )}
-                >
-                    <ReactECharts option={generationTrendOption} style={{ height: 240 }} opts={{ renderer: 'svg' }} />
                 </Panel>
-
-                <Panel
-                    title='Payment Modes'
-                    action={(
-                        <div className='flex items-center gap-1'>
-                            {['Daily', 'Weekly', 'Monthly'].map((period) => (
-                                <button
-                                    key={period}
-                                    type='button'
-                                    onClick={() => setPaymentPeriod(period)}
-                                    className={`text-xs px-2.5 py-1 rounded-md cursor-pointer transition-colors ${
-                                        paymentPeriod === period
-                                            ? 'bg-[#515DEF] text-white'
-                                            : 'text-[#667085] hover:bg-[#515DEF1A] hover:text-[#515DEF]'
-                                    }`}
-                                >
-                                    {period}
-                                </button>
-                            ))}
+                <Panel title='Payment Modes'>
+                    {modes.length === 0 ? (
+                        <p className='text-sm text-[#667085]'>No receipts recorded yet.</p>
+                    ) : (
+                        <div className='flex items-center gap-4'>
+                            <div className='flex-1 min-w-0'>
+                                <ReactECharts option={modesOption} style={{ height: 220 }} opts={{ renderer: 'svg' }} />
+                            </div>
+                            <div className='space-y-3 shrink-0 pr-2'>
+                                {modes.map((item, index) => (
+                                    <div key={item.name} className='flex items-center gap-2 text-sm'>
+                                        <span className='size-2.5 rounded-full shrink-0' style={{ backgroundColor: MODE_COLORS[index % MODE_COLORS.length] }} />
+                                        <span className='text-[#667085]'>{item.name}</span>
+                                        <span className='font-semibold text-[#1E1E1E]'>{item.percent}%</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
-                >
-                    <div className='flex items-center gap-4'>
-                        <div className='flex-1 min-w-0'>
-                            <ReactECharts option={paymentModesOption} style={{ height: 220 }} opts={{ renderer: 'svg' }} />
-                        </div>
-                        <div className='space-y-3 shrink-0 pr-2'>
-                            {RECEIPT_PAYMENT_MODES.map((mode) => (
-                                <div key={mode.name} className='flex items-center gap-2 text-sm'>
-                                    <span className='size-2.5 rounded-full shrink-0' style={{ backgroundColor: mode.color }} />
-                                    <span className='text-[#667085]'>{mode.name}</span>
-                                    <span className='font-semibold text-[#1E1E1E]'>{mode.percent}%</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                 </Panel>
             </div>
 
@@ -233,32 +145,16 @@ const ReceiptManagementTab = () => {
                             <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
                             <input
                                 type='text'
-                                placeholder='Filter student...'
+                                value={search}
+                                onChange={(event) => setSearch(event.target.value)}
+                                placeholder='Receipt no, student...'
                                 className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
                             />
                         </div>
-                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'>
-                            {RECEIPT_CLASSES.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
+                        <select value={mode} onChange={(event) => setMode(event.target.value)} className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'>
+                            <option value=''>All payment modes</option>
+                            {modeOptions.map((item) => <option key={item} value={item}>{item}</option>)}
                         </select>
-                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'>
-                            {RECEIPT_DATE_RANGES.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'>
-                            {RECEIPT_PAYMENT_FILTERS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
-                        <button
-                            type='button'
-                            className='size-10 flex items-center justify-center border border-[#D9D9D9] rounded-md text-[#667085] hover:text-[#515DEF] hover:border-[#515DEF] transition-colors cursor-pointer'
-                            aria-label='Filter receipts'
-                        >
-                            <Filter size={16} />
-                        </button>
                     </div>
                 </div>
 
@@ -267,149 +163,58 @@ const ReceiptManagementTab = () => {
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
                             <tr>
                                 <th className={`${thClass} rounded-s-lg`}>Receipt #</th>
+                                <th className={thClass}>Date</th>
                                 <th className={thClass}>Student Name</th>
                                 <th className={thClass}>Class</th>
                                 <th className={thClass}>Fee Heads</th>
                                 <th className={thClass}>Amount</th>
-                                <th className={thClass}>Status</th>
-                                <th className={`${thClass} rounded-e-lg`}>Actions</th>
+                                <th className={thClass}>Mode</th>
+                                <th className={thClass}>Recorded By</th>
+                                <th className={`${thClass} rounded-e-lg`}>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {[...liveRows, ...RECEIPTS_REGISTER].map((row) => (
+                            {loading && (
+                                <tr><td colSpan={9} className='px-2 py-6 text-center text-[#667085]'>Loading receipts…</td></tr>
+                            )}
+                            {!loading && filtered.length === 0 && (
+                                <tr><td colSpan={9} className='px-2 py-6 text-center text-[#667085]'>
+                                    {failed ? 'Receipts are unavailable.' : rows.length === 0 ? 'No receipts recorded yet.' : 'No receipts match the filters.'}
+                                </td></tr>
+                            )}
+                            {!loading && filtered.map((row) => (
                                 <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                    <td className={`${tdClass} rounded-s-lg`}>
-                                        <button type='button' className='text-[#515DEF] font-medium hover:underline cursor-pointer'>
-                                            {row.receiptNo}
-                                        </button>
-                                    </td>
+                                    <td className={`${tdClass} rounded-s-lg text-[#515DEF] font-medium`}>{row.receiptNo}</td>
+                                    <td className={tdClass}>{row.paymentDate || '—'}</td>
                                     <td className={tdClass}>
-                                        <div className='flex items-center gap-3'>
-                                            <div className={`size-9 rounded-full ${row.avatarColor} text-white text-xs font-semibold flex items-center justify-center shrink-0`}>
-                                                {row.initials}
-                                            </div>
-                                            <div>
-                                                <p className='font-medium text-[#1E1E1E]'>{row.student}</p>
-                                                <p className='text-xs'>{row.studentId}</p>
-                                            </div>
-                                        </div>
+                                        <p className='font-medium text-[#1E1E1E]'>{row.student}</p>
+                                        <p className='text-xs'>{row.studentId}</p>
                                     </td>
-                                    <td className={tdClass}>{row.className}</td>
-                                    <td className={tdClass}>{row.feeHeads}</td>
-                                    <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amount}</td>
-                                    <td className={tdClass}>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${receiptStatusBadgeColor[row.status]}`}>
-                                            {row.status}
-                                        </span>
-                                    </td>
+                                    <td className={tdClass}>{row.className || '—'}</td>
+                                    <td className={tdClass}>{row.feeHeads || '—'}</td>
+                                    <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amountLabel}</td>
+                                    <td className={tdClass}>{row.paymentMode || '—'}</td>
+                                    <td className={tdClass}>{row.source}</td>
                                     <td className={`${tdClass} rounded-e-lg`}>
-                                        <button type='button' className='p-1.5 rounded-md hover:bg-[#515DEF1A] text-[#667085] hover:text-[#515DEF] cursor-pointer' aria-label='Receipt actions'>
-                                            <MoreVertical size={16} />
-                                        </button>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${receiptStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>{row.status}</span>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
-
-                <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-2'>
-                    <p className='text-sm text-[#667085]'>Showing 1 to 10 of 1,022 receipts</p>
-                    <div className='flex items-center gap-2'>
-                        <button type='button' className='size-8 flex items-center justify-center rounded-md border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
-                            <ChevronLeft size={16} />
-                        </button>
-                        {[1, 2, 3].map((page) => (
-                            <button
-                                key={page}
-                                type='button'
-                                className={`size-8 flex items-center justify-center rounded-md text-sm font-medium cursor-pointer transition-colors ${
-                                    page === 1
-                                        ? 'bg-[#515DEF] text-white'
-                                        : 'border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white'
-                                }`}
-                            >
-                                {page}
-                            </button>
-                        ))}
-                        <button type='button' className='size-8 flex items-center justify-center rounded-md border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
-                            <ChevronRight size={16} />
-                        </button>
-                    </div>
-                </div>
+                <p className='text-sm text-[#667085] mt-4'>Showing {filtered.length} of {rows.length} receipt(s)</p>
             </div>
 
-            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-                <Panel
-                    title='Reprint Requests'
-                    action={(
-                        <button type='button' className='text-sm font-medium text-[#515DEF] hover:opacity-80 cursor-pointer'>
-                            View All Requests
-                        </button>
-                    )}
-                >
-                    <div className='relative overflow-x-auto'>
-                        <table className='w-full text-sm text-left'>
-                            <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                                <tr>
-                                    <th className={`${thClass} rounded-s-lg`}>Request ID</th>
-                                    <th className={thClass}>Receipt No</th>
-                                    <th className={thClass}>Reason</th>
-                                    <th className={thClass}>Status</th>
-                                    <th className={`${thClass} rounded-e-lg`}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {REPRINT_REQUESTS.map((row) => (
-                                    <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
-                                        <td className={`${tdClass} rounded-s-lg font-medium text-[#1E1E1E]`}>{row.id}</td>
-                                        <td className={`${tdClass} text-[#515DEF]`}>{row.receiptNo}</td>
-                                        <td className={tdClass}>{row.reason}</td>
-                                        <td className={tdClass}>
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${reprintStatusBadgeColor[row.status]}`}>
-                                                {row.status}
-                                            </span>
-                                        </td>
-                                        <td className={`${tdClass} rounded-e-lg`}>
-                                            {row.status === 'PENDING' ? (
-                                                <button type='button' className='text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'>
-                                                    Approve
-                                                </button>
-                                            ) : (
-                                                <span className='text-xs text-[#667085]'>—</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </Panel>
-
-                <Panel title='Recent Activity Log'>
-                    <div className='space-y-4'>
-                        {RECEIPT_ACTIVITY_LOG.map((item, index) => (
-                            <div key={item.id} className='flex gap-3'>
-                                <div className='flex flex-col items-center shrink-0'>
-                                    <span className={`size-2.5 rounded-full mt-1.5 ${ACTIVITY_DOT[item.tone]}`} />
-                                    {index < RECEIPT_ACTIVITY_LOG.length - 1 && (
-                                        <span className='w-px flex-1 bg-[#E2E8F0] mt-1 min-h-[24px]' />
-                                    )}
-                                </div>
-                                <div className='pb-1'>
-                                    <p className='text-sm text-[#1E1E1E]'>{item.message}</p>
-                                    <p className='text-xs text-[#667085] mt-1'>
-                                        {item.time}
-                                        {' · '}
-                                        {item.actor}
-                                    </p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </Panel>
-            </div>
-
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='receipt-management'
+                title='Receipt Management'
+                rows={filtered}
+                columns={EXPORT_COLUMNS}
+                exportDescription={<>You are exporting {filtered.length} receipt record(s) from live Finance data.</>}
+            />
         </div>
     )
 }

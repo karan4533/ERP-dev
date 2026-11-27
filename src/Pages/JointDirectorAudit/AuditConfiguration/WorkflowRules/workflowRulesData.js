@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 import { DEPARTMENTS } from '../../AuditPlanning/auditPlanningData'
 
 export const WORKFLOW_STEP_OPTIONS = [
@@ -34,7 +35,7 @@ export const DEFAULT_WORKFLOW_STEPS = [
     'Visible to JD Audit',
 ]
 
-export const WORKFLOW_RULES = [
+const DEFAULT_WORKFLOW_RULES = [
     {
         id: 'WF-001',
         workflowName: 'Academic Audit Workflow',
@@ -138,3 +139,15 @@ export const getStoredSteps = (formData) => [
     formData.step4,
     formData.step5,
 ].filter(Boolean)
+export const WORKFLOW_RULES_STORAGE_KEY = 'schoolerp-jd-audit-workflow-rules-v1'
+export function getAuditWorkflowRules() {
+    return ensureCampusSeed('schoolerp-jd-audit-workflow-rules-v1', DEFAULT_WORKFLOW_RULES)
+}
+export function saveAuditWorkflowRules(rows) {
+    return saveCampusJson('schoolerp-jd-audit-workflow-rules-v1', rows)
+}
+export function hydrateAuditWorkflowRulesFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-workflow-rules-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-workflow-rules-v1', DEFAULT_WORKFLOW_RULES)
+}
+export const WORKFLOW_RULES = DEFAULT_WORKFLOW_RULES

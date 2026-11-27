@@ -1,8 +1,15 @@
-"""Direct messages between two people on the same campus."""
+"""Inbox threads between people on the same campus: two-person chats and small groups.
+
+Who may message whom (no project document defines a narrower rule):
+- staff may message anyone active on their own campus;
+- parents and students may only message staff, never another parent or student;
+- a group follows its creator's rule, so a parent or student can only start a group of staff.
+Only members of a conversation can read it, send to it or download its attachments.
+"""
 
 from __future__ import annotations
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import UploadFile
 from sqlalchemy import func, select
@@ -19,11 +26,27 @@ from app.services.errors import fail
 
 ROLE_NAMES = dict(ALL_ROLES)
 BODY_MAX = 4000
+TITLE_MAX = 120
+GROUP_MIN_OTHERS = 2
+GROUP_MAX_MEMBERS = 50
+NON_STAFF_ROLES = frozenset({"parent", "student"})
 COLORS = ["#515DEF", "#DB2777", "#0C1E5B", "#0891B2", "#7C3AED", "#059669", "#B45309", "#EA580C"]
 
 
 def _has(db: Session, actor: User, code: str) -> bool:
     return code in permission_codes_for(db, actor)
+
+
+def _is_staff(db: Session, user: User) -> bool:
+    return role_code_for(db, user) not in NON_STAFF_ROLES
+
+
+def _may_message(db: Session, actor: User, other: User) -> bool:
+    return _is_staff(db, actor) or _is_staff(db, other)
+
+
+def _refuse_recipient() -> None:
+    fail(403, "recipient_not_allowed", "Parents and students can only message school staff.")
 
 
 def _person(db: Session, user: User) -> dict:
@@ -37,6 +60,7 @@ def _person(db: Session, user: User) -> dict:
     return {
         "id": str(user.id),
         "name": name,
+        "email": user.email,
         "employeeId": employee.employee_code if employee else "",
         "role": ROLE_NAMES.get(role.code, role.code) if role else "",
         "department": (employee.department or "") if employee else "",
@@ -47,9 +71,10 @@ def _person(db: Session, user: User) -> dict:
 def directory(db: Session, actor: User) -> list[dict]:
     if not _has(db, actor, "communication.read"):
         fail(403, "forbidden", "You are not allowed to view the inbox.")
-    people = db.scalars(
-        select(User).where(User.campus_id == actor.campus_id, User.is_active.is_(True), User.id != actor.id)
-    ).all()
+    query = select(User).where(User.campus_id == actor.campus_id, User.is_active.is_(True), User.id != actor.id)
+    if not _is_staff(db, actor):
+        query = query.join(Role, Role.id == User.role_id).where(Role.code.not_in(NON_STAFF_ROLES))
+    people = db.scalars(query).all()
     return sorted((_person(db, user) for user in people), key=lambda item: item["name"].lower())
 
 
@@ -68,6 +93,7 @@ def _ensure_participants(db: Session, conversation: Conversation, *user_ids: UUI
     for user_id in user_ids:
         if user_id not in existing:
             db.add(ConversationParticipant(conversation_id=conversation.id, user_id=user_id))
+            existing.add(user_id)
 
 
 def _mine(db: Session, conversation: Conversation, actor: User) -> ConversationParticipant | None:
@@ -79,6 +105,16 @@ def _mine(db: Session, conversation: Conversation, actor: User) -> ConversationP
     )
 
 
+def _member_of(db: Session, actor: User, conversation_id: UUID) -> tuple[Conversation, ConversationParticipant]:
+    row = db.get(Conversation, conversation_id)
+    if row is None or row.campus_id != actor.campus_id:
+        fail(404, "not_found", "Conversation not found.")
+    mine = _mine(db, row, actor)
+    if mine is None:
+        fail(403, "not_a_member", "You are not a member of this conversation.")
+    return row, mine
+
+
 def _other(db: Session, conversation: Conversation, actor: User) -> User | None:
     row = db.scalar(
         select(ConversationParticipant).where(
@@ -87,6 +123,16 @@ def _other(db: Session, conversation: Conversation, actor: User) -> User | None:
         )
     )
     return db.get(User, row.user_id) if row else None
+
+
+def _members(db: Session, conversation: Conversation) -> list[User]:
+    return list(
+        db.scalars(
+            select(User)
+            .join(ConversationParticipant, ConversationParticipant.user_id == User.id)
+            .where(ConversationParticipant.conversation_id == conversation.id)
+        ).all()
+    )
 
 
 def _last_message(db: Session, conversation: Conversation) -> Message | None:
@@ -118,14 +164,16 @@ def _file_out(db: Session, file_id) -> dict | None:
     }
 
 
-def _message_out(db: Session, message: Message, *, read: bool) -> dict:
+def _message_out(db: Session, message: Message, *, read: bool, people: dict[str, dict] | None = None) -> dict:
     file = _file_out(db, message.file_id)
     kind = "file" if file else "text"
     if file and (file["type"] or "").startswith("image/"):
         kind = "image"
+    sender = (people or {}).get(str(message.sender_id))
     return {
         "id": str(message.id),
         "senderId": str(message.sender_id),
+        "senderName": sender["name"] if sender else "",
         "type": kind,
         "content": message.body,
         "createdAt": message.created_at.isoformat(),
@@ -134,9 +182,22 @@ def _message_out(db: Session, message: Message, *, read: bool) -> dict:
     }
 
 
+def _group_title(conversation: Conversation, people: list[dict], actor: User) -> str:
+    if conversation.title:
+        return conversation.title
+    names = sorted(person["name"] for person in people if person["id"] != str(actor.id))
+    label = ", ".join(names[:3])
+    return f"{label} +{len(names) - 3}" if len(names) > 3 else label or "Group"
+
+
 def _conversation_out(db: Session, conversation: Conversation, actor: User, *, with_messages: bool = False) -> dict:
     mine = _mine(db, conversation, actor)
-    other = _other(db, conversation, actor)
+    people = [_person(db, user) for user in _members(db, conversation)]
+    people.sort(key=lambda item: item["name"].lower())
+    by_id = {person["id"]: person for person in people}
+    participant = None
+    if not conversation.is_group:
+        participant = next((person for person in people if person["id"] != str(actor.id)), None)
     last = _last_message(db, conversation)
     unread = _unread(db, conversation, mine) if mine else 0
     messages = []
@@ -146,12 +207,16 @@ def _conversation_out(db: Session, conversation: Conversation, actor: User, *, w
         ).all()
         cutoff = mine.last_read_at if mine else None
         messages = [
-            _message_out(db, message, read=cutoff is not None and message.created_at <= cutoff)
+            _message_out(db, message, read=cutoff is not None and message.created_at <= cutoff, people=by_id)
             for message in rows
         ]
     return {
         "id": str(conversation.id),
-        "participant": _person(db, other) if other else None,
+        "isGroup": bool(conversation.is_group),
+        "title": _group_title(conversation, people, actor) if conversation.is_group else (participant or {}).get("name", ""),
+        "createdBy": str(conversation.created_by_id) if conversation.created_by_id else None,
+        "participant": participant,
+        "participants": people,
         "lastMessage": (last.body if last and last.body else (last and _file_out(db, last.file_id) or {}).get("name") or ""),
         "lastMessageAt": last.created_at.isoformat() if last else conversation.created_at.isoformat(),
         "unreadCount": unread,
@@ -167,7 +232,13 @@ def list_conversations(db: Session, actor: User) -> list[dict]:
     ids = db.scalars(
         select(ConversationParticipant.conversation_id).where(ConversationParticipant.user_id == actor.id)
     ).all()
-    rows = db.scalars(select(Conversation).where(Conversation.id.in_(ids))).all() if ids else []
+    rows = (
+        db.scalars(
+            select(Conversation).where(Conversation.id.in_(ids), Conversation.campus_id == actor.campus_id)
+        ).all()
+        if ids
+        else []
+    )
     listed = [_conversation_out(db, row, actor) for row in rows]
     listed.sort(key=lambda item: item["lastMessageAt"], reverse=True)
     return listed
@@ -179,13 +250,16 @@ def _open(db: Session, actor: User, other_id: UUID) -> Conversation:
     other = db.get(User, other_id)
     if other is None or other.campus_id != actor.campus_id or not other.is_active:
         fail(404, "not_found", "That person was not found.")
+    if not _may_message(db, actor, other):
+        _refuse_recipient()
     key = _pair_key(actor.id, other.id)
     row = db.scalar(select(Conversation).where(Conversation.campus_id == actor.campus_id, Conversation.pair_key == key))
     if row is None:
-        row = Conversation(campus_id=actor.campus_id, pair_key=key)
+        row = Conversation(campus_id=actor.campus_id, pair_key=key, created_by_id=actor.id)
         db.add(row)
         db.flush()
     _ensure_participants(db, row, actor.id, other.id)
+    db.flush()
     mine = _mine(db, row, actor)
     if mine and mine.deleted:
         mine.deleted = False
@@ -196,10 +270,7 @@ def _open(db: Session, actor: User, other_id: UUID) -> Conversation:
 def get_conversation(db: Session, actor: User, conversation_id: UUID) -> dict:
     if not _has(db, actor, "communication.read"):
         fail(403, "forbidden", "You are not allowed to view the inbox.")
-    row = db.get(Conversation, conversation_id)
-    mine = _mine(db, row, actor) if row and row.campus_id == actor.campus_id else None
-    if row is None or mine is None:
-        fail(404, "not_found", "Conversation not found.")
+    row, mine = _member_of(db, actor, conversation_id)
     last = _last_message(db, row)
     if last:
         mine.last_read_at = last.created_at
@@ -215,6 +286,45 @@ def start_conversation(db: Session, actor: User, other_id: UUID) -> dict:
     return _conversation_out(db, row, actor, with_messages=True)
 
 
+def create_group(db: Session, actor: User, user_ids: list[UUID], title: str | None) -> dict:
+    """Start one conversation with several people; the creator is always a member."""
+    if not _has(db, actor, "communication.write"):
+        fail(403, "forbidden", "You are not allowed to send messages.")
+    title = (title or "").strip()
+    if len(title) > TITLE_MAX:
+        fail(422, "title_too_long", f"A group name can be at most {TITLE_MAX} characters.")
+    others = list(dict.fromkeys(user_id for user_id in user_ids if user_id != actor.id))
+    if len(others) < GROUP_MIN_OTHERS:
+        fail(422, "group_too_small", "Choose at least two other people to start a group.")
+    if len(others) + 1 > GROUP_MAX_MEMBERS:
+        fail(422, "group_too_large", f"A group can have at most {GROUP_MAX_MEMBERS} members.")
+    found = {
+        user.id: user
+        for user in db.scalars(select(User).where(User.id.in_(others))).all()
+        if user.campus_id == actor.campus_id and user.is_active
+    }
+    if len(found) != len(others):
+        fail(404, "not_found", "One or more of those people were not found.")
+    if any(not _may_message(db, actor, user) for user in found.values()):
+        _refuse_recipient()
+    row = Conversation(
+        campus_id=actor.campus_id,
+        pair_key=f"group:{uuid4().hex}",
+        is_group=True,
+        title=title or None,
+        created_by_id=actor.id,
+    )
+    db.add(row)
+    db.flush()
+    _ensure_participants(db, row, actor.id, *others)
+    write_audit(
+        db, action="CONVERSATION_GROUP_CREATED", entity_type="conversation", entity_id=str(row.id),
+        actor_id=actor.id, campus_id=actor.campus_id, details=f"{len(others) + 1} members",
+    )
+    db.commit()
+    return _conversation_out(db, row, actor, with_messages=True)
+
+
 def send(db: Session, actor: User, conversation_id: UUID | None, *, other_id: UUID | None, body: str, upload: UploadFile | None) -> dict:
     if not _has(db, actor, "communication.write"):
         fail(403, "forbidden", "You are not allowed to send messages.")
@@ -224,10 +334,11 @@ def send(db: Session, actor: User, conversation_id: UUID | None, *, other_id: UU
     if not body and (upload is None or not upload.filename):
         fail(422, "empty_message", "Write a message or attach a file.")
     if conversation_id:
-        row = db.get(Conversation, conversation_id)
-        mine = _mine(db, row, actor) if row and row.campus_id == actor.campus_id else None
-        if row is None or mine is None:
-            fail(404, "not_found", "Conversation not found.")
+        row, mine = _member_of(db, actor, conversation_id)
+        if not row.is_group:
+            other = _other(db, row, actor)
+            if other is not None and not _may_message(db, actor, other):
+                _refuse_recipient()
         if mine.deleted:
             mine.deleted = False
     else:
@@ -251,19 +362,33 @@ def send(db: Session, actor: User, conversation_id: UUID | None, *, other_id: UU
         db.flush()
         mine = _mine(db, row, actor)
         mine.last_read_at = message.created_at
-        other = _other(db, row, actor)
-        if other is not None:
+        recipients = db.scalars(
+            select(ConversationParticipant).where(
+                ConversationParticipant.conversation_id == row.id,
+                ConversationParticipant.user_id != actor.id,
+            )
+        ).all()
+        if recipients:
             sender_name = _person(db, actor)["name"]
             preview = body[:120] if body else ((stored.original_name if stored else None) or "Attachment")
-            _notify(
-                db,
-                campus_id=actor.campus_id,
-                title=f"New message from {sender_name}",
-                body=preview,
-                entity_type="conversation",
-                entity_id=str(row.id),
-                user_id=other.id,
+            heading = (
+                f"{sender_name} in {row.title or 'a group conversation'}"
+                if row.is_group
+                else f"New message from {sender_name}"
             )
+            for recipient in recipients:
+                # A new message brings a thread the recipient deleted or archived back into their inbox.
+                recipient.deleted = False
+                recipient.archived = False
+                _notify(
+                    db,
+                    campus_id=actor.campus_id,
+                    title=heading,
+                    body=preview,
+                    entity_type="conversation",
+                    entity_id=str(row.id),
+                    user_id=recipient.user_id,
+                )
         write_audit(
             db, action="MESSAGE_SENT", entity_type="conversation", entity_id=str(row.id),
             actor_id=actor.id, campus_id=actor.campus_id, details=str(message.id),
@@ -280,10 +405,7 @@ def send(db: Session, actor: User, conversation_id: UUID | None, *, other_id: UU
 def set_flags(db: Session, actor: User, conversation_id: UUID, *, archived: bool | None, deleted: bool | None) -> dict:
     if not _has(db, actor, "communication.write"):
         fail(403, "forbidden", "You are not allowed to change conversations.")
-    row = db.get(Conversation, conversation_id)
-    mine = _mine(db, row, actor) if row and row.campus_id == actor.campus_id else None
-    if row is None or mine is None:
-        fail(404, "not_found", "Conversation not found.")
+    row, mine = _member_of(db, actor, conversation_id)
     if archived is not None:
         mine.archived = archived
     if deleted is not None:
@@ -297,5 +419,5 @@ def authorize_file_download(db: Session, actor: User, file: FileAsset) -> None:
     if message is None:
         return
     conversation = db.get(Conversation, message.conversation_id)
-    if conversation is None or _mine(db, conversation, actor) is None:
+    if conversation is None or conversation.campus_id != actor.campus_id or _mine(db, conversation, actor) is None:
         fail(404, "not_found", "File was not found.")

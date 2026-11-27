@@ -1,75 +1,92 @@
-import { NavLink } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Bus, ClipboardCheck, MapPinned, Wrench } from 'lucide-react'
-import { IntegrationNotice, PageHeader, StatusBadge } from '../../../Common/ui'
+import React, { useEffect, useState } from 'react'
+import { Bus, MapPin, Users, ClipboardList, GraduationCap, Wrench } from 'lucide-react'
+import { getDrivers, hydrateDriversFromApi } from '../DriverManagement/driverManagementData'
+import { getVehicles, hydrateVehiclesFromApi } from '../VehicleManagement/vehicleManagementData'
+import { getRoutes, hydrateRoutesFromApi } from '../RouteManagement/routeManagementData'
+import { getDuties, hydrateDutiesFromApi } from '../AssignDuty/assignDutyData'
+import { getStudentTransports, hydrateStudentTransportsFromApi } from '../StudentTransport/studentTransportData'
+import { getMaintenanceRecords, hydrateMaintenanceRecordsFromApi } from '../VehicleMaintenance/vehicleMaintenanceData'
 
-const METRICS = [
-    { label: 'Fleet records', value: 12, detail: 'Reference vehicles', icon: Bus },
-    { label: 'Active routes', value: 8, detail: 'Reference route plans', icon: MapPinned },
-    { label: 'Maintenance due', value: 3, detail: 'Needs scheduling review', icon: Wrench },
-    { label: 'Approval queue', value: 4, detail: 'Requests awaiting decision', icon: ClipboardCheck },
+const STAT_CARDS = [
+    { key: 'drivers', label: 'Drivers', icon: Users, color: 'text-[#515DEF]', bg: 'bg-[#515DEF]/10' },
+    { key: 'vehicles', label: 'Vehicles', icon: Bus, color: 'text-[#2196F3]', bg: 'bg-[#2196F3]/10' },
+    { key: 'routes', label: 'Routes', icon: MapPin, color: 'text-[#9C27B0]', bg: 'bg-[#9C27B0]/10' },
+    { key: 'duties', label: 'Assigned Duties', icon: ClipboardList, color: 'text-[#FF9800]', bg: 'bg-[#FF9800]/10' },
+    { key: 'students', label: 'Student Transports', icon: GraduationCap, color: 'text-[#4CAF50]', bg: 'bg-[#4CAF50]/10' },
+    { key: 'maintenance', label: 'Maintenance Records', icon: Wrench, color: 'text-[#F44336]', bg: 'bg-[#F44336]/10' },
 ]
 
-const ATTENTION = [
-    { id: 'VH-004', title: 'Insurance renewal evidence due', context: 'Vehicle TN-09-AB-4521 · due 04-11-2026', status: 'High', to: '/transport-manager/vehicle-management' },
-    { id: 'MT-018', title: 'Preventive service schedule review', context: 'School bus 07 · odometer threshold reached', status: 'Pending', to: '/transport-manager/vehicle-maintenance' },
-    { id: 'REQ-026', title: 'Route 5 repair request', context: 'Workshop quotation awaiting approval', status: 'In Review', to: '/transport-manager/request-approvals' },
-]
+const Dashboard = () => {
+    const [loading, setLoading] = useState(true)
+    const [counts, setCounts] = useState({
+        drivers: 0,
+        vehicles: 0,
+        routes: 0,
+        duties: 0,
+        students: 0,
+        maintenance: 0,
+    })
 
-const QUICK_LINKS = [
-    { label: 'Review fleet', to: '/transport-manager/vehicle-management' },
-    { label: 'Manage routes', to: '/transport-manager/route-management' },
-    { label: 'Assign duties', to: '/transport-manager/assign-duty' },
-    { label: 'Review maintenance', to: '/transport-manager/vehicle-maintenance' },
-]
+    useEffect(() => {
+        let cancelled = false
+        Promise.all([
+            hydrateDriversFromApi(),
+            hydrateVehiclesFromApi(),
+            hydrateRoutesFromApi(),
+            hydrateDutiesFromApi(),
+            hydrateStudentTransportsFromApi(),
+            hydrateMaintenanceRecordsFromApi(),
+        ]).finally(() => {
+            if (!cancelled) {
+                setCounts({
+                    drivers: getDrivers().length,
+                    vehicles: getVehicles().length,
+                    routes: getRoutes().length,
+                    duties: getDuties().length,
+                    students: getStudentTransports().length,
+                    maintenance: getMaintenanceRecords().length,
+                })
+                setLoading(false)
+            }
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [])
 
-const Dashboard = () => (
-    <section>
-        <PageHeader
-            title='Transport operations briefing'
-            description='Fleet readiness, route coverage, maintenance risk and approval work requiring transport management attention.'
-            context='Reference operational data · live telematics and transport services not connected'
-        />
+    return (
+        <section>
+            <div className='bg-white rounded-2xl shadow-md p-4 mb-6'>
+                <h2 className='text-xl font-semibold text-black'>Transport Dashboard</h2>
+                <p className='text-sm text-[#667085] mt-1'>
+                    Live counts from campus transport operations.
+                </p>
+            </div>
 
-        <IntegrationNotice
-            state='demo'
-            title='Transport reference workspace'
-            description='Counts and attention items are frontend reference data. Live GPS, vehicle telemetry, duty acknowledgement, maintenance work orders, documents and approval notifications require backend integrations.'
-            className='mb-5'
-        />
-
-        <dl className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'>
-            {METRICS.map(({ label, value, detail, icon: Icon }) => (
-                <div key={label} className='rounded-2xl border border-[var(--erp-line)] bg-white p-4 shadow-[var(--erp-shadow-subtle)]'>
-                    <div className='flex items-start justify-between gap-3'>
-                        <div><dt className='text-sm font-medium text-[var(--erp-muted)]'>{label}</dt><dd className='mt-1 text-2xl font-semibold text-[var(--erp-ink)]'>{value}</dd></div>
-                        <span className='grid size-10 place-items-center rounded-xl bg-[var(--erp-primary-soft)] text-[var(--erp-primary)]'>{Icon && <Icon size={19} aria-hidden='true' />}</span>
-                    </div>
-                    <p className='mt-2 text-xs text-[var(--erp-slate)]'>{detail}</p>
+            {loading ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading dashboard…
                 </div>
-            ))}
-        </dl>
-
-        <div className='mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]'>
-            <section className='rounded-2xl border border-[var(--erp-line)] bg-white p-4 shadow-[var(--erp-shadow-subtle)]' aria-labelledby='transport-attention-heading'>
-                <div className='flex items-center gap-2'><AlertTriangle className='text-amber-600' size={19} aria-hidden='true' /><h3 id='transport-attention-heading' className='text-lg font-semibold text-[var(--erp-ink)]'>Attention queue</h3></div>
-                <div className='mt-4 divide-y divide-[var(--erp-line)]'>
-                    {ATTENTION.map((item) => (
-                        <article key={item.id} className='flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between'>
-                            <div className='min-w-0'><p className='font-semibold text-[var(--erp-ink)]'>{item.title}</p><p className='mt-1 text-sm text-[var(--erp-slate)]'>{item.id} · {item.context}</p></div>
-                            <div className='flex items-center gap-2'><StatusBadge status={item.status} /><NavLink to={item.to} className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--erp-primary)] px-3 py-1.5 text-sm font-semibold text-[var(--erp-primary)]'>Review <ArrowRight size={14} aria-hidden='true' /></NavLink></div>
-                        </article>
-                    ))}
+            ) : (
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
+                    {STAT_CARDS.map((card) => {
+                        const StatIcon = card.icon
+                        return (
+                            <div key={card.key} className='bg-white rounded-2xl shadow-md p-6 flex items-center gap-4'>
+                                <div className={`p-3 rounded-xl ${card.bg}`}>
+                                    <StatIcon size={28} className={card.color} />
+                                </div>
+                                <div>
+                                    <p className='text-sm text-[#667085]'>{card.label}</p>
+                                    <p className='text-3xl font-semibold text-[#0C1E5B] mt-1'>{counts[card.key]}</p>
+                                </div>
+                            </div>
+                        )
+                    })}
                 </div>
-            </section>
-
-            <section className='rounded-2xl border border-[var(--erp-line)] bg-white p-4 shadow-[var(--erp-shadow-subtle)]' aria-labelledby='transport-quick-links-heading'>
-                <h3 id='transport-quick-links-heading' className='text-lg font-semibold text-[var(--erp-ink)]'>Common actions</h3>
-                <div className='mt-4 grid gap-2'>
-                    {QUICK_LINKS.map((item) => <NavLink key={item.to} to={item.to} className='flex min-h-11 items-center justify-between rounded-xl border border-[var(--erp-line)] px-3 py-2 text-sm font-semibold text-[var(--erp-slate)] hover:border-[var(--erp-primary)] hover:text-[var(--erp-primary)]'>{item.label}<ArrowRight size={15} aria-hidden='true' /></NavLink>)}
-                </div>
-            </section>
-        </div>
-    </section>
-)
+            )}
+        </section>
+    )
+}
 
 export default Dashboard

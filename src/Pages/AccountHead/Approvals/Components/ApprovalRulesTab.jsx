@@ -4,7 +4,7 @@ import {
     APPROVAL_RULES,
     ruleStatusBadgeColor,
 } from '../approvalsData'
-import { tdClass, thClass } from './approvalStyles'
+import { tdClass, thClass } from './ApprovalsShared'
 
 const ApprovalRulesTab = () => (
     <div className='space-y-6'>

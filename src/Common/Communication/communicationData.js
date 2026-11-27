@@ -1,3 +1,5 @@
+import { canUseCommunicationApi } from '../../services/communicationApi'
+
 const STORAGE_KEY = 'schoolerp_communication_v1'
 
 export const DIRECTORY_CONTACTS = [
@@ -276,8 +278,18 @@ const writeStore = (store) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
 }
 
+export const getDirectoryContacts = () => {
+    if (canUseCommunicationApi()) return []
+    return DIRECTORY_CONTACTS
+}
+
 export const getConversationsForRole = (roleKey, currentUserId) => {
     const store = readStore()
+    // API mode: never seed the localStorage demo directory / chats for any role
+    // (GateKeeper, Librarian, and all other CommunicationPage inboxes hydrate via communicationApi).
+    if (canUseCommunicationApi()) {
+        return Array.isArray(store[roleKey]) ? store[roleKey] : []
+    }
     if (!store[roleKey]) {
         store[roleKey] = buildSeedConversations(currentUserId)
         writeStore(store)

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models import Admission, FinanceRecord, FinancialYear, Student, User
+from app.models import AcademicYear, Admission, FinanceRecord, FinancialYear, Section, Student, User
 from app.services.audit import write_audit
 from app.services.errors import fail
 
@@ -47,6 +47,15 @@ STATE_COLLECTIONS = (
 
 _SNAPSHOT = "snapshot"
 _SNAPSHOT_ID = "current"
+
+# Server-only record of every receipt issued by fee collection or a verified online payment.
+# The snapshot copy is what the Finance screens show; this ledger is what the enrolment fee gate trusts.
+RECEIPT_LEDGER_COLLECTION = "fee-receipt-ledger"
+# A client snapshot save may only change reprint bookkeeping on an existing receipt.
+_CLIENT_RECEIPT_FIELDS = ("reprintCount", "lastReprintedAt", "lastReprintedBy", "reprintReason")
+RECEIPT_SERVER_ONLY_MESSAGE = (
+    "Receipts are issued only by fee collection or a verified online payment, not by saving Finance data."
+)
 
 
 def _utcnow() -> str:
@@ -184,8 +193,41 @@ def _attach_financial_year_meta(db: Session, actor: User, data: dict) -> dict:
     return data
 
 
+def _section_label_for_student(student: Student, sections_by_id: dict) -> str:
+    """Section display name from placement; empty when the student is not yet placed."""
+    label = (student.section or "").strip()
+    if label:
+        return label
+    if student.section_id:
+        row = sections_by_id.get(student.section_id)
+        if row is not None:
+            return (row.name or "").strip()
+    return ""
+
+
+def _academic_year_label_for_student(student: Student, years_by_id: dict) -> str:
+    """Academic-year display label from the student's FK; empty when unset (never fabricate)."""
+    if not student.academic_year_id:
+        return ""
+    year = years_by_id.get(student.academic_year_id)
+    if year is None:
+        return ""
+    return (year.name or "").strip()
+
+
 def _enrolled_students(db: Session, campus_id) -> list[dict]:
     students = db.scalars(select(Student).where(Student.campus_id == campus_id)).all()
+    year_ids = {s.academic_year_id for s in students if s.academic_year_id}
+    section_ids = {s.section_id for s in students if s.section_id}
+    years_by_id = {
+        y.id: y
+        for y in db.scalars(select(AcademicYear).where(AcademicYear.id.in_(year_ids))).all()
+    } if year_ids else {}
+    sections_by_id = {
+        s.id: s
+        for s in db.scalars(select(Section).where(Section.id.in_(section_ids))).all()
+    } if section_ids else {}
+
     rows: list[dict] = []
     for student in students:
         admission = None
@@ -205,8 +247,8 @@ def _enrolled_students(db: Session, campus_id) -> list[dict]:
                 "applicationNo": "",
                 "registerNo": "",
                 "className": student.class_name,
-                "section": "",
-                "academicYear": "2026-2027",
+                "section": _section_label_for_student(student, sections_by_id),
+                "academicYear": _academic_year_label_for_student(student, years_by_id),
                 "dateOfBirth": admission.date_of_birth.isoformat() if admission and admission.date_of_birth else "",
                 "bloodGroup": (admission.blood_group if admission else "") or "",
                 "fatherName": (admission.father_name if admission else "") or "",
@@ -354,27 +396,64 @@ def get_state(db: Session, actor: User) -> dict:
     }
 
 
-def save_state(db: Session, actor: User, payload: dict) -> dict:
+def _snapshot_row(db: Session, campus_id) -> FinanceRecord | None:
+    return db.scalar(
+        select(FinanceRecord).where(
+            FinanceRecord.campus_id == campus_id,
+            FinanceRecord.collection == _SNAPSHOT,
+            FinanceRecord.public_id == _SNAPSHOT_ID,
+        )
+    )
+
+
+def _merge_client_receipts(stored, incoming) -> list:
+    """Keep every stored receipt; a client may only update reprint fields and never add receipts."""
+    stored = [row for row in (stored or []) if row is not None] if isinstance(stored, list) else []
+    if incoming is None:
+        incoming = []
+    if not isinstance(incoming, list):
+        fail(400, "validation_error", "receipts must be a list.")
+    stored_ids = {str(row.get("id")) for row in stored if isinstance(row, dict) and row.get("id")}
+    patches: dict[str, dict] = {}
+    for index, row in enumerate(incoming):
+        if not isinstance(row, dict):
+            fail(400, "validation_error", f"receipts[{index}] must be an object.")
+        receipt_id = str(row.get("id") or "").strip()
+        if not receipt_id or receipt_id not in stored_ids:
+            fail(403, "receipt_server_only", RECEIPT_SERVER_ONLY_MESSAGE)
+        patches[receipt_id] = row
+    merged = []
+    for row in stored:
+        patch = patches.get(str(row.get("id"))) if isinstance(row, dict) else None
+        if patch:
+            row = {**row, **{key: patch[key] for key in _CLIENT_RECEIPT_FIELDS if key in patch}}
+        merged.append(row)
+    return merged
+
+
+def save_state(db: Session, actor: User, payload: dict, *, server_authored: bool = False) -> dict:
+    """Save the campus Finance snapshot.
+
+    ``server_authored`` is set only by the Finance action services; a client save (PUT /state or a
+    collection replace) cannot add, change or remove receipts.
+    """
     data = payload.get("data")
     if not isinstance(data, dict):
         fail(400, "validation_error", "Finance state data object is required.")
 
+    row = _snapshot_row(db, actor.campus_id)
     cleaned = _empty_state()
     for key in STATE_COLLECTIONS:
         if key in data:
             cleaned[key] = data[key]
+    if not server_authored:
+        stored_receipts = (row.body or {}).get("receipts") if row is not None else []
+        cleaned["receipts"] = _merge_client_receipts(stored_receipts, data.get("receipts"))
     cleaned["meta"] = {**(cleaned.get("meta") or {}), **(data.get("meta") or {}), "seeded": True}
     _validate_finance_config(cleaned)
     cleaned = _attach_financial_year_meta(db, actor, cleaned)
     cleaned["_savedAt"] = _utcnow()
 
-    row = db.scalar(
-        select(FinanceRecord).where(
-            FinanceRecord.campus_id == actor.campus_id,
-            FinanceRecord.collection == _SNAPSHOT,
-            FinanceRecord.public_id == _SNAPSHOT_ID,
-        )
-    )
     if row is None:
         row = FinanceRecord(
             campus_id=actor.campus_id,
@@ -425,6 +504,9 @@ def replace_collection(db: Session, actor: User, collection: str, items: list) -
 
 
 def reset_state(db: Session, actor: User) -> dict:
+    row = _snapshot_row(db, actor.campus_id)
+    if row is not None and (row.body or {}).get("receipts"):
+        fail(409, "receipts_present", "Finance data that holds issued receipts cannot be reset.")
     db.execute(
         delete(FinanceRecord).where(
             FinanceRecord.campus_id == actor.campus_id,

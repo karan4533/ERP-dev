@@ -16,6 +16,14 @@ export const listAcademicsCollectionApi = (collection) =>
 export const replaceAcademicsCollectionApi = (collection, items) =>
     apiRequest(`/academics/${enc(collection)}`, { method: 'PUT', body: items })
 
+/** PATCH one record (currently extra-classes only). Returns the saved server row. */
+export const updateAcademicsRecordApi = (collection, id, patch) =>
+    apiRequest(`/academics/${enc(collection)}/${enc(id)}`, { method: 'PATCH', body: patch })
+
+/** DELETE one record (class-timetables / extra-classes); server enforces role + scope and audits. */
+export const deleteAcademicsRecordApi = (collection, id) =>
+    apiRequest(`/academics/${enc(collection)}/${enc(id)}`, { method: 'DELETE' })
+
 /** Drop server bookkeeping keys before persisting in memory / re-PUT. */
 export const stripAcademicsMeta = (row) => {
     if (!row || typeof row !== 'object') return row

@@ -1,14 +1,15 @@
-import React from 'react'
-import { Download } from 'lucide-react'
-import { IntegrationNotice, PageHeader } from '../../../Common/ui'
-import ExecutiveFindingSummary from '../../../Common/AuditGovernance/ExecutiveFindingSummary'
-import { FINDINGS } from '../FindingsCompliance/findingsComplianceData'
+import React, { useState } from 'react'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { Calendar, Download, BarChart3 } from 'lucide-react'
+import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
     AUDIT_SUMMARY_REPORT,
     FINDINGS_ANALYSIS_REPORT,
     COMPLIANCE_PERFORMANCE_REPORT,
     RECURRING_ISSUES_REPORT,
     RISK_ANALYSIS_REPORT,
+    REPORT_PERIODS,
     severityBadgeColor,
     statusBadgeColor,
 } from './reportsAnalyticsData'
@@ -23,16 +24,74 @@ const ReportWidget = ({ title, children }) => (
 const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
 const tdClass = 'px-2 py-3 text-[#667085] text-sm'
 
-const ReportsAnalytics = () => (
+const ReportsAnalytics = () => {
+    const [fromDate, setFromDate] = useState(new Date())
+    const [toDate, setToDate] = useState(new Date())
+    const [exportModal, setExportModal] = useState(false)
+
+    return (
         <section className='space-y-6'>
-            <PageHeader
-                title='Reports & analytics'
-                description='Executive risk, closure and compliance views from the current audit reference dataset.'
-                context='Static demonstration data · no authoritative date-series service connected'
-                actions={<button type='button' disabled title='Requires reporting and document services' className='inline-flex min-h-10 cursor-not-allowed items-center gap-2 rounded-lg bg-[var(--erp-primary)] px-4 py-2 text-sm font-semibold text-white opacity-50'><Download size={16} aria-hidden='true' /> Export reports</button>}
-            />
-            <IntegrationNotice state='demo' title='Reporting integration required' description='The figures below are reference fixtures and do not respond to a reporting period until the audit analytics API is connected. Export is intentionally disabled.' />
-            <ExecutiveFindingSummary findings={FINDINGS} />
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex items-center gap-3 mb-4'>
+                    <div className='p-2.5 rounded-xl bg-[#515DEF]/10 text-[#515DEF]'>
+                        <BarChart3 size={22} />
+                    </div>
+                    <div>
+                        <h2 className='text-xl font-semibold text-black'>Reports & Analytics</h2>
+                        <p className='text-sm text-[#667085] mt-0.5'>Audit summaries, findings analysis, compliance performance, and risk reports.</p>
+                    </div>
+                </div>
+                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
+                    <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
+                        Clear Filters
+                    </button>
+                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full' defaultValue='Current Quarter'>
+                        {REPORT_PERIODS.map((period) => (
+                            <option key={period} value={period}>{period}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6'>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>From</label>
+                        <div className='relative w-full'>
+                            <DatePicker
+                                selected={fromDate}
+                                onChange={(date) => setFromDate(date)}
+                                isClearable
+                                showMonthYearDropdown
+                                scrollableMonthYearDropdown
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>To</label>
+                        <div className='relative'>
+                            <DatePicker
+                                selected={toDate}
+                                onChange={(date) => setToDate(date)}
+                                isClearable
+                                showMonthYearDropdown
+                                scrollableMonthYearDropdown
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                    <div className='flex flex-col gap-y-2 lg:col-span-2 lg:justify-end'>
+                        <button
+                            type='button'
+                            onClick={() => setExportModal(true)}
+                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center justify-center gap-x-2 w-full sm:w-auto sm:ml-auto'
+                        >
+                            <Download size={16} />
+                            Export All Reports
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <ReportWidget title='Audit Summary Report'>
                 <table className='w-full text-sm text-left'>
@@ -180,7 +239,11 @@ const ReportsAnalytics = () => (
                 </ReportWidget>
             </div>
 
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal}
+                unavailableReason='Export is not available on this page yet.'
+            />
         </section>
-)
+    )
+}
 
 export default ReportsAnalytics

@@ -332,7 +332,13 @@ const StudentAllocationList = ({
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} exportDescription={exportDescription} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='student-allocation'
+                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
+                exportDescription={exportDescription}
+            />
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </section>
     )

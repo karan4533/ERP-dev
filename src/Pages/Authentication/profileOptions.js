@@ -4,7 +4,7 @@ import teacher_profile from '../../assets/images/teacher-icon.png'
 import driver_profile from '../../assets/images/van-driver-icon.png'
 import librarian_profile from '../../assets/images/librarian-icon.png'
 import prm_profile from '../../assets/images/prm-icon.jpg'
-import { ROLES } from '../../constants/roles.js'
+import { ROLES } from '../../context/AuthContext'
 
 /** Single source of truth for login profile metadata (labels, images). */
 export const PROFILE_OPTIONS = [
@@ -17,6 +17,7 @@ export const PROFILE_OPTIONS = [
     { role: ROLES.DRIVER, label: 'Driver', image: driver_profile, alt: 'driver_profile' },
     { role: ROLES.LIBRARIAN, label: 'Librarian', image: librarian_profile, alt: 'librarian_profile' },
     { role: ROLES.PRM, label: 'PRM', image: prm_profile, alt: 'prm_profile', imageClassName: 'rounded-full' },
+    { role: ROLES.PRO, label: 'PRO', image: prm_profile, alt: 'pro_profile', imageClassName: 'rounded-full' },
     { role: ROLES.GATEKEEPER, label: 'Gate Keeper', image: driver_profile, alt: 'gatekeeper_profile' },
     {
         role: ROLES.GATEKEEPER_MANAGER,
@@ -39,9 +40,6 @@ export const PROFILE_OPTIONS = [
     { role: ROLES.QUALITY_AUDITOR, label: 'Quality Auditor', image: admin_profile, alt: 'quality_auditor_profile' },
     { role: ROLES.HR, label: 'HR', image: admin_profile, alt: 'hr_profile' },
     { role: ROLES.ACCOUNT_HEAD, label: 'Account Head', image: admin_profile, alt: 'account_head_profile' },
-    { role: ROLES.PRO, label: 'Public Relations Officer', image: prm_profile, alt: 'pro_profile' },
-    { role: ROLES.FILE_ROOM, label: 'File Room Custodian', image: librarian_profile, alt: 'file_room_profile' },
-    { role: ROLES.CCTV, label: 'CCTV In-charge', image: admin_profile, alt: 'cctv_profile' },
 ]
 
 export const PROFILE_BY_ROLE = Object.fromEntries(

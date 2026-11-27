@@ -4,7 +4,7 @@ export default function ReceivedLeaveRequests() {
     return (
         <ReceivedLeaveRequestsList
             roleKey='superadmin'
-            description='Leave requests submitted by Admin for Super Admin approval.'
+            description='Live campus leave inbox (GET /leave-requests). Includes requests awaiting Super Admin and campus-wide leave visible to this role.'
         />
     )
 }

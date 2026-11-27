@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import NotificationsListView from '../../../Common/Notifications/NotificationsListView'
 import { getNotifications, saveNotifications } from '../domain/hrStore'
-import { useHrTick } from '../components/hrUiState'
+import { useHrTick } from '../components/HrUi'
 
 const TYPES = ['Training', 'Recruitment', 'Payroll', 'Internal Job', 'Leave', 'Disciplinary', 'Exit', 'Onboarding']
 
@@ -20,14 +20,19 @@ const Notifications = () => {
     const tick = useHrTick()
     const notifications = useMemo(() => getNotifications().map((item) => ({ ...item, meta: item.type })), [tick])
     return (
-        <div onClick={(event) => {
-            const card = event.target.closest('[data-notification-id]')
-            if (!card) return
-            const id = card.getAttribute('data-notification-id')
-            if (!id) return
-            saveNotifications(getNotifications().map((item) => item.id === id ? { ...item, isRead: true } : item))
-        }}>
-            <NotificationsListView notifications={notifications} notificationTypes={TYPES} typeBadgeColor={badge} title='HR Notifications' />
+        <div className="space-y-2">
+            <p className="text-xs text-[#667085] px-1">
+                Source: live HR API notifications collection. In-app mark-read persists on the campus snapshot.
+            </p>
+            <div onClick={(event) => {
+                const card = event.target.closest('[data-notification-id]')
+                if (!card) return
+                const id = card.getAttribute('data-notification-id')
+                if (!id) return
+                saveNotifications(getNotifications().map((item) => item.id === id ? { ...item, isRead: true } : item))
+            }}>
+                <NotificationsListView notifications={notifications} notificationTypes={TYPES} typeBadgeColor={badge} title='HR Notifications' />
+            </div>
         </div>
     )
 }

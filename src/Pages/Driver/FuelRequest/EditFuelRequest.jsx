@@ -1,12 +1,23 @@
-﻿import React from 'react'
+﻿import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import FuelRequestForm from './Components/FuelRequestForm'
-import { getFuelRequestById } from './fuelRequestData'
+import {
+    getFuelRequestById,
+    hydrateDriverFuelRequestsFromApi,
+    upsertDriverFuelRequest,
+} from './fuelRequestData'
 
 const EditFuelRequest = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const record = getFuelRequestById(id)
+    const formRef = useRef(null)
+    const [record, setRecord] = useState(() => getFuelRequestById(id))
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        hydrateDriverFuelRequestsFromApi().finally(() => setRecord(getFuelRequestById(id)))
+    }, [id])
 
     if (!record) {
         return (
@@ -18,6 +29,29 @@ const EditFuelRequest = () => {
         )
     }
 
+    const handleSave = async () => {
+        const error = formRef.current?.validate?.()
+        if (error) {
+            toast.error(error)
+            return
+        }
+        setSaving(true)
+        const result = await upsertDriverFuelRequest({
+            ...record,
+            ...formRef.current.getValues(),
+            id: record.id,
+            fuelRequestId: record.fuelRequestId,
+            approvalStatus: record.approvalStatus,
+        })
+        setSaving(false)
+        if (result?.success === false) {
+            toast.error(result.message || 'Could not save fuel request.')
+            return
+        }
+        toast.success('Fuel request updated.')
+        navigate('/driver/fuel-request')
+    }
+
     return (
         <section className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-md p-4 md:p-6'>
@@ -27,7 +61,7 @@ const EditFuelRequest = () => {
                     {' '}
                     <span className='font-medium text-[#1E1E1E]'>{record.fuelRequestId}</span>
                 </p>
-                <FuelRequestForm record={record} />
+                <FuelRequestForm ref={formRef} record={record} />
             </div>
 
             <div className='flex sm:justify-end justify-center gap-x-4'>
@@ -40,10 +74,11 @@ const EditFuelRequest = () => {
                 </button>
                 <button
                     type='button'
-                    onClick={() => navigate('/driver/fuel-request')}
-                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all cursor-pointer md:w-auto w-full'
+                    disabled={saving}
+                    onClick={handleSave}
+                    className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all cursor-pointer md:w-auto w-full disabled:opacity-60'
                 >
-                    Save Changes
+                    {saving ? 'Saving…' : 'Save Changes'}
                 </button>
             </div>
         </section>

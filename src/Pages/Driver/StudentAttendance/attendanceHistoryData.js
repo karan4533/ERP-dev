@@ -1,167 +1,8 @@
-import { SCHOOL_NAME } from './studentAttendanceData'
+import { getAttendanceMarks, hydrateTransportStudentAttendanceFromApi } from './studentAttendanceData'
 
 export const HISTORY_PERIODS = ['Morning', 'Evening']
 export const HISTORY_PHASES = ['Pickup', 'Drop']
 export const MARKED_STATUSES = ['Present', 'Absent']
-
-export const ATTENDANCE_HISTORY = [
-    {
-        id: 'AH-001',
-        attendanceDate: '08-07-2025',
-        studentId: 'STU001',
-        studentName: 'Sandy Selva',
-        classSection: 'Grade 9 - A',
-        busStop: 'Central Bus Stand',
-        period: 'Morning',
-        phase: 'Pickup',
-        location: 'Central Bus Stand',
-        status: 'Present',
-        markedAt: '07:12 AM',
-    },
-    {
-        id: 'AH-002',
-        attendanceDate: '08-07-2025',
-        studentId: 'STU001',
-        studentName: 'Sandy Selva',
-        classSection: 'Grade 9 - A',
-        busStop: 'Central Bus Stand',
-        period: 'Morning',
-        phase: 'Drop',
-        location: SCHOOL_NAME,
-        status: 'Present',
-        markedAt: '08:05 AM',
-    },
-    {
-        id: 'AH-003',
-        attendanceDate: '08-07-2025',
-        studentId: 'STU002',
-        studentName: 'Priya M.',
-        classSection: 'Grade 8 - B',
-        busStop: 'Surampatti Bus Stop',
-        period: 'Morning',
-        phase: 'Pickup',
-        location: 'Surampatti Bus Stop',
-        status: 'Present',
-        markedAt: '07:18 AM',
-    },
-    {
-        id: 'AH-004',
-        attendanceDate: '08-07-2025',
-        studentId: 'STU003',
-        studentName: 'Arun Raj',
-        classSection: 'Grade 10 - A',
-        busStop: 'Teachers Colony',
-        period: 'Morning',
-        phase: 'Pickup',
-        location: 'Teachers Colony',
-        status: 'Absent',
-        markedAt: '07:22 AM',
-    },
-    {
-        id: 'AH-005',
-        attendanceDate: '08-07-2025',
-        studentId: 'STU003',
-        studentName: 'Arun Raj',
-        classSection: 'Grade 10 - A',
-        busStop: 'Teachers Colony',
-        period: 'Morning',
-        phase: 'Drop',
-        location: SCHOOL_NAME,
-        status: 'Absent',
-        markedAt: '08:10 AM',
-    },
-    {
-        id: 'AH-006',
-        attendanceDate: '07-07-2025',
-        studentId: 'STU004',
-        studentName: 'Vignesh S.',
-        classSection: 'Grade 7 - A',
-        busStop: 'Collector Office',
-        period: 'Evening',
-        phase: 'Pickup',
-        location: SCHOOL_NAME,
-        status: 'Present',
-        markedAt: '03:45 PM',
-    },
-    {
-        id: 'AH-007',
-        attendanceDate: '07-07-2025',
-        studentId: 'STU004',
-        studentName: 'Vignesh S.',
-        classSection: 'Grade 7 - A',
-        busStop: 'Collector Office',
-        period: 'Evening',
-        phase: 'Drop',
-        location: 'Collector Office',
-        status: 'Present',
-        markedAt: '04:20 PM',
-    },
-    {
-        id: 'AH-008',
-        attendanceDate: '07-07-2025',
-        studentId: 'STU005',
-        studentName: 'Divya V.',
-        classSection: 'Grade 9 - C',
-        busStop: 'VOC Park',
-        period: 'Morning',
-        phase: 'Pickup',
-        location: 'VOC Park',
-        status: 'Present',
-        markedAt: '07:08 AM',
-    },
-    {
-        id: 'AH-009',
-        attendanceDate: '07-07-2025',
-        studentId: 'STU005',
-        studentName: 'Divya V.',
-        classSection: 'Grade 9 - C',
-        busStop: 'VOC Park',
-        period: 'Morning',
-        phase: 'Drop',
-        location: SCHOOL_NAME,
-        status: 'Present',
-        markedAt: '08:02 AM',
-    },
-    {
-        id: 'AH-010',
-        attendanceDate: '06-07-2025',
-        studentId: 'STU006',
-        studentName: 'Kavin M.',
-        classSection: 'Grade 6 - A',
-        busStop: 'Perundurai Road',
-        period: 'Evening',
-        phase: 'Pickup',
-        location: SCHOOL_NAME,
-        status: 'Absent',
-        markedAt: '03:50 PM',
-    },
-    {
-        id: 'AH-011',
-        attendanceDate: '06-07-2025',
-        studentId: 'STU002',
-        studentName: 'Priya M.',
-        classSection: 'Grade 8 - B',
-        busStop: 'Surampatti Bus Stop',
-        period: 'Evening',
-        phase: 'Drop',
-        location: 'Surampatti Bus Stop',
-        status: 'Present',
-        markedAt: '04:35 PM',
-    },
-    {
-        id: 'AH-012',
-        attendanceDate: '05-07-2025',
-        studentId: 'STU001',
-        studentName: 'Sandy Selva',
-        classSection: 'Grade 9 - A',
-        busStop: 'Central Bus Stand',
-        period: 'Evening',
-        phase: 'Pickup',
-        location: SCHOOL_NAME,
-        status: 'Present',
-        markedAt: '03:40 PM',
-    },
-]
 
 export const markedStatusBadgeColor = {
     Present: 'bg-[#4CAF501A] text-[#4CAF50]',
@@ -169,10 +10,29 @@ export const markedStatusBadgeColor = {
 }
 
 const parseAttendanceDate = (value) => {
-    const [day, month, year] = value.split('-').map(Number)
+    const [day, month, year] = String(value || '').split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
+
+export function getAttendanceHistory() {
+    return getAttendanceMarks()
+        .filter((row) => ['Present', 'Absent'].includes(String(row.status || '')))
+        .slice()
+        .sort((a, b) => {
+            const da = parseAttendanceDate(a.attendanceDate)?.getTime() || 0
+            const db = parseAttendanceDate(b.attendanceDate)?.getTime() || 0
+            if (db !== da) return db - da
+            return String(b.markedAt || '').localeCompare(String(a.markedAt || ''))
+        })
+}
+
+export function hydrateAttendanceHistoryFromApi() {
+    return hydrateTransportStudentAttendanceFromApi()
+}
+
+/** @deprecated Prefer getAttendanceHistory() after hydrate */
+export const ATTENDANCE_HISTORY = []
 
 export const filterAttendanceHistory = ({
     records,
@@ -182,23 +42,39 @@ export const filterAttendanceHistory = ({
     status = '',
     fromDate = null,
     toDate = null,
-}) => records.filter((record) => {
-    const query = search.trim().toLowerCase()
-    const matchesSearch = !query || [
-        record.studentId,
-        record.studentName,
-        record.classSection,
-        record.busStop,
-        record.location,
-    ].some((field) => field.toLowerCase().includes(query))
+    timeframe = '',
+}) => {
+    const now = new Date()
+    let rangeFrom = fromDate
+    let rangeTo = toDate
+    if (timeframe === 'week' && !fromDate && !toDate) {
+        rangeFrom = new Date(now)
+        rangeFrom.setDate(now.getDate() - 7)
+        rangeTo = now
+    }
+    if (timeframe === 'month' && !fromDate && !toDate) {
+        rangeFrom = new Date(now.getFullYear(), now.getMonth(), 1)
+        rangeTo = now
+    }
 
-    const matchesPeriod = !period || record.period === period
-    const matchesPhase = !phase || record.phase === phase
-    const matchesStatus = !status || record.status === status
+    return (Array.isArray(records) ? records : []).filter((record) => {
+        const query = search.trim().toLowerCase()
+        const matchesSearch = !query || [
+            record.studentId,
+            record.studentName,
+            record.classSection,
+            record.busStop,
+            record.location,
+        ].some((field) => String(field || '').toLowerCase().includes(query))
 
-    const attendanceDate = parseAttendanceDate(record.attendanceDate)
-    const matchesFrom = !fromDate || (attendanceDate && attendanceDate >= fromDate)
-    const matchesTo = !toDate || (attendanceDate && attendanceDate <= toDate)
+        const matchesPeriod = !period || record.period === period
+        const matchesPhase = !phase || String(record.phase || '').toLowerCase() === String(phase).toLowerCase()
+        const matchesStatus = !status || record.status === status
 
-    return matchesSearch && matchesPeriod && matchesPhase && matchesStatus && matchesFrom && matchesTo
-})
+        const attendanceDate = parseAttendanceDate(record.attendanceDate)
+        const matchesFrom = !rangeFrom || (attendanceDate && attendanceDate >= rangeFrom)
+        const matchesTo = !rangeTo || (attendanceDate && attendanceDate <= rangeTo)
+
+        return matchesSearch && matchesPeriod && matchesPhase && matchesStatus && matchesFrom && matchesTo
+    })
+}

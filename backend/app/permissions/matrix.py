@@ -1,9 +1,4 @@
-"""Frontend portal roles plus Managing Director and Finance Assistant.
-
-W1 alignment: FE portals `maintenancemanager`, `pro`, `fileroom`, and `cctv` are
-registered here with conservative grants (no silent privilege expansion).
-`managing_director` / `finance_assistant` remain backend-capable without dedicated FE ROLES entries.
-"""
+"""Frontend portal roles plus Managing Director and finance/PRO variants."""
 
 FRONTEND_ROLES: list[tuple[str, str]] = [
     ("superadmin", "Super Admin"),
@@ -13,6 +8,7 @@ FRONTEND_ROLES: list[tuple[str, str]] = [
     ("librarian", "Librarian"),
     ("hostelwarden", "Hostel Warden"),
     ("prm", "PRM"),
+    ("pro", "PRO"),
     ("gatekeeper", "Gate Keeper"),
     ("gatekeepermanager", "Gate Keeper Manager"),
     ("director", "Director"),
@@ -32,10 +28,11 @@ FRONTEND_ROLES: list[tuple[str, str]] = [
     ("qualityauditor", "Quality Auditor"),
     ("hr", "HR"),
     ("accounthead", "Account Head"),
+    ("financemanager", "Finance Manager"),
+    ("accountassistant", "Account Assistant"),
     ("driver", "Driver"),
-    ("pro", "PRO"),
     ("fileroom", "File Room"),
-    ("cctv", "CCTV"),
+    ("cctv", "CCTV Room"),
 ]
 
 MD_EXTRA_ROLES: list[tuple[str, str]] = [
@@ -45,7 +42,6 @@ MD_EXTRA_ROLES: list[tuple[str, str]] = [
 
 ALL_ROLES = FRONTEND_ROLES + MD_EXTRA_ROLES
 
-# Legacy / alternate codes → canonical matrix codes (no privilege upgrade).
 ROLE_ALIASES: dict[str, str] = {
     "vandriver": "driver",
     "van_driver": "driver",
@@ -63,11 +59,9 @@ def normalize_role_code(code: str | None) -> str:
     raw = (code or "").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
     if not raw:
         return ""
-    # Try direct, then alias keys normalized the same way.
     for alias, canonical in ROLE_ALIASES.items():
         if raw == alias.replace("-", "").replace("_", ""):
             return canonical
-    # Pass-through when already a known role code (keep hyphens stripped only for alias match).
     cleaned = (code or "").strip().lower().replace(" ", "")
     for alias, canonical in ROLE_ALIASES.items():
         if cleaned == alias:
@@ -113,6 +107,7 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("approvals.read", "View approval inbox and history"),
     ("notifications.read", "View own in-app notifications"),
     ("finance.read", "View finance fees, receipts, and books"),
+    ("finance.pay", "Pay own or linked student fees online (parent/student portal)"),
     ("finance.collect", "Collect fees and send receipts (operational)"),
     ("finance.write", "Change finance masters, fee structures, and snapshot config"),
     ("finance.approve", "Approve finance requests and apply Head-only actions"),
@@ -123,13 +118,16 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("documents.students.write", "Upload, replace and remove student documents"),
     ("documents.employees.read", "View and download employee documents"),
     ("documents.employees.write", "Upload, replace and remove employee documents"),
+    ("documents.library.read", "View and download campus file-library uploads"),
+    ("documents.library.write", "Upload and delete campus file-library uploads"),
     ("announcements.read", "View announcements sent to your role"),
     ("announcements.write", "Send announcements"),
     ("calendar.read", "View the academic calendar"),
     ("calendar.write", "Add, change and remove academic calendar events"),
     ("tc.read", "View transfer-certificate requests"),
     ("tc.write", "File or forward a transfer-certificate request"),
-    ("tc.decide", "Approve or reject a transfer-certificate request"),
+    ("tc.noc", "Record a manager NOC on a transfer-certificate request"),
+    ("tc.decide", "Final approve or reject a transfer-certificate request (MD / Super Admin)"),
     ("frontoffice.read", "View Front Office gate passes, transfers and re-enrollment"),
     ("frontoffice.write", "Create and change Front Office campus records"),
     ("academics.read", "View class timetables, teacher allocations and timetable change requests"),
@@ -138,6 +136,7 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("ops.write", "Change campus ops collections for your vertical"),
     ("campus_audit.read", "View campus audit collections (JD Audit + Process/Quality)"),
     ("campus_audit.write", "Change campus audit collections for your auditor role"),
+    ("campus_audit.respond", "Respond to audit observations assigned to your department"),
     ("activities.read", "View cultural, sports and competition activities"),
     ("activities.write", "Add, change and remove activities"),
     ("activities.approve", "Approve or reject an activity"),
@@ -214,8 +213,26 @@ ROLE_PERMISSIONS.update(
                 ]
             )
         ),
+        # PRO: government liaison + PR/FO access; ops for gov-case collections.
+        "pro": list(
+            dict.fromkeys(
+                [
+                    *_ADMISSIONS,
+                    "hr.self",
+                    "hr.employees.read",
+                    "frontoffice.read",
+                    "frontoffice.write",
+                    "ops.read",
+                    "ops.write",
+                ]
+            )
+        ),
         "accounthead": list(_FINANCE_HEAD),
+        # Finance Manager = full finance head portal (separate from Account Head demo).
+        "financemanager": list(_FINANCE_HEAD),
         "finance_assistant": list(_FINANCE_ASSISTANT),
+        # Account Assistant = collect/ops finance (staff sheet Accountants / Trainees).
+        "accountassistant": list(_FINANCE_ASSISTANT),
         # Staff UIS + class attendance (P1-5 / Y-1)
         "teacher": list(_STAFF_ACADEMIC),
         # hr.employees.read: campus teacher directory for Class Timetable / allocations (read-only).
@@ -252,8 +269,9 @@ ROLE_PERMISSIONS.update(
                     "attendance.read",
                     "exams.read",
                     "academics.read",
-                    # Parent Academic Payment — scoped via GET /finance/my-fees (not full ledger write).
+                    # Parent Academic Payment — read fee status; pay via finance.pay (not collect/write).
                     "finance.read",
+                    "finance.pay",
                 ]
             )
         ),
@@ -267,6 +285,7 @@ ROLE_PERMISSIONS.update(
                     "exams.read",
                     "academics.read",
                     "finance.read",
+                    "finance.pay",
                 ]
             )
         ),
@@ -284,6 +303,26 @@ ROLE_PERMISSIONS.update(
                 ]
             )
         ),
+        # File Room: documents + ops collections (register / issue-return).
+        "fileroom": list(
+            dict.fromkeys(
+                [
+                    *_CORE,
+                    "students.read",
+                    "hr.employees.read",
+                    "documents.students.read",
+                    "documents.students.write",
+                    "documents.employees.read",
+                    "documents.employees.write",
+                    "documents.library.read",
+                    "documents.library.write",
+                    "ops.read",
+                    "ops.write",
+                ]
+            )
+        ),
+        # CCTV Room: camera register + footage-request / daily status ops collections.
+        "cctv": list(dict.fromkeys([*_CORE, "ops.read", "ops.write"])),
     }
 )
 
@@ -317,7 +356,8 @@ for _code, _perms in ROLE_PERMISSIONS.items():
 # (mirrors CREATOR_ROLE_KEYS in src/Common/Announcement/announcementData.js; Super Admin and the Managing
 # Director already hold every permission).
 _ANNOUNCEMENT_SENDERS = {
-    "admin", "principal", "gatekeepermanager", "itsupportmanager", "housekeepingmanager", "hr",
+    "admin", "principal", "director", "gatekeepermanager", "itsupportmanager",
+    "housekeepingmanager", "maintenancemanager", "hr",
 }
 for _code, _perms in ROLE_PERMISSIONS.items():
     if "announcements.read" not in _perms:
@@ -327,23 +367,34 @@ for _code, _perms in ROLE_PERMISSIONS.items():
 
 # Academic calendar: every role can read it; the school office roles that plan the year can change it
 # (Super Admin and the Managing Director already hold every permission).
-_CALENDAR_EDITORS = {"admin", "principal"}
+_CALENDAR_EDITORS = {"admin", "principal", "director"}
 for _code, _perms in ROLE_PERMISSIONS.items():
     if "calendar.read" not in _perms:
         _perms.append("calendar.read")
     if _code in _CALENDAR_EDITORS and "calendar.write" not in _perms:
         _perms.append("calendar.write")
 
-# TC requests: parents and front office file them; PRM forwards; administrators decide.
-# Super Admin / Managing Director already hold every permission.
-_TC_FILERS = {"parent", "student", "prm", "admin"}
-_TC_FORWARDERS = {"prm", "admin"}
-_TC_DECIDERS = {"admin"}
+# TC requests: parents/FO file; applicable managers give NOCs; PRM forwards; MD/SA/Admin final decide.
+# Super Admin / Managing Director already hold every permission via _ADMIN.
+_TC_FILERS = {"parent", "student", "prm", "pro", "admin"}
+_TC_FORWARDERS = {"prm", "pro", "admin"}
+_TC_NOC_ROLES = {
+    "transportmanager",
+    "accounthead",
+    "librarian",
+    "stationerystoremanager",
+}  # matches TC_NOC_AUTHORITIES in tc_requests service
+_TC_DECIDERS = {"admin", "superadmin", "managing_director"}
 for _code, _perms in ROLE_PERMISSIONS.items():
-    if _code in {"admin", "superadmin", "managing_director", "prm", "parent", "student"} and "tc.read" not in _perms:
+    if (
+        _code in {"admin", "superadmin", "managing_director", "prm", "pro", "parent", "student"}
+        or _code in _TC_NOC_ROLES
+    ) and "tc.read" not in _perms:
         _perms.append("tc.read")
     if _code in _TC_FILERS and "tc.write" not in _perms:
         _perms.append("tc.write")
+    if _code in _TC_NOC_ROLES and "tc.noc" not in _perms:
+        _perms.append("tc.noc")
     if _code in _TC_DECIDERS and "tc.decide" not in _perms:
         _perms.append("tc.decide")
 
@@ -374,7 +425,7 @@ for _code, _perms in ROLE_PERMISSIONS.items():
 # - Principal + Director read-only — matches front_office service _READERS.
 # - Gate Keeper / Manager may read+write gate-pass collections (service also gates by role).
 for _code, _perms in ROLE_PERMISSIONS.items():
-    if _code in {"admin", "prm"}:
+    if _code in {"admin", "prm", "pro"}:
         for _p in ("frontoffice.read", "frontoffice.write"):
             if _p not in _perms:
                 _perms.append(_p)
@@ -382,7 +433,13 @@ for _code, _perms in ROLE_PERMISSIONS.items():
         for _p in ("frontoffice.read", "frontoffice.write"):
             if _p not in _perms:
                 _perms.append(_p)
-    if _code in {"principal", "director"} and "frontoffice.read" not in _perms:
+    # Stationery Store Manager: material gate passes only (service ACL still blocks other FO collections).
+    if _code == "stationerystoremanager":
+        for _p in ("frontoffice.read", "frontoffice.write"):
+            if _p not in _perms:
+                _perms.append(_p)
+    if _code in {"principal", "director", "jointdirectorassistant"} and "frontoffice.read" not in _perms:
+        # Joint Director Assistant: gate passes read-only (front_office service limits which collections).
         _perms.append("frontoffice.read")
 
 # Ops campus collections (library / gate / transport / stores / JD / biometric).
@@ -391,7 +448,6 @@ _OPS_ROLES = {
     "hostelwarden",
     "gatekeeper",
     "gatekeepermanager",
-    "prm",  # W1: PRM visitors via /ops/gate-visitors
     "transportmanager",
     "driver",
     "canteenmanager",
@@ -413,29 +469,6 @@ for _code, _perms in ROLE_PERMISSIONS.items():
         for _p in ("ops.read", "ops.write"):
             if _p not in _perms:
                 _perms.append(_p)
-
-# W1 institutional portals: core + announcements/calendar read only (no invented domain APIs).
-_INSTITUTIONAL_READ = list(
-    dict.fromkeys(
-        [
-            *_CORE,
-            "announcements.read",
-            "calendar.read",
-            "notifications.read",
-            "communication.read",
-        ]
-    )
-)
-for _code in ("pro", "fileroom", "cctv"):
-    if _code in ROLE_PERMISSIONS:
-        for _p in _INSTITUTIONAL_READ:
-            if _p not in ROLE_PERMISSIONS[_code]:
-                ROLE_PERMISSIONS[_code].append(_p)
-# Maintenance manager: same ops grants as other facility managers (via _OPS_ROLES) + approvals submit.
-if "maintenancemanager" in ROLE_PERMISSIONS:
-    for _p in ("approvals.submit", "approvals.read", "notifications.read"):
-        if _p not in ROLE_PERMISSIONS["maintenancemanager"]:
-            ROLE_PERMISSIONS["maintenancemanager"].append(_p)
 
 # Transport Manager assigns students to bus routes — needs campus student roster (read-only).
 for _code, _perms in ROLE_PERMISSIONS.items():
@@ -464,3 +497,13 @@ for _code, _perms in ROLE_PERMISSIONS.items():
         _perms.append("campus_audit.read")
     if _code in _CAMPUS_AUDIT_WRITERS and "campus_audit.write" not in _perms:
         _perms.append("campus_audit.write")
+
+# Department heads that receive audit observations (must match campus_audit_collections.RECIPIENT_ROLES).
+AUDIT_RECIPIENT_ROLES = {
+    "housekeepingmanager", "maintenancemanager", "itsupportmanager", "transportmanager", "canteenmanager",
+    "stationerystoremanager", "librarian", "gatekeepermanager", "accounthead", "hr", "prm", "fileroom",
+    "principal", "coordinator",
+}
+for _code, _perms in ROLE_PERMISSIONS.items():
+    if _code in AUDIT_RECIPIENT_ROLES and "campus_audit.respond" not in _perms:
+        _perms.append("campus_audit.respond")

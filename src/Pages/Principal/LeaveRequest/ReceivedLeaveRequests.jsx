@@ -4,7 +4,7 @@ export default function ReceivedLeaveRequests() {
     return (
         <ReceivedLeaveRequestsList
             roleKey='principal'
-            description='Leave requests submitted to Principal for approval.'
+            description='Teacher and coordinator leave requests awaiting Principal. Your approval forwards the request to HR for final confirmation.'
         />
     )
 }

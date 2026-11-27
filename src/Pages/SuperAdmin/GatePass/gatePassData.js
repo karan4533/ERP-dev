@@ -1,8 +1,23 @@
-import noProfile from '../../../assets/images/no-profile.png'
-import { getHostelGatePasses } from '../../FrontOffice/HostelGatePass/hostelGatePassData'
-import { getMaterialGatePasses } from '../../FrontOffice/MaterialGatePass/materialGatePassData'
+import { getStudentGatePasses, hydrateStudentGatePassesFromApi } from '../../FrontOffice/GatePass/gatePassData'
+import {
+    getHostelApprovalStatus,
+    getHostelGatePasses,
+    hydrateHostelGatePassesFromApi,
+} from '../../FrontOffice/HostelGatePass/hostelGatePassData'
+import {
+    getMaterialGatePasses,
+    hydrateMaterialGatePassesFromApi,
+} from '../../FrontOffice/MaterialGatePass/materialGatePassData'
+import { frontOfficeApiOn } from '../../FrontOffice/frontOfficeStore'
 
 export const ROUTE_BASE = '/super-admin/gate-pass'
+
+/** Read-only gate pass list is shared by Super Admin and the Joint Director Assistant. */
+export const getGatePassRouteBase = () => {
+    const path = typeof window !== 'undefined' ? String(window.location.pathname || '') : ''
+    if (path.startsWith('/joint-director-assistant')) return '/joint-director-assistant/gate-pass'
+    return ROUTE_BASE
+}
 
 export const PASS_CATEGORIES = ['Student', 'Hostel', 'Material']
 
@@ -22,45 +37,6 @@ export const passCategoryBadgeColor = {
     Material: 'bg-[#FF980033] text-[#FF9800]',
 }
 
-const STUDENT_GATE_PASSES = [
-    {
-        id: 'student-SGP-001',
-        passCategory: 'Student',
-        passId: 'SGP-001',
-        profile: noProfile,
-        studentId: 'STD-NO1845',
-        studentName: 'Sandy Selva',
-        classSection: '10 A',
-        gender: 'Male',
-        mobileNumber: '9944076993',
-        city: 'Pudukkottai',
-        reason: 'Going to Hospital',
-        date: '20-05-2026',
-        outTime: '10:00 AM',
-        status: 'Approved',
-        createdBy: 'Front Office',
-        createdAt: '20-05-2026 09:00 AM',
-    },
-    {
-        id: 'student-SGP-002',
-        passCategory: 'Student',
-        passId: 'SGP-002',
-        profile: noProfile,
-        studentId: 'STD-NO1846',
-        studentName: 'John Milton',
-        classSection: '12 B',
-        gender: 'Male',
-        mobileNumber: '9944076993',
-        city: 'Madurai',
-        reason: 'Going to Home Town',
-        date: '24-05-2026',
-        outTime: '12:00 PM',
-        status: 'Pending',
-        createdBy: 'Front Office',
-        createdAt: '24-05-2026 08:30 AM',
-    },
-]
-
 const toListItem = (record) => ({
     id: record.id,
     passCategory: record.passCategory,
@@ -74,14 +50,36 @@ const toListItem = (record) => ({
     details: record,
 })
 
+/** Pull student / hostel / material gate passes from the same Front Office SoT (API when signed in). */
+export const hydrateAllGatePassesFromApi = async () => {
+    if (frontOfficeApiOn()) {
+        await Promise.all([
+            hydrateStudentGatePassesFromApi(),
+            hydrateHostelGatePassesFromApi(),
+            hydrateMaterialGatePassesFromApi(),
+        ])
+    }
+    return getAllGatePasses()
+}
+
 export const getAllGatePasses = () => {
-    const studentItems = STUDENT_GATE_PASSES.map(toListItem)
+    const studentItems = getStudentGatePasses().map((record) =>
+        toListItem({
+            ...record,
+            id: `student-${record.id}`,
+            passCategory: 'Student',
+            passId: record.gatePassId || record.id,
+            createdBy: record.createdBy || 'Front Office',
+        }),
+    )
     const hostelItems = getHostelGatePasses().map((record) =>
         toListItem({
             ...record,
             id: `hostel-${record.id}`,
             passCategory: 'Hostel',
             passId: record.gatePassId,
+            // Before check-out the meaningful state is the Parent / Principal decision.
+            status: record.status && record.status !== 'Pending' ? record.status : getHostelApprovalStatus(record),
         }),
     )
     const materialItems = getMaterialGatePasses().map((record) =>
@@ -105,13 +103,35 @@ export const getGatePassById = (id) =>
 
 export const filterGatePasses = (
     records,
-    { search = '', status = '', passCategory = '' } = {},
+    { search = '', status = '', passCategory = '', fromDate = null, toDate = null } = {},
 ) => {
     const query = search.trim().toLowerCase()
 
     return records.filter((record) => {
         if (passCategory && record.passCategory !== passCategory) return false
         if (status && record.status !== status) return false
+
+        if (fromDate || toDate) {
+            const raw = record.date || record.createdAt || ''
+            const parts = String(raw).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/)
+            const itemDate = parts
+                ? new Date(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]))
+                : (raw ? new Date(raw) : null)
+            if (itemDate && !Number.isNaN(itemDate.getTime())) {
+                const day = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate())
+                if (fromDate) {
+                    const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate())
+                    if (day < from) return false
+                }
+                if (toDate) {
+                    const to = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999)
+                    if (day > to) return false
+                }
+            } else if (fromDate || toDate) {
+                return false
+            }
+        }
+
         if (!query) return true
 
         const haystack = [

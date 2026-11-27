@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date
+from types import SimpleNamespace
 from uuid import UUID
 
 from sqlalchemy import select
@@ -23,6 +24,7 @@ from app.models.base import utcnow
 from app.services import approvals
 from app.services.audit import write_audit
 from app.services.errors import fail
+from app.services.students import staff_student_filter
 
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 SUBMIT_DAY = 25
@@ -67,6 +69,7 @@ def _out(db: Session, plan: LessonPlan, *, with_events: bool = False) -> dict:
         "deadline": deadline_for(plan.month).isoformat(),
         "approvalId": str(approval.id) if approval else None,
         "awaitingRole": None,
+        "awaitingEligibleApprover": approvals.awaiting_eligible_approver(db, approval),
         "createdAt": plan.created_at.isoformat(),
     }
     if approval:
@@ -83,12 +86,30 @@ def _actor_for_campus(db: Session, plan: LessonPlan) -> User:
     return db.get(User, plan.teacher_id)  # type: ignore[return-value]
 
 
+def plan_visible(db: Session, actor: User, plan: LessonPlan, role: str | None = None) -> bool:
+    """Owner, campus-wide leadership, or a coordinator whose grade band / allocations cover the plan."""
+    if plan.campus_id != actor.campus_id:
+        return False
+    if plan.teacher_id == actor.id:
+        return True
+    role = role or role_code_for(db, actor)
+    if role not in VIEW_ALL_ROLES:
+        return False
+    allowed = staff_student_filter(db, actor, role)
+    return allowed is None or allowed(SimpleNamespace(class_name=plan.class_name, section=plan.section or ""))
+
+
+def plan_visible_by_id(db: Session, actor: User, plan_id: str, role: str | None = None) -> bool:
+    try:
+        plan = db.get(LessonPlan, UUID(str(plan_id)))
+    except ValueError:
+        return False
+    return plan is not None and plan_visible(db, actor, plan, role)
+
+
 def _load(db: Session, actor: User, plan_id: UUID) -> LessonPlan:
     plan = db.get(LessonPlan, plan_id)
-    if not plan or plan.campus_id != actor.campus_id:
-        fail(404, "not_found", "Lesson plan not found.")
-    role = role_code_for(db, actor)
-    if plan.teacher_id != actor.id and role not in VIEW_ALL_ROLES:
+    if not plan or not plan_visible(db, actor, plan):
         fail(404, "not_found", "Lesson plan not found.")
     return plan
 
@@ -320,7 +341,7 @@ def list_plans(
     if class_name:
         stmt = stmt.where(LessonPlan.class_name == class_name)
     rows = db.scalars(stmt.order_by(LessonPlan.month.desc(), LessonPlan.class_name, LessonPlan.version.desc())).all()
-    out = [_out(db, p) for p in rows]
+    out = [_out(db, p) for p in rows if plan_visible(db, actor, p, role)]
     if status:
         out = [o for o in out if o["status"] == status]
     return out

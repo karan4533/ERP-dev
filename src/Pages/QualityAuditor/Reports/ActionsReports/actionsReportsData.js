@@ -1,5 +1,6 @@
 import { getObservations, OPEN_STATUSES, CLOSED_STATUSES, statusBadgeColor } from '../../Observations/observationsData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS } from '../../Observations/observationsData'
 export { statusBadgeColor }
 
@@ -22,10 +23,10 @@ export const computeDaysLeft = (dueDate, reference = new Date()) => {
 }
 
 const CLOSED_META = {
-    'OBS-PA-2026-009': { closedBy: 'Mr. Arjun Mehta', closedDate: '10-06-2026', daysTaken: 9 },
-    'OBS-PA-2026-007': { closedBy: 'Mr. Ramesh Iyer', closedDate: '28-05-2026', daysTaken: 6 },
-    'OBS-PA-2026-005': { closedBy: 'Mr. Vikram Singh', closedDate: '05-06-2026', daysTaken: 35 },
-    'OBS-PA-2026-003': { closedBy: 'Prof. Anil Kapoor', closedDate: '25-04-2026', daysTaken: 5 },
+    'OBS-QA-2026-009': { closedBy: 'Mr. Arjun Mehta', closedDate: '10-06-2026', daysTaken: 9 },
+    'OBS-QA-2026-007': { closedBy: 'Mr. Ramesh Iyer', closedDate: '28-05-2026', daysTaken: 6 },
+    'OBS-QA-2026-005': { closedBy: 'Mr. Vikram Singh', closedDate: '05-06-2026', daysTaken: 35 },
+    'OBS-QA-2026-003': { closedBy: 'Prof. Anil Kapoor', closedDate: '25-04-2026', daysTaken: 5 },
 }
 
 const buildPendingFromObservations = () =>
@@ -69,13 +70,13 @@ const DEFAULT_DATA = {
 }
 
 export const saveActionsReports = (data) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    saveCampusJson(STORAGE_KEY, data)
 }
 
 export const getActionsReports = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+    if (stored) return stored
     } catch {
         /* ignore */
     }
@@ -101,3 +102,6 @@ export const daysLeftBadgeClass = (daysLeft) => {
     if (daysLeft === 'Due today') return 'text-[#FF9800] font-semibold'
     return 'text-[#667085]'
 }
+
+export const hydrateFromApi = (seed = []) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

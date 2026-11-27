@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const AUDIT_TYPES = [
     'Process Audit',
     'Quality Audit',
@@ -29,7 +30,7 @@ export const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical']
 
 export const STATUS_OPTIONS = ['Planned', 'In Progress', 'Completed']
 
-export const AUDIT_PLANS = [
+const DEFAULT_AUDIT_PLANS = [
     {
         id: 'AUD-2026-014',
         title: 'Q2 Financial Process Review',
@@ -128,7 +129,7 @@ export const AUDIT_PLANS = [
     },
 ]
 
-export const getAuditPlanById = (id) => AUDIT_PLANS.find((plan) => plan.id === id) ?? null
+export const getAuditPlanById = (id) => getAuditPlans().find((plan) => plan.id === id) ?? null
 
 export const priorityBadgeColor = {
     Low: 'bg-[#66708533] text-[#667085]',
@@ -149,3 +150,18 @@ export const auditTypeBadgeColor = {
     'HR Audit': 'bg-[#FF980033] text-[#FF9800]',
     'Special Audit': 'bg-[#9C27B033] text-[#9C27B0]',
 }
+
+export const AUDIT_PLANS_STORAGE_KEY = 'schoolerp-jd-audit-plans-v1'
+export function getAuditPlans() {
+    return ensureCampusSeed('schoolerp-jd-audit-plans-v1', DEFAULT_AUDIT_PLANS)
+}
+export function saveAuditPlans(rows) {
+    return saveCampusJson('schoolerp-jd-audit-plans-v1', rows)
+}
+export function hydrateAuditPlansFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-plans-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-plans-v1', DEFAULT_AUDIT_PLANS)
+}
+/** Static seed / fallback — list pages should call getAuditPlans() after hydrate */
+export const AUDIT_PLANS = DEFAULT_AUDIT_PLANS
+

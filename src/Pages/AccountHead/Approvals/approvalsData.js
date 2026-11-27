@@ -5,33 +5,17 @@ export const APPROVALS_TABS = [
     { id: 'approval-rules', label: 'Approval Rules' },
 ]
 
-export const APPROVAL_DEPARTMENTS = ['All Departments', 'Admissions', 'Transport', 'Academics', 'Admin', 'Facilities']
+export const APPROVAL_DEPARTMENTS = ['All Departments', 'Transport', 'Academics', 'Admin', 'Facilities']
 
 export const PENDING_SUMMARY = [
-    { label: 'Pending Approvals', value: '17', sub: '₹1.47L total value', subTone: 'danger', iconTone: 'danger' },
+    { label: 'Pending Approvals', value: '16', sub: '₹1.42L total value', subTone: 'danger', iconTone: 'danger' },
     { label: 'Awaiting >48 hrs', value: '5', sub: 'needs attention', subTone: 'danger', iconTone: 'danger' },
     { label: 'Approved This Month', value: '62', sub: '₹4.8L disbursed', subTone: 'success', iconTone: 'success' },
     { label: 'Rejected This Month', value: '4', sub: '₹9,200 value', iconTone: 'warning' },
 ]
 
+/** Legacy UI mock rows — never seed into finance API / snapshot. */
 export const PENDING_REQUESTS = [
-    {
-        id: 'APR-ADM-101',
-        raisedBy: 'Front Office PRM Desk',
-        initials: 'PR',
-        department: 'Admissions',
-        type: 'Admission Clearance',
-        amount: '₹5,000',
-        raisedOn: 'Today',
-        detail: {
-            raisedByFull: 'Front Office / PRM Desk',
-            department: 'Admissions',
-            claimType: 'Student Admission Fee Verification & Enrolment',
-            amount: '₹5,000',
-            submittedOn: 'Today, 10:00am',
-            document: 'admission_form_verification.pdf',
-        },
-    },
     {
         id: 'APR-1142',
         raisedBy: 'Transport Mgr.',
@@ -88,6 +72,33 @@ export const PENDING_REQUESTS = [
     },
 ]
 
+export const APPROVED_REQUESTS_DEMO_IDS = ['APR-1119', 'APR-1112', 'APR-1103']
+export const REJECTED_REQUESTS_DEMO_IDS = ['APR-1108', 'APR-1095', 'APR-1088']
+
+/** IDs that were hardcoded marketing/demo samples — strip from live SoT. */
+export const DEMO_APPROVAL_IDS = new Set([
+    ...PENDING_REQUESTS.map((row) => row.id),
+    ...APPROVED_REQUESTS_DEMO_IDS,
+    ...REJECTED_REQUESTS_DEMO_IDS,
+])
+
+const DEMO_RAISED_BY = new Set(
+    PENDING_REQUESTS.map((row) => String(row.raisedBy || '').trim().toLowerCase()),
+)
+
+export const isDemoApprovalRow = (row) => {
+    if (!row) return false
+    if (row.source === 'transport-ops' || row.linkedRequestId) return false
+    const id = String(row.id || '').trim()
+    if (DEMO_APPROVAL_IDS.has(id)) return true
+    // Catch renamed copies of the same seed cast
+    const raisedBy = String(row.raisedBy || '').trim().toLowerCase()
+    if (DEMO_RAISED_BY.has(raisedBy) && /^APR-11\d{2}$/i.test(id)) return true
+    return false
+}
+
+export const stripDemoApprovals = (rows = []) => (rows || []).filter((row) => !isDemoApprovalRow(row))
+
 export const APPROVED_SUMMARY = [
     { label: 'Approved This Month', value: '62', sub: '₹4.8L total value', subTone: 'success', iconTone: 'success' },
     { label: 'Avg. Approval Time', value: '6.4 hrs', sub: 'from raise to decision', iconTone: 'info' },
@@ -100,6 +111,8 @@ export const APPROVED_REQUESTS = [
     { id: 'APR-1112', raisedBy: 'Sri Balaji Motors', type: 'Service Bill', amount: '₹6,200', approvedBy: 'Finance Manager', approvedOn: '20 Jun' },
     { id: 'APR-1103', raisedBy: 'Preethi V. (7-C)', type: 'RTE Waiver', amount: '₹4,600', approvedBy: 'Principal', approvedOn: '15 Jun' },
 ]
+
+// Keep APPROVED_REQUESTS for offline docs only — live UI must use stripDemoApprovals.
 
 export const REJECTED_SUMMARY = [
     { label: 'Rejected This Month', value: '4', sub: '₹9,200 value', iconTone: 'danger' },

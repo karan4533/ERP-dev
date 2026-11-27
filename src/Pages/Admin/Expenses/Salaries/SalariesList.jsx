@@ -1,9 +1,47 @@
-import React from 'react'
-import AdminExpensesWorkspace from '../AdminExpensesWorkspace'
+import React, { useCallback } from 'react'
+import AdminLiveDataList from '../../Components/AdminLiveDataList'
+import { pullFinanceState } from '../../../../services/financeApi'
+import { formatCurrency } from '../../../AccountHead/financeDomain/financeHelpers'
 
-/**
- * @deprecated Per Document 7 compliance, Admin salary/expense lists have been integrated with centralized Finance (Account Head).
- */
+const COLUMNS = [
+    { key: 'transactionDate', label: 'Date' },
+    { key: 'narration', label: 'Narration' },
+    { key: 'category', label: 'Category' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'status', label: 'Status' },
+    { key: 'voucherNo', label: 'Voucher' },
+]
+
 export default function SalariesList() {
-    return <AdminExpensesWorkspace view='approvals' />
+    const loadRows = useCallback(async () => {
+        const state = await pullFinanceState()
+        const data = state?.data || state || {}
+        const transactions = Array.isArray(data.transactions) ? data.transactions : []
+        return transactions
+            .filter((row) => {
+                if (row.direction && row.direction !== 'OUT') return false
+                const blob = `${row.category || ''} ${row.narration || ''} ${row.sourceModule || ''}`.toLowerCase()
+                return blob.includes('salary') || blob.includes('payroll') || blob.includes('wage')
+            })
+            .map((row) => ({
+                id: row.id,
+                transactionDate: row.transactionDate || row.date || '—',
+                narration: row.narration || '—',
+                category: row.category || 'Salary',
+                amount: formatCurrency(row.amount || 0),
+                status: row.status || '—',
+                voucherNo: row.voucherNo || row.reference || '—',
+            }))
+    }, [])
+
+    return (
+        <AdminLiveDataList
+            title='Salary Expenses'
+            description='Live finance OUT transactions categorized as salary/payroll.'
+            columns={COLUMNS}
+            loadRows={loadRows}
+            searchKeys={['narration', 'category', 'voucherNo']}
+            addPath='/admin/expenses/add-salaries-exp'
+        />
+    )
 }

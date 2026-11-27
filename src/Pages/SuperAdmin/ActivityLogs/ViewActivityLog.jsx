@@ -1,13 +1,18 @@
-import React from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
     LOG_TYPES,
     ROUTE_BASE,
-    getActivityLogById,
     getViewFields,
     statusBadgeColor,
 } from './activityLogsData'
+import {
+    canUseLiveAuditLogs,
+    getCachedLiveAuditById,
+    getLiveAuditLogApi,
+    mapAuditApiRow,
+} from './liveAuditLogs'
 
 const Field = ({ label, value, badge }) => (
     <div className='flex flex-col gap-y-1'>
@@ -24,22 +29,83 @@ const Field = ({ label, value, badge }) => (
 
 const ViewActivityLog = () => {
     const { id } = useParams()
+    const [searchParams] = useSearchParams()
     const navigate = useNavigate()
-    const record = getActivityLogById(id)
+    const preferredType = searchParams.get('type')
+    const initial = (() => {
+        const cached = getCachedLiveAuditById(id)
+        if (!cached) return null
+        if (preferredType && LOG_TYPES[preferredType]) {
+            return { ...cached, logType: preferredType }
+        }
+        return cached
+    })()
+    const [record, setRecord] = useState(initial)
+    const [loading, setLoading] = useState(!initial)
+    const [error, setError] = useState('')
+
+    useEffect(() => {
+        const logType = (preferredType && LOG_TYPES[preferredType]) ? preferredType : 'audit-logs'
+        const cached = getCachedLiveAuditById(id)
+        if (cached) {
+            setRecord({ ...cached, logType })
+            setLoading(false)
+            setError('')
+        }
+        if (!canUseLiveAuditLogs()) {
+            if (!cached) {
+                setRecord(null)
+                setError('Sign in with API auth to view live audit log details.')
+            }
+            setLoading(false)
+            return undefined
+        }
+        let active = true
+        if (!cached) setLoading(true)
+        getLiveAuditLogApi(id)
+            .then((row) => {
+                if (!active) return
+                setRecord(mapAuditApiRow(row, logType))
+                setError('')
+            })
+            .catch((err) => {
+                if (!active) return
+                if (!cached) {
+                    setRecord(null)
+                    setError(err?.message || 'Activity log not found.')
+                }
+            })
+            .finally(() => {
+                if (active) setLoading(false)
+            })
+        return () => { active = false }
+    }, [id, preferredType])
+
     const config = record ? LOG_TYPES[record.logType] : null
+    const backRoute = config?.route || `${ROUTE_BASE}/audit-logs`
+
+    if (loading) {
+        return (
+            <section className='space-y-6'>
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>Loading activity log…</div>
+            </section>
+        )
+    }
 
     if (!record || !config) {
         return (
             <section className='space-y-6'>
                 <button
                     type='button'
-                    onClick={() => navigate(`${ROUTE_BASE}/login-history`)}
+                    onClick={() => navigate(backRoute)}
                     className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
                 >
                     <ArrowLeft size={18} />
                     Back to logs
                 </button>
-                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>Activity log not found.</div>
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    {error || 'Activity log not found.'}
+                </div>
             </section>
         )
     }
@@ -50,7 +116,7 @@ const ViewActivityLog = () => {
         <section className='space-y-6'>
             <button
                 type='button'
-                onClick={() => navigate(config.route)}
+                onClick={() => navigate(backRoute)}
                 className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
             >
                 <ArrowLeft size={18} />

@@ -1,177 +1,165 @@
-import { NavLink } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, ClipboardCheck, ClipboardList, Clock, Fuel, ShieldCheck, Users, Wrench, Zap } from 'lucide-react'
-import { DataTable, IntegrationNotice, StatusBadge } from '../../../Common/ui'
-import { SUMMARY_CARDS, RECENT_WORK_ORDERS, LOW_STOCK_SPARES, PENDING_REQUESTS, RECENT_ANNOUNCEMENTS } from './dashboardData'
+import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, CalendarDays, ClipboardCheck, ClipboardList, Ticket, Wrench } from 'lucide-react'
+import { buildMaintenanceDashboard, hydrateMaintenanceDashboardFromApi } from './dashboardData'
 
 const CARD_ICONS = {
-    'Active Work Orders': Wrench,
-    'Preventive Schedules Due': Clock,
-    'DG GenSet Fuel Level': Fuel,
-    'Open Helpdesk Tickets': AlertTriangle,
-    'Technicians On Duty': Users,
-    'Pending Approvals': ClipboardCheck,
-    'Equipment Inspected': ShieldCheck,
+    'Facilities Tickets': Ticket,
+    'Open Tickets': AlertTriangle,
+    'Open Duties': ClipboardList,
+    'Active Schedules': CalendarDays,
+    'Pending Checklists': ClipboardCheck,
+    'Low Materials': Wrench,
+    'Store Requests': ClipboardList,
+    'Purchase Open': ClipboardCheck,
+    'Announcements': Ticket,
 }
 
-const workOrderColumns = [
-    { key: 'orderId', label: 'Work Order', required: true },
-    { key: 'serviceType', label: 'Service Category', required: true },
-    { key: 'block', label: 'Location / Block', required: true },
-    { key: 'technician', label: 'Assigned Tech', required: true },
-    { key: 'status', label: 'Status', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
+const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
+const tdClass = 'px-2 py-3 text-[#667085] text-sm'
 
-const spareColumns = [
-    { key: 'item', label: 'Spare / Material', required: true },
-    { key: 'availableQty', label: 'Available', required: true },
-    { key: 'reorderLevel', label: 'Reorder at', required: true },
-]
-
-const requestColumns = [
-    { key: 'requestId', label: 'Request', required: true },
-    { key: 'type', label: 'Requirement', required: true },
-    { key: 'status', label: 'Decision', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
-
-const announcementColumns = [
-    { key: 'title', label: 'Announcement', required: true },
-    { key: 'date', label: 'Published', required: true },
-]
-
-const QueuePanel = ({ title, description, action, children }) => (
-    <article className='overflow-hidden rounded-2xl bg-white shadow-md'>
-        <div className='flex flex-col gap-3 border-b border-[var(--erp-line)] p-4 sm:flex-row sm:items-start sm:justify-between'>
-            <div>
-                <h3 className='font-semibold text-[var(--erp-ink)]'>{title}</h3>
-                <p className='mt-0.5 text-xs text-[var(--erp-muted)]'>{description}</p>
-            </div>
-            {action}
+const Widget = ({ title, children, to }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4 h-full'>
+        <div className='flex items-center justify-between gap-3 mb-4'>
+            <h3 className='text-lg font-semibold text-black'>{title}</h3>
+            {to ? (
+                <Link to={to} className='text-sm text-[#515DEF] hover:underline'>
+                    Open
+                </Link>
+            ) : null}
         </div>
-        {children}
-    </article>
+        <div className='relative overflow-x-auto'>{children}</div>
+    </div>
 )
 
-const Dashboard = () => (
-    <section className='space-y-5'>
-        <div className='rounded-2xl bg-white p-4 shadow-md sm:p-5'>
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <div>
-                    <h2 className='text-xl font-semibold text-[var(--erp-ink)]'>Campus Infrastructure & Maintenance Operations</h2>
-                    <p className='mt-1 max-w-3xl text-sm text-[var(--erp-slate)]'>
-                        Manage HT/LT electrical substations, diesel generators, plumbing & water networks, HVAC systems, civil work orders, and safety inspections.
-                    </p>
+const Dashboard = () => {
+    const [data, setData] = useState(() => buildMaintenanceDashboard())
+
+    useEffect(() => {
+        let active = true
+        hydrateMaintenanceDashboardFromApi().then((next) => {
+            if (active) setData(next)
+        })
+        return () => { active = false }
+    }, [])
+
+    const { summaryCards, recentTickets, recentDuties, recentChecklists } = data
+
+    return (
+        <section className='space-y-6'>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex items-center gap-3'>
+                    <div className='p-2.5 rounded-xl bg-[#515DEF]/10 text-[#515DEF]'>
+                        <Wrench size={22} />
+                    </div>
+                    <div>
+                        <h2 className='text-xl font-semibold text-black'>Maintenance Manager Dashboard</h2>
+                        <p className='text-sm text-[#667085] mt-0.5'>
+                            Facilities tickets, duty allotment, schedules, and checklist completion. Housekeeping cleaning data stays separate.
+                        </p>
+                    </div>
                 </div>
-                <StatusBadge status='Department portal' />
             </div>
-            <IntegrationNotice
-                state='demo'
-                className='mt-4'
-                title='Maintenance operational telemetry'
-                description='Real-time equipment logs, work orders, preventive checklists, spares movements and duty rosters are synchronized across Operations and Stores.'
-            />
-        </div>
 
-        <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-            {SUMMARY_CARDS.map((card) => {
-                const Icon = CARD_ICONS[card.label] ?? Wrench
-                return (
-                    <article key={card.label} className='rounded-2xl bg-white p-4 shadow-md'>
-                        <div className='flex items-start justify-between gap-3'>
-                            <div className='min-w-0'>
-                                <p className='text-xs text-[var(--erp-muted)]'>{card.label}</p>
-                                <p className='mt-1 text-xl font-semibold text-[var(--erp-ink)]'>{card.value}</p>
-                                <p className='mt-1 text-xs text-[var(--erp-slate)]'>{card.sub}</p>
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
+                {summaryCards.map((card) => {
+                    const Icon = CARD_ICONS[card.label] ?? Ticket
+                    return (
+                        <Link
+                            key={card.label}
+                            to={card.to}
+                            className='bg-white rounded-2xl shadow-md p-4 border border-transparent hover:border-[#515DEF]/40 transition-colors'
+                        >
+                            <div className='flex items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='text-xs text-[#808080]'>{card.label}</p>
+                                    <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
+                                    <p className='text-xs text-[#667085] mt-1'>{card.sub}</p>
+                                </div>
+                                <div className='p-2 rounded-xl bg-[#515DEF]/10 text-[#515DEF] shrink-0'>
+                                    <Icon size={18} />
+                                </div>
                             </div>
-                            <span className='rounded-xl bg-[var(--erp-indigo-soft)] p-2 text-[var(--erp-indigo)]'>
-                                <Icon aria-hidden='true' size={18} />
-                            </span>
-                        </div>
-                    </article>
-                )
-            })}
-        </div>
+                        </Link>
+                    )
+                })}
+            </div>
 
-        <div className='grid grid-cols-1 gap-5 lg:grid-cols-2'>
-            <QueuePanel
-                title='Recent Campus Work Orders'
-                description='Live tracking of ongoing and resolved electrical, plumbing and civil repairs.'
-                action={
-                    <NavLink
-                        to='/maintenance-manager/campus-maintenance'
-                        className='text-xs font-semibold text-[var(--erp-indigo)] hover:underline'
-                    >
-                        View all orders →
-                    </NavLink>
-                }
-            >
-                <DataTable
-                    columns={workOrderColumns}
-                    data={RECENT_WORK_ORDERS}
-                    caption='Recent work orders'
-                />
-            </QueuePanel>
+            <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+                <Widget title='Recent Facilities Tickets' to='/maintenance-manager/tickets'>
+                    <table className='w-full text-sm text-left'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Ticket</th>
+                                <th className={thClass}>Subject</th>
+                                <th className={`${thClass} rounded-e-lg`}>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentTickets.length === 0 && (
+                                <tr><td colSpan={3} className={`${tdClass} text-center`}>No Facilities tickets yet.</td></tr>
+                            )}
+                            {recentTickets.map((row) => (
+                                <tr key={row.ticketId} className='border-b border-[#f2f4f7]'>
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.ticketId}</td>
+                                    <td className={`${tdClass} max-w-[160px] truncate`} title={row.subject}>{row.subject}</td>
+                                    <td className={tdClass}>{row.status}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
 
-            <QueuePanel
-                title='Critical Spares Below Reorder Level'
-                description='Spare parts and electrical consumables requiring store requisition or purchase order.'
-                action={
-                    <NavLink
-                        to='/maintenance-manager/inventory'
-                        className='text-xs font-semibold text-[var(--erp-indigo)] hover:underline'
-                    >
-                        Open spares inventory →
-                    </NavLink>
-                }
-            >
-                <DataTable
-                    columns={spareColumns}
-                    data={LOW_STOCK_SPARES}
-                    caption='Low stock spares'
-                />
-            </QueuePanel>
-        </div>
+                <Widget title='Recent Duties' to='/maintenance-manager/duty-allotment'>
+                    <table className='w-full text-sm text-left'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Duty</th>
+                                <th className={thClass}>Staff</th>
+                                <th className={`${thClass} rounded-e-lg`}>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentDuties.length === 0 && (
+                                <tr><td colSpan={3} className={`${tdClass} text-center`}>No duties yet.</td></tr>
+                            )}
+                            {recentDuties.map((row) => (
+                                <tr key={row.id} className='border-b border-[#f2f4f7]'>
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.dutyType}</td>
+                                    <td className={tdClass}>{row.staff}</td>
+                                    <td className={tdClass}>{row.status}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
 
-        <div className='grid grid-cols-1 gap-5 lg:grid-cols-2'>
-            <QueuePanel
-                title='Material & AMC Requests'
-                description='Procurement requisitions and AMC renewals pending Joint Director Operations sign-off.'
-                action={
-                    <NavLink
-                        to='/maintenance-manager/requests-approvals'
-                        className='text-xs font-semibold text-[var(--erp-indigo)] hover:underline'
-                    >
-                        Manage requests →
-                    </NavLink>
-                }
-            >
-                <DataTable
-                    columns={requestColumns}
-                    data={PENDING_REQUESTS}
-                    caption='Pending maintenance requests'
-                />
-            </QueuePanel>
-
-            <QueuePanel
-                title='Department Announcements & Service Bulletins'
-                description='Power shutdowns, water tank cleaning advisories, and campus safety notices.'
-                action={
-                    <NavLink
-                        to='/maintenance-manager/broadcast'
-                        className='text-xs font-semibold text-[var(--erp-indigo)] hover:underline'
-                    >
-                        All announcements →
-                    </NavLink>
-                }
-            >
-                <DataTable
-                    columns={announcementColumns}
-                    data={RECENT_ANNOUNCEMENTS}
-                    caption='Recent maintenance announcements'
-                />
-            </QueuePanel>
-        </div>
-    </section>
-)
+                <Widget title='Recent Checklists' to='/maintenance-manager/checklists'>
+                    <table className='w-full text-sm text-left'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Checklist</th>
+                                <th className={thClass}>Staff</th>
+                                <th className={`${thClass} rounded-e-lg`}>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentChecklists.length === 0 && (
+                                <tr><td colSpan={3} className={`${tdClass} text-center`}>No checklists yet.</td></tr>
+                            )}
+                            {recentChecklists.map((row) => (
+                                <tr key={row.id} className='border-b border-[#f2f4f7]'>
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E] max-w-[160px] truncate`} title={row.title}>{row.title}</td>
+                                    <td className={tdClass}>{row.staff}</td>
+                                    <td className={tdClass}>{row.status}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
+            </div>
+        </section>
+    )
+}
 
 export default Dashboard
-

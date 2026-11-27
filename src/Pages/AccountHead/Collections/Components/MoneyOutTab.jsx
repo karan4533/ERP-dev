@@ -1,42 +1,133 @@
-import { useMemo, useState } from 'react'
-import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
-import { EXPENSE_REGISTER, MONEY_OUT_SUMMARY } from '../collectionsData'
-import { SummaryCards } from './CollectionsShared'
-
-const CATEGORY_FILTERS = ['All Categories', 'Salaries', 'Transport', 'Maintenance', 'Utilities', 'Procurement']
+import React, { useMemo } from 'react'
+import { Download } from 'lucide-react'
+import {
+    EXPENSE_REGISTER,
+    MONEY_OUT_SUMMARY,
+    expenseStatusBadgeColor,
+} from '../collectionsData'
+import {
+    SummaryCards,
+    TableCard,
+    TablePagination,
+    tdClass,
+    thClass,
+} from './CollectionsShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency } from '../../financeDomain/financeHelpers'
 
 const MoneyOutTab = () => {
-    const [query, setQuery] = useState('')
-    const [category, setCategory] = useState(CATEGORY_FILTERS[0])
-    const rows = useMemo(() => EXPENSE_REGISTER.filter((row) => {
-        if (category !== CATEGORY_FILTERS[0] && row.category !== category) return false
-        const normalizedQuery = query.trim().toLowerCase()
-        if (!normalizedQuery) return true
-        return [row.date, row.category, row.paidTo, row.mode, row.amount, row.status].join(' ').toLowerCase().includes(normalizedQuery)
-    }), [category, query])
-    const columns = [
-        { key: 'date', label: 'Date' },
-        { key: 'category', label: 'Category', required: true, render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{row.category}</span> },
-        { key: 'paidTo', label: 'Paid to' },
-        { key: 'mode', label: 'Mode' },
-        { key: 'amount', label: 'Amount', render: (row) => <span className='font-semibold text-[var(--erp-red)]'>{row.amount}</span> },
-        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    ]
+    const { transactions, financePersistence } = useFinance()
+    const apiLive = Boolean(financePersistence?.apiEnabled)
+    const rows = useMemo(() => {
+        const live = (transactions || [])
+            .filter((row) => row.direction === 'OUT')
+            .map((row) => ({
+                id: row.id,
+                category: row.category || row.sourceModule || 'Expense',
+                vendor: row.narration || row.employeeId || '—',
+                amount: formatCurrency(row.amount || 0),
+                amountNum: Number(row.amount) || 0,
+                date: row.transactionDate || '—',
+                status: row.status === 'POSTED' ? 'Paid' : (row.status || 'Pending'),
+                mode: row.paymentMode || '—',
+            }))
+        if (apiLive) return live
+        return live.length ? live : EXPENSE_REGISTER
+    }, [apiLive, transactions])
+
+    const summaryCards = useMemo(() => {
+        const total = rows.reduce((sum, row) => sum + (row.amountNum || 0), 0)
+        return [
+            {
+                label: 'Outflows (list)',
+                value: formatCurrency(total),
+                sub: `${rows.length} row(s)`,
+                iconTone: 'danger',
+            },
+            {
+                label: 'Paid / posted',
+                value: String(rows.filter((row) => row.status === 'Paid').length),
+                sub: 'Status Paid',
+                iconTone: 'success',
+            },
+            {
+                label: 'Other status',
+                value: String(rows.filter((row) => row.status !== 'Paid').length),
+                sub: 'Pending / held',
+                iconTone: 'warning',
+            },
+            {
+                label: 'Source',
+                value: apiLive ? 'API' : 'Demo',
+                sub: apiLive ? 'Snapshot OUT only — no seed fallback' : 'May use offline expense register',
+                iconTone: 'success',
+            },
+        ]
+    }, [apiLive, rows])
 
     return (
-        <div className='space-y-5'>
-            <IntegrationNotice state='demo' title='Sample expense reference' description='Expense cards and rows are static reporting fixtures. They are not authoritative payouts and are not mixed with browser-stored transactions.' />
-            <SummaryCards cards={MONEY_OUT_SUMMARY} />
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='sample-expense-title'>
-                <div className='px-4 pt-4 sm:px-5'><h3 id='sample-expense-title' className='text-base font-semibold text-[var(--erp-ink)]'>Sample expense reference</h3></div>
-                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search sample expenses' searchPlaceholder='Category, payee, mode or status…' resultCount={rows.length} onReset={() => { setQuery(''); setCategory(CATEGORY_FILTERS[0]) }} filters={(
-                    <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Category
-                        <select value={category} onChange={(event) => setCategory(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{CATEGORY_FILTERS.map((item) => <option key={item}>{item}</option>)}</select>
-                    </label>
-                )} />
-                <DataTable caption='Sample expense reference' rows={rows} columns={columns} rowKey='id' emptyTitle='No sample expenses found' emptyDescription='Reset the filters to see the full reference dataset.' />
-            </section>
-        </div>
+    <div className='space-y-6'>
+        <SummaryCards cards={summaryCards.length ? summaryCards : MONEY_OUT_SUMMARY} />
+
+        <TableCard
+            title='Expense register'
+            filters={(
+                <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
+                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[140px]'>
+                        <option>All Categories</option>
+                        <option>Salaries</option>
+                        <option>Transport</option>
+                        <option>Maintenance</option>
+                        <option>Utilities</option>
+                        <option>Procurement</option>
+                    </select>
+                    <button
+                        type='button'
+                        className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                    >
+                        <Download size={16} />
+                        Export
+                    </button>
+                </div>
+            )}
+            footer={<TablePagination summary={`${rows.length} expenses`} />}
+        >
+            <table className='w-full text-sm text-left mt-4'>
+                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                    <tr>
+                        <th className={`${thClass} rounded-s-lg`}>Category</th>
+                        <th className={thClass}>Vendor / Narration</th>
+                        <th className={thClass}>Amount</th>
+                        <th className={thClass}>Date</th>
+                        <th className={thClass}>Mode</th>
+                        <th className={`${thClass} rounded-e-lg`}>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.length === 0 ? (
+                        <tr>
+                            <td colSpan={6} className={`${tdClass} text-[#667085]`}>
+                                No OUT transactions on the campus finance snapshot yet.
+                            </td>
+                        </tr>
+                    ) : rows.map((row) => (
+                        <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                            <td className={`${tdClass} rounded-s-lg`}>{row.category}</td>
+                            <td className={tdClass}>{row.vendor}</td>
+                            <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amount}</td>
+                            <td className={tdClass}>{row.date}</td>
+                            <td className={tdClass}>{row.mode}</td>
+                            <td className={`${tdClass} rounded-e-lg`}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${expenseStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
+                                    {row.status}
+                                </span>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </TableCard>
+    </div>
     )
 }
 

@@ -88,29 +88,48 @@ def test_driver_sees_only_assigned_vehicle():
 
 
 def test_department_roles_persist_their_own_records():
-    cases = [
+    # HR staff hire covers operational roles. Audit portals use seeded logins (HR cannot assign them).
+    hire_cases = [
         ("librarian", "lib.flow@example.com", "EMP-LIB-1", "/api/v1/ops/library-books", {"id": "BK-1", "title": "Atlas"}),
         ("gatekeeper", "gate.flow@example.com", "EMP-GKP-1", "/api/v1/ops/gate-visitors", {"id": "VIS-1", "name": "Guest", "purpose": "Meeting"}),
         ("canteenmanager", "canteen.flow@example.com", "EMP-CAN-1", "/api/v1/ops/canteen-menu", {"id": "MENU-1", "item": "Idli"}),
         ("itsupportmanager", "it.flow@example.com", "EMP-IT-1", "/api/v1/ops/it-assets", {"id": "ASSET-1", "name": "Laptop"}),
         ("stationerystoremanager", "store.flow@example.com", "EMP-STO-1", "/api/v1/ops/stationery-inventory", {"id": "STK-1", "item": "Paper", "quantity": 10}),
         ("housekeepingmanager", "hk.flow@example.com", "EMP-HK-1", "/api/v1/ops/hk-schedules", {"id": "SCH-1", "area": "Block A"}),
-        ("processauditor", "process.flow@example.com", "EMP-PA-1", "/api/v1/campus-audit/process-observations", {"id": "OBS-1", "finding": "Late register"}),
-        ("jointdirectoraudit", "jdaudit.flow@example.com", "EMP-JDA-1", "/api/v1/campus-audit/audit-assignments", {"id": "AAS-1", "title": "Term audit", "owner": "Process", "dueDate": "2026-11-01", "status": "Assigned"}),
+    ]
+    seeded_cases = [
+        ("processauditor@qmis.edu", "process123", "/api/v1/campus-audit/process-observations", {"id": "OBS-1", "finding": "Late register"}),
+        ("jointdirectoraudit@qmis.edu", "jdaudit123", "/api/v1/campus-audit/audit-assignments", {"id": "AAS-1", "title": "Term audit", "owner": "Process", "dueDate": "2026-11-01", "status": "Assigned"}),
     ]
     with _client() as client:
         hr = _login(client, "hr@qmis.edu", "hr12345")
         teacher = _login(client, "teacher@qmis.edu", "teacher123")
-        for role, email, code, path, row in cases:
+        for role, email, code, path, row in hire_cases:
             headers = _hire(client, hr, role, email, code)
-            saved = client.put(path, headers=headers, json=[row])
+            # Gate collections are item-upsert only (concurrent-safe).
+            if path.endswith("/gate-visitors"):
+                saved = client.put(f"{path}/items/{row['id']}", headers=headers, json=row)
+            else:
+                saved = client.put(path, headers=headers, json=[row])
             assert saved.status_code == 200, (role, saved.text)
             fresh = _login(client, email, "Secure-Pass-99")
             listed = client.get(path, headers=fresh)
             assert listed.status_code == 200, (role, listed.text)
             assert listed.json()[0]["id"] == row["id"]
-            denied = client.put(path, headers=teacher, json=[row])
+            if path.endswith("/gate-visitors"):
+                denied = client.put(f"{path}/items/{row['id']}", headers=teacher, json=row)
+            else:
+                denied = client.put(path, headers=teacher, json=[row])
             assert denied.status_code == 403, (role, denied.text)
+        for email, password, path, row in seeded_cases:
+            headers = _login(client, email, password)
+            saved = client.put(path, headers=headers, json=[row])
+            assert saved.status_code == 200, (email, saved.text)
+            listed = client.get(path, headers=headers)
+            assert listed.status_code == 200, (email, listed.text)
+            assert listed.json()[0]["id"] == row["id"]
+            denied = client.put(path, headers=teacher, json=[row])
+            assert denied.status_code == 403, (email, denied.text)
 
 
 def test_canteen_orders_persist_after_new_login():

@@ -132,7 +132,15 @@ const TaskManagement = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename="director-tasks"
+                title="Director Task Management"
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {ASSIGNED_TASKS.length} assigned task(s).</>}
+            />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </section>

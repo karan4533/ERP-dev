@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronDown,
     ChevronLeft,
@@ -13,7 +13,7 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import ChecklistSectionFormModal from './ChecklistSectionFormModal'
 import {
-    CHECKLIST_SECTIONS,
+    getChecklistSections, hydrateChecklistSectionsFromApi,
     SECTION_STATUS_OPTIONS,
     TEMPLATE_OPTIONS,
     createSectionId,
@@ -26,7 +26,10 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const ChecklistSectionsList = () => {
-    const [sections, setSections] = useState(CHECKLIST_SECTIONS)
+    const [sections, setSections] = useState(() => getChecklistSections())
+    useEffect(() => {
+        hydrateChecklistSectionsFromApi().finally(() => setSections(getChecklistSections()))
+    }, [])
     const [search, setSearch] = useState('')
     const [templateFilter, setTemplateFilter] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
@@ -351,7 +354,14 @@ const ChecklistSectionsList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='checklistsectionslist'
+                title='ChecklistSectionsList'
+                rows={Array.isArray(filteredSections) ? filteredSections : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredSections) ? filteredSections.length : 0} record(s).</>}
+            />
             <ChecklistSectionFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

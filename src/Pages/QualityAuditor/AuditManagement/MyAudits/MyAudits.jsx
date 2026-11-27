@@ -7,6 +7,7 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import {
     getMyAudits,
+    hydrateFromApi,
     updateAuditStatus,
     DEPARTMENTS,
     AUDIT_TYPES,
@@ -27,6 +28,16 @@ const MyAudits = () => {
     useEffect(() => {
         setAudits(getMyAudits())
     }, [location.pathname])
+
+    useEffect(() => {
+        let cancelled = false
+        hydrateFromApi().then(() => {
+            if (!cancelled) setAudits(getMyAudits())
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [])
 
     const handleStartOrResume = (id) => {
         const next = updateAuditStatus(id, 'In Progress')
@@ -257,7 +268,14 @@ const MyAudits = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='myaudits'
+                title='MyAudits'
+                rows={Array.isArray(audits) ? audits : []}
+                exportDescription={<>You are exporting {Array.isArray(audits) ? audits.length : 0} record(s).</>}
+            />
         </section>
     )
 }

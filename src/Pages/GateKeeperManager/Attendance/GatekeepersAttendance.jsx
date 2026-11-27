@@ -1,18 +1,41 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { toast } from 'react-toastify'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
     ATTENDANCE_STATUSES,
-    GATEKEEPERS_ATTENDANCE_LIST,
+    getGatekeepersAttendance,
+    hydrateGatekeepersAttendanceFromApi,
     statusBadgeColor,
+    updateGatekeeperAttendanceStatus,
 } from './gatekeepersAttendanceData'
 
 const GatekeepersAttendance = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
+    const [records, setRecords] = useState(() => getGatekeepersAttendance())
+    const [savingId, setSavingId] = useState('')
+
+    useEffect(() => {
+        hydrateGatekeepersAttendanceFromApi().finally(() => setRecords(getGatekeepersAttendance()))
+    }, [])
+
+    const handleStatusChange = async (id, attendanceStatus) => {
+        setSavingId(id)
+        try {
+            const result = await updateGatekeeperAttendanceStatus(id, attendanceStatus)
+            if (result?.success === false) {
+                toast.error(result.message || 'Could not update attendance.')
+                return
+            }
+            setRecords(getGatekeepersAttendance())
+        } finally {
+            setSavingId('')
+        }
+    }
 
     return (
         <section>
@@ -96,7 +119,14 @@ const GatekeepersAttendance = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {GATEKEEPERS_ATTENDANCE_LIST.map((record) => (
+                            {records.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className='px-2 py-6 text-center text-[#667085]'>
+                                        No attendance records yet.
+                                    </td>
+                                </tr>
+                            )}
+                            {records.map((record) => (
                                 <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.employeeId}</td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.name}</td>
@@ -105,9 +135,16 @@ const GatekeepersAttendance = () => {
                                     <td className='px-2 py-4'>{record.inTime}</td>
                                     <td className='px-2 py-4'>{record.outTime}</td>
                                     <td className='px-2 py-4 rounded-e-lg'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.attendanceStatus]}`}>
-                                            {record.attendanceStatus}
-                                        </span>
+                                        <select
+                                            value={record.attendanceStatus}
+                                            disabled={savingId === record.id}
+                                            onChange={(e) => handleStatusChange(record.id, e.target.value)}
+                                            className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap border-0 cursor-pointer ${statusBadgeColor[record.attendanceStatus] || ''}`}
+                                        >
+                                            {ATTENDANCE_STATUSES.map((status) => (
+                                                <option key={status} value={status}>{status}</option>
+                                            ))}
+                                        </select>
                                     </td>
                                 </tr>
                             ))}
@@ -118,7 +155,7 @@ const GatekeepersAttendance = () => {
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {GATEKEEPERS_ATTENDANCE_LIST.length} of {GATEKEEPERS_ATTENDANCE_LIST.length} entries
+                    Showing {records.length === 0 ? 0 : 1} to {records.length} of {records.length} entries
                 </p>
                 <div className='flex justify-center gap-x-2 flex-wrap'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
@@ -133,7 +170,14 @@ const GatekeepersAttendance = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='gatekeepersattendance'
+                title='GatekeepersAttendance'
+                rows={Array.isArray(records) ? records : []}
+                exportDescription={<>You are exporting {Array.isArray(records) ? records.length : 0} record(s).</>}
+            />
         </section>
     )
 }

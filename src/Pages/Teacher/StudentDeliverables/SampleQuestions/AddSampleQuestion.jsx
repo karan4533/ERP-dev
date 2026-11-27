@@ -6,9 +6,13 @@ import { addSampleQuestion, ROUTE_BASE } from './sampleQuestionsData'
 const AddSampleQuestion = () => {
     const navigate = useNavigate()
 
-    const handleSave = (values) => {
-        addSampleQuestion(values)
-        navigate(ROUTE_BASE)
+    const handleSave = async (values) => {
+        try {
+            await addSampleQuestion(values)
+            navigate(ROUTE_BASE)
+        } catch (error) {
+            window.alert(error?.message || 'Could not save sample question.')
+        }
     }
 
     return (

@@ -1,3 +1,12 @@
+import {
+    ensureCampusSeed,
+    hydrateCampusKey,
+    persistCampusJson,
+    usesCampusApiForKey,
+} from '../../../services/campusJsonStore'
+
+export const ATTENDANCE_STORAGE_KEY = 'schoolerp-security-team-attendance-v1'
+
 export const ATTENDANCE_STATUSES = ['Present', 'Absent', 'Half Day', 'Late', 'On Duty']
 
 export const statusBadgeColor = {
@@ -8,7 +17,7 @@ export const statusBadgeColor = {
     'On Duty': 'bg-[#2196F333] text-[#2196F3]',
 }
 
-export const GATEKEEPERS_ATTENDANCE_LIST = [
+const DEMO_GATEKEEPERS_ATTENDANCE = [
     {
         id: 'GK-ATT-001',
         employeeId: 'GK-1001',
@@ -70,3 +79,25 @@ export const GATEKEEPERS_ATTENDANCE_LIST = [
         date: '23-07-2026',
     },
 ]
+
+const seedFor = () => (usesCampusApiForKey(ATTENDANCE_STORAGE_KEY) ? [] : DEMO_GATEKEEPERS_ATTENDANCE)
+
+export function getGatekeepersAttendance() {
+    return ensureCampusSeed(ATTENDANCE_STORAGE_KEY, seedFor())
+}
+
+export function saveGatekeepersAttendance(rows) {
+    return persistCampusJson(ATTENDANCE_STORAGE_KEY, rows)
+}
+
+export function hydrateGatekeepersAttendanceFromApi() {
+    if (!usesCampusApiForKey(ATTENDANCE_STORAGE_KEY)) return Promise.resolve(false)
+    return hydrateCampusKey(ATTENDANCE_STORAGE_KEY, [])
+}
+
+export async function updateGatekeeperAttendanceStatus(id, attendanceStatus) {
+    const rows = getGatekeepersAttendance()
+    const next = rows.map((row) => (String(row.id) === String(id) ? { ...row, attendanceStatus } : row))
+    const result = await saveGatekeepersAttendance(next)
+    return { ...result, record: next.find((row) => String(row.id) === String(id)) }
+}

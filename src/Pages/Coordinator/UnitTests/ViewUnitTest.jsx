@@ -1,9 +1,14 @@
-import React from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { NavLink, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Pencil } from 'lucide-react'
 import pdf_icon from '../../../assets/images/pdf-icon.png'
 import UnitTestForm from './Components/UnitTestForm'
-import { formatTestDate, getUnitTestById, ROUTE_BASE } from './unitTestsData'
+import {
+    formatTestDate,
+    getUnitTestById,
+    hydrateUnitTestsFromApi,
+    ROUTE_BASE,
+} from './unitTestsData'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -24,7 +29,21 @@ const Field = ({ label, value }) => (
 const ViewUnitTest = () => {
     const { id } = useParams()
     const navigate = useNavigate()
-    const record = getUnitTestById(id)
+    const [record, setRecord] = useState(() => getUnitTestById(id))
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        let cancelled = false
+        setLoading(true)
+        hydrateUnitTestsFromApi().finally(() => {
+            if (cancelled) return
+            setRecord(getUnitTestById(id))
+            setLoading(false)
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [id])
 
     return (
         <section className='space-y-6'>
@@ -37,9 +56,22 @@ const ViewUnitTest = () => {
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
+                {record ? (
+                    <NavLink
+                        to={`${ROUTE_BASE}/edit/${record.id}`}
+                        className='inline-flex items-center gap-2 text-sm text-white bg-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:opacity-90 transition-colors cursor-pointer'
+                    >
+                        <Pencil size={16} />
+                        Edit
+                    </NavLink>
+                ) : null}
             </div>
 
-            {!record ? (
+            {loading ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading unit test…
+                </div>
+            ) : !record ? (
                 <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
                     Unit test record not found or could not be loaded.
                 </div>

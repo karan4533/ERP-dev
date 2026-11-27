@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -6,7 +6,7 @@ import { Calendar, ChevronLeft, ChevronRight, EllipsisIcon, Download } from 'luc
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
-    ESCALATIONS,
+    getJdEscalations, hydrateJdEscalationsFromApi,
     DEPARTMENTS,
     ESCALATION_STATUSES,
     statusBadgeColor,
@@ -14,6 +14,11 @@ import {
 } from './escalationData'
 
 const Escalations = () => {
+    const [escalations, setEscalations] = useState(() => getJdEscalations())
+    useEffect(() => {
+        hydrateJdEscalationsFromApi().finally(() => setEscalations(getJdEscalations()))
+    }, [])
+
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
@@ -121,7 +126,7 @@ const Escalations = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {ESCALATIONS.map((escalation) => (
+                            {escalations.map((escalation) => (
                                 <tr
                                     key={escalation.id}
                                     className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]"
@@ -174,7 +179,7 @@ const Escalations = () => {
             </div>
 
             <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {ESCALATIONS.length} of {ESCALATIONS.length} entries</p>
+                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {escalations.length} of {escalations.length} entries</p>
                 <div className="flex justify-center gap-x-2 flex-wrap">
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
                         <ChevronLeft size={16} />
@@ -188,7 +193,14 @@ const Escalations = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='escalations'
+                title='Escalations'
+                rows={Array.isArray(escalations) ? escalations : []}
+                exportDescription={<>You are exporting {Array.isArray(escalations) ? escalations.length : 0} record(s).</>}
+            />
         </section>
     )
 }

@@ -1,6 +1,5 @@
-import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
-import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
+import { staffCommonRoutes } from '../Common/staffCommonRoutes'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/JointDirectorAudit/Dashboard/Dashboard'
 import AuditPlanningList from '../Pages/JointDirectorAudit/AuditPlanning/AuditPlanningList'
@@ -71,6 +70,7 @@ const JointDirectorAuditRoutes = () => {
             <Route path="/joint-director-audit/employee-management/:roleKey" element={<ViewEmployeeProfile />} />
             <Route path="/joint-director-audit/employee-management" element={<Navigate to="/joint-director-audit/employee-management/hr-manager" replace />} />
             <Route path="/joint-director-audit/request-approvals" element={<RequestApprovals />} />
+            <Route path="/joint-director-audit/request-approvals/view-request/:id" element={<ViewRequestApproval />} />
             <Route path="/joint-director-audit/request-approvals/view-request" element={<ViewRequestApproval />} />
             <Route path="/joint-director-audit/escalations" element={<Escalations />} />
             <Route path="/joint-director-audit/escalations/view-escalation/:id" element={<ViewEscalation />} />
@@ -78,9 +78,8 @@ const JointDirectorAuditRoutes = () => {
             <Route path="/joint-director-audit/broadcast" element={<AnnouncementList />} />
             <Route path="/joint-director-audit/broadcast/add-broadcast" element={<AddAnnouncement />} />
             <Route path="/joint-director-audit/broadcast/view-broadcast/:id" element={<ViewAnnouncement />} />
-                        <Route path="/joint-director-audit/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
-            {EnterpriseOperationsRoutes({ basePath: '/joint-director-audit', role: 'jointdirectoraudit' })}
             <Route path="*" element={<Navigate to="/joint-director-audit/dashboard" replace />} />
+            {staffCommonRoutes('/joint-director-audit', 'jointDirectorAudit', 'Joint Director Audit', { leaveKey: 'jointdirectoraudit' })}
         </ReactRoutes>
     )
 }

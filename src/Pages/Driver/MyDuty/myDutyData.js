@@ -1,8 +1,12 @@
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
+import { hydrateCampusKey, loadCampusJson, saveCampusJson, usesCampusApiForKey } from '../../../services/campusJsonStore'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+
 export const SHIFTS = ['Morning', 'Afternoon', 'Evening']
 
 export const DUTY_STATUSES = ['Assigned', 'In Progress', 'Completed', 'Cancelled']
 
-export const MY_DUTIES = [
+const DEFAULT_MY_DUTIES = [
     {
         id: 'DUTY-2001',
         dutyId: 'DUTY-2001',
@@ -89,6 +93,79 @@ export const MY_DUTIES = [
     },
 ]
 
+export const MY_DUTIES_STORAGE_KEY = 'schoolerp-transport-driver-my-duties-v1'
+const ASSIGNED_DUTIES_KEY = 'schoolerp-transport-duties-v1'
+
+const asDuty = (row) => ({
+    ...row,
+    dutyId: row.dutyId || row.id,
+    dutyStatus: row.dutyStatus || row.status || 'Assigned',
+    routeName: row.routeName || '',
+    vehicleNumber: row.vehicleNumber || '',
+    assignedBy: row.assignedBy || 'Transport Manager',
+})
+
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+export function getMyDuties() {
+    const ownFallback = (usesCampusApiForKey(MY_DUTIES_STORAGE_KEY) || apiCatalogMode()) ? [] : DEFAULT_MY_DUTIES
+    const own = loadCampusJson(MY_DUTIES_STORAGE_KEY, ownFallback).map(asDuty)
+    const assigned = loadCampusJson(ASSIGNED_DUTIES_KEY, []).map(asDuty)
+    const seen = new Set()
+    return [...assigned, ...own].filter((row) => {
+        const key = String(row.dutyId || row.id || '')
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+    })
+}
+export function saveMyDuties(rows) {
+    return saveCampusJson('schoolerp-transport-driver-my-duties-v1', rows)
+}
+
+/** Persist status onto TM Assign Duty collection so Parent/Student Track Bus can hide completed trips. */
+export async function setMyDutyStatus(dutyId, dutyStatus) {
+    const status = String(dutyStatus || '').trim() || 'Assigned'
+    const assigned = loadCampusJson(ASSIGNED_DUTIES_KEY, []).map(asDuty)
+    const idx = assigned.findIndex((row) => (
+        String(row.id) === String(dutyId) || String(row.dutyId) === String(dutyId)
+    ))
+    const patchDuty = (row) => ({
+        ...row,
+        dutyStatus: status,
+        status,
+        trackingActive: !['Completed', 'Cancelled', 'Done'].includes(status),
+        startedAt: ['In Progress', 'Started'].includes(status)
+            ? (row.startedAt || new Date().toISOString())
+            : row.startedAt,
+        completedAt: ['Completed', 'Done'].includes(status)
+            ? new Date().toISOString()
+            : row.completedAt,
+    })
+    if (idx >= 0) {
+        const next = assigned.map((row, i) => (i === idx ? patchDuty(row) : row))
+        await saveCampusJson(ASSIGNED_DUTIES_KEY, next)
+        return { success: true, record: next[idx] }
+    }
+    const own = loadCampusJson(MY_DUTIES_STORAGE_KEY, []).map(asDuty)
+    const ownIdx = own.findIndex((row) => (
+        String(row.id) === String(dutyId) || String(row.dutyId) === String(dutyId)
+    ))
+    if (ownIdx < 0) return { success: false, message: 'Duty not found.' }
+    const nextOwn = own.map((row, i) => (i === ownIdx ? patchDuty(row) : row))
+    await saveMyDuties(nextOwn)
+    return { success: true, record: nextOwn[ownIdx] }
+}
+export function hydrateMyDutiesFromApi() {
+    if (!usesCampusApiForKey(MY_DUTIES_STORAGE_KEY)) return Promise.resolve(false)
+    return Promise.all([
+        hydrateCampusKey(MY_DUTIES_STORAGE_KEY, []),
+        hydrateCampusKey(ASSIGNED_DUTIES_KEY, []),
+    ]).then(() => true)
+}
+/** Prefer getMyDuties() — empty when API mode is on (never DEFAULT_MY_DUTIES). */
+export const MY_DUTIES = liveArray(getMyDuties)
+
 export const dutyStatusBadgeColor = {
     Assigned: 'bg-[#515DEF1A] text-[#515DEF]',
     'In Progress': 'bg-[#FF98001A] text-[#FF9800]',
@@ -116,7 +193,7 @@ export const filterMyDuties = ({
         duty.routeName,
         duty.vehicleNumber,
         duty.assignedBy,
-    ].some((field) => field.toLowerCase().includes(query))
+    ].some((field) => String(field || '').toLowerCase().includes(query))
 
     const matchesShift = !shift || duty.shift === shift
     const matchesStatus = !status || duty.dutyStatus === status

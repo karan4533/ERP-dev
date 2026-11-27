@@ -12,7 +12,7 @@ import {
     mapExamFromApi,
     mapMarksBatchFromApi,
 } from '../../../services/examsApi'
-import { canUseResultsApi, getStudentResultsApi } from '../../../services/resultsApi'
+import { canUseResultsApi, getClassAnalyticsApi, getStudentResultsApi } from '../../../services/resultsApi'
 
 const selectClass = 'border border-[#D9D9D9] rounded-md px-2 py-2 text-sm bg-white min-w-[12rem]'
 
@@ -23,6 +23,8 @@ const PerformanceAnalytics = () => {
     const [examsById, setExamsById] = useState({})
     const [publishedExams, setPublishedExams] = useState([])
     const [studentId, setStudentId] = useState('')
+    const [viewMode, setViewMode] = useState('individual')
+    const [classFilter, setClassFilter] = useState('')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
@@ -200,35 +202,126 @@ const PerformanceAnalytics = () => {
         ? Math.round((series.scores.reduce((sum, value) => sum + value, 0) / series.scores.length) * 10) / 10
         : null
 
+    const classOptions = useMemo(() => {
+        const options = new Map()
+        students.forEach((student) => {
+            const className = student.className || student.class || ''
+            if (!className) return
+            if (!options.has(className)) options.set(className, { value: className, className, section: '' })
+            if (student.section) {
+                const value = `${className}|${student.section}`
+                options.set(value, { value, className, section: student.section })
+            }
+        })
+        return [...options.values()].sort((a, b) => a.value.localeCompare(b.value))
+    }, [students])
+
+    const [classResult, setClassResult] = useState({ key: '', payload: null, error: '' })
+    const classTarget = classOptions.find((option) => option.value === classFilter) || classOptions[0] || null
+    const classRequestKey = viewMode === 'class' && classTarget && canUseResultsApi() ? classTarget.value : ''
+
+    useEffect(() => {
+        if (!classRequestKey) return undefined
+        const [className, section = ''] = classRequestKey.split('|')
+        let cancelled = false
+        getClassAnalyticsApi({ className, section })
+            .then((payload) => {
+                if (!cancelled) setClassResult({ key: classRequestKey, payload, error: '' })
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setClassResult({
+                        key: classRequestKey,
+                        payload: null,
+                        error: err?.message || 'Could not load class analytics.',
+                    })
+                }
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [classRequestKey])
+
+    const classCurrent = classRequestKey && classResult.key === classRequestKey ? classResult : null
+    const classLoading = Boolean(classRequestKey && !classCurrent)
+    const classAnalytics = classCurrent?.payload || null
+    const classError = classCurrent?.error || ''
+
+    const classOption = useMemo(() => ({
+        color: ['#515DEF'],
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: (classAnalytics?.subjects || []).map((row) => row.subject) },
+        yAxis: { type: 'value', min: 0, max: 100 },
+        series: [{
+            name: 'Subject average %',
+            type: 'bar',
+            data: (classAnalytics?.subjects || []).map((row) => row.averagePercentage ?? 0),
+        }],
+    }), [classAnalytics])
+
     return (
         <section className='bg-white rounded-2xl shadow-md p-4 space-y-4'>
             <div className='flex justify-between gap-3 flex-wrap items-start'>
                 <div>
-                    <h2 className='text-xl font-semibold'>Student performance comparison</h2>
+                    <h2 className='text-xl font-semibold'>Performance analytics</h2>
                     <p className='text-sm text-[#667085]'>
-                        Scores from your marks batches and published results for students in assigned classes.
+                        Class-wise and individual student analytics for assigned classes.
                     </p>
                     {assignments.emptyReason ? (
                         <p className='text-sm text-[#E65100] mt-1'>{assignments.emptyReason}</p>
                     ) : null}
                     {error ? <p className='text-sm text-[#FF0000] mt-1'>{error}</p> : null}
                 </div>
-                <select
-                    value={studentId}
-                    onChange={(event) => setStudentId(event.target.value)}
-                    className={selectClass}
-                    disabled={!students.length}
-                >
-                    {!students.length ? <option value=''>No assigned students</option> : null}
-                    {students.map((student) => (
-                        <option key={student.id} value={String(student.id)}>
-                            {student.name} ({student.className || student.class}{student.section ? `-${student.section}` : ''})
-                        </option>
-                    ))}
-                </select>
+                <div className='flex flex-wrap gap-2 items-center'>
+                    <div className='flex rounded-lg border border-[#D9D9D9] overflow-hidden text-sm'>
+                        <button
+                            type='button'
+                            onClick={() => setViewMode('class')}
+                            className={`px-3 py-2 cursor-pointer ${viewMode === 'class' ? 'bg-[#515DEF] text-white' : 'text-[#667085]'}`}
+                        >
+                            Class-wise
+                        </button>
+                        <button
+                            type='button'
+                            onClick={() => setViewMode('individual')}
+                            className={`px-3 py-2 cursor-pointer ${viewMode === 'individual' ? 'bg-[#515DEF] text-white' : 'text-[#667085]'}`}
+                        >
+                            Individual
+                        </button>
+                    </div>
+                    {viewMode === 'class' ? (
+                        <select
+                            value={classTarget?.value || ''}
+                            onChange={(event) => setClassFilter(event.target.value)}
+                            className={selectClass}
+                            disabled={!classOptions.length}
+                        >
+                            {!classOptions.length ? <option value=''>No assigned classes</option> : null}
+                            {classOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.section ? `${option.className}-${option.section}` : `${option.className} (all sections)`}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <select
+                            value={studentId}
+                            onChange={(event) => setStudentId(event.target.value)}
+                            className={selectClass}
+                            disabled={!students.length}
+                        >
+                            {!students.length ? <option value=''>No assigned students</option> : null}
+                            {students.map((student) => (
+                                <option key={student.id} value={String(student.id)}>
+                                    {student.name} ({student.className || student.class}{student.section ? `-${student.section}` : ''})
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
             </div>
 
-            {selected ? (
+            {viewMode === 'individual' && selected ? (
                 <p className='text-sm text-[#667085]'>
                     {selected.name}
                     {selected.className || selected.class
@@ -240,6 +333,89 @@ const PerformanceAnalytics = () => {
 
             {loading ? (
                 <p className='text-sm text-[#667085]'>Loading analytics…</p>
+            ) : viewMode === 'class' ? (
+                !canUseResultsApi() ? (
+                    <p className='text-sm text-[#667085]'>Sign in with API auth to load class analytics.</p>
+                ) : !classTarget ? (
+                    <p className='text-sm text-[#667085]'>No assigned classes to analyse.</p>
+                ) : classLoading ? (
+                    <p className='text-sm text-[#667085]'>Loading class analytics…</p>
+                ) : classError ? (
+                    <p className='text-sm text-[#FF0000]'>{classError}</p>
+                ) : !classAnalytics?.studentCount ? (
+                    <p className='text-sm text-[#667085]'>
+                        No published marks for {classTarget.section ? `${classTarget.className}-${classTarget.section}` : classTarget.className} yet.
+                        Class analytics use Director-published results only.
+                    </p>
+                ) : (
+                    <>
+                        <div className='grid grid-cols-2 lg:grid-cols-5 gap-3'>
+                            {[
+                                ['Students', classAnalytics.studentCount],
+                                ['Average %', classAnalytics.averagePercentage ?? '—'],
+                                ['Highest %', classAnalytics.highestPercentage ?? '—'],
+                                ['Lowest %', classAnalytics.lowestPercentage ?? '—'],
+                                ['Pass / Fail', `${classAnalytics.passCount} / ${classAnalytics.failCount}`],
+                            ].map(([label, value]) => (
+                                <div key={label} className='rounded-xl border border-[#F2F4F7] p-3'>
+                                    <p className='text-xs text-[#667085]'>{label}</p>
+                                    <p className='text-lg font-semibold text-[#1E1E1E]'>{value}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <ReactECharts option={classOption} style={{ height: 320 }} />
+                        <div className='overflow-x-auto'>
+                            <table className='w-full text-sm'>
+                                <thead>
+                                    <tr className='text-left text-[#667085] border-b'>
+                                        <th className='py-2 pr-3'>Subject</th>
+                                        <th className='py-2 pr-3'>Students</th>
+                                        <th className='py-2 pr-3'>Average %</th>
+                                        <th className='py-2 pr-3'>Highest %</th>
+                                        <th className='py-2 pr-3'>Lowest %</th>
+                                        <th className='py-2'>Pass / Fail</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {classAnalytics.subjects.map((row) => (
+                                        <tr key={row.subject} className='border-b border-[#F0F0F0]'>
+                                            <td className='py-2 pr-3'>{row.subject}</td>
+                                            <td className='py-2 pr-3'>{row.students}</td>
+                                            <td className='py-2 pr-3'>{row.averagePercentage ?? '—'}</td>
+                                            <td className='py-2 pr-3'>{row.highestPercentage ?? '—'}</td>
+                                            <td className='py-2 pr-3'>{row.lowestPercentage ?? '—'}</td>
+                                            <td className='py-2'>{row.passCount} / {row.failCount}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className='overflow-x-auto'>
+                            <table className='w-full text-sm'>
+                                <thead>
+                                    <tr className='text-left text-[#667085] border-b'>
+                                        <th className='py-2 pr-3'>Student</th>
+                                        <th className='py-2 pr-3'>Section</th>
+                                        <th className='py-2 pr-3'>Overall %</th>
+                                        <th className='py-2 pr-3'>Grade</th>
+                                        <th className='py-2'>Result</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {classAnalytics.students.map((row) => (
+                                        <tr key={row.studentId} className='border-b border-[#F0F0F0]'>
+                                            <td className='py-2 pr-3'>{row.studentName}</td>
+                                            <td className='py-2 pr-3'>{row.section || '—'}</td>
+                                            <td className='py-2 pr-3'>{row.percentage ?? '—'}</td>
+                                            <td className='py-2 pr-3'>{row.grade || '—'}</td>
+                                            <td className='py-2'>{row.result || '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )
             ) : !canUseExamsApi() ? (
                 <p className='text-sm text-[#667085]'>Sign in with API auth to load exam marks.</p>
             ) : !series.rows.length ? (
@@ -251,7 +427,7 @@ const PerformanceAnalytics = () => {
                 <ReactECharts option={option} style={{ height: 320 }} />
             )}
 
-            {series.rows.length > 0 ? (
+            {viewMode === 'individual' && series.rows.length > 0 ? (
                 <div className='overflow-x-auto'>
                     <table className='w-full text-sm'>
                         <thead>

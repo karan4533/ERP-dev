@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download, Trophy, Star } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
@@ -9,29 +9,45 @@ import StarRatingDisplay from './Components/StarRatingDisplay'
 import {
     ACADEMIC_YEARS,
     EMPLOYEE_TYPE_OPTIONS,
-    MOCK_SOM_RATINGS,
     RATING_CATEGORY,
     SOY_MONTH_COUNT,
     getAvailableSomMonths,
     getConsolidatedSoyRatings,
     getEmployeeTypeLabel,
+    getSomRatings,
     getStarOfMonth,
     getStarOfYear,
 } from './starRatingsData'
 
 const StarRatings = ({ view = 'som' }) => {
     const isSom = view === 'som'
-    const months = useMemo(() => getAvailableSomMonths(), [])
+    const [revision, setRevision] = useState(0)
+    const allRatings = useMemo(() => getSomRatings(), [revision])
+    const months = useMemo(() => getAvailableSomMonths(), [allRatings])
     const [search, setSearch] = useState('')
     const [employeeType, setEmployeeType] = useState('')
-    const [selectedMonth, setSelectedMonth] = useState(months[months.length - 1] ?? '')
+    const [selectedMonth, setSelectedMonth] = useState('')
     const [academicYear, setAcademicYear] = useState(ACADEMIC_YEARS[0])
     const [exportModal, setExportModal] = useState(false)
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
 
+    useEffect(() => {
+        if (!selectedMonth && months.length) {
+            setSelectedMonth(months[months.length - 1])
+        }
+    }, [months, selectedMonth])
+
+    useEffect(() => {
+        const onStorage = (event) => {
+            if (event.key === 'director-staff-star-ratings') setRevision((n) => n + 1)
+        }
+        window.addEventListener('storage', onStorage)
+        return () => window.removeEventListener('storage', onStorage)
+    }, [])
+
     const somRatings = useMemo(() => {
-        return MOCK_SOM_RATINGS.filter((item) => {
+        return allRatings.filter((item) => {
             const matchesMonth = !selectedMonth || item.month === selectedMonth
             const matchesType = !employeeType || item.employeeType === employeeType
             const query = search.trim().toLowerCase()
@@ -42,11 +58,11 @@ const StarRatings = ({ view = 'som' }) => {
                 || item.ratingId.toLowerCase().includes(query)
             return matchesMonth && matchesType && matchesSearch
         })
-    }, [selectedMonth, employeeType, search])
+    }, [allRatings, selectedMonth, employeeType, search])
 
     const soyRatings = useMemo(
         () => getConsolidatedSoyRatings(academicYear),
-        [academicYear],
+        [academicYear, allRatings],
     )
 
     const filteredSoyRatings = useMemo(() => {
@@ -90,11 +106,11 @@ const StarRatings = ({ view = 'som' }) => {
                     >
                         Clear Filters
                     </button>
-                    {!isSom && (
-                        <p className='text-sm text-[#667085]'>
-                            Annual rating consolidated from {SOY_MONTH_COUNT} months of SOM data.
-                        </p>
-                    )}
+                    <p className='text-sm text-[#B8860B]'>
+                        {isSom
+                            ? 'Shared FE SoT — Star of the Month persists in browser localStorage (Add Rating saves). No staff_ratings REST API yet; not multi-user live.'
+                            : `Shared FE SoT — Star of the Year is derived from localStorage SOM rows (${SOY_MONTH_COUNT} months). No staff_ratings REST API yet.`}
+                    </p>
                 </div>
 
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:mt-6 mt-2'>
@@ -371,7 +387,14 @@ const StarRatings = ({ view = 'som' }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='starratings'
+                title='StarRatings'
+                rows={Array.isArray(filteredSoyRatings) ? filteredSoyRatings : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredSoyRatings) ? filteredSoyRatings.length : 0} record(s).</>}
+            />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </section>

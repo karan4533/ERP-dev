@@ -38,8 +38,10 @@ const DynamicDocumentFields = ({ slots, onChange }) => {
                             type='text'
                             value={slot.label}
                             onChange={(e) => updateSlot(slot.key, { label: e.target.value })}
+                            readOnly={Boolean(slot.fileId)}
+                            title={slot.fileId ? 'A stored document keeps its label. Remove it and add a new one to rename.' : undefined}
                             placeholder='e.g. Aadhaar Card, Offer Letter…'
-                            className='text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
+                            className={`text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full ${slot.fileId ? 'bg-[#F9FAFB] cursor-not-allowed' : ''}`}
                         />
                     </div>
                     <div className='lg:col-span-3 flex flex-col gap-y-2'>
@@ -60,7 +62,8 @@ const DynamicDocumentFields = ({ slots, onChange }) => {
                         <label className='text-base font-medium text-[#1E1E1E]'>Upload File</label>
                         <DocumentFileUpload
                             fileName={slot.fileName}
-                            onChange={(fileName) => updateSlot(slot.key, { fileName })}
+                            downloadUrl={slot.downloadUrl}
+                            onChange={(fileName, file) => updateSlot(slot.key, { fileName, file })}
                         />
                     </div>
                     <div className='lg:col-span-1 flex items-end justify-end pb-2'>

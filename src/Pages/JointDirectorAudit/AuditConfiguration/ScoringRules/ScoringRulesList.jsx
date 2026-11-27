@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -10,9 +10,10 @@ import {
 } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import { filterListRows } from '../../../../Common/listFiltering'
 import ScoringRuleFormModal from './ScoringRuleFormModal'
 import {
-    SCORING_RULES,
+    getAuditScoringRules, hydrateAuditScoringRulesFromApi,
     SCORING_RULE_STATUS_OPTIONS,
     buildScoringRulePayload,
     createScoringRuleId,
@@ -29,7 +30,11 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const ScoringRulesList = () => {
-    const [rules, setRules] = useState(SCORING_RULES)
+    const [scoringRules, setScoringRules] = useState(() => getAuditScoringRules())
+    useEffect(() => {
+        hydrateAuditScoringRulesFromApi().finally(() => setScoringRules(getAuditScoringRules()))
+    }, [])
+
     const [search, setSearch] = useState('')
     const [responseTypeFilter, setResponseTypeFilter] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
@@ -38,15 +43,20 @@ const ScoringRulesList = () => {
 
     const responseTypeOptions = useMemo(() => getResponseTypeOptions(), [])
 
-    const filteredRules = useMemo(() => rules.filter((rule) => {
-        const searchValue = search.trim().toLowerCase()
-        const matchesSearch = !searchValue || rule.rule.toLowerCase().includes(searchValue)
-        const matchesResponseType = !responseTypeFilter || rule.responseTypeId === responseTypeFilter
-        const ruleStatus = getScoringRuleStatus(rule.active)
-        const matchesStatus = !statusFilter || ruleStatus === statusFilter
-
-        return matchesSearch && matchesResponseType && matchesStatus
-    }), [rules, search, responseTypeFilter, statusFilter])
+    const filteredRules = useMemo(() => {
+        const rows = scoringRules.map((rule) => ({
+            ...rule,
+            statusLabel: getScoringRuleStatus(rule.active),
+        }))
+        return filterListRows(rows, {
+            search,
+            searchKeys: ['rule', 'id', 'responseType'],
+            equals: {
+                responseTypeId: responseTypeFilter,
+                statusLabel: statusFilter,
+            },
+        })
+    }, [scoringRules, search, responseTypeFilter, statusFilter])
 
     const clearFilters = () => {
         setSearch('')
@@ -84,13 +94,13 @@ const ScoringRulesList = () => {
         const payload = buildScoringRulePayload(formData)
 
         if (formModal.mode === 'edit' && formModal.ruleId) {
-            setRules((prev) => prev.map((rule) => (
+            setScoringRules((prev) => prev.map((rule) => (
                 rule.id === formModal.ruleId
                     ? { ...rule, ...payload }
                     : rule
             )))
         } else {
-            setRules((prev) => [
+            setScoringRules((prev) => [
                 {
                     id: createScoringRuleId(prev),
                     ...payload,
@@ -103,7 +113,7 @@ const ScoringRulesList = () => {
     }
 
     const toggleActive = (ruleId) => {
-        setRules((prev) => prev.map((rule) => (
+        setScoringRules((prev) => prev.map((rule) => (
             rule.id === ruleId
                 ? { ...rule, active: !rule.active }
                 : rule
@@ -309,7 +319,14 @@ const ScoringRulesList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='scoringruleslist'
+                title='ScoringRulesList'
+                rows={Array.isArray(filteredRules) ? filteredRules : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRules) ? filteredRules.length : 0} record(s).</>}
+            />
             <ScoringRuleFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

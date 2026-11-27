@@ -1,9 +1,10 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 import { addDays } from 'date-fns'
 import { generateId, toDateKey } from '../../../Common/MeetingsCalendar/utils/dateHelpers'
 
 const today = new Date()
 
-export const SEED_EVENTS = [
+const DEFAULT_SEED_EVENTS = [
     {
         id: generateId(),
         title: 'JD Office Coordination',
@@ -32,3 +33,15 @@ export const SEED_EVENTS = [
         colorIdx: 5,
     },
 ]
+
+export function getSeedEvents() {
+    return ensureCampusSeed('schoolerp-jd-meetings-v1', DEFAULT_SEED_EVENTS)
+}
+export function saveSeedEvents(rows) {
+    return saveCampusJson('schoolerp-jd-meetings-v1', rows)
+}
+export function hydrateSeedEventsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-meetings-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-meetings-v1', DEFAULT_SEED_EVENTS)
+}
+export const SEED_EVENTS = DEFAULT_SEED_EVENTS

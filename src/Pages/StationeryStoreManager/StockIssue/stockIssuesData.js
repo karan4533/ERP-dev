@@ -5,7 +5,8 @@ import {
     usesCampusApiForKey,
 } from '../../../services/campusJsonStore'
 import { nextSerial } from '../../../Common/demoDomain/storage'
-import { getInventoryItems, saveInventoryItems } from '../Inventory/inventoryData'
+import { canUseOpsApi, stationeryIssueReturnApi } from '../../../services/opsApi'
+import { getInventoryItems, hydrateInventoryItemsFromApi, saveInventoryItems } from '../Inventory/inventoryData'
 
 export const STOCK_ISSUES_STORAGE_KEY = 'schoolerp-stationery-stock-issues-v1'
 
@@ -49,12 +50,54 @@ const deriveStatus = (qty, reorder) => {
 
 export async function issueStationeryStock({ itemName, quantity, to, issuedBy, receivedBy }) {
     const qty = Number(quantity)
+    if (!Number.isFinite(qty) || qty <= 0) {
+        return { success: false, message: 'Quantity must be a positive number.' }
+    }
+
+    // Live API: reuse authoritative issue-return ledger (also mirrors into stock-issues).
+    if (canUseOpsApi()) {
+        try {
+            const clientRequestId = `SSI-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+            const result = await stationeryIssueReturnApi({
+                activityType: 'Issue',
+                clientRequestId,
+                requestedBy: receivedBy || to || 'Staff',
+                department: to || 'Stores',
+                purpose: 'Stock issue',
+                lines: [{ itemName, quantity: qty }],
+            })
+            await Promise.all([hydrateStationeryStockIssuesFromApi(), hydrateInventoryItemsFromApi()])
+            const movement = result?.movements?.[0]
+            return {
+                success: Boolean(result?.success),
+                api: true,
+                idempotent: Boolean(result?.idempotent),
+                record: movement
+                    ? {
+                        id: movement.id,
+                        item: movement.itemName,
+                        itemId: movement.itemId,
+                        quantity: movement.quantity,
+                        from: 'Stores',
+                        to: movement.department,
+                        issuedBy: issuedBy || movement.recordedByEmail || 'Stores',
+                        receivedBy: movement.requestedBy,
+                        date: movement.issueDate,
+                        status: movement.status,
+                    }
+                    : null,
+            }
+        } catch (err) {
+            return { success: false, message: err?.message || 'Could not issue stock.' }
+        }
+    }
+
     const items = getInventoryItems()
     const item = items.find((row) => row.itemName === itemName)
     if (!item) return { success: false, message: 'Item not found in stationery inventory.' }
     const available = Number(item.availableQuantity) || 0
-    if (!Number.isFinite(qty) || qty <= 0 || qty > available) {
-        return { success: false, message: 'Quantity exceeds available stock.' }
+    if (qty > available) {
+        return { success: false, message: 'Quantity exceeds available stock. Raise a purchase instead.' }
     }
 
     const nextQty = available - qty

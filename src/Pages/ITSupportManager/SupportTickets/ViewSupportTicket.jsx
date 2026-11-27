@@ -1,9 +1,28 @@
-import React, { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import React, { useCallback, useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CircleCheck } from 'lucide-react'
 import { toast } from 'react-toastify'
-import { getTicketById, updateTicket } from '../../../Common/demoDomain/itTickets'
-import { STATUS_OPTIONS, priorityBadgeColor, statusBadgeColor } from './supportTicketsData'
+import {
+    IT_TICKETS_KEY,
+    assignTicket,
+    getTicketById,
+    hydrateTicketsFromApi,
+    listAssignableUsers,
+    updateTicket,
+} from '../../../Common/demoDomain/itTickets'
+import { usesCampusApiForKey } from '../../../services/campusJsonStore'
+import ResourceAttachments from '../../../Common/CommonComponents/ResourceAttachments'
+import { STATUS_OPTIONS, normalizeTicketStatus, priorityBadgeColor, statusBadgeColor } from './supportTicketsData'
+
+const listPathFromLocation = (pathname = '') => {
+    if (pathname.includes('/tickets/view-ticket/')) {
+        return pathname.split('/view-ticket/')[0]
+    }
+    if (pathname.includes('/support-tickets/view-ticket/')) {
+        return pathname.split('/view-ticket/')[0]
+    }
+    return '/it-support-manager/support-tickets'
+}
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -22,12 +41,34 @@ const Field = ({ label, value }) => (
 const selectClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full max-w-xs bg-white'
 
+const formatHistoryAt = (value) => {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return String(value)
+    return date.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    })
+}
+
 const ViewSupportTicket = () => {
     const navigate = useNavigate()
+    const location = useLocation()
+    const listPath = listPathFromLocation(location.pathname)
     const { id } = useParams()
+    const apiMode = usesCampusApiForKey(IT_TICKETS_KEY)
     const [ticket, setTicket] = useState(() => getTicketById(id))
-    const [status, setStatus] = useState(ticket?.status ?? 'Open')
+    const [loadState, setLoadState] = useState(() => (apiMode ? 'loading' : 'ready'))
+    const [assignable, setAssignable] = useState({ key: '', status: 'loading', rows: [], error: '' })
+    const [selectedAssignees, setSelectedAssignees] = useState(() => ticket?.assigneeUserIds ?? [])
+    const [assignBusy, setAssignBusy] = useState(false)
+    const [status, setStatus] = useState(normalizeTicketStatus(ticket?.status ?? 'Raised'))
+    const [assignedTo, setAssignedTo] = useState(ticket?.assignedTo ?? '')
     const [remarks, setRemarks] = useState(ticket?.remarks ?? '')
+    const [requesterConfirmed, setRequesterConfirmed] = useState(Boolean(ticket?.requesterConfirmed))
     const [outsideService, setOutsideService] = useState(Boolean(ticket?.outsideService))
     const [printerMaintenance, setPrinterMaintenance] = useState(Boolean(ticket?.printerMaintenance))
     const [service, setService] = useState({
@@ -42,25 +83,144 @@ const ViewSupportTicket = () => {
     })
     const [saved, setSaved] = useState(false)
 
-    const handleUpdateStatus = () => {
-        const next = updateTicket(id, { status, remarks, outsideService, printerMaintenance, ...service, serviceAsset: service.asset, serviceVendor: service.vendor, serviceCost: service.cost })
+    const applyTicket = useCallback((next) => {
         setTicket(next)
+        setStatus(normalizeTicketStatus(next?.status ?? 'Raised'))
+        setAssignedTo(next?.assignedTo ?? '')
+        setRemarks(next?.remarks ?? '')
+        setRequesterConfirmed(Boolean(next?.requesterConfirmed))
+        setOutsideService(Boolean(next?.outsideService))
+        setPrinterMaintenance(Boolean(next?.printerMaintenance))
+        setSelectedAssignees(next?.assigneeUserIds ?? [])
+        setService({
+            asset: next?.serviceAsset || '',
+            vendor: next?.serviceVendor || '',
+            sentDate: next?.sentDate || '',
+            expectedReturn: next?.expectedReturn || '',
+            returnedDate: next?.returnedDate || '',
+            cost: next?.serviceCost || '',
+            serviceStatus: next?.serviceStatus || 'Sent',
+            serviceRemarks: next?.serviceRemarks || '',
+        })
+    }, [])
+
+    const [reloadToken, setReloadToken] = useState(0)
+    useEffect(() => {
+        if (!apiMode) return undefined
+        let cancelled = false
+        hydrateTicketsFromApi().then((ok) => {
+            if (cancelled) return
+            const fresh = getTicketById(id)
+            if (fresh) applyTicket(fresh)
+            setLoadState(fresh ? 'ready' : ok ? 'missing' : 'error')
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [apiMode, id, applyTicket, reloadToken])
+
+    const retryLoad = () => {
+        setLoadState('loading')
+        setReloadToken((value) => value + 1)
+    }
+
+    const ticketKey = ticket?.ticketId
+    useEffect(() => {
+        if (!apiMode || !ticketKey) return undefined
+        let cancelled = false
+        listAssignableUsers(ticketKey)
+            .then((rows) => {
+                if (!cancelled) setAssignable({ key: ticketKey, status: 'ready', rows, error: '' })
+            })
+            .catch((error) => {
+                if (cancelled) return
+                setAssignable({
+                    key: ticketKey,
+                    status: error?.status === 403 ? 'forbidden' : 'error',
+                    rows: [],
+                    error: error?.message || 'Department members could not be loaded.',
+                })
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [apiMode, ticketKey])
+    const assignableStatus = assignable.key === ticketKey ? assignable.status : 'loading'
+
+    const toggleAssignee = (userId) => {
+        setSelectedAssignees((prev) => (prev.includes(userId) ? prev.filter((value) => value !== userId) : [...prev, userId]))
+    }
+
+    const handleSaveAssignees = async () => {
+        if (assignBusy || !ticket) return
+        setAssignBusy(true)
+        const result = await assignTicket(ticket.ticketId, selectedAssignees)
+        setAssignBusy(false)
+        if (!result?.success) {
+            toast.error(result?.message || 'The assignment could not be saved.')
+            return
+        }
+        applyTicket(result.ticket)
+        toast.success(result.ticket.assignees.length ? `Assigned to ${result.ticket.assignedTo}.` : 'Returned to the department queue.')
+    }
+
+    const statusChoices = STATUS_OPTIONS.includes(status)
+        ? STATUS_OPTIONS
+        : [status, ...STATUS_OPTIONS]
+
+    const handleUpdateStatus = async () => {
+        let nextStatus = status
+        if (requesterConfirmed && normalizeTicketStatus(status) === 'Resolved') {
+            nextStatus = 'Confirmed by Requester'
+            setStatus(nextStatus)
+        }
+        const hasAssignee = apiMode ? Boolean(ticket?.assignees?.length) : Boolean(assignedTo)
+        if (hasAssignee && nextStatus === 'Raised') {
+            nextStatus = 'Assigned'
+            setStatus(nextStatus)
+        }
+        const result = await updateTicket(id, {
+            status: nextStatus,
+            assignedTo,
+            remarks,
+            requesterConfirmed,
+            confirmationNote: requesterConfirmed ? 'Requester confirmed resolution' : '',
+            outsideService,
+            printerMaintenance,
+            ...service,
+            serviceAsset: service.asset,
+            serviceVendor: service.vendor,
+            serviceCost: service.cost,
+        })
+        if (!result?.success) {
+            toast.error(result?.message || 'The ticket could not be updated.')
+            return
+        }
+        setTicket(result.ticket)
         setSaved(true)
-        toast.success('Ticket updated. The requester sees the same record.')
+        toast.success('Ticket updated. History retained; the requester sees the same record.')
     }
 
     return (
         <section className='space-y-6'>
             <div className='flex flex-wrap items-center gap-3'>
-                <button type='button' onClick={() => navigate('/it-support-manager/support-tickets')} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
+                <button type='button' onClick={() => navigate(listPath)} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
             </div>
 
-            {!ticket ? (
+            {/* Edit only the server copy: a cached ticket would be reset under the user when the load lands. */}
+            {loadState === 'loading' ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>Loading ticket…</div>
+            ) : loadState === 'error' ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#B42318] space-y-3'>
+                    <p>The ticket could not be loaded.</p>
+                    <button type='button' onClick={retryLoad} className='border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md text-sm cursor-pointer'>Retry</button>
+                </div>
+            ) : !ticket ? (
                 <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                    Ticket not found or could not be loaded.
+                    Ticket not found, or it belongs to another department.
                 </div>
             ) : (
                 <>
@@ -91,11 +251,64 @@ const ViewSupportTicket = () => {
                             <div className='lg:col-span-3'>
                                 <Field label='Description' value={ticket.description} />
                             </div>
+                            {apiMode && (
+                                <div className='lg:col-span-3'>
+                                    <ResourceAttachments resourceType='it-ticket-attachment' resourceId={ticket.ticketId} canUpload />
+                                </div>
+                            )}
                         </div>
                     </Section>
 
+                    {apiMode && (
+                        <Section title='Assignees'>
+                            <p className='text-xs text-[#808080] mb-4'>
+                                Assign this ticket to one or more {ticket.department} members. Every change is kept in the ticket history.
+                            </p>
+                            {assignableStatus === 'loading' ? (
+                                <p className='text-sm text-[#667085]'>Loading department members…</p>
+                            ) : assignableStatus === 'forbidden' ? (
+                                <p className='text-sm text-[#667085]'>
+                                    {ticket.assignees?.length ? `Assigned to ${ticket.assignedTo}.` : 'Not assigned yet.'} Only IT Support or the {ticket.department} head can change assignees.
+                                </p>
+                            ) : assignableStatus === 'error' ? (
+                                <p className='text-sm text-[#B42318]'>{assignable.error}</p>
+                            ) : assignable.rows.length === 0 ? (
+                                <p className='text-sm text-[#667085]'>No active {ticket.department} members found to assign.</p>
+                            ) : (
+                                <div className='space-y-4'>
+                                    <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2'>
+                                        {assignable.rows.map((member) => (
+                                            <label key={member.userId} className='flex items-center gap-2 text-sm border border-[#EEF0F6] rounded-md px-3 py-2'>
+                                                <input
+                                                    type='checkbox'
+                                                    checked={selectedAssignees.includes(member.userId)}
+                                                    onChange={() => toggleAssignee(member.userId)}
+                                                />
+                                                <span className='flex flex-col'>
+                                                    <span className='text-[#1E1E1E]'>{member.name}</span>
+                                                    <span className='text-xs text-[#667085]'>{member.email}</span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <button
+                                        type='button'
+                                        onClick={handleSaveAssignees}
+                                        disabled={assignBusy}
+                                        className='bg-[#515DEF] text-white text-sm px-8 py-3 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer disabled:opacity-60'
+                                    >
+                                        {assignBusy ? 'Saving…' : 'Save Assignees'}
+                                    </button>
+                                </div>
+                            )}
+                        </Section>
+                    )}
+
                     <Section title='Update Status'>
-                        <div className='flex flex-col sm:flex-row sm:items-end gap-4'>
+                        <p className='text-xs text-[#808080] mb-4'>
+                            Lifecycle: Raised → Assigned → In Progress → Resolved → Confirmed by Requester. History is retained; records are not deleted.
+                        </p>
+                        <div className='flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap'>
                             <div className='flex flex-col gap-y-2'>
                                 <label htmlFor="ticket-status" className='text-base font-medium text-[#1E1E1E]'>Status</label>
                                 <select
@@ -107,11 +320,26 @@ const ViewSupportTicket = () => {
                                         setSaved(false)
                                     }}
                                 >
-                                    {STATUS_OPTIONS.map((option) => (
+                                    {statusChoices.map((option) => (
                                         <option key={option} value={option}>{option}</option>
                                     ))}
                                 </select>
                             </div>
+                            {!apiMode && (
+                                <div className='flex flex-col gap-y-2'>
+                                    <label htmlFor="ticket-assignee" className='text-base font-medium text-[#1E1E1E]'>Assigned To</label>
+                                    <input
+                                        id="ticket-assignee"
+                                        className={selectClass}
+                                        value={assignedTo}
+                                        onChange={(e) => {
+                                            setAssignedTo(e.target.value)
+                                            setSaved(false)
+                                        }}
+                                        placeholder='Staff / queue name'
+                                    />
+                                </div>
+                            )}
                             <button
                                 type='button'
                                 onClick={handleUpdateStatus}
@@ -120,7 +348,18 @@ const ViewSupportTicket = () => {
                                 Update Status
                             </button>
                         </div>
-                        <label className='flex flex-col gap-2 mt-4 text-sm'>Remarks
+                        <label className='flex items-center gap-2 mt-4 text-sm'>
+                            <input
+                                type='checkbox'
+                                checked={requesterConfirmed}
+                                onChange={(event) => {
+                                    setRequesterConfirmed(event.target.checked)
+                                    setSaved(false)
+                                }}
+                            />
+                            Confirmed by requester
+                        </label>
+                        <label className='flex flex-col gap-2 mt-4 text-sm'>Remarks / resolution details
                             <textarea value={remarks} onChange={(event) => setRemarks(event.target.value)} rows={3} className='border border-[#D9D9D9] rounded-md px-2 py-2' />
                         </label>
                         <div className='flex gap-4 mt-3 text-sm'>
@@ -136,11 +375,20 @@ const ViewSupportTicket = () => {
                             </div>
                         )}
                         {ticket.history?.length > 0 && (
-                            <ul className='mt-4 text-sm text-[#667085] space-y-1'>
-                                {ticket.history.map((event, index) => (
-                                    <li key={`${event.event}-${index}`}>{event.event}: {event.note}</li>
-                                ))}
-                            </ul>
+                            <div className='mt-6'>
+                                <h3 className='text-base font-semibold text-[#1E1E1E] mb-3'>Ticket History</h3>
+                                <ul className='space-y-3 border border-[#EEF0F6] rounded-xl p-4'>
+                                    {ticket.history.map((event, index) => (
+                                        <li key={`${event.event}-${event.at || index}`} className='text-sm border-b border-[#F2F4F7] last:border-0 pb-3 last:pb-0'>
+                                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                                <span className='font-medium text-[#1E1E1E]'>{event.event}</span>
+                                                <span className='text-xs text-[#667085]'>{formatHistoryAt(event.at)}</span>
+                                            </div>
+                                            <p className='text-[#667085] mt-1'>{event.note || '—'}</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         )}
                         {saved && (
                             <div className='flex items-center gap-2 mt-4 text-sm text-[#4CAF50] font-medium'>

@@ -1,8 +1,4 @@
-export const TEACHER_TIMETABLE_INFO = {
-    employeeId: 'TEA-1001',
-    teacherName: 'Anita Verma',
-    subject: 'Mathematics',
-}
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
 
 export const WEEKLY_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -14,7 +10,29 @@ export const TIME_SLOTS = [
     { time: '01:15 PM -\n02:00 PM', label: '01:15 PM - 02:00 PM' },
 ]
 
-export const WEEKLY_SCHEDULE = {
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+const DEMO_TEACHER_TIMETABLE_INFO = {
+    employeeId: 'TEA-1001',
+    teacherName: 'Anita Verma',
+    subject: 'Mathematics',
+}
+
+const emptyTeacherInfo = () => ({
+    employeeId: '',
+    teacherName: '',
+    subject: '',
+})
+
+const emptyWeeklySchedule = () =>
+    Object.fromEntries(
+        TIME_SLOTS.map((slot) => [
+            slot.label,
+            Object.fromEntries(WEEKLY_DAYS.map((day) => [day, null])),
+        ]),
+    )
+
+const DEMO_WEEKLY_SCHEDULE = {
     '09:00 AM - 09:45 AM': {
         Monday: { subject: 'Mathematics', className: '10-A' },
         Tuesday: { subject: 'Mathematics', className: '10-B' },
@@ -57,67 +75,38 @@ export const WEEKLY_SCHEDULE = {
     },
 }
 
+export const getTeacherTimetableInfo = () =>
+    (apiCatalogMode() ? emptyTeacherInfo() : { ...DEMO_TEACHER_TIMETABLE_INFO })
+
+export const getWeeklySchedule = () =>
+    (apiCatalogMode() ? emptyWeeklySchedule() : structuredClone(DEMO_WEEKLY_SCHEDULE))
+
+/** Offline demo only — empty identity when API auth is on. */
+export const TEACHER_TIMETABLE_INFO = new Proxy(emptyTeacherInfo(), {
+    get(_, prop) {
+        return getTeacherTimetableInfo()[prop]
+    },
+})
+
+/** Offline demo schedule only — empty period grid when API auth is on. */
+export const WEEKLY_SCHEDULE = new Proxy({}, {
+    get(_, prop) {
+        const schedule = getWeeklySchedule()
+        if (prop === Symbol.iterator) return undefined
+        return schedule[prop]
+    },
+    ownKeys() {
+        return Reflect.ownKeys(getWeeklySchedule())
+    },
+    getOwnPropertyDescriptor(_, prop) {
+        const schedule = getWeeklySchedule()
+        if (!(prop in schedule)) return undefined
+        return { configurable: true, enumerable: true, value: schedule[prop] }
+    },
+})
+
 export const SUBJECT_COLORS = {
     Mathematics: 'bg-blue-50 text-blue-700 border border-blue-100',
     Physics: 'bg-purple-50 text-purple-700 border border-purple-100',
-    Chemistry: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
-    Biology: 'bg-teal-50 text-teal-700 border border-teal-100',
     English: 'bg-rose-50 text-rose-700 border border-rose-100',
-    'Social Studies': 'bg-amber-50 text-amber-700 border border-amber-100',
-    'Computer Science': 'bg-cyan-50 text-cyan-700 border border-cyan-100',
-    'Hindi / Regional': 'bg-orange-50 text-orange-700 border border-orange-100',
-    'Physical Education': 'bg-lime-50 text-lime-700 border border-lime-100',
-    'Library & Reading': 'bg-indigo-50 text-indigo-700 border border-indigo-100',
-    'Co-Curricular / Clubs': 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100',
-}
-
-export const ALLOTTED_CLASS_INFO = {
-    className: 'Class 10-A',
-    classTeacher: 'Anita Verma',
-    room: 'Room 304, Secondary Wing',
-    totalStudents: 42,
-    academicYear: '2026-27'
-}
-
-export const ALLOTTED_CLASS_SCHEDULE = {
-    '09:00 AM - 09:45 AM': {
-        Monday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-        Tuesday: { subject: 'English', teacher: 'Sandy Selva', room: '304' },
-        Wednesday: { subject: 'Physics', teacher: 'Dr. Subramanian', room: 'Lab 2' },
-        Thursday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-        Friday: { subject: 'Chemistry', teacher: 'Ananya Roy', room: 'Lab 1' },
-        Saturday: { subject: 'Social Studies', teacher: 'Priya Sharma', room: '304' },
-    },
-    '09:45 AM - 10:30 AM': {
-        Monday: { subject: 'Physics', teacher: 'Dr. Subramanian', room: 'Lab 2' },
-        Tuesday: { subject: 'Chemistry', teacher: 'Ananya Roy', room: 'Lab 1' },
-        Wednesday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-        Thursday: { subject: 'English', teacher: 'Sandy Selva', room: '304' },
-        Friday: { subject: 'Biology', teacher: 'Dr. Anita Sen', room: 'Bio Lab' },
-        Saturday: { subject: 'Physical Education', teacher: 'Coach Murugan', room: 'Playground' },
-    },
-    '10:45 AM - 11:30 AM': {
-        Monday: { subject: 'Social Studies', teacher: 'Priya Sharma', room: '304' },
-        Tuesday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-        Wednesday: { subject: 'Computer Science', teacher: 'Rakesh Nair', room: 'IT Lab 1' },
-        Thursday: { subject: 'Chemistry', teacher: 'Ananya Roy', room: 'Lab 1' },
-        Friday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-        Saturday: { subject: 'English', teacher: 'Sandy Selva', room: '304' },
-    },
-    '11:30 AM - 12:15 PM': {
-        Monday: { subject: 'English', teacher: 'Sandy Selva', room: '304' },
-        Tuesday: { subject: 'Social Studies', teacher: 'Priya Sharma', room: '304' },
-        Wednesday: { subject: 'Hindi / Regional', teacher: 'Meena Kumari', room: '304' },
-        Thursday: { subject: 'Computer Science', teacher: 'Rakesh Nair', room: 'IT Lab 1' },
-        Friday: { subject: 'Physics', teacher: 'Dr. Subramanian', room: 'Lab 2' },
-        Saturday: { subject: 'Library & Reading', teacher: 'Meenakshi Sundaram', room: 'Central Library' },
-    },
-    '01:15 PM - 02:00 PM': {
-        Monday: { subject: 'Chemistry', teacher: 'Ananya Roy', room: 'Lab 1' },
-        Tuesday: { subject: 'Physics', teacher: 'Dr. Subramanian', room: 'Lab 2' },
-        Wednesday: { subject: 'Social Studies', teacher: 'Priya Sharma', room: '304' },
-        Thursday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-        Friday: { subject: 'Co-Curricular / Clubs', teacher: 'Club In-Charge', room: 'Activity Hall' },
-        Saturday: { subject: 'Mathematics', teacher: 'Anita Verma', room: '304' },
-    },
 }

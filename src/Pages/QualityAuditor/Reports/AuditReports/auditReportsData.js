@@ -1,5 +1,6 @@
 import { DEPARTMENTS, CAMPUSES } from '../../AuditManagement/AuditHistory/auditHistoryData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, CAMPUSES }
 
 export const REPORT_STATUSES = ['Completed', 'Approved', 'Closed']
@@ -46,6 +47,7 @@ const buildAuditReport = ({
 }) => ({
     id: auditNumber,
     auditNumber,
+    auditStream: 'QUALITY',
     auditName,
     department,
     campus,
@@ -64,7 +66,7 @@ const buildAuditReport = ({
 
 const DEFAULT_AUDIT_REPORTS = [
     buildAuditReport({
-        auditNumber: 'AUD-PA-2026-041',
+        auditNumber: 'AUD-QA-2026-041',
         auditName: 'Classroom Cleanliness & Facilities Audit',
         department: 'Academic',
         campus: 'Main Campus',
@@ -101,7 +103,7 @@ const DEFAULT_AUDIT_REPORTS = [
             'Overall audit compliance is satisfactory at 92%. Classroom hygiene standards met in 5 of 6 inspected rooms. One room requires follow-up on whiteboard maintenance. Documentation section needs improvement — attendance registers and safety signage require attention. All critical safety observations have been addressed except dustbin overflow in Room 12A.',
     }),
     buildAuditReport({
-        auditNumber: 'AUD-PA-2026-038',
+        auditNumber: 'AUD-QA-2026-038',
         auditName: 'Fleet Maintenance & Trip Logs',
         department: 'Transport',
         campus: 'Main Campus',
@@ -126,14 +128,14 @@ const DEFAULT_AUDIT_REPORTS = [
             { section: 'Driver Compliance', passed: 3, failed: 0, na: 1, compliance: 100 },
         ],
         observationSummary: [
-            { observationId: 'OBS-PA-2026-011', observation: 'Fire extinguisher expired on Bus TN-12-AB-4521', priority: 'Critical', assignedTo: 'Transport Manager', status: 'Closed' },
-            { observationId: 'OBS-PA-2026-010', observation: 'Trip log unsigned for Route 3', priority: 'Medium', assignedTo: 'Transport Manager', status: 'Closed' },
+            { observationId: 'OBS-QA-2026-011', observation: 'Fire extinguisher expired on Bus TN-12-AB-4521', priority: 'Critical', assignedTo: 'Transport Manager', status: 'Closed' },
+            { observationId: 'OBS-QA-2026-010', observation: 'Trip log unsigned for Route 3', priority: 'Medium', assignedTo: 'Transport Manager', status: 'Closed' },
         ],
         recommendations: 'Enable automated fleet maintenance alerts 30 days before equipment expiry. Mandate daily trip log sign-off before route departure.',
         generalRemarks: 'Transport department demonstrated strong driver compliance. Both observations resolved within SLA. Recommend quarterly fleet safety audits.',
     }),
     buildAuditReport({
-        auditNumber: 'AUD-PA-2026-043',
+        auditNumber: 'AUD-QA-2026-043',
         auditName: 'Canteen Hygiene & Food Safety Audit',
         department: 'Canteen',
         campus: 'Main Campus',
@@ -158,14 +160,14 @@ const DEFAULT_AUDIT_REPORTS = [
             { section: 'Staff Compliance', passed: 5, failed: 1, na: 0, compliance: 83 },
         ],
         observationSummary: [
-            { observationId: 'OBS-PA-2026-014', observation: 'Food storage temperature log missing', priority: 'Critical', assignedTo: 'Canteen Manager', status: 'Pending' },
-            { observationId: 'OBS-PA-2026-007', observation: 'Staff hygiene compliance below standard', priority: 'Medium', assignedTo: 'Canteen Manager', status: 'Closed' },
+            { observationId: 'OBS-QA-2026-014', observation: 'Food storage temperature log missing', priority: 'Critical', assignedTo: 'Canteen Manager', status: 'Pending' },
+            { observationId: 'OBS-QA-2026-007', observation: 'Staff hygiene compliance below standard', priority: 'Medium', assignedTo: 'Canteen Manager', status: 'Closed' },
         ],
         recommendations: 'Mandatory daily temperature logging with supervisor verification. Increase hygiene training frequency to monthly sessions.',
         generalRemarks: 'Canteen hygiene audit identified critical gaps in cold storage monitoring. Immediate corrective action required for temperature log compliance.',
     }),
     buildAuditReport({
-        auditNumber: 'AUD-PA-2026-039',
+        auditNumber: 'AUD-QA-2026-039',
         auditName: 'Data Backup & Access Control Policy',
         department: 'IT Support',
         campus: 'Main Campus',
@@ -190,13 +192,13 @@ const DEFAULT_AUDIT_REPORTS = [
             { section: 'Policy Compliance', passed: 4, failed: 0, na: 0, compliance: 100 },
         ],
         observationSummary: [
-            { observationId: 'OBS-PA-2026-009', observation: 'Backup verification log incomplete', priority: 'High', assignedTo: 'IT Support Manager', status: 'Closed' },
+            { observationId: 'OBS-QA-2026-009', observation: 'Backup verification log incomplete', priority: 'High', assignedTo: 'IT Support Manager', status: 'Closed' },
         ],
         recommendations: 'Continue quarterly access control reviews. Expand storage capacity proactively before threshold alerts.',
         generalRemarks: 'IT infrastructure audit passed with minor backup logging gap now resolved. Access control policies fully compliant.',
     }),
     buildAuditReport({
-        auditNumber: 'AUD-PA-2026-045',
+        auditNumber: 'AUD-QA-2026-045',
         auditName: 'Housekeeping Standards — Academic Block',
         department: 'Housekeeping',
         campus: 'South Campus',
@@ -221,7 +223,7 @@ const DEFAULT_AUDIT_REPORTS = [
             { section: 'Waste Management', passed: 3, failed: 1, na: 0, compliance: 75 },
         ],
         observationSummary: [
-            { observationId: 'OBS-PA-2026-012', observation: 'Corridor cleaning schedule not displayed', priority: 'Medium', assignedTo: 'Housekeeping Supervisor', status: 'Pending' },
+            { observationId: 'OBS-QA-2026-012', observation: 'Corridor cleaning schedule not displayed', priority: 'Medium', assignedTo: 'Housekeeping Supervisor', status: 'Pending' },
         ],
         recommendations: 'Display housekeeping schedules on all floors. Implement weekly supervisor walkthrough with photo evidence.',
         generalRemarks: 'Housekeeping standards generally maintained. Schedule board compliance needs improvement on upper floors.',
@@ -229,13 +231,22 @@ const DEFAULT_AUDIT_REPORTS = [
 ]
 
 export const saveAuditReports = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
+}
+
+const belongsToQualityStream = (item) => {
+    const stream = String(item?.auditStream || item?.stream || '').trim().toUpperCase()
+    if (stream === 'PROCESS') return false
+    if (stream === 'QUALITY') return true
+    const blob = [item?.id, item?.auditNumber, item?.observationId].join(' ')
+    if (/\b(OBS|AUD|ATR|SCH|RCA)-PA\b/.test(blob)) return false
+    return true
 }
 
 export const getAuditReports = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+        if (Array.isArray(stored)) return stored.filter(belongsToQualityStream)
     } catch {
         /* ignore */
     }
@@ -245,3 +256,6 @@ export const getAuditReports = () => {
 
 export const getAuditReportById = (id) =>
     getAuditReports().find((item) => item.id === id || item.auditNumber === id) ?? null
+
+export const hydrateFromApi = (seed = DEFAULT_AUDIT_REPORTS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

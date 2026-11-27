@@ -1,3 +1,6 @@
+import { getInventoryItems, hydrateInventoryItemsFromApi } from '../Inventory/inventoryData'
+import { getHousekeepingTasks, hydrateHousekeepingTasksFromApi } from '../TaskManagement/taskData'
+
 export const REPORT_TYPES = [
     'Task Completion Report',
     'Supply Usage Report',
@@ -5,33 +8,73 @@ export const REPORT_TYPES = [
     'Low Stock Report',
 ]
 
-export const TASK_COMPLETION_REPORT = [
-    { task: 'Classroom Block A — Deep Clean', assignedTo: 'Ramesh Kumar', zone: 'Block A', completed: 'Yes', date: '10-06-2026' },
-    { task: 'Restroom Sanitization — Floor 2', assignedTo: 'Sunita Devi', zone: 'Admin Block', completed: 'Yes', date: '10-06-2026' },
-    { task: 'Corridor Mopping — Science Wing', assignedTo: 'Vijay Singh', zone: 'Science Wing', completed: 'No', date: '10-06-2026' },
-    { task: 'Playground Litter Pickup', assignedTo: 'Anita Sharma', zone: 'Playground', completed: 'Yes', date: '09-06-2026' },
-    { task: 'Staff Room Cleaning', assignedTo: 'Mohit Patel', zone: 'Admin Block', completed: 'No', date: '09-06-2026' },
-]
+const periodLabel = () => new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 
-export const SUPPLY_USAGE_REPORT = [
-    { item: 'Floor Cleaner — Lemon (5L)', quantityUsed: 8, zone: 'Block A', period: 'June 2026' },
-    { item: 'Disinfectant Spray (500ml)', quantityUsed: 24, zone: 'All Restrooms', period: 'June 2026' },
-    { item: 'Garbage Bags — Large', quantityUsed: 15, zone: 'Campus Wide', period: 'June 2026' },
-    { item: 'Toilet Bowl Cleaner (1L)', quantityUsed: 12, zone: 'Block B & C', period: 'June 2026' },
-    { item: 'Mop Head — Cotton', quantityUsed: 6, zone: 'Corridors', period: 'June 2026' },
-]
+const taskZone = (task) => {
+    const title = String(task.title || '')
+    const parts = title.split('—')
+    return (parts[1] || parts[0] || 'Campus').trim()
+}
 
-export const ZONE_CLEANING_REPORT = [
-    { zone: 'Block A — Classrooms', lastCleaned: '10-06-2026', status: 'Completed', staff: 'Ramesh Kumar' },
-    { zone: 'Block B — Classrooms', lastCleaned: '10-06-2026', status: 'In Progress', staff: 'Sunita Devi' },
-    { zone: 'Admin Block — Restrooms', lastCleaned: '10-06-2026', status: 'Completed', staff: 'Vijay Singh' },
-    { zone: 'Science Wing — Labs', lastCleaned: '09-06-2026', status: 'Completed', staff: 'Anita Sharma' },
-    { zone: 'Playground', lastCleaned: '09-06-2026', status: 'Pending', staff: 'Mohit Patel' },
-]
+const isLowOrOut = (item) => {
+    if (item.status === 'Low Stock' || item.status === 'Out of Stock') return true
+    const qty = Number(item.availableQuantity)
+    const reorder = Number(item.reorderLevel)
+    return Number.isFinite(qty) && Number.isFinite(reorder) && qty <= reorder
+}
 
-export const LOW_STOCK_REPORT = [
-    { item: 'Garbage Bags — Large (Roll of 50)', currentQty: 8, reorderLevel: 20 },
-    { item: 'Disinfectant Spray (500ml)', currentQty: 4, reorderLevel: 12 },
-    { item: 'Mop Head — Cotton (Standard)', currentQty: 0, reorderLevel: 10 },
-    { item: 'Floor Cleaner — Lemon (5L)', currentQty: 6, reorderLevel: 15 },
-]
+export function buildHousekeepingReports() {
+    const items = getInventoryItems()
+    const tasks = getHousekeepingTasks()
+    const period = periodLabel()
+
+    const taskCompletion = tasks.map((task) => ({
+        task: task.title,
+        assignedTo: task.assignedTo || '—',
+        zone: taskZone(task),
+        completed: task.status === 'Completed' ? 'Yes' : 'No',
+        date: task.dueDate || task.assignedDate || '',
+    }))
+
+    const supplyUsage = items.map((item) => ({
+        item: item.productName,
+        quantityUsed: Number(item.availableQuantity) || 0,
+        zone: item.category || 'Housekeeping',
+        period: item.lastPurchaseDate || item.purchaseDate || period,
+    }))
+
+    const zoneCleaning = tasks.map((task) => ({
+        zone: taskZone(task),
+        lastCleaned: task.dueDate || task.assignedDate || '',
+        status: task.status === 'In Complete' ? 'Pending' : task.status,
+        staff: task.assignedTo || '—',
+    }))
+
+    const lowStock = items.filter(isLowOrOut).map((item) => ({
+        item: item.productName,
+        currentQty: Number(item.availableQuantity) || 0,
+        reorderLevel: Number(item.reorderLevel) || 0,
+    }))
+
+    return {
+        taskCompletion,
+        supplyUsage,
+        zoneCleaning,
+        lowStock,
+    }
+}
+
+export async function hydrateHousekeepingReportsFromApi() {
+    await Promise.all([
+        hydrateInventoryItemsFromApi(),
+        hydrateHousekeepingTasksFromApi(),
+    ])
+    return buildHousekeepingReports()
+}
+
+const FALLBACK = buildHousekeepingReports()
+
+export const TASK_COMPLETION_REPORT = FALLBACK.taskCompletion
+export const SUPPLY_USAGE_REPORT = FALLBACK.supplyUsage
+export const ZONE_CLEANING_REPORT = FALLBACK.zoneCleaning
+export const LOW_STOCK_REPORT = FALLBACK.lowStock

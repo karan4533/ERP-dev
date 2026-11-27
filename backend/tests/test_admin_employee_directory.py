@@ -19,7 +19,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.main import app
-from app.models import AuditLog, HrEmployee
+from app.models import AuditLog, HrEmployee, Role, User
 
 ADMIN = (settings.admin_seed_email, settings.admin_seed_password)
 HR = (settings.hr_seed_email, settings.hr_seed_password)
@@ -227,3 +227,64 @@ def test_rbac_created_user_gets_no_hr_record_and_is_reachable_through_admin_user
     user = _rbac_user(client, admin, "dir.separate@qmis.edu")
     assert "dir.separate@qmis.edu" not in {row["email"] for row in _portal(client, admin)}
     assert user["id"] in {u["id"] for u in client.get(USERS, headers=admin).json()}
+
+
+# --- ASA-01: HR must not mint privileged portal roles ---------------------------------
+
+
+@pytest.mark.parametrize("privileged_role", ["Admin", "Super Admin", "HR", "Account Head", "Director", "Parent"])
+def test_admin_cannot_mint_privileged_logins_via_hr_staff(client, privileged_role):
+    """Campus Admin has hr.write but must not bypass creatable_roles_for through HR staffing."""
+    admin = _login(client, *ADMIN)
+    email = f"esc.{privileged_role.replace(' ', '').lower()}@qmis.edu"
+    response = client.post(
+        "/api/v1/hr/staff",
+        headers=admin,
+        json={
+            "role": privileged_role,
+            "email": email,
+            "name": "Escalation Attempt",
+            "department": "Office",
+            "designation": privileged_role,
+            "status": "Active",
+        },
+    )
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["code"] == "forbidden"
+    with SessionLocal() as db:
+        assert db.scalar(select(User).where(User.email == email)) is None
+
+
+def test_hr_cannot_mint_admin_via_portal_employees_put(client):
+    hr = _login(client, *HR)
+    email = "esc.hr.admin@qmis.edu"
+    response = client.put(
+        PORTAL,
+        headers=hr,
+        json=[
+            {
+                "id": "EMP-ESC-ADMIN",
+                "name": "Fake Admin",
+                "email": email,
+                "department": "Office",
+                "designation": "Administrator",
+                "role": "Admin",
+                "status": "Active",
+            }
+        ],
+    )
+    assert response.status_code == 403, response.text
+    with SessionLocal() as db:
+        assert db.scalar(select(User).where(User.email == email)) is None
+
+
+def test_hr_can_still_provision_teacher_logins(client):
+    """Regression: operational staff roles remain provisionable from HR."""
+    hr = _login(client, *HR)
+    created = _hr_staff(client, hr, "esc.teacher.ok@qmis.edu")
+    assert created["id"]
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == "esc.teacher.ok@qmis.edu"))
+        assert user is not None
+        role = db.get(Role, user.role_id)
+        assert role is not None and role.code == "teacher"

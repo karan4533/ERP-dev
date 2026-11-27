@@ -8,6 +8,10 @@ import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 
+const EXPORT_ROWS = [
+    {student_name: 'Sandy Selva', route_name: 'Route 1 – Main Road', start_location: 'Kochadai', end_location: 'South Gate', class: 'Class 5th', vehicle_number: 'TN55 AB 1234', support_staff: 'Ramesh Kumar', created_date: '20-10-2025'},
+]
+
 const AssignedRouteList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -173,7 +177,14 @@ const AssignedRouteList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='assigned-route-list'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
 

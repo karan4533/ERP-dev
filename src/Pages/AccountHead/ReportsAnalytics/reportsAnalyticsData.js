@@ -21,12 +21,10 @@ export const INCOME_EXPENDITURE_TREND = {
     expenditure: [14, 12, 16, 13, 17, 25],
 }
 
-export const REVENUE_BREAKDOWN = [
-    // Renamed from INCOME_MIX per client review
-
+export const INCOME_MIX = [
     { name: 'Tuition Fee', percent: 74.4, color: '#515DEF' },
     { name: 'Transport Fee', percent: 11.4, color: '#2196F3' },
-    { name: 'Café / Other', percent: 10.6, color: '#B4C4FF' },
+    { name: 'Canteen / Other', percent: 10.6, color: '#B4C4FF' },
     { name: 'Donations', percent: 3.6, color: '#D9D5C8' },
 ]
 
@@ -40,7 +38,7 @@ export const INCOME_REPORT_TILES = [
 export const INCOME_BREAKDOWN = [
     { category: 'Tuition Fee', amount: '₹1,86,00,000', percent: '74.4%', vsLastTerm: '↑ 5.1%', trend: 'up' },
     { category: 'Transport Fee', amount: '₹28,40,000', percent: '11.4%', vsLastTerm: '↑ 2.8%', trend: 'up' },
-    { category: 'Café / Other Income', amount: '₹26,60,000', percent: '10.6%', vsLastTerm: '↓ 1.2%', trend: 'down' },
+    { category: 'Canteen / Other Income', amount: '₹26,60,000', percent: '10.6%', vsLastTerm: '↓ 1.2%', trend: 'down' },
     { category: 'Donations & Grants', amount: '₹9,00,000', percent: '3.6%', vsLastTerm: '↑ 14.0%', trend: 'up' },
 ]
 
@@ -71,5 +69,3 @@ export const YEAR_ON_YEAR = [
     { label: 'Expenditure — 2024–25', amount: '₹2.19 Cr', value: 88, tone: 'out' },
     { label: 'Expenditure — 2025–26', amount: '₹2.30 Cr', value: 92, tone: 'out' },
 ]
-
-export const INCOME_MIX = REVENUE_BREAKDOWN

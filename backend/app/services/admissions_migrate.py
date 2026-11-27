@@ -32,6 +32,25 @@ _STUDENT_COLUMNS = (
 )
 
 
+def _widen_varchar(connection, table: str, column: str, length: int) -> None:
+    """Widen a VARCHAR column when the live DB still has a shorter length (Postgres)."""
+    if connection.dialect.name != "postgresql":
+        return
+    meta = next(
+        (c for c in inspect(connection).get_columns(table) if c["name"] == column),
+        None,
+    )
+    if not meta:
+        return
+    col_type = meta.get("type")
+    current = getattr(col_type, "length", None)
+    if current is not None and current >= length:
+        return
+    connection.execute(
+        text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({length})")
+    )
+
+
 def ensure_admissions_schema() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -40,6 +59,9 @@ def ensure_admissions_schema() -> None:
 
     present = {column["name"] for column in inspector.get_columns("admission_enquiries")}
     with engine.begin() as connection:
+        if "admissions" in tables:
+            _widen_varchar(connection, "admissions", "zip_code", 40)
+            _widen_varchar(connection, "admissions", "parent_zip_code", 40)
         for name, column_type in _ENQUIRY_COLUMNS:
             if name not in present:
                 connection.execute(text(f"ALTER TABLE admission_enquiries ADD COLUMN {name} {column_type}"))

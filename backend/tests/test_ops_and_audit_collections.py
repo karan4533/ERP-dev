@@ -83,6 +83,126 @@ def test_biometric_teacher_can_write(client):
     assert get.json()[0]["id"] == "BIO-1001"
 
 
+def test_star_of_month_matrix_records_are_saved_one_class_at_a_time(client):
+    teacher = _login(client, TEACHER[0], TEACHER[1])
+    coordinator = _login(client, "coordinator@qmis.edu", "coord123")
+    grade7 = {"context": {"month": "October", "year": "2026", "grade": "Grade 7", "section": "A"},
+              "ratings": [{"studentId": "S1", "subId": "sub-attendance", "rating": "3"}]}
+    grade8 = {"context": {"month": "October", "year": "2026", "grade": "Grade 8", "section": "B"},
+              "ratings": [{"studentId": "S9", "subId": "sub-homework", "rating": "2"}]}
+    first = client.put("/api/v1/ops/som-matrix/items/2026|October|Grade 7|A", json=grade7, headers=teacher)
+    assert first.status_code == 200, first.text
+    second = client.put("/api/v1/ops/som-matrix/items/2026|October|Grade 8|B", json=grade8, headers=coordinator)
+    assert second.status_code == 200, second.text
+
+    # saving one class again replaces only that class
+    updated = {**grade7, "ratings": [{"studentId": "S1", "subId": "sub-attendance", "rating": "2"}]}
+    assert client.put("/api/v1/ops/som-matrix/items/2026|October|Grade 7|A", json=updated,
+                      headers=teacher).status_code == 200
+    rows = {row["id"]: row for row in client.get("/api/v1/ops/som-matrix", headers=teacher).json()}
+    assert rows["2026|October|Grade 7|A"]["ratings"][0]["rating"] == "2"
+    assert rows["2026|October|Grade 8|B"]["ratings"][0]["rating"] == "2"
+
+    assert client.put("/api/v1/ops/som-config/items/checklist", json={"categories": [{"id": "c1"}]},
+                      headers=coordinator).status_code == 200
+    # whole-list collections cannot be saved item by item
+    assert client.put("/api/v1/ops/library-books/items/LBK-1", json={"title": "x"},
+                      headers=_admin_headers(client)).status_code == 400
+    # parents/students neither read nor write matrix ratings
+    parent = _login(client, "parent@qmis.edu", "parent123")
+    assert client.get("/api/v1/ops/som-matrix", headers=parent).status_code == 403
+    assert client.put("/api/v1/ops/som-matrix/items/x", json=grade7, headers=parent).status_code == 403
+
+
+def test_star_of_month_rejects_half_star_and_duplicate_cells(client):
+    teacher = _login(client, TEACHER[0], TEACHER[1])
+    bad_rating = {
+        "context": {"month": "October", "year": "2026", "grade": "Grade 7", "section": "A"},
+        "ratings": [{"studentId": "S1", "subId": "sub-attendance", "rating": "2.5"}],
+    }
+    rejected = client.put(
+        "/api/v1/ops/som-matrix/items/2026|October|Grade 7|A",
+        json=bad_rating,
+        headers=teacher,
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert "invalid_rating" in rejected.text or "2.5" in rejected.text
+
+    dup = {
+        "context": {"month": "October", "year": "2026", "grade": "Grade 7", "section": "A"},
+        "ratings": [
+            {"studentId": "S1", "subId": "sub-attendance", "rating": "3"},
+            {"studentId": "S1", "subId": "sub-attendance", "rating": "2"},
+        ],
+    }
+    dup_resp = client.put(
+        "/api/v1/ops/som-matrix/items/2026|October|Grade 7|A",
+        json=dup,
+        headers=teacher,
+    )
+    assert dup_resp.status_code == 422, dup_resp.text
+
+    ok = {
+        "context": {"month": "October", "year": "2026", "grade": "Grade 7", "section": "A"},
+        "ratings": [{"studentId": "S1", "subId": "sub-attendance", "rating": "1"}],
+        "meta": {
+            "documents": [
+                {"fileId": "11111111-1111-1111-1111-111111111111", "name": "evidence.pdf"},
+            ],
+        },
+    }
+    saved = client.put(
+        "/api/v1/ops/som-matrix/items/2026|October|Grade 7|A",
+        json=ok,
+        headers=teacher,
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["ratings"][0]["rating"] == "1"
+    assert saved.json()["meta"]["documents"][0]["name"] == "evidence.pdf"
+
+
+def test_star_of_month_individual_ratings_reject_half_stars(client):
+    teacher = _login(client, TEACHER[0], TEACHER[1])
+    bad = client.put(
+        "/api/v1/academics/student-star-ratings",
+        headers=teacher,
+        json=[{"id": "SSR-BAD", "studentId": "S1", "month": "October 2026", "rating": 2.5}],
+    )
+    assert bad.status_code == 422, bad.text
+    assert "invalid_rating" in bad.text
+
+    ok = client.put(
+        "/api/v1/academics/student-star-ratings",
+        headers=teacher,
+        json=[{"id": "SSR-OK", "studentId": "S1", "month": "October 2026", "rating": 3}],
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()[0]["rating"] == 3
+
+
+def test_teacher_can_upload_and_download_som_attachment(client):
+    teacher = _login(client, TEACHER[0], TEACHER[1])
+    denied = client.post(
+        "/api/v1/files",
+        headers=teacher,
+        data={"resource_type": "attachment"},
+        files={"file": ("note.pdf", b"%PDF-1.4 test", "application/pdf")},
+    )
+    assert denied.status_code == 403, denied.text
+
+    uploaded = client.post(
+        "/api/v1/files",
+        headers=teacher,
+        data={"resource_type": "som-matrix-doc", "resource_id": "2026|October|Grade 7|A"},
+        files={"file": ("evidence.pdf", b"%PDF-1.4 som-evidence", "application/pdf")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    file_id = uploaded.json()["id"]
+    download = client.get(f"/api/v1/files/{file_id}/download", headers=teacher)
+    assert download.status_code == 200, download.text
+    assert download.content.startswith(b"%PDF-1.4")
+
+
 def test_campus_audit_replace_and_list(client):
     headers = _admin_headers(client)
     payload = [{"id": "ATM-1", "name": "Safety Walkthrough", "status": "Published"}]

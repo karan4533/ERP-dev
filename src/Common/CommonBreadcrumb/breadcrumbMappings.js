@@ -1,5 +1,6 @@
 import { getPageTitle } from '../CommonHeader/Components/TitleMappings'
 import { ROLE_HOME_PATHS, ROLES } from '../../context/AuthContext'
+import { isPathUnder } from '../../utils/pathPrefix'
 import {
     adminSidebarLinks,
     superAdminSidebarLinks,
@@ -8,6 +9,7 @@ import {
     teacherSidebarLinks,
     librarianSidebarLinks,
     prmSidebarLinks,
+    proSidebarLinks,
     gateKeeperSidebarLinks,
     gateKeeperManagerSidebarLinks,
     directorSidebarLinks,
@@ -21,6 +23,8 @@ const ROLE_ROUTE_CONFIG = [
     { prefix: '/gatekeeper-manager', role: ROLES.GATEKEEPER_MANAGER, links: gateKeeperManagerSidebarLinks },
     { prefix: '/gate-keeper', role: ROLES.GATEKEEPER, links: gateKeeperSidebarLinks },
     { prefix: '/front-office', role: ROLES.PRM, links: prmSidebarLinks },
+    // Exact `/pro` segment only — do not use a bare startsWith that matches `/process-auditor`.
+    { prefix: '/pro', role: ROLES.PRO, links: proSidebarLinks },
     { prefix: '/teacher', role: ROLES.TEACHER, links: teacherSidebarLinks },
     { prefix: '/student', role: ROLES.STUDENT, links: studentSidebarLinks },
     { prefix: '/librarian', role: ROLES.LIBRARIAN, links: librarianSidebarLinks },
@@ -86,7 +90,8 @@ const scoreLeafMatch = (pathname, leafTo) => {
 }
 
 export const getRoleConfigForPath = (pathname) => {
-    const match = ROLE_ROUTE_CONFIG.find((config) => pathname.startsWith(config.prefix))
+    // Segment-aware: `/pro` must not match `/process-auditor`.
+    const match = ROLE_ROUTE_CONFIG.find((config) => isPathUnder(pathname, config.prefix))
     if (match) {
         return {
             ...match,
@@ -95,7 +100,7 @@ export const getRoleConfigForPath = (pathname) => {
     }
 
     // Admin also owns legacy `/dashboard`
-    if (pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')) {
+    if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
         return {
             prefix: '/admin',
             role: ROLES.ADMIN,

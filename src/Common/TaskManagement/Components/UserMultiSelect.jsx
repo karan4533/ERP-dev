@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect } from 'react'
 import { getUsersByRole } from '../taskManagementConfig'
 
-const UserMultiSelect = ({ roleKey, selectedUserIds, onChange, disabled = false }) => {
-    const users = useMemo(() => getUsersByRole(roleKey), [roleKey])
+/**
+ * `users` / `loading` / `error` come from useAssignableUsers (API mode). When `users` is not passed the
+ * component falls back to the built-in demo list for the role, exactly as before.
+ */
+const UserMultiSelect = ({ roleKey, selectedUserIds, onChange, disabled = false, users: usersProp, loading = false, error = '' }) => {
+    const users = usersProp ?? getUsersByRole(roleKey)
     const allSelected = users.length > 0 && users.every((user) => selectedUserIds.includes(user.id))
 
     useEffect(() => {
@@ -25,20 +29,22 @@ const UserMultiSelect = ({ roleKey, selectedUserIds, onChange, disabled = false 
         onChange(allSelected ? [] : users.map((user) => user.id))
     }
 
+    const emptyBox = 'text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-3 bg-[#F9FAFB]'
+
     if (!roleKey) {
-        return (
-            <div className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-3 bg-[#F9FAFB]'>
-                Select a role to choose users
-            </div>
-        )
+        return <div className={emptyBox}>Select a role to choose users</div>
+    }
+
+    if (loading) {
+        return <div className={emptyBox}>Loading users…</div>
+    }
+
+    if (error) {
+        return <div className='text-sm text-[#B42318] border border-[#FDA29B] rounded-md px-3 py-3 bg-[#FEF3F2]' role='alert'>{error}</div>
     }
 
     if (!users.length) {
-        return (
-            <div className='text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-3 bg-[#F9FAFB]'>
-                No users available for this role
-            </div>
-        )
+        return <div className={emptyBox}>No users available for this role</div>
     }
 
     return (
@@ -66,7 +72,7 @@ const UserMultiSelect = ({ roleKey, selectedUserIds, onChange, disabled = false 
                             className='size-4 accent-[#515DEF] cursor-pointer'
                         />
                         <span className='text-sm text-[#1E1E1E]'>{user.name}</span>
-                        <span className='text-xs text-[#808080]'>({user.id})</span>
+                        <span className='text-xs text-[#808080]'>({user.hint ?? user.id})</span>
                     </label>
                 ))}
             </div>

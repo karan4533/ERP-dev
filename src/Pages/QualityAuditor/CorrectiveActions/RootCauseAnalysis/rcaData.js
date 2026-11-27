@@ -1,5 +1,6 @@
 import { DEPARTMENTS, PRIORITIES, priorityBadgeColor } from '../../Observations/observationsData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, PRIORITIES, priorityBadgeColor }
 
 export const RCA_STATUSES = [
@@ -118,9 +119,9 @@ const buildRca = ({
 
 const DEFAULT_RCA_RECORDS = [
     buildRca({
-        id: 'RCA-PA-2026-005',
-        observationId: 'OBS-PA-2026-014',
-        auditNumber: 'AUD-PA-2026-043',
+        id: 'RCA-QA-2026-005',
+        observationId: 'OBS-QA-2026-014',
+        auditNumber: 'AUD-QA-2026-043',
         auditName: 'Canteen Hygiene Audit — June 2026',
         department: 'Canteen',
         section: 'Food Storage & Safety',
@@ -157,9 +158,9 @@ const DEFAULT_RCA_RECORDS = [
         },
     }),
     buildRca({
-        id: 'RCA-PA-2026-004',
-        observationId: 'OBS-PA-2026-011',
-        auditNumber: 'AUD-PA-2026-038',
+        id: 'RCA-QA-2026-004',
+        observationId: 'OBS-QA-2026-011',
+        auditNumber: 'AUD-QA-2026-038',
         auditName: 'Transport Safety Audit — June 2026',
         department: 'Transport',
         section: 'Fleet Safety Equipment',
@@ -196,9 +197,9 @@ const DEFAULT_RCA_RECORDS = [
         },
     }),
     buildRca({
-        id: 'RCA-PA-2026-003',
-        observationId: 'OBS-PA-2026-013',
-        auditNumber: 'AUD-PA-2026-041',
+        id: 'RCA-QA-2026-003',
+        observationId: 'OBS-QA-2026-013',
+        auditNumber: 'AUD-QA-2026-041',
         auditName: 'Finance Controls Audit — June 2026',
         department: 'Finance',
         section: 'Petty Cash Management',
@@ -238,9 +239,9 @@ const DEFAULT_RCA_RECORDS = [
         },
     }),
     buildRca({
-        id: 'RCA-PA-2026-002',
-        observationId: 'OBS-PA-2026-012',
-        auditNumber: 'AUD-PA-2026-045',
+        id: 'RCA-QA-2026-002',
+        observationId: 'OBS-QA-2026-012',
+        auditNumber: 'AUD-QA-2026-045',
         auditName: 'Housekeeping Compliance Audit — June 2026',
         department: 'Housekeeping',
         section: 'Corridor Maintenance',
@@ -277,9 +278,9 @@ const DEFAULT_RCA_RECORDS = [
         },
     }),
     buildRca({
-        id: 'RCA-PA-2026-001',
-        observationId: 'OBS-PA-2026-009',
-        auditNumber: 'AUD-PA-2026-039',
+        id: 'RCA-QA-2026-001',
+        observationId: 'OBS-QA-2026-009',
+        auditNumber: 'AUD-QA-2026-039',
         auditName: 'IT Infrastructure Audit — June 2026',
         department: 'IT Support',
         section: 'Backup & Recovery',
@@ -318,13 +319,13 @@ const DEFAULT_RCA_RECORDS = [
 ]
 
 export const saveRcaRecords = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
 }
 
 export const getRcaRecords = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+    if (stored) return stored
     } catch {
         /* ignore */
     }
@@ -337,3 +338,6 @@ export const getRcaById = (id) =>
 
 export const getRcaByObservationId = (observationId) =>
     getRcaRecords().find((item) => item.observationId === observationId) ?? null
+
+export const hydrateFromApi = (seed = DEFAULT_RCA_RECORDS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

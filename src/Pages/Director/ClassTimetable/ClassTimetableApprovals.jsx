@@ -1,47 +1,100 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
+import { toast } from 'react-toastify'
 import { Calendar, ChevronRight, Download, Eye } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import ClassTimeTableModal from './Components/ClassTimeTableModal'
+import ClassTimeTableModal from '../../Principal/ClassTimetable/Components/ClassTimeTableModal'
 import DenyTimetableModal from '../Components/DenyTimetableModal'
+import { APPROVAL_STATUSES } from '../timetableApprovalsData'
 import {
-    APPROVAL_STATUSES,
-    CLASS_TIMETABLE_APPROVALS,
+    CLASS_TIMETABLES_UPDATED_EVENT,
     approvalStatusColor,
-} from '../timetableApprovalsData'
+    decideClassTimetableApproval,
+    getClassSectionLabel,
+    getClassTimetables,
+    hydrateClassTimetablesFromApi,
+} from '../../Principal/ClassTimetable/classTimetableData'
+
+// Submitted dates are saved as DD-MM-YYYY; API rows may carry ISO dates.
+const parseSubmittedDate = (value) => {
+    const text = String(value || '').trim()
+    const dmy = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+    if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]))
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+    return null
+}
+
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+const mapRecordToApprovalRow = (record) => ({
+    id: record.id,
+    classSection: getClassSectionLabel(record),
+    academicYear: record.academicYear || '—',
+    submittedBy: [record.ownerTeacherName, record.createdByRole].filter(Boolean).join(' · ') || '—',
+    submittedDate: record.submittedDate || '—',
+    approvalStatus: record.approvalStatus || 'Pending',
+    rejectionReason: record.rejectionReason || '',
+    record,
+})
 
 const ClassTimetableApprovals = () => {
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const navigate = useNavigate()
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
-    const [timeTableModal, setTimeTableModal] = useState(false)
-    const [modalTitle, setModalTitle] = useState('Class Timetable')
+    const [selectedRecord, setSelectedRecord] = useState(null)
     const [denyModal, setDenyModal] = useState(false)
     const [selectedEntry, setSelectedEntry] = useState(null)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [approvals, setApprovals] = useState(() => [...CLASS_TIMETABLE_APPROVALS])
+    const [approvals, setApprovals] = useState([])
+    const [loading, setLoading] = useState(true)
+
+    const refresh = () => {
+        setApprovals(getClassTimetables().map(mapRecordToApprovalRow))
+    }
+
+    useEffect(() => {
+        setLoading(true)
+        hydrateClassTimetablesFromApi()
+            .finally(() => {
+                refresh()
+                setLoading(false)
+            })
+        window.addEventListener(CLASS_TIMETABLES_UPDATED_EVENT, refresh)
+        return () => window.removeEventListener(CLASS_TIMETABLES_UPDATED_EVENT, refresh)
+    }, [])
 
     const filteredApprovals = useMemo(() => {
         const query = search.trim().toLowerCase()
+        const from = fromDate ? startOfDay(fromDate) : null
+        const to = toDate ? startOfDay(toDate) : null
         return approvals.filter((item) => {
             const matchesStatus = !statusFilter || item.approvalStatus === statusFilter
             const matchesSearch = !query
                 || item.id.toLowerCase().includes(query)
                 || item.classSection.toLowerCase().includes(query)
-            return matchesStatus && matchesSearch
+                || String(item.submittedBy).toLowerCase().includes(query)
+            if (!matchesStatus || !matchesSearch) return false
+            if (!from && !to) return true
+            const submitted = parseSubmittedDate(item.submittedDate)
+            if (!submitted) return false
+            return (!from || submitted >= from) && (!to || submitted <= to)
         })
-    }, [approvals, search, statusFilter])
+    }, [approvals, search, statusFilter, fromDate, toDate])
 
-    const handleApprove = (id) => {
-        setApprovals((prev) =>
-            prev.map((item) =>
-                item.id === id
-                    ? { ...item, approvalStatus: 'Approved', rejectionReason: '' }
-                    : item,
-            ),
-        )
+    const handleApprove = async (id) => {
+        const result = await decideClassTimetableApproval(id, 'Approved', 'Director')
+        if (!result.success) {
+            toast.error((result.errors && result.errors[0]) || 'Could not approve this timetable.')
+            refresh()
+            return
+        }
+        refresh()
+        toast.success('Class timetable approved.')
     }
 
     const openDenyModal = (entry) => {
@@ -49,15 +102,15 @@ const ClassTimetableApprovals = () => {
         setDenyModal(true)
     }
 
-    const handleDenyConfirm = (reason) => {
+    const handleDenyConfirm = async (reason) => {
         if (!selectedEntry) return
-        setApprovals((prev) =>
-            prev.map((item) =>
-                item.id === selectedEntry.id
-                    ? { ...item, approvalStatus: 'Denied', rejectionReason: reason }
-                    : item,
-            ),
-        )
+        const result = await decideClassTimetableApproval(selectedEntry.id, 'Denied', 'Director', reason)
+        if (!result.success) {
+            toast.error((result.errors && result.errors[0]) || 'Could not deny this timetable.')
+        } else {
+            toast.success('Class timetable denied.')
+            refresh()
+        }
         setDenyModal(false)
         setSelectedEntry(null)
     }
@@ -65,11 +118,8 @@ const ClassTimetableApprovals = () => {
     const clearFilters = () => {
         setSearch('')
         setStatusFilter('')
-    }
-
-    const openTimetableModal = (entry) => {
-        setModalTitle(entry.modalTitle)
-        setTimeTableModal(true)
+        setFromDate(null)
+        setToDate(null)
     }
 
     return (
@@ -84,7 +134,7 @@ const ClassTimetableApprovals = () => {
                         Clear Filters
                     </button>
                     <p className='text-sm text-[#667085]'>
-                        Class timetables submitted by the Principal for Director approval.
+                        Principal or Director can approve, deny, or edit class timetables. Edits return the timetable to Pending.
                     </p>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
@@ -114,7 +164,7 @@ const ClassTimetableApprovals = () => {
                         </select>
                     </div>
                     <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>From</label>
+                        <label className='text-base font-medium text-[#808080]'>Submitted from</label>
                         <div className='relative w-full'>
                             <DatePicker
                                 selected={fromDate}
@@ -128,7 +178,7 @@ const ClassTimetableApprovals = () => {
                         </div>
                     </div>
                     <div className='flex flex-col gap-y-2'>
-                        <label className='text-base font-medium text-[#808080]'>To</label>
+                        <label className='text-base font-medium text-[#808080]'>Submitted to</label>
                         <div className='relative'>
                             <DatePicker
                                 selected={toDate}
@@ -172,7 +222,13 @@ const ClassTimetableApprovals = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredApprovals.length === 0 ? (
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
+                                        Loading class timetables…
+                                    </td>
+                                </tr>
+                            ) : filteredApprovals.length === 0 ? (
                                 <tr>
                                     <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>
                                         No class timetable approvals found.
@@ -199,7 +255,7 @@ const ClassTimetableApprovals = () => {
                                         <td className='px-2 py-4'>
                                             <button
                                                 type='button'
-                                                onClick={() => openTimetableModal(entry)}
+                                                onClick={() => setSelectedRecord(entry.record)}
                                                 className='bg-[#515DEF] text-white text-sm px-2 py-1.5 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
                                             >
                                                 <Eye size={16} />
@@ -223,9 +279,22 @@ const ClassTimetableApprovals = () => {
                                                     >
                                                         Deny
                                                     </button>
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => navigate(`/director/edit-class-timetable/${entry.id}`)}
+                                                        className='bg-[#515DEF] text-white text-xs px-3 py-1.5 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer'
+                                                    >
+                                                        Edit
+                                                    </button>
                                                 </div>
                                             ) : (
-                                                <span className='text-xs text-[#808080]'>—</span>
+                                                <button
+                                                    type='button'
+                                                    onClick={() => navigate(`/director/edit-class-timetable/${entry.id}`)}
+                                                    className='bg-[#515DEF] text-white text-xs px-3 py-1.5 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer'
+                                                >
+                                                    Edit
+                                                </button>
                                             )}
                                         </td>
                                     </tr>
@@ -250,11 +319,21 @@ const ClassTimetableApprovals = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='class-timetable-approvals'
+                rows={filteredApprovals.map((r) => ({
+                    id: r.id,
+                    classSection: r.classSection,
+                    academicYear: r.academicYear,
+                    approvalStatus: r.approvalStatus,
+                }))}
+            />
             <ClassTimeTableModal
-                open={timeTableModal}
-                onClose={() => setTimeTableModal(false)}
-                title={modalTitle}
+                open={Boolean(selectedRecord)}
+                onClose={() => setSelectedRecord(null)}
+                record={selectedRecord}
             />
             <DenyTimetableModal
                 open={denyModal}

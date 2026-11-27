@@ -8,6 +8,26 @@ New days go at the top. Older days stay below so the history is in one file.
 
 ---
 
+## 27 November 2026 — Connect the frontend to the full QMIS backend API (PostgreSQL `qmis_erp_staging`)
+
+### Done
+- Backend: `backend/` now matches `Heuristic-Labs/QMIS` `main` (c8a7db3). `backend/.env` points at the local pgAdmin database `qmis_erp_staging`, Alembic is at 0030, and the API runs on :8000 (`/health` ok)
+- Frontend: all of `src/` (services, stores, pages, routes, layouts) is aligned to the QMIS API-wired versions. Every service client and the `VITE_USE_API_*` flags are on, and `.env` already turns on API auth, so the screens read and write through the API into PostgreSQL
+- Super Admin pages (admin users, gate pass, live dashboard, activity logs) are taken from the QMIS versions. Their live behaviour is not yet click-tested
+- Merge method: a three-way merge (253 files merged cleanly, 115 new files added). Conflicting files and the 19 files added on both sides took the QMIS version, as agreed. A third pass aligned the remaining files to QMIS where merged helpers no longer matched, so the app is consistent
+- Added the `xlsx` dependency that QMIS pages need
+- Windows case clash: `Common/Approvals` and `Common/approvals` both exist in git. The two `ApprovalHistory` imports now use an explicit `.jsx`
+- Vite build passes. Backend suite: 1043 passed, 1 failed, 38 skipped (details in the testing report)
+
+### Still open
+- Pages that were replaced by the QMIS version no longer have the irul-only layout and wording. The pre-merge copy of `src` is kept in `C:\karan\irul_backup_src_20261127`
+- The irul-only enterprise additions (task workspace, library workspace, central activities, mark-entry tier view, role navigation registries) import functions the QMIS data modules do not have, so they are not wired in. Their route files are not reached by the app
+- 71 of 283 frontend `npm test` tests fail. They assert the irul-only UI that was replaced (responsive/"honest integration" markup, enterprise task and library modules). They need a decision: delete or rewrite them
+- `test_staff_reconciliation.py::test_excel_122_body...` fails because the client Excel files under `docs/` are not in this checkout
+- Not yet done: a click-through of each role's screens against live data, and a database persistence check per role
+
+---
+
 ## 26 November 2026 — Finance Wave A7–A10 + integration with partner new-UI main
 
 ### A7–A10 done (staging)

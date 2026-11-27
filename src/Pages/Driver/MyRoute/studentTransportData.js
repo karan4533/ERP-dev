@@ -1,6 +1,13 @@
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+import {
+    getStudentTransports as getCampusStudentTransports,
+    hydrateStudentTransportsFromApi,
+} from '../../TransportManager/StudentTransport/studentTransportData'
+
 export const TRANSPORT_STATUSES = ['Active', 'Inactive', 'Suspended']
 
-export const STUDENT_TRANSPORTS = [
+const DEMO_STUDENT_TRANSPORTS = [
     {
         id: 'STU-001',
         studentId: 'STU001',
@@ -87,8 +94,39 @@ export const STUDENT_TRANSPORTS = [
     },
 ]
 
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+const mapCampusRow = (row) => ({
+    id: row.id,
+    studentId: row.studentId || row.id,
+    studentName: row.studentName || '',
+    classSection: row.classSection || '',
+    admissionNumber: row.admissionNumber || '',
+    routeName: row.routeName || '',
+    startLocation: row.startLocation || '',
+    endLocation: row.endLocation || '',
+    parentContact: row.parentContact || '',
+    transportPass: row.supportStaff || row.transportPass || row.driverName || '',
+    status: row.status || 'Active',
+    enrolledDate: row.createdDate || row.enrolledDate || '',
+})
+
+export function getDriverStudentTransports() {
+    if (apiCatalogMode()) {
+        return getCampusStudentTransports().map(mapCampusRow)
+    }
+    return DEMO_STUDENT_TRANSPORTS.map((row) => ({ ...row }))
+}
+
+export function hydrateDriverStudentTransportsFromApi() {
+    return hydrateStudentTransportsFromApi()
+}
+
+/** Prefer getDriverStudentTransports() — empty/API-hydrated when auth is on. */
+export const STUDENT_TRANSPORTS = liveArray(getDriverStudentTransports)
+
 const parseEnrolledDate = (value) => {
-    const [day, month, year] = value.split('-').map(Number)
+    const [day, month, year] = String(value || '').split('-').map(Number)
     if (!day || !month || !year) return null
     return new Date(year, month - 1, day)
 }
@@ -108,7 +146,7 @@ export const filterStudentTransports = ({
         record.routeName,
         record.transportPass,
         record.parentContact,
-    ].some((field) => field.toLowerCase().includes(query))
+    ].some((field) => String(field || '').toLowerCase().includes(query))
 
     const matchesStatus = !status || record.status === status
 

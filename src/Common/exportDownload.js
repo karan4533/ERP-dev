@@ -1,10 +1,12 @@
 /**
- * Client-side table export helpers used by ExportModal / HrExport.
- * CSV is the native format; Excel uses UTF-8 BOM CSV (opens cleanly in Excel);
- * PDF opens a print-friendly HTML table (no extra dependency).
+ * Client-side table export helpers used by ExportModal.
+ * Excel is a real .xlsx (SheetJS, loaded on demand); PDF opens a print-friendly HTML table.
  */
 
 const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+
+const escapeHtml = (value) =>
+    String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 const normalizeRows = (rows, columns) => {
     const list = Array.isArray(rows) ? rows.filter((row) => row && typeof row === 'object') : []
@@ -26,6 +28,8 @@ const normalizeRows = (rows, columns) => {
     return { headers: labels, body }
 }
 
+const baseName = (filename) => String(filename || 'export').replace(/\.(csv|xlsx|xls|pdf)$/i, '')
+
 const triggerDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -37,6 +41,7 @@ const triggerDownload = (blob, filename) => {
     URL.revokeObjectURL(url)
 }
 
+/** Kept for the HR CSV helper re-export; ExportModal offers Excel and PDF only. */
 export const downloadTableCsv = (filename, rows, columns) => {
     const { headers, body } = normalizeRows(rows, columns)
     if (!headers.length) return false
@@ -45,42 +50,38 @@ export const downloadTableCsv = (filename, rows, columns) => {
         ...body.map((cells) => cells.map(escapeCsv).join(',')),
     ]
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' })
-    const base = String(filename || 'export').replace(/\.(csv|xlsx|xls|pdf)$/i, '')
-    triggerDownload(blob, `${base}.csv`)
+    triggerDownload(blob, `${baseName(filename)}.csv`)
     return true
 }
 
-/** Excel-compatible UTF-8 CSV (no XLSX dependency). */
-export const downloadTableExcel = (filename, rows, columns) => {
+export const downloadTableExcel = async (filename, rows, columns) => {
     const { headers, body } = normalizeRows(rows, columns)
     if (!headers.length) return false
-    const lines = [
-        headers.map(escapeCsv).join(','),
-        ...body.map((cells) => cells.map(escapeCsv).join(',')),
-    ]
-    const blob = new Blob([`\uFEFF${lines.join('\n')}`], {
-        type: 'application/vnd.ms-excel;charset=utf-8;',
+    const XLSX = await import('xlsx')
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...body])
+    const book = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(book, sheet, 'Export')
+    const bytes = XLSX.write(book, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([bytes], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
-    const base = String(filename || 'export').replace(/\.(csv|xlsx|xls|pdf)$/i, '')
-    triggerDownload(blob, `${base}.xls`)
+    triggerDownload(blob, `${baseName(filename)}.xlsx`)
     return true
 }
 
 export const openTablePdf = (title, rows, columns) => {
     const { headers, body } = normalizeRows(rows, columns)
     if (!headers.length) return false
-    const head = headers.map((h) => `<th>${String(h).replace(/</g, '&lt;')}</th>`).join('')
-    const trs = body
-        .map(
-            (cells) =>
-                `<tr>${cells.map((c) => `<td>${String(c).replace(/</g, '&lt;')}</td>`).join('')}</tr>`,
-        )
-        .join('')
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${String(title || 'Export').replace(/</g, '&lt;')}</title>
+    const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')
+    const trs = body.map((cells) => `<tr>${cells.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')
+    const safeTitle = escapeHtml(title || 'Export')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
 <style>body{font-family:Arial,sans-serif;padding:24px;color:#1e1e1e}h1{font-size:18px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5}</style>
-</head><body><h1>${String(title || 'Export').replace(/</g, '&lt;')}</h1><table><thead><tr>${head}</tr></thead><tbody>${trs}</tbody></table></body></html>`
-    const frame = window.open('', '_blank', 'noopener,noreferrer,width=960,height=720')
+</head><body><h1>${safeTitle}</h1><table><thead><tr>${head}</tr></thead><tbody>${trs}</tbody></table></body></html>`
+    // 'noopener' makes window.open return null, so the window could never be written to.
+    const frame = window.open('', '_blank', 'width=960,height=720')
     if (!frame) return false
+    frame.opener = null
     frame.document.write(html)
     frame.document.close()
     frame.focus()
@@ -88,13 +89,9 @@ export const openTablePdf = (title, rows, columns) => {
     return true
 }
 
-export const runTableExport = (format, { filename = 'export', rows = [], columns, title } = {}) => {
+export const runTableExport = async (format, { filename = 'export', rows = [], columns, title } = {}) => {
     if (!Array.isArray(rows) || rows.length === 0) return { ok: false, reason: 'empty' }
-    if (format === 'pdf') {
-        return { ok: openTablePdf(title || filename, rows, columns), reason: 'pdf' }
-    }
-    if (format === 'excel') {
-        return { ok: downloadTableExcel(filename, rows, columns), reason: 'excel' }
-    }
-    return { ok: downloadTableCsv(filename, rows, columns), reason: 'csv' }
+    if (format === 'pdf') return { ok: openTablePdf(title || filename, rows, columns), reason: 'pdf' }
+    if (format === 'excel') return { ok: await downloadTableExcel(filename, rows, columns), reason: 'excel' }
+    return { ok: false, reason: 'unsupported' }
 }

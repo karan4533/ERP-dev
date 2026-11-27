@@ -2,6 +2,14 @@ import { addDays } from 'date-fns'
 import { generateId, toDateKey } from '../../../../Common/MeetingsCalendar/utils/dateHelpers'
 import { DEPARTMENTS, FREQUENCIES, getMyAudits } from '../MyAudits/myAuditsData'
 
+import {
+    loadCampusJson,
+    saveCampusJson,
+    persistCampusJson,
+    hydrateCampusKey,
+    usesCampusApiForKey,
+    getCampusLoadState,
+} from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, FREQUENCIES }
 
 export const SCHEDULE_STATUSES = ['Scheduled', 'Pending', 'In Progress', 'Completed', 'Overdue']
@@ -15,6 +23,8 @@ export const statusBadgeColor = {
 }
 
 const STORAGE_KEY = 'quality-auditor-audit-schedule'
+export const SCHEDULE_STORAGE_KEY = STORAGE_KEY
+export const getAuditSchedulesLoadState = () => getCampusLoadState(STORAGE_KEY)
 
 export const parseDisplayDate = (value) => {
     const [day, month, year] = value.split('-').map(Number)
@@ -52,8 +62,8 @@ const buildSchedule = ({
 
 const DEFAULT_AUDIT_SCHEDULES = [
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-001',
-        auditId: 'AUD-PA-2026-041',
+        scheduleId: 'SCH-QA-2026-001',
+        auditId: 'AUD-QA-2026-041',
         auditName: 'Petty Cash & Voucher Compliance',
         department: 'Finance',
         frequency: 'Monthly',
@@ -66,8 +76,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 0,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-002',
-        auditId: 'AUD-PA-2026-042',
+        scheduleId: 'SCH-QA-2026-002',
+        auditId: 'AUD-QA-2026-042',
         auditName: 'Employee Onboarding Process',
         department: 'HR',
         frequency: 'Quarterly',
@@ -80,8 +90,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 1,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-003',
-        auditId: 'AUD-PA-2026-043',
+        scheduleId: 'SCH-QA-2026-003',
+        auditId: 'AUD-QA-2026-043',
         auditName: 'Food Safety & Kitchen Hygiene',
         department: 'Canteen',
         frequency: 'Monthly',
@@ -94,8 +104,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 2,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-004',
-        auditId: 'AUD-PA-2026-044',
+        scheduleId: 'SCH-QA-2026-004',
+        auditId: 'AUD-QA-2026-044',
         auditName: 'Inventory Control & Stock Reconciliation',
         department: 'Store',
         frequency: 'Quarterly',
@@ -108,8 +118,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 3,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-005',
-        auditId: 'AUD-PA-2026-038',
+        scheduleId: 'SCH-QA-2026-005',
+        auditId: 'AUD-QA-2026-038',
         auditName: 'Fleet Maintenance & Trip Logs',
         department: 'Transport',
         frequency: 'Monthly',
@@ -122,8 +132,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 4,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-006',
-        auditId: 'AUD-PA-2026-039',
+        scheduleId: 'SCH-QA-2026-006',
+        auditId: 'AUD-QA-2026-039',
         auditName: 'Data Backup & Access Control Policy',
         department: 'IT Support',
         frequency: 'Quarterly',
@@ -136,8 +146,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 0,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-007',
-        auditId: 'AUD-PA-2026-045',
+        scheduleId: 'SCH-QA-2026-007',
+        auditId: 'AUD-QA-2026-045',
         auditName: 'Classroom Safety & Housekeeping Standards',
         department: 'Housekeeping',
         frequency: 'Monthly',
@@ -150,8 +160,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 1,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-2026-008',
-        auditId: 'AUD-PA-2026-046',
+        scheduleId: 'SCH-QA-2026-008',
+        auditId: 'AUD-QA-2026-046',
         auditName: 'Examination Workflow Compliance',
         department: 'Academic',
         frequency: 'Ad-hoc',
@@ -164,8 +174,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 2,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-REC-WEEK',
-        auditId: 'AUD-PA-REC-WEEK',
+        scheduleId: 'SCH-QA-REC-WEEK',
+        auditId: 'AUD-QA-REC-WEEK',
         auditName: 'Weekly Gate Safety Walk',
         department: 'Security',
         frequency: 'WEEKLY',
@@ -176,8 +186,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
         colorIdx: 3,
     }),
     buildSchedule({
-        scheduleId: 'SCH-PA-REC-MONTH',
-        auditId: 'AUD-PA-REC-MONTH',
+        scheduleId: 'SCH-QA-REC-MONTH',
+        auditId: 'AUD-QA-REC-MONTH',
         auditName: 'Monthly Fee Register Audit',
         department: 'Finance',
         frequency: 'MONTHLY',
@@ -190,8 +200,8 @@ const DEFAULT_AUDIT_SCHEDULES = [
 ]
 
 const RECURRENCE_META = {
-    'SCH-PA-REC-WEEK': { isRecurring: true, recurrenceType: 'Weekly', dayOfWeek: 1, startDate: '01-09-2026', endDate: '', scheduleKind: 'Recurring' },
-    'SCH-PA-REC-MONTH': { isRecurring: true, recurrenceType: 'Monthly', dayOfMonth: 15, startDate: '01-06-2026', endDate: '', scheduleKind: 'Recurring' },
+    'SCH-QA-REC-WEEK': { isRecurring: true, recurrenceType: 'Weekly', dayOfWeek: 1, startDate: '01-09-2026', endDate: '', scheduleKind: 'Recurring' },
+    'SCH-QA-REC-MONTH': { isRecurring: true, recurrenceType: 'Monthly', dayOfMonth: 15, startDate: '01-06-2026', endDate: '', scheduleKind: 'Recurring' },
 }
 
 const auditIdByName = () =>
@@ -273,24 +283,37 @@ export const migrateSchedules = (records) => {
 }
 
 export const saveAuditSchedules = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
 }
 
-export const addAuditSchedule = (payload) => {
+/** Saves a new schedule; resolves `{ success, message?, record? }` only after the server confirms. */
+export const addAuditSchedule = async (payload) => {
+    const loadState = getCampusLoadState(STORAGE_KEY)
+    if (loadState.api && loadState.status !== 'loaded') {
+        return { success: false, message: loadState.error || 'Schedules have not loaded yet. Refresh and try again.' }
+    }
+    if (!String(payload?.auditName || '').trim()) return { success: false, message: 'Schedule name is required.' }
+    if (!payload?.startDate) return { success: false, message: 'Start date is required.' }
     const current = getAuditSchedules().filter((item) => !item.parentScheduleId)
-    const scheduleId = `SCH-PA-${Date.now()}`
+    const scheduleId = `SCH-QA-${Date.now()}`
     const record = buildSchedule({
         scheduleId,
-        auditId: payload.auditId || `AUD-${Date.now()}`,
+        auditId: payload.auditId || `AUD-QA-${Date.now()}`,
         auditName: payload.auditName,
         department: payload.department || 'Academic',
-        frequency: payload.recurrenceType === 'Weekly' ? 'WEEKLY' : payload.recurrenceType === 'Monthly' ? 'MONTHLY' : 'Ad-hoc',
+        frequency: !payload.isRecurring
+            ? 'Ad-hoc'
+            : payload.recurrenceType === 'Weekly'
+                ? 'WEEKLY'
+                : payload.recurrenceType === 'Monthly'
+                    ? 'MONTHLY'
+                    : (payload.recurrenceType || 'Ad-hoc'),
         assignedDate: payload.startDate,
         dueDate: payload.startDate,
-        assignedBy: payload.assignedBy || 'Process Audit Manager',
+        assignedBy: payload.assignedBy || 'Quality Auditor',
         status: 'Scheduled',
     })
-    const next = [...current, {
+    const saved = {
         ...record,
         isRecurring: payload.isRecurring,
         recurrenceType: payload.isRecurring ? payload.recurrenceType : '',
@@ -298,27 +321,58 @@ export const addAuditSchedule = (payload) => {
         dayOfMonth: payload.dayOfMonth,
         startDate: payload.startDate,
         endDate: payload.endDate || '',
-    }]
-    const materialized = materializeOccurrences(next)
-    saveAuditSchedules(materialized)
-    return materialized
+        componentId: payload.componentId || '',
+        componentName: payload.componentName || '',
+        rubric1: payload.rubric1 || '',
+        rubric2: payload.rubric2 || '',
+        rubric3: payload.rubric3 || '',
+        rubric4: payload.rubric4 || '',
+    }
+    const result = await persistCampusJson(STORAGE_KEY, materializeOccurrences([...current, saved]))
+    if (result?.success === false) return { success: false, message: result.message || 'Could not save the schedule.' }
+    return { success: true, record: saved }
+}
+
+const coerceScheduleRecords = (stored) => {
+    if (stored == null) return null
+    if (typeof stored === 'string') {
+        try {
+            const parsed = JSON.parse(stored)
+            return Array.isArray(parsed) ? parsed : null
+        } catch {
+            return null
+        }
+    }
+    return Array.isArray(stored) ? stored : null
 }
 
 export const getAuditSchedules = () => {
     let records = DEFAULT_AUDIT_SCHEDULES
+    let fromStore = false
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) records = JSON.parse(stored)
+        const stored = coerceScheduleRecords(loadCampusJson(STORAGE_KEY, null))
+        // Any array (including empty) is authoritative once hydrated / after a save.
+        if (Array.isArray(stored) && (usesCampusApiForKey(STORAGE_KEY) || stored.length)) {
+            records = stored
+            fromStore = true
+        }
     } catch {
         records = DEFAULT_AUDIT_SCHEDULES
     }
+    // Server mode: an unloaded or failed collection is not data — never show demo schedules.
+    if (usesCampusApiForKey(STORAGE_KEY) && !fromStore) return []
     records = migrateSchedules(records)
-    const ids = new Set(records.map((item) => item.scheduleId))
-    const missing = DEFAULT_AUDIT_SCHEDULES.filter((item) => !ids.has(item.scheduleId))
-    if (missing.length) records = [...records, ...missing]
-    records = migrateSchedules(records)
+    // Only backfill demo defaults when running purely offline — never overwrite API SoT.
+    if (!usesCampusApiForKey(STORAGE_KEY) && !fromStore) {
+        const ids = new Set(records.map((item) => item.scheduleId))
+        const missing = DEFAULT_AUDIT_SCHEDULES.filter((item) => !ids.has(item.scheduleId))
+        if (missing.length) records = [...records, ...missing]
+        records = migrateSchedules(records)
+    }
     const materialized = materializeOccurrences(records)
-    if (materialized.length !== records.length || missing.length) saveAuditSchedules(materialized)
+    if (!usesCampusApiForKey(STORAGE_KEY) && (materialized.length !== records.length || !fromStore)) {
+        saveAuditSchedules(materialized)
+    }
     return materialized
 }
 
@@ -337,12 +391,13 @@ export const buildSeedCalendarEvents = () => {
     const today = new Date()
     const todayKey = toDateKey(today)
     const events = schedulesToCalendarEvents(getAuditSchedules())
+    if (usesCampusApiForKey(STORAGE_KEY)) return events
 
     if (!events.some((event) => event.date === todayKey)) {
         events.unshift({
             id: generateId(),
             title: 'Finance Process Walkthrough',
-            description: 'SCH-PA-2026-000 · Finance · Due today',
+            description: 'SCH-QA-2026-000 · Finance · Due today',
             date: todayKey,
             startTime: '09:00',
             endTime: '10:00',
@@ -353,7 +408,7 @@ export const buildSeedCalendarEvents = () => {
     events.push({
         id: generateId(),
         title: 'Transport Compliance Review',
-        description: 'SCH-PA-2026-009 · Transport · Due next week',
+        description: 'SCH-QA-2026-009 · Transport · Due next week',
         date: toDateKey(addDays(today, 7)),
         startTime: '14:00',
         endTime: '15:30',
@@ -362,3 +417,6 @@ export const buildSeedCalendarEvents = () => {
 
     return events
 }
+
+export const hydrateFromApi = (seed = DEFAULT_AUDIT_SCHEDULES) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

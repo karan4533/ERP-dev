@@ -17,8 +17,8 @@ import {
 const ObservationReports = () => {
     const location = useLocation()
     const [records, setRecords] = useState(() => getObservations())
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
 
     useEffect(() => {
@@ -182,7 +182,25 @@ const ObservationReports = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                rows={records}
+                columns={[
+                    { key: 'observationId', label: 'Observation ID' },
+                    { key: 'title', label: 'Title' },
+                    { key: 'department', label: 'Department' },
+                    { key: 'priority', label: 'Priority' },
+                    { key: 'status', label: 'Status' },
+                    { key: 'createdDate', label: 'Created Date' },
+                    { key: 'dueDate', label: 'Due Date' },
+                ]}
+                filename='observation-reports'
+                title='Observation Reports'
+                enableDateRange
+                dateKeys={['createdDate', 'dueDate']}
+                exportDescription={<>You are exporting {records.length} observation(s).</>}
+            />
         </section>
     )
 }

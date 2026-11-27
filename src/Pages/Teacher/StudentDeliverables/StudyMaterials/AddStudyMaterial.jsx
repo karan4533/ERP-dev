@@ -6,9 +6,13 @@ import { addStudyMaterial, DEFAULT_ROUTE_BASE } from './studyMaterialsData'
 const AddStudyMaterial = ({ routeBase = DEFAULT_ROUTE_BASE }) => {
     const navigate = useNavigate()
 
-    const handleSave = (values) => {
-        addStudyMaterial(values)
-        navigate(routeBase)
+    const handleSave = async (values) => {
+        try {
+            await addStudyMaterial(values)
+            navigate(routeBase)
+        } catch (error) {
+            window.alert(error?.message || 'Could not save study material.')
+        }
     }
 
     return (

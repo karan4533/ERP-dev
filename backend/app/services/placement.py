@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import re
+import uuid
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.deps import role_code_for
 from app.models import (
     AcademicYear,
+    AcademicsRecord,
     CoordinatorGradeBand,
     SchoolClass,
     Section,
@@ -20,6 +23,13 @@ from app.models import (
 from app.services.audit import write_audit
 from app.services.errors import fail
 
+# Internal academics_records collection; not exposed on the campus JSON API.
+_PROMOTION_COLLECTION = "student-promotions"
+
+
+def _promotion_public_id(student_id: UUID, year_id: UUID) -> str:
+    return f"{student_id}:{year_id}"
+
 _BYPASS_ROLES = {
     "principal",
     "director",
@@ -28,6 +38,17 @@ _BYPASS_ROLES = {
     "managing_director",
     "jointdirector",
 }
+
+
+_PRE_PRIMARY = re.compile(r"^(pre[\s-]*kg|prekg|nursery|play\s*group|playgroup|lkg|ukg|kg|kindergarten|pre[\s-]*primary)\b", re.I)
+
+
+def school_grade(class_name: str | None) -> int | None:
+    """Like parse_grade, but pre-primary classes (Pre-KG, LKG, UKG, KG, Nursery) count as 0."""
+    text = str(class_name or "").strip()
+    if _PRE_PRIMARY.match(re.sub(r"^(class|grade)\s+", "", text, flags=re.I)):
+        return 0
+    return parse_grade(text)
 
 
 def parse_grade(class_name: str | None) -> int | None:
@@ -332,17 +353,32 @@ def promote_student(
             fail(404, "not_found", "Academic year not found.")
     else:
         year = current_academic_year(db, actor.campus_id)
+    if year is None:
+        fail(400, "validation_error", "An academic year is required to promote a student.")
+
+    # Unique (campus, collection, public_id) refuses a second promote in the same year,
+    # including when two requests race — no new table or migration.
+    public_id = _promotion_public_id(student.id, year.id)
+    already = db.scalar(
+        select(AcademicsRecord).where(
+            AcademicsRecord.campus_id == actor.campus_id,
+            AcademicsRecord.collection == _PROMOTION_COLLECTION,
+            AcademicsRecord.public_id == public_id,
+        )
+    )
+    if already is not None:
+        fail(409, "already_promoted", "This student has already been promoted in this academic year.")
 
     _capacity_ok(db, section, exclude_student_id=student.id)
     roll = _next_roll(
         db,
         campus_id=actor.campus_id,
-        academic_year_id=year.id if year else None,
+        academic_year_id=year.id,
         section_id=section.id,
     )
 
     previous = f"{student.class_name}-{student.section or ''}#{student.roll_number}"
-    student.academic_year_id = year.id if year else student.academic_year_id
+    student.academic_year_id = year.id
     student.class_id = school_class.id
     student.class_name = school_class.name
     student.section_id = section.id
@@ -350,6 +386,22 @@ def promote_student(
     student.roll_number = roll
     student.placement_status = "placed"
 
+    db.add(
+        AcademicsRecord(
+            id=uuid.uuid4(),
+            campus_id=actor.campus_id,
+            collection=_PROMOTION_COLLECTION,
+            public_id=public_id,
+            body={
+                "studentId": str(student.id),
+                "academicYearId": str(year.id),
+                "from": previous,
+                "to": f"{school_class.name}-{section.name}#{roll}",
+                "promotedBy": str(actor.id),
+            },
+            created_by=actor.id,
+        )
+    )
     write_audit(
         db,
         action="STUDENT_PROMOTED",
@@ -359,7 +411,11 @@ def promote_student(
         campus_id=actor.campus_id,
         details=f"{previous} -> {school_class.name}-{section.name} roll {roll}",
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        fail(409, "already_promoted", "This student has already been promoted in this academic year.")
     db.refresh(student)
     return get_student(db, actor, student.id)
 

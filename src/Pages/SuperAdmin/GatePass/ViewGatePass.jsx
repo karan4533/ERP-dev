@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import mo_user from '../../../assets/images/no-profile.png'
@@ -10,11 +10,13 @@ import {
     statusBadgeColor as materialStatusBadgeColor,
 } from '../../FrontOffice/MaterialGatePass/materialGatePassData'
 import {
-    ROUTE_BASE,
     getGatePassById,
+    getGatePassRouteBase,
+    hydrateAllGatePassesFromApi,
     passCategoryBadgeColor,
     statusBadgeColor,
 } from './gatePassData'
+import { frontOfficeApiOn } from '../../FrontOffice/frontOfficeStore'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -105,8 +107,8 @@ const HostelGatePassView = ({ record }) => (
                 <Field label='Out time' value={record.outTime} />
                 <Field label='Return date' value={record.returnDate} />
                 <Field label='Return time' value={record.returnTime} />
-                <Field label='Parent approval' value={record.parentApproval || 'Approved'} />
-                <Field label='Principal approval' value={record.principalApproval || 'Approved'} />
+                <Field label='Parent approval' value={record.parentApproval} />
+                <Field label='Principal approval' value={record.principalApproval || record.wardenApproval} />
             </div>
         </Section>
     </>
@@ -193,20 +195,41 @@ const MaterialGatePassView = ({ record }) => {
 const ViewGatePass = () => {
     const { id } = useParams()
     const navigate = useNavigate()
+    const routeBase = getGatePassRouteBase()
+    const [fetchedId, setFetchedId] = useState(null)
+    const [loadError, setLoadError] = useState('')
     const gatePass = getGatePassById(id)
+    const loading = !gatePass && frontOfficeApiOn() && fetchedId !== id && !loadError
+
+    useEffect(() => {
+        if (getGatePassById(id) || !frontOfficeApiOn()) return undefined
+        let active = true
+        hydrateAllGatePassesFromApi()
+            .catch((error) => {
+                if (active) setLoadError(error?.message || 'Could not load gate pass.')
+            })
+            .finally(() => {
+                if (active) setFetchedId(id)
+            })
+        return () => {
+            active = false
+        }
+    }, [id])
 
     if (!gatePass) {
         return (
             <section className='space-y-6'>
                 <button
                     type='button'
-                    onClick={() => navigate(ROUTE_BASE)}
+                    onClick={() => navigate(routeBase)}
                     className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
                 >
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
-                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>Gate pass not found.</div>
+                <div className={`bg-white rounded-2xl shadow-md p-8 text-center ${loadError ? 'text-[#B42318]' : 'text-[#667085]'}`}>
+                    {loading ? 'Loading gate pass…' : loadError || 'Gate pass not found.'}
+                </div>
             </section>
         )
     }
@@ -217,7 +240,7 @@ const ViewGatePass = () => {
         <section className='space-y-6'>
             <button
                 type='button'
-                onClick={() => navigate(ROUTE_BASE)}
+                onClick={() => navigate(routeBase)}
                 className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
             >
                 <ArrowLeft size={18} />

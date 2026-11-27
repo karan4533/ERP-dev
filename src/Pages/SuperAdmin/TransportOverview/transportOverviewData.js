@@ -220,3 +220,156 @@ export const getSectionTable = (sectionKey) => {
             return { columns: [], rows: [] }
     }
 }
+
+const docsFromVehicles = (vehicles = []) =>
+    vehicles.flatMap((vehicle, index) => {
+        const number = vehicle.vehicleNumber || vehicle.registrationNumber || `VEH-${index + 1}`
+        const type = vehicle.vehicleType || vehicle.type || 'Vehicle'
+        const docs = []
+        if (vehicle.insuranceExpiryDate || vehicle.insuranceExpiry) {
+            docs.push({
+                id: `${number}-ins`,
+                vehicleNumber: number,
+                vehicleType: type,
+                docType: 'Insurance Certificate',
+                issuedOn: vehicle.insuranceIssuedOn || '—',
+                validTill: vehicle.insuranceExpiryDate || vehicle.insuranceExpiry,
+                status: vehicle.insuranceStatus || 'Valid',
+            })
+        }
+        if (vehicle.fitnessExpiryDate || vehicle.fitnessExpiry) {
+            docs.push({
+                id: `${number}-fit`,
+                vehicleNumber: number,
+                vehicleType: type,
+                docType: 'Fitness Certificate',
+                issuedOn: vehicle.fitnessIssuedOn || '—',
+                validTill: vehicle.fitnessExpiryDate || vehicle.fitnessExpiry,
+                status: vehicle.fitnessStatus || 'Valid',
+            })
+        }
+        if (vehicle.pollutionExpiryDate || vehicle.pollutionExpiry) {
+            docs.push({
+                id: `${number}-pol`,
+                vehicleNumber: number,
+                vehicleType: type,
+                docType: 'Pollution Certificate',
+                issuedOn: vehicle.pollutionIssuedOn || '—',
+                validTill: vehicle.pollutionExpiryDate || vehicle.pollutionExpiry,
+                status: vehicle.pollutionStatus || 'Valid',
+            })
+        }
+        if (!docs.length) {
+            docs.push({
+                id: `${number}-rc`,
+                vehicleNumber: number,
+                vehicleType: type,
+                docType: 'RC',
+                issuedOn: vehicle.rcIssuedOn || '—',
+                validTill: vehicle.rcValidTill || '—',
+                status: vehicle.docStatus || vehicle.status || 'Valid',
+            })
+        }
+        return docs
+    })
+
+/** Live-row helpers used by TransportOverview after hydrate. */
+export const getFleetSummaryFromRows = ({ routes = [], vehicles = [], drivers = [], fuel = [], maintenance = [] }) => {
+    const documents = docsFromVehicles(vehicles)
+    const totalStops = routes.reduce((sum, route) => sum + Number(route.totalStops || route.stops?.length || 0), 0)
+    const totalCapacity = vehicles.reduce((sum, vehicle) => sum + Number(vehicle.capacity || 0), 0)
+    const activeDrivers = drivers.filter((driver) => String(driver.status || '').toLowerCase() === 'active').length
+    const fuelSpend = fuel.reduce((sum, item) => sum + parseAmount(item.amount), 0)
+    const scheduledMaintenance = maintenance.filter((item) => /schedul/i.test(String(item.status || ''))).length
+    const expiringDocs = documents.filter((doc) => /expir/i.test(String(doc.status || ''))).length
+    return {
+        totalRoutes: routes.length,
+        totalVehicles: vehicles.length,
+        activeDrivers,
+        totalDrivers: drivers.length,
+        totalStops,
+        totalCapacity,
+        fuelSpend: formatRupee(fuelSpend),
+        scheduledMaintenance,
+        expiringDocs,
+        totalDocuments: documents.length,
+    }
+}
+
+export const getSectionSummaryFromRows = (sectionKey, data) => {
+    const { routes = [], vehicles = [], drivers = [], fuel = [], maintenance = [] } = data || {}
+    const documents = docsFromVehicles(vehicles)
+    switch (sectionKey) {
+        case 'routes':
+            return [
+                { label: 'Active Routes', value: routes.length },
+                { label: 'Total Stops', value: routes.reduce((s, r) => s + Number(r.totalStops || r.stops?.length || 0), 0) },
+                { label: 'Assigned Vehicles', value: new Set(routes.map((r) => r.vehicleNumber).filter(Boolean)).size },
+                { label: 'Drivers Linked', value: new Set(routes.map((r) => r.driverName || r.driverId).filter(Boolean)).size },
+            ]
+        case 'vehicles':
+            return [
+                { label: 'Fleet Size', value: vehicles.length },
+                { label: 'Total Capacity', value: vehicles.reduce((s, v) => s + Number(v.capacity || 0), 0) },
+                { label: 'Types', value: new Set(vehicles.map((v) => v.vehicleType || v.type).filter(Boolean)).size },
+                { label: 'With Driver', value: vehicles.filter((v) => v.driverName || v.driverId).length },
+            ]
+        case 'drivers':
+            return [
+                { label: 'Total Drivers', value: drivers.length },
+                { label: 'Active', value: drivers.filter((d) => String(d.status || '').toLowerCase() === 'active').length },
+                { label: 'On Leave', value: drivers.filter((d) => /leave/i.test(String(d.status || ''))).length },
+                { label: 'With Route', value: drivers.filter((d) => d.routeAssigned || d.routeId).length },
+            ]
+        case 'fuel-expenses': {
+            const total = fuel.reduce((s, item) => s + parseAmount(item.amount), 0)
+            const totalLitres = fuel.reduce((s, item) => s + (parseFloat(item.fuelQuantity) || 0), 0)
+            return [
+                { label: 'Fuel Entries', value: fuel.length },
+                { label: 'Total Spend', value: formatRupee(total) },
+                { label: 'Total Quantity', value: `${totalLitres} L` },
+                { label: 'Vehicles Fueled', value: new Set(fuel.map((f) => f.vehicleNumber).filter(Boolean)).size },
+            ]
+        }
+        case 'vehicle-maintenance':
+            return [
+                { label: 'Records', value: maintenance.length },
+                { label: 'Scheduled', value: maintenance.filter((m) => /schedul/i.test(String(m.status || ''))).length },
+                { label: 'Pending', value: maintenance.filter((m) => /pend/i.test(String(m.status || ''))).length },
+                { label: 'Est. Cost', value: formatRupee(maintenance.reduce((s, m) => s + parseAmount(m.estimatedCost || m.cost), 0)) },
+            ]
+        case 'vehicle-documents':
+            return [
+                { label: 'Documents Tracked', value: documents.length },
+                { label: 'Valid', value: documents.filter((d) => /valid/i.test(String(d.status || ''))).length },
+                { label: 'Expiring Soon', value: documents.filter((d) => /expir/i.test(String(d.status || ''))).length },
+                { label: 'Expired', value: documents.filter((d) => String(d.status || '').toLowerCase() === 'expired').length },
+            ]
+        default:
+            return []
+    }
+}
+
+export const getSectionTableFromRows = (sectionKey, data) => {
+    const { routes = [], vehicles = [], drivers = [], fuel = [], maintenance = [] } = data || {}
+    const base = getSectionTable(sectionKey)
+    switch (sectionKey) {
+        case 'routes':
+            return { ...base, rows: routes }
+        case 'vehicles':
+            return { ...base, rows: vehicles }
+        case 'drivers':
+            return {
+                ...base,
+                rows: drivers.map((driver) => ({ ...driver, name: getDriverDisplayName(driver) })),
+            }
+        case 'fuel-expenses':
+            return { ...base, rows: fuel }
+        case 'vehicle-maintenance':
+            return { ...base, rows: maintenance }
+        case 'vehicle-documents':
+            return { ...base, rows: docsFromVehicles(vehicles) }
+        default:
+            return { columns: [], rows: [] }
+    }
+}

@@ -1,5 +1,6 @@
 import React from 'react'
 import EmployeeListPage from '../Components/EmployeeListPage'
+import { SEED } from '../../../HR/domain/hrSeed'
 
 const columns = [
     { key: 'profile', label: 'Profile', isProfile: true },
@@ -15,32 +16,21 @@ const columns = [
     { key: 'state', label: 'State' },
 ]
 
-const rows = [
-    {
-        employeeId: 'FO-1001',
-        name: 'Priya Sharma',
-        gender: 'Female',
-        email: 'priya.sharma@school.com',
-        mobile: '9876543210',
-        dateOfBirth: '15-04-1992',
-        qualification: 'B.Com, MBA',
-        experience: '6 Years',
-        city: 'Chennai',
+const rows = SEED.employees
+    .filter((row) => row.role === 'prm' || /parent relationship|public relations|assistant pro/i.test(row.designation || ''))
+    .map((row) => ({
+        employeeId: row.id,
+        name: row.name,
+        gender: row.gender || '—',
+        email: row.email,
+        mobile: row.contact,
+        dateOfBirth: row.dateOfBirth || '—',
+        qualification: row.qualification || '—',
+        experience: row.experience || '—',
+        city: 'Madurai',
         state: 'Tamil Nadu',
-    },
-    {
-        employeeId: 'FO-1002',
-        name: 'Rajesh Kumar',
-        gender: 'Male',
-        email: 'rajesh.kumar@school.com',
-        mobile: '9123456780',
-        dateOfBirth: '22-08-1988',
-        qualification: 'B.A, Diploma in Office Management',
-        experience: '10 Years',
-        city: 'Coimbatore',
-        state: 'Tamil Nadu',
-    },
-]
+        designation: row.designation,
+    }))
 
 const FrontOfficeList = () => (
     <EmployeeListPage

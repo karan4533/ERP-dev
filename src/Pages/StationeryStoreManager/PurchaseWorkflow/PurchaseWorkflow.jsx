@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { StatusBadge } from '../../../Common/demoDomain/statusBadge'
 import {
@@ -9,13 +10,18 @@ import {
     getStationeryPurchaseOrders,
     hydrateStationeryProcurementFromApi,
     PROCUREMENT_STATUSES,
+    receiveStationeryGoods,
 } from './procurementData'
 
 const PurchaseWorkflow = () => {
+    const location = useLocation()
+    const receiveFocus = new URLSearchParams(location.search).get('stage') === 'receive'
     const [rows, setRows] = useState(() => getStationeryProcurement())
     const [title, setTitle] = useState('')
     const [amount, setAmount] = useState('')
     const [minor, setMinor] = useState(true)
+    const [busyId, setBusyId] = useState('')
+    const [receiveQty, setReceiveQty] = useState({})
 
     const refresh = () => setRows(getStationeryProcurement())
 
@@ -26,6 +32,14 @@ const PurchaseWorkflow = () => {
         })
         return () => { active = false }
     }, [])
+
+    const visibleRows = useMemo(() => {
+        if (!receiveFocus) return rows
+        return rows.filter((row) => {
+            const status = String(row.status || '').toLowerCase()
+            return status.includes('po') || status.includes('approved') || status.includes('receive') || status.includes('grn')
+        })
+    }, [rows, receiveFocus])
 
     const create = async (event) => {
         event.preventDefault()
@@ -52,13 +66,38 @@ const PurchaseWorkflow = () => {
     }
 
     const advance = async (id) => {
-        const result = await advanceStationeryProcurement(id)
-        if (result?.success === false) {
-            toast.error(result.message || 'Could not advance workflow.')
-            return
+        setBusyId(id)
+        try {
+            const result = await advanceStationeryProcurement(id)
+            if (result?.success === false) {
+                toast.error(result.message || 'Could not advance workflow.')
+                return
+            }
+            refresh()
+            toast.success('Workflow advanced.')
+        } finally {
+            setBusyId('')
         }
-        refresh()
-        toast.success('Workflow advanced.')
+    }
+
+    const receiveGoods = async (row) => {
+        setBusyId(row.id)
+        try {
+            const quantity = Math.max(1, Number(receiveQty[row.id] ?? row.quantity ?? 1) || 1)
+            const result = await receiveStationeryGoods(row.id, {
+                grnId: `GRN-${row.id}`,
+                itemName: row.title,
+                quantity,
+            })
+            if (result?.success === false) {
+                toast.error(result.message || 'Goods receipt failed. Link inventory item lines before GRN.')
+                return
+            }
+            refresh()
+            toast.success(`Goods receipt recorded (${quantity} qty).`)
+        } finally {
+            setBusyId('')
+        }
     }
 
     const orders = getStationeryPurchaseOrders(rows)
@@ -66,8 +105,14 @@ const PurchaseWorkflow = () => {
     return (
         <section className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-md p-4'>
-                <h2 className='text-xl font-semibold text-black'>Purchase workflow</h2>
-                <p className='text-sm text-[#667085] mt-1'>Stationery store of record. Primary approver: Joint Director Operations.</p>
+                <h2 className='text-xl font-semibold text-black'>
+                    {receiveFocus ? 'Receive Goods (GRN)' : 'Purchase workflow'}
+                </h2>
+                <p className='text-sm text-[#667085] mt-1'>
+                    {receiveFocus
+                        ? 'Approved purchase orders ready for goods receipt into store stock.'
+                        : 'Requirement → vendor compare → JD → Finance budget → PO → GRN → stock. Store prepares; JD/Finance decide on the API (not editable status labels).'}
+                </p>
                 <p className='text-xs text-[#808080] mt-2'>{PROCUREMENT_STATUSES.join(' → ')}</p>
                 <button type='button' onClick={downloadQuotationTemplate} className='mt-3 text-sm text-[#515DEF] underline cursor-pointer'>Download comparative quotation template</button>
                 <form onSubmit={create} className='grid grid-cols-1 md:grid-cols-4 gap-3 mt-4'>
@@ -90,10 +135,10 @@ const PurchaseWorkflow = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.length === 0 && (
-                            <tr><td colSpan={6} className='px-2 py-6 text-center text-[#667085]'>No stationery purchase requests yet.</td></tr>
+                        {visibleRows.length === 0 && (
+                            <tr><td colSpan={6} className='px-2 py-6 text-center text-[#667085]'>{receiveFocus ? 'No purchase orders waiting for goods receipt.' : 'No stationery purchase requests yet.'}</td></tr>
                         )}
-                        {rows.map((row) => (
+                        {visibleRows.map((row) => (
                             <tr key={row.id} className='border-b border-[#f2f4f7]'>
                                 <td className='px-2 py-3'>{row.id}</td>
                                 <td className='px-2 py-3'>{row.title}</td>
@@ -101,7 +146,36 @@ const PurchaseWorkflow = () => {
                                 <td className='px-2 py-3'><StatusBadge status={row.status} /></td>
                                 <td className='px-2 py-3'>{row.poNumber || '—'}</td>
                                 <td className='px-2 py-3'>
-                                    <button type='button' onClick={() => advance(row.id)} className='text-[#515DEF] text-xs cursor-pointer'>Advance</button>
+                                    <div className='flex flex-wrap gap-2'>
+                                        <button
+                                            type='button'
+                                            disabled={busyId === row.id}
+                                            onClick={() => advance(row.id)}
+                                            className='text-[#515DEF] text-xs cursor-pointer disabled:opacity-50'
+                                        >
+                                            Advance
+                                        </button>
+                                        {['PO_APPROVED', 'PO_RAISED'].includes(String(row.status || '').toUpperCase()) && (
+                                            <div className='inline-flex items-center gap-2'>
+                                                <input
+                                                    type='number'
+                                                    min='1'
+                                                    value={receiveQty[row.id] ?? row.quantity ?? 1}
+                                                    onChange={(event) => setReceiveQty((prev) => ({ ...prev, [row.id]: event.target.value }))}
+                                                    className='w-16 border border-[#D9D9D9] rounded px-1 py-0.5 text-xs'
+                                                    aria-label='Receive quantity'
+                                                />
+                                                <button
+                                                    type='button'
+                                                    disabled={busyId === row.id}
+                                                    onClick={() => receiveGoods(row)}
+                                                    className='text-[#4CAF50] text-xs cursor-pointer disabled:opacity-50'
+                                                >
+                                                    Receive GRN
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}

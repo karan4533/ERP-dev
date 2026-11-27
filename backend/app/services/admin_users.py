@@ -3,8 +3,10 @@
 Rules enforced here, not in the browser:
 
 * Only roles an actor may *create* can be created, and only users holding such a role can be
-  changed afterwards. An Administrator can therefore never create, edit, deactivate or reset an
-  Administrator, Super Admin, HR, Finance, student or parent account.
+  changed afterwards. Campus Admin cannot create Administrator, Super Admin, Managing Director,
+  File Room, CCTV, student or parent accounts (privilege escalation / wrong channel).
+* Super Admin may create campus Administrators plus File Room / CCTV / Managing Director, and
+  every staff role Campus Admin can create.
 * Profile fields, email, status and creatable roles may be edited. Role changes are limited to
   roles the actor is allowed to create. Staff codes stay unchanged when the role changes.
 * Every new or reset login gets a temporary password and ``must_change_password``. Passwords are
@@ -26,16 +28,26 @@ from app.permissions.matrix import PERMISSIONS
 from app.services.audit import write_audit
 from app.services.errors import fail
 
-# (role code, label, staff-code prefix). Mirrors the frontend's CREATABLE_ROLE_OPTIONS.
-# Campus Admin may create these operational / academic logins. Privileged roles
-# (admin, superadmin, hr, accounthead, student, parent, auditors, JD) stay out.
+# (role code, label, staff-code prefix). Campus Admin may create these ERP staff logins.
+# Keep prefixes stable — existing staff codes already use them.
 STAFF_ROLES: list[tuple[str, str, str]] = [
     ("principal", "Principal", "PRC"),
+    ("director", "Director", "DIR"),
     ("prm", "PRM", "PRM"),
+    ("pro", "PRO", "PRO"),
     ("teacher", "Teacher", "TEA"),
     ("coordinator", "Coordinator", "CRD"),
     ("librarian", "Librarian", "LIB"),
-    ("hostelwarden", "Hostel Warden", "HSW"),
+    ("hr", "HR", "HRM"),
+    ("accounthead", "Account Head", "ACH"),
+    ("financemanager", "Finance Manager", "FNM"),
+    ("accountassistant", "Account Assistant", "ACA"),
+    ("finance_assistant", "Finance Assistant", "FAS"),
+    ("jointdirector", "Joint Director", "JD"),
+    ("jointdirectorassistant", "Joint Director Assistant", "JDA"),
+    ("jointdirectoraudit", "Joint Director Audit", "JDU"),
+    ("processauditor", "Process Auditor", "PRA"),
+    ("qualityauditor", "Quality Auditor", "QLA"),
     ("gatekeepermanager", "Gate Keeper Manager", "GKM"),
     ("gatekeeper", "Gate Keeper", "GKP"),
     ("transportmanager", "Transport Manager", "TRM"),
@@ -44,10 +56,49 @@ STAFF_ROLES: list[tuple[str, str, str]] = [
     ("itsupportmanager", "IT Support Manager", "ITM"),
     ("stationerystoremanager", "Stationery Store Manager", "SSM"),
     ("housekeepingmanager", "Housekeeping Manager", "HKM"),
+    ("maintenancemanager", "Maintenance Manager", "MTM"),
 ]
+# Super Admin only — campus Admin must not self-provision peer/elevated portals.
 _ADMIN_ROLE: tuple[str, str, str] = ("admin", "Administrator", "ADM")
+_FILE_ROOM_ROLE: tuple[str, str, str] = ("fileroom", "File Room", "FLR")
+_CCTV_ROLE: tuple[str, str, str] = ("cctv", "CCTV Room", "CCTV")
+_MD_ROLE: tuple[str, str, str] = ("managing_director", "Managing Director", "MD")
+_SUPERADMIN_ONLY_ROLES: list[tuple[str, str, str]] = [
+    _ADMIN_ROLE,
+    _FILE_ROOM_ROLE,
+    _CCTV_ROLE,
+    _MD_ROLE,
+]
 
-_ROLE_INFO = {code: (label, prefix) for code, label, prefix in [*STAFF_ROLES, _ADMIN_ROLE]}
+# Never creatable through this API (bootstrap / admissions channels).
+_NEVER_CREATABLE = frozenset({"superadmin", "student", "parent"})
+
+# Admin User Management may create these, but HR staffing must not (ASA-01 / privilege escalation).
+# Keep teacher/driver/ops managers assignable from HR; route leadership/finance/HR through Admin UI.
+_HR_STAFFING_BLOCKED = frozenset({
+    "hr",
+    "accounthead",
+    "financemanager",
+    "accountassistant",
+    "finance_assistant",
+    "director",
+    "jointdirector",
+    "jointdirectorassistant",
+    "jointdirectoraudit",
+    "processauditor",
+    "qualityauditor",
+    "prm",
+    "pro",
+    "fileroom",
+    "cctv",
+    "admin",
+    "managing_director",
+})
+
+_ROLE_INFO = {
+    code: (label, prefix)
+    for code, label, prefix in [*STAFF_ROLES, *_SUPERADMIN_ONLY_ROLES]
+}
 
 # Optional profile fields kept in ``UserProfile.extra``. Anything else a client sends is ignored.
 DETAIL_FIELDS = (
@@ -79,16 +130,41 @@ _MAX_TEXT = 500
 
 
 def creatable_roles_for(actor_role: str) -> list[str]:
-    """Role codes the actor may create and afterwards manage."""
+    """Role codes the actor may create and afterwards manage via Admin User Management.
+
+    Admin User Management is gated by ``users.write``. HR staffing uses
+    ``hr_assignable_portal_roles`` so expanded Admin creatable roles do not open
+    a privilege-escalation path through ``/hr/staff``.
+    """
+    if actor_role not in {"admin", "superadmin", "hr"}:
+        return []
     codes = [code for code, _, _ in STAFF_ROLES]
     if actor_role == "superadmin":
-        codes.append(_ADMIN_ROLE[0])
-    return codes
+        codes.extend(code for code, _, _ in _SUPERADMIN_ONLY_ROLES)
+    return [code for code in codes if code not in _NEVER_CREATABLE]
+
+
+def hr_assignable_portal_roles(actor_role: str) -> list[str]:
+    """Portal roles that may be linked when creating/updating employees via HR."""
+    return [code for code in creatable_roles_for(actor_role) if code not in _HR_STAFFING_BLOCKED]
 
 
 def creatable_role_options(db: Session, actor: User) -> list[dict]:
-    allowed = set(creatable_roles_for(_actor_role(db, actor)))
-    return [{"role": code, "label": label} for code, (label, _) in _ROLE_INFO.items() if code in allowed]
+    """Return roles the actor may assign, labeled from the DB when seeded."""
+    allowed = creatable_roles_for(_actor_role(db, actor))
+    if not allowed:
+        return []
+    rows = db.scalars(select(Role).where(Role.code.in_(allowed))).all()
+    by_code = {row.code: row for row in rows}
+    options: list[dict] = []
+    for code in allowed:
+        info = _ROLE_INFO.get(code)
+        if info is None:
+            continue
+        label, _prefix = info
+        db_role = by_code.get(code)
+        options.append({"role": code, "label": (db_role.name if db_role and db_role.name else label)})
+    return options
 
 
 def _clean_text(value) -> str:
@@ -508,6 +584,7 @@ __all__ = [
     "create_user",
     "creatable_role_options",
     "creatable_roles_for",
+    "hr_assignable_portal_roles",
     "get_user",
     "list_roles",
     "list_users",

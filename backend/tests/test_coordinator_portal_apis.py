@@ -40,6 +40,21 @@ def test_coordinator_shared_reads_and_exams_write(client):
     assert client.get("/api/v1/exams", headers=headers).status_code == 200
     assert client.get("/api/v1/attendance?date=2026-10-15", headers=headers).status_code == 200
 
+    admin = _login(client, settings.admin_seed_email, settings.admin_seed_password)
+    classes = client.get("/api/v1/masters/classes", headers=admin).json()
+    if not any(c.get("name") == "Grade 6" for c in classes):
+        made = client.post("/api/v1/masters/classes", json={"name": "Grade 6"}, headers=admin)
+        assert made.status_code == 201, made.text
+    # Coordinators schedule exams only inside their grade band (#59), so give this one Grades 1–8.
+    options = client.get("/api/v1/masters/class-teacher-options", headers=admin).json()
+    coordinator_id = next(o["user_id"] for o in options if o["email"] == COORDINATOR[0])
+    principal = _login(client, settings.principal_seed_email, settings.principal_seed_password)
+    band = client.put(
+        "/api/v1/students/coordinator-grade-bands",
+        json={"userId": coordinator_id, "gradeFrom": 1, "gradeTo": 8},
+        headers=principal,
+    )
+    assert band.status_code == 200, band.text
     created = client.post(
         "/api/v1/exams",
         headers=headers,

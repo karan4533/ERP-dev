@@ -1,6 +1,19 @@
-import { getAuditById } from '../MyAudits/myAuditsData.js'
+import { getAuditById } from '../MyAudits/myAuditsData'
 
-export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Observation', 'Positive Practice']
+import {
+    loadCampusJson,
+    saveCampusJson,
+    persistCampusJson,
+    hydrateCampusKey,
+    usesCampusApiForKey,
+} from '../../../../services/campusJsonStore'
+import { findDraftInStore, upsertDraftInStore } from '../../../../Common/auditDomain/executeAuditDraftStore'
+
+export const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
+
+export const FINDING_RATINGS = ['Compliant', 'Minor Non-Conformity', 'Major Non-Conformity']
+
+export const RISK_LEVELS = ['High', 'Medium', 'Low']
 
 export const OBSERVATION_PRIORITIES = ['Critical', 'High', 'Medium', 'Low']
 
@@ -53,9 +66,17 @@ const OBS_NUMBER_COUNTER_KEY = 'quality-auditor-inline-obs-counter'
 
 export const resolveReportTo = (assignTo) => REPORT_TO_MAP[assignTo] ?? ''
 
-export const generateObservationNumber = () => {
+/** Next observation number; `takenNumbers` are numbers already used on the server (any auditor, any device). */
+export const generateObservationNumber = (takenNumbers = []) => {
     const year = new Date().getFullYear()
-    let counter = Number(localStorage.getItem(OBS_NUMBER_COUNTER_KEY) ?? 151)
+    const prefix = `OBS-${year}-`
+    const highestTaken = takenNumbers.reduce((max, value) => {
+        const text = String(value || '')
+        if (!text.startsWith(prefix)) return max
+        const num = Number(text.slice(prefix.length))
+        return Number.isFinite(num) ? Math.max(max, num) : max
+    }, 0)
+    let counter = Math.max(Number(localStorage.getItem(OBS_NUMBER_COUNTER_KEY) ?? 151), highestTaken)
     counter += 1
     localStorage.setItem(OBS_NUMBER_COUNTER_KEY, String(counter))
     return `OBS-${year}-${String(counter).padStart(5, '0')}`
@@ -95,13 +116,8 @@ export const QUALITY_RATING_LABELS = {
 export const CHECKLIST_RESPONSE_OPTIONS = ['Yes', 'No', 'Error']
 
 export const parseRating = (value) => {
-    if (value === null || value === undefined || value === '') return null
-    if (value === 'Yes' || value === 'Pass' || value === '1' || value === 1) return 5
-    if (value === '0.5' || value === 0.5 || value === 'Partial') return 3
-    if (value === 'No' || value === 'Fail' || value === 'Error' || value === '0' || value === 0) return 1
-
     const rating = Number(value)
-    return !Number.isNaN(rating) && rating >= QUALITY_RATING_MIN && rating <= QUALITY_RATING_MAX
+    return Number.isInteger(rating) && rating >= QUALITY_RATING_MIN && rating <= QUALITY_RATING_MAX
         ? rating
         : null
 }
@@ -115,6 +131,16 @@ export const migrateLegacyResponse = (value) => {
     return parseRating(value) ?? ''
 }
 
+export const normalizeResponseType = (responseType) => {
+    const raw = String(responseType || 'star_rating').trim().toLowerCase()
+    if (['place', 'location', 'venue'].includes(raw)) return 'place'
+    if (['text', 'textarea', 'remarks', 'comment'].includes(raw)) return 'text'
+    if (raw === 'date') return 'date'
+    if (['yes_no', 'pass_fail', 'checkbox'].includes(raw)) return 'yes_no'
+    if (['star_rating', 'scale', 'rating'].includes(raw) || !raw) return 'star_rating'
+    return raw
+}
+
 export const RESPONSE_TYPE_LABELS = {
     star_rating: 'Star Rating (1–5)',
     yes_no: 'Yes / No',
@@ -122,6 +148,9 @@ export const RESPONSE_TYPE_LABELS = {
     scale: '0 / 0.5 / 1',
     dropdown: 'Dropdown',
     checkbox: 'Checkbox',
+    remarks: 'Remarks',
+    place: 'Place / Location',
+    location: 'Place / Location',
     number: 'Number',
     text: 'Text',
     textarea: 'Textarea',
@@ -466,7 +495,14 @@ const migrateRecommendations = (rec) => {
     return { ...emptyStructuredRecommendations(), ...rec }
 }
 
-export const isResponseAnswered = (_responseType, value) => parseRating(value) !== null
+export const isResponseAnswered = (responseType, value) => {
+    const kind = normalizeResponseType(responseType)
+    if (kind === 'date' || kind === 'place' || kind === 'text') {
+        return String(value ?? '').trim().length > 0
+    }
+    if (kind === 'yes_no') return CHECKLIST_RESPONSE_OPTIONS.includes(value)
+    return parseRating(value) !== null
+}
 
 export const computeProgress = (sections, responses) => {
     let total = 0
@@ -501,7 +537,7 @@ export const getUnansweredQuestions = (sections, responses) => {
     return unanswered
 }
 
-export const getParameterVisualStatus = (parameter, value) => {
+export const getParameterVisualStatus = (parameter, value, observation) => {
     const rating = parseRating(value?.response)
     if (rating === null) return 'pending'
     if (rating >= 4) return 'passed'
@@ -571,6 +607,8 @@ export const emptyParameterValue = () => ({
     evidence: emptyEvidence(),
     severity: '',
     remarks: '',
+    findingRating: '',
+    riskLevel: '',
 })
 
 export const buildEmptyResponses = (sections) => {
@@ -614,14 +652,18 @@ export const emptyObservation = (parameter, sectionTitle, auditReference = '') =
     title: parameter.label,
     description: '',
     priority: 'Medium',
+    findingRating: 'Minor Non-Conformity',
+    riskLevel: 'Medium',
+    dueDate: '',
     assignTo: '',
     reportTo: '',
-    dueDate: '',
     observationNumber: '',
     auditReference,
     assignedDate: '',
     status: '',
     evidence: emptyEvidence(),
+    collectionId: '',
+    capaId: '',
     saved: false,
     submitted: false,
     createdAt: new Date().toISOString(),
@@ -642,15 +684,26 @@ export const migrateObservation = (obs, auditReference = '') => ({
 const migrateResponses = (responses, sections) => {
     const empty = buildEmptyResponses(sections)
     const migrated = { ...empty }
+    const paramTypeById = {}
+    sections.forEach((section) => {
+        section.parameters.forEach((param) => {
+            paramTypeById[param.id] = param.responseType
+        })
+    })
 
     Object.keys(empty).forEach((id) => {
         const existing = responses?.[id]
         if (!existing) return
+        const kind = normalizeResponseType(paramTypeById[id])
+        const nextResponse =
+            kind === 'star_rating' || kind === 'scale'
+                ? migrateLegacyResponse(existing.response)
+                : existing.response
 
         migrated[id] = {
             ...emptyParameterValue(),
             ...existing,
-            response: migrateLegacyResponse(existing.response),
+            response: nextResponse,
             evidence: typeof existing.evidence === 'string'
                 ? { ...emptyEvidence(), url: existing.evidence }
                 : { ...emptyEvidence(), ...existing.evidence },
@@ -666,24 +719,28 @@ export const loadExecuteAuditDraft = (auditId) => {
     const sections = loadChecklistSections(audit)
 
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-            const parsed = JSON.parse(stored)
-            const sameAudit = !auditId || parsed.header?.auditId === auditId || parsed.header?.auditNumber === audit?.auditId
-            if (sameAudit) {
-                const mergedSections = parsed.sections ?? sections
-                return {
-                    ...parsed,
-                    sections: mergedSections,
-                    header: { ...header, ...parsed.header, auditId: header.auditId },
-                    responses: migrateResponses(parsed.responses, mergedSections),
-                    timeline: parsed.timeline ?? buildDefaultTimeline(header.auditDate),
-                    observations: (parsed.observations ?? []).map((obs) =>
-                        migrateObservation(obs, header.auditNumber),
-                    ),
-                    recommendations: migrateRecommendations(parsed.recommendations),
-                    lastSavedAt: parsed.lastSavedAt ?? null,
-                }
+        // loadCampusJson already returns a parsed object/array — do not JSON.parse again.
+        const stored = loadCampusJson(STORAGE_KEY, null)
+        const parsed = findDraftInStore(stored, auditId || header.auditId || header.auditNumber)
+        if (parsed) {
+            const mergedSections = parsed.sections ?? sections
+            const mergedHeader = {
+                ...header,
+                ...parsed.header,
+                auditId: parsed.header?.auditId || header.auditId,
+            }
+            return {
+                ...parsed,
+                sections: mergedSections,
+                header: mergedHeader,
+                responses: migrateResponses(parsed.responses, mergedSections),
+                timeline: parsed.timeline ?? buildDefaultTimeline(mergedHeader.auditDate),
+                observations: (parsed.observations ?? []).map((obs) =>
+                    migrateObservation(obs, mergedHeader.auditNumber),
+                ),
+                recommendations: migrateRecommendations(parsed.recommendations),
+                generalRemarks: parsed.generalRemarks ?? '',
+                lastSavedAt: parsed.lastSavedAt ?? null,
             }
         }
     } catch {
@@ -704,17 +761,30 @@ export const loadExecuteAuditDraft = (auditId) => {
 
 export const saveExecuteAuditDraft = (draft) => {
     const payload = { ...draft, lastSavedAt: new Date().toISOString() }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-    return payload
+    const stored = loadCampusJson(STORAGE_KEY, [])
+    const { list, payload: withId } = upsertDraftInStore(stored, payload)
+    saveCampusJson(STORAGE_KEY, list)
+    return withId
 }
 
-export const getScoreResult = (_responseType, value) => {
-    if (value === null || value === undefined || value === '') return 'na'
-    const str = String(value).trim().toLowerCase()
-    if (str === 'yes' || str === 'pass' || str === '1') return 'pass'
-    if (str === '0.5' || str === 'partial') return 'partial'
-    if (str === 'no' || str === 'fail' || str === 'error' || str === '0') return 'fail'
+export const persistExecuteAuditDraft = async (draft) => {
+    const payload = { ...draft, lastSavedAt: new Date().toISOString() }
+    const stored = loadCampusJson(STORAGE_KEY, [])
+    const { list, payload: withId } = upsertDraftInStore(stored, payload)
+    const result = await persistCampusJson(STORAGE_KEY, list)
+    return { ...result, draft: withId }
+}
 
+export const getScoreResult = (responseType, value) => {
+    const kind = normalizeResponseType(responseType)
+    if (kind === 'date' || kind === 'place' || kind === 'text') {
+        return String(value || '').trim() ? 'pass' : 'na'
+    }
+    if (kind === 'yes_no') {
+        if (value === 'Yes') return 'pass'
+        if (value === 'No' || value === 'Error') return 'fail'
+        return 'na'
+    }
     const rating = parseRating(value)
     if (rating === null) return 'na'
     if (rating >= 4) return 'pass'
@@ -722,8 +792,26 @@ export const getScoreResult = (_responseType, value) => {
     return 'fail'
 }
 
-export const isNonCompliant = (_responseType, value) => {
-    return getScoreResult(_responseType, value) === 'fail'
+export const isNonCompliant = (responseType, value) => {
+    const kind = normalizeResponseType(responseType)
+    if (kind === 'date' || kind === 'place' || kind === 'text') return false
+    if (kind === 'yes_no') return value === 'No' || value === 'Error'
+    const rating = parseRating(value)
+    return rating !== null && rating <= 2
+}
+
+export const mapResponseToFindingRating = (response) => {
+    const rating = parseRating(response)
+    if (rating !== null) {
+        if (rating >= 4) return 'Compliant'
+        if (rating === 3) return 'Minor Non-Conformity'
+        return 'Major Non-Conformity'
+    }
+    if (response === 'Yes') return 'Compliant'
+    if (response === 'Error') return 'Major Non-Conformity'
+    if (response === 'No') return 'Minor Non-Conformity'
+    if (FINDING_RATINGS.includes(response)) return response
+    return ''
 }
 
 export const computeScores = (sections, responses) => {
@@ -778,14 +866,34 @@ export const computeScores = (sections, responses) => {
 export const computeFindings = (sections, responses, observations) => {
     const scores = computeScores(sections, responses)
 
+    let compliant = 0
+    let minorNc = 0
+    let majorNc = 0
+
+    sections.forEach((section) => {
+        section.parameters.forEach((param) => {
+            const entry = responses[param.id]
+            const rating = entry?.findingRating || mapResponseToFindingRating(entry?.response)
+            if (rating === 'Compliant') compliant += 1
+            else if (rating === 'Minor Non-Conformity') minorNc += 1
+            else if (rating === 'Major Non-Conformity') majorNc += 1
+        })
+    })
+
     const criticalAnswered = observations.filter(
         (obs) => obs.priority === 'Critical' && (obs.submitted || (obs.saved && obs.title?.trim())),
     ).length
 
     return {
         ...scores,
-        totalFindings: scores.needsImprovement + scores.critical,
+        overallCompliance: scores.overallQualityScore,
+        totalFindings: scores.needsImprovement + scores.critical + minorNc + majorNc,
         criticalFindings: scores.critical,
+        compliant,
+        minorNc,
+        majorNc,
+        yes: scores.excellent + scores.good,
+        no: scores.needsImprovement,
         observationsRaised: observations.length,
         criticalAnswered,
     }
@@ -817,3 +925,6 @@ export const getSopDetails = (code) =>
         reference: 'Quality Audit SOP Library',
         expectedResult: 'Alignment with institutional quality standards.',
     }
+
+export const hydrateFromApi = (seed = DEFAULT_CHECKLIST_SECTIONS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

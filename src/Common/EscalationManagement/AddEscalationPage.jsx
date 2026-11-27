@@ -1,42 +1,48 @@
-import React, { useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import EscalationForm from './Components/EscalationForm'
-import { createEscalation, emptyEscalationForm } from './escalationData'
+import { createEscalation, emptyEscalationForm, raiseEscalationViaApi } from './escalationData'
+import { canUseEscalationsApi } from '../../services/escalationApi'
 import { getRoleConfig } from './escalationRoleConfig'
 import {
     getEscalationRecipientById,
     getEscalationRecipientSelectOptions,
 } from './escalationUsersData'
 import { useEscalationContext } from './useEscalationContext'
-import IntegrationNotice from '../ui/IntegrationNotice'
-import PageHeader from '../ui/PageHeader'
-import Surface from '../ui/Surface'
-import UnavailableWorkflowPage from '../ui/UnavailableWorkflowPage'
 
 const AddEscalationPage = ({ roleKey }) => {
     const navigate = useNavigate()
-    const location = useLocation()
-    const { pathname } = location
-    const effectiveRoleKey = roleKey || (pathname.startsWith('/parent') ? 'parent' : (pathname.startsWith('/student') ? 'student' : null))
-    const roleConfig = getRoleConfig(effectiveRoleKey || roleKey)
-    const { currentUser } = useEscalationContext(effectiveRoleKey || roleKey)
+    const roleConfig = getRoleConfig(roleKey)
+    const { currentUser } = useEscalationContext(roleKey)
 
-    const defaultRecipientId = useMemo(
-        () => getEscalationRecipientSelectOptions(roleConfig?.escalatesToRoleKey)?.[0]?.value || '',
-        [roleConfig?.escalatesToRoleKey],
-    )
+    const apiOn = canUseEscalationsApi()
+    const defaultRecipientId = apiOn
+        ? ''
+        : getEscalationRecipientSelectOptions(roleConfig?.escalatesToRoleKey)?.[0]?.value || ''
 
     const [form, setForm] = useState(() => emptyEscalationForm(defaultRecipientId))
 
-    if (!roleConfig?.escalatesToRoleKey) {
-        return <UnavailableWorkflowPage title='Escalation creation is unavailable' description='This role does not have a configured escalation destination.' alternateHref={roleConfig?.routeBase} alternateLabel='Open escalations' />
-    }
+    const [saving, setSaving] = useState(false)
 
-    const handleSubmit = (e) => {
-        if (e) e.preventDefault()
+    const handleSave = async () => {
         if (!form.description.trim()) {
             toast.error('Description is required.')
+            return
+        }
+
+        if (canUseEscalationsApi()) {
+            // The server routes it one level up; the recipient is optional (empty = whole role).
+            setSaving(true)
+            try {
+                const created = await raiseEscalationViaApi(form)
+                toast.success(`${created.escalationId} routed to ${roleConfig.escalatesTo}. Resolve-by is 24 hours.`)
+                navigate(roleConfig.routeBase)
+            } catch (error) {
+                toast.error(error?.message || 'Could not raise the escalation.')
+            } finally {
+                setSaving(false)
+            }
             return
         }
 
@@ -50,7 +56,7 @@ const AddEscalationPage = ({ roleKey }) => {
             return
         }
 
-        const result = createEscalation(effectiveRoleKey || roleKey, form, roleConfig, currentUser, recipientUser)
+        const result = createEscalation(roleKey, form, roleConfig, currentUser, recipientUser)
         if (!result.success) {
             toast.error(result.message)
             return
@@ -61,29 +67,30 @@ const AddEscalationPage = ({ roleKey }) => {
     }
 
     return (
-        <form onSubmit={handleSubmit} noValidate className='space-y-5'>
-            <PageHeader title='Raise escalation' description={`Route an issue through ${roleConfig.hierarchyLabel}.`} />
-            <IntegrationNotice state='demo' title='Local escalation routing' description='This escalation is stored in this browser. Recipient notification, evidence upload and the production audit trail are not connected.' />
-            <Surface title='Escalation information' description='Choose the responsible recipient and provide enough context for a 24-hour response.' contentClassName='p-4 sm:p-5'>
+        <section>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <h2 className='text-xl font-semibold text-black'>Add Escalation</h2>
                 <EscalationForm form={form} onChange={setForm} roleConfig={roleConfig} />
-            </Surface>
+            </div>
 
-            <div className='flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'>
+            <div className='flex sm:justify-end justify-center gap-x-4 mt-6'>
                 <button
                     type='button'
                     onClick={() => navigate(roleConfig.routeBase)}
                     className='bg-white text-[#515DEF] text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:bg-[#515DEF] hover:text-white hover:border-[#515DEF] transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
-                    Cancel
+                    Discard Changes
                 </button>
                 <button
-                    type='submit'
+                    type='button'
+                    onClick={handleSave}
+                    disabled={saving}
                     className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
-                    Raise escalation
+                    Save Escalation
                 </button>
             </div>
-        </form>
+        </section>
     )
 }
 

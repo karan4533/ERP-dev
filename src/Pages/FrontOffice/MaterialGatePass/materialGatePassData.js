@@ -1,5 +1,33 @@
+import {
+    createFrontOfficeItem,
+    deleteFrontOfficeItem,
+    frontOfficeApiOn,
+    hydrateFrontOfficeCollection,
+    peekFrontOfficeCollection,
+    updateFrontOfficeItem,
+} from '../frontOfficeStore'
+
 const STORAGE_KEY = 'material-gate-pass-front-office'
 const MGP_COUNTER_KEY = 'material-gate-pass-mgp-counter'
+
+/** Shared Material Gate Pass routes for Front Office + Stationery Store Manager. */
+export const getMaterialGatePassPaths = () => {
+    const path = typeof window !== 'undefined' ? String(window.location.pathname || '') : ''
+    if (path.startsWith('/stationery-store-manager')) {
+        return {
+            list: '/stationery-store-manager/material-gate-pass',
+            add: '/stationery-store-manager/material-gate-pass/add',
+            view: (id) => `/stationery-store-manager/material-gate-pass/view/${id}`,
+            edit: (id) => `/stationery-store-manager/material-gate-pass/edit/${id}`,
+        }
+    }
+    return {
+        list: '/front-office/material-gate-pass-list',
+        add: '/front-office/add-material-gate-pass',
+        view: (id) => `/front-office/material-gate-pass/view/${id}`,
+        edit: (id) => `/front-office/material-gate-pass/edit/${id}`,
+    }
+}
 
 export const APPROVAL_ROLES = [
     { key: 'storeKeeper', label: 'Store Keeper', useRoleSelect: true },
@@ -74,58 +102,7 @@ export const normalizeApprovals = (approvals = {}) =>
         return acc
     }, {})
 
-const DEFAULT_MATERIAL_GATE_PASSES = [
-    {
-        id: 'mgp-0001',
-        mgpNo: '0001',
-        passType: 'Returnable',
-        date: '2026-11-04',
-        time: '11:00',
-        timePeriod: 'AM',
-        vendorDepartment: 'PrintTech Solutions',
-        destination: 'PrintTech Service Center, Madurai',
-        carrierName: 'Ramu Logistics (Auto #TN-58-Z-1011)',
-        reason: 'Epson EB-X06 Overhead Projector optical alignment & lamp repair',
-        expectedReturnDate: '2026-11-12',
-        materials: [
-            { id: 'm-1', description: 'Overhead Projector (Epson EB-X06, S/N: EP-9921)', quantity: 1, destination: 'Madurai Service Center', remarks: 'Optical unit blurred' }
-        ],
-        approvals: {
-            storeKeeper: { role: 'Store Keeper', name: 'Selvam R.' },
-            security: { role: 'Security', name: 'Murugan P.' },
-            takenBy: { name: 'K. Balaji (Service Engg)' },
-            principal: { role: 'Principal', name: 'Dr. Priya Nair' },
-            authorizedSignatory: { role: 'Authorized Signatory', name: 'Admin Office' }
-        },
-        status: 'Approved',
-        createdAt: '04/11/2026 11:15 AM'
-    },
-    {
-        id: 'mgp-0002',
-        mgpNo: '0002',
-        passType: 'Non-Returnable',
-        date: '2026-11-07',
-        time: '03:45',
-        timePeriod: 'PM',
-        vendorDepartment: 'EcoMills Recyclers',
-        destination: 'Industrial Waste Processing Zone, Madurai',
-        carrierName: 'EcoMills Truck (TN-59-C-4412)',
-        reason: 'Disposal and authorized pulping of archived answer scripts (>5 years old)',
-        expectedReturnDate: 'N/A',
-        materials: [
-            { id: 'm-2', description: 'Bundled Outdated Exam Scripts (Sealed & Weighed)', quantity: 45, destination: 'EcoMills Processing', remarks: 'Pre-approved by Examination Committee' }
-        ],
-        approvals: {
-            storeKeeper: { role: 'Store Keeper', name: 'Selvam R.' },
-            security: { role: 'Security', name: 'Murugan P.' },
-            takenBy: { name: 'V. Senthil' },
-            principal: { role: 'Principal', name: 'Dr. Priya Nair' },
-            authorizedSignatory: { role: '', name: '' }
-        },
-        status: 'Partially Approved',
-        createdAt: '07/11/2026 03:50 PM'
-    }
-]
+const DEFAULT_MATERIAL_GATE_PASSES = []
 
 export const calculateTotalItems = (materials = []) =>
     materials.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
@@ -179,7 +156,14 @@ const hydrateRecord = (record) => ({
     status: record.status ?? deriveOverallStatus(record.approvals),
 })
 
-export const getMaterialGatePasses = () => {
+const FO_COLLECTION = 'material-gate-passes'
+
+export const hydrateMaterialGatePassesFromApi = async () => {
+    const rows = await hydrateFrontOfficeCollection(FO_COLLECTION)
+    return rows.map(hydrateRecord)
+}
+
+const localMaterialGatePasses = () => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
         const records = JSON.parse(stored).map(hydrateRecord)
@@ -191,6 +175,11 @@ export const getMaterialGatePasses = () => {
     return DEFAULT_MATERIAL_GATE_PASSES.map(hydrateRecord)
 }
 
+export const getMaterialGatePasses = () =>
+    frontOfficeApiOn()
+        ? peekFrontOfficeCollection(FO_COLLECTION).map(hydrateRecord)
+        : localMaterialGatePasses()
+
 export const saveMaterialGatePasses = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
@@ -198,12 +187,10 @@ export const saveMaterialGatePasses = (records) => {
 export const getMaterialGatePassById = (id) =>
     getMaterialGatePasses().find((record) => record.id === id) ?? null
 
-export const addMaterialGatePass = (payload) => {
-    const records = getMaterialGatePasses()
-    const mgpNo = generateMgpNo()
-    const record = hydrateRecord({
-        id: `mgp-${mgpNo}`,
-        mgpNo,
+export const addMaterialGatePass = async (payload) => {
+    const mgpNo = frontOfficeApiOn() ? undefined : generateMgpNo()
+    const draft = hydrateRecord({
+        ...(mgpNo ? { id: `mgp-${mgpNo}`, mgpNo } : {}),
         ...payload,
         status: deriveOverallStatus(payload.approvals),
         createdAt: new Date().toLocaleString('en-IN', {
@@ -215,11 +202,15 @@ export const addMaterialGatePass = (payload) => {
             hour12: true,
         }).replace(',', ''),
     })
-    saveMaterialGatePasses([record, ...records])
-    return record
+    if (frontOfficeApiOn()) {
+        const row = await createFrontOfficeItem(FO_COLLECTION, draft)
+        return hydrateRecord(row)
+    }
+    saveMaterialGatePasses([draft, ...localMaterialGatePasses()])
+    return draft
 }
 
-export const updateMaterialGatePass = (id, payload) => {
+export const updateMaterialGatePass = async (id, payload) => {
     const records = getMaterialGatePasses()
     const index = records.findIndex((record) => record.id === id)
     if (index === -1) return null
@@ -228,14 +219,20 @@ export const updateMaterialGatePass = (id, payload) => {
         ...payload,
         status: deriveOverallStatus(payload.approvals ?? records[index].approvals),
     })
+    if (frontOfficeApiOn()) {
+        return hydrateRecord(await updateFrontOfficeItem(FO_COLLECTION, id, updated))
+    }
     records[index] = updated
     saveMaterialGatePasses(records)
     return updated
 }
 
-export const deleteMaterialGatePass = (id) => {
-    const records = getMaterialGatePasses().filter((record) => record.id !== id)
-    saveMaterialGatePasses(records)
+export const deleteMaterialGatePass = async (id) => {
+    if (frontOfficeApiOn()) {
+        await deleteFrontOfficeItem(FO_COLLECTION, id)
+        return
+    }
+    saveMaterialGatePasses(localMaterialGatePasses().filter((record) => record.id !== id))
 }
 
 export const getNextMgpPreview = () => {

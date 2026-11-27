@@ -1,6 +1,9 @@
 export {
     GENDERS,
-    STUDENTS_LIST,
+} from '../../Teacher/StudentsList/studentsListData'
+
+export {
     getStudentsList,
     getStudentById,
-} from '../../Teacher/StudentsList/studentsListData'
+    STUDENTS_LIST,
+} from '../../../Common/StudentDatabase/studentDatabaseData'

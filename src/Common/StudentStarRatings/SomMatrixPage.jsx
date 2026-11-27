@@ -1,15 +1,25 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Upload, FileText, Download } from 'lucide-react'
 import { SCHOOL_PROFILE } from '../../constants/schoolProfile'
+import { hydrateEnrolledStudentsFromApi, getAllEnrolledStudents } from '../StudentDatabase/enrolledStudentsData'
+import { useTeacherAssignments } from '../Teacher/useTeacherAssignments'
+import {
+    classKeysMatch,
+    normalizeSectionKey,
+} from '../Teacher/teacherAssignedClasses'
 import { downloadHtml, openPrintDocument } from '../printDocument'
+import { isApiStudentsEnabled } from '../../services/apiClient'
+import { canUseClassDetailsApi, listAcademicYears } from '../../services/classDetailsApi'
 import { useStarRatingsRouteBase } from './useStarRatingsRouteBase'
+import { toast } from 'react-toastify'
+import { fileDownloadUrl, uploadProfileImage } from '../../services/filesApi'
 import {
     getDisabledSubs,
+    hydrateSomFromApi,
     SOM_MONTHS,
+    SOM_SYNC_EVENT,
     SOM_RATINGS,
     averageRatings,
-    checklistTemplateCsv,
     flattenSubs,
     getChecklist,
     getMatrixMeta,
@@ -17,10 +27,8 @@ import {
     getSomRoster,
     getStarTitles,
     importSomRows,
-    previewSomImport,
     ratingFor,
     resetChecklist,
-    rosterFor,
     saveChecklist,
     saveMatrixMeta,
     saveStarTitles,
@@ -30,6 +38,7 @@ import {
     upsertRating,
     visibleSubs,
 } from './somChecklist'
+import { downloadSomTemplateCsv, downloadSomTemplateExcel, previewSomImportFile } from './somImportFile'
 
 const inputClass = 'border border-[#D9D9D9] rounded-md px-2 py-2 text-sm bg-white'
 
@@ -37,46 +46,203 @@ const newId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).
 
 const SomMatrixPage = () => {
     const routeBase = useStarRatingsRouteBase()
-    const roster = useMemo(() => getSomRoster(), [])
-    const grades = [...new Set(roster.map((student) => student.grade))]
-    const [month, setMonth] = useState('August')
-    const [year, setYear] = useState('2026')
-    const [grade, setGrade] = useState(grades[0] || '')
+    const assignments = useTeacherAssignments()
+    const [scopedRows, setScopedRows] = useState([])
+    const [loadingStudents, setLoadingStudents] = useState(isApiStudentsEnabled())
+
+    useEffect(() => {
+        let cancelled = false
+        const apply = () => {
+            const all = getAllEnrolledStudents()
+            if (!assignments.ready) return
+            // Teachers are scoped to allocated classes; Principal/Coordinator/Admin see campus roster.
+            const campusWide = /\/(principal|coordinator|director|admin|super-admin)\b/.test(routeBase || '')
+            const scoped = assignments.assignments.length
+                ? all.filter((student) => assignments.studentInScope(student))
+                : (campusWide ? all : [])
+            if (!cancelled) {
+                setScopedRows(scoped)
+                setLoadingStudents(false)
+            }
+        }
+        if (!isApiStudentsEnabled()) {
+            queueMicrotask(() => {
+                if (!cancelled) apply()
+            })
+            return () => {
+                cancelled = true
+            }
+        }
+        hydrateEnrolledStudentsFromApi().finally(() => {
+            if (!cancelled) apply()
+        })
+        return () => {
+            cancelled = true
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when assignment hydrate settles
+    }, [assignments.ready, assignments.assignments.length, routeBase])
+
+    const [yearOptions, setYearOptions] = useState(() => {
+        const current = new Date().getFullYear()
+        return [String(current - 1), String(current), String(current + 1)]
+    })
+    useEffect(() => {
+        let cancelled = false
+        if (!canUseClassDetailsApi()) return undefined
+        listAcademicYears()
+            .then((years) => {
+                if (cancelled || !Array.isArray(years) || !years.length) return
+                const fromApi = new Set()
+                years.forEach((row) => {
+                    const start = String(row.startDate || '').slice(0, 4)
+                    const end = String(row.endDate || '').slice(0, 4)
+                    if (/^\d{4}$/.test(start)) fromApi.add(start)
+                    if (/^\d{4}$/.test(end)) fromApi.add(end)
+                    const nameYears = String(row.name || '').match(/\d{4}/g) || []
+                    nameYears.forEach((value) => fromApi.add(value))
+                })
+                if (!fromApi.size) return
+                fromApi.add(String(new Date().getFullYear()))
+                setYearOptions([...fromApi].sort())
+            })
+            .catch(() => {
+                /* keep calendar-year fallback */
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    const roster = useMemo(() => getSomRoster(scopedRows), [scopedRows])
+    const teacherName = assignments.profile?.name || ''
+    const grades = useMemo(() => {
+        if (assignments.classes?.length) return assignments.classes
+        return [...new Set(roster.map((student) => student.grade))]
+    }, [assignments.classes, roster])
+    const now = useMemo(() => new Date(), [])
+    const [month, setMonth] = useState(() => SOM_MONTHS[now.getMonth()])
+    const [year, setYear] = useState(() => String(now.getFullYear()))
+    const [grade, setGrade] = useState('')
     const [section, setSection] = useState('')
-    const sections = [...new Set(roster.filter((student) => student.grade === grade).map((student) => student.section))]
-    const activeSection = section || sections[0] || ''
-    const context = { month, year, grade, section: activeSection }
+    const activeGrade = grade && grades.some((item) => classKeysMatch(item, grade) || item === grade)
+        ? (grades.find((item) => classKeysMatch(item, grade) || item === grade) || grade)
+        : (grades[0] || '')
+
+    const sections = useMemo(() => {
+        if (activeGrade && assignments.sectionsFor) {
+            const fromAssignments = assignments.sectionsFor(activeGrade)
+            if (fromAssignments.length) return fromAssignments
+        }
+        return [
+            ...new Set(
+                roster
+                    .filter((student) => classKeysMatch(student.grade, activeGrade))
+                    .map((student) => student.section),
+            ),
+        ]
+    }, [activeGrade, assignments, roster])
+
+    const activeSection = sections.find((item) => normalizeSectionKey(item) === normalizeSectionKey(section))
+        || sections[0]
+        || ''
+    const context = { month, year, grade: activeGrade, section: activeSection }
     const [checklist, setChecklist] = useState(() => getChecklist())
     const [titles, setTitles] = useState(() => getStarTitles())
     const [ratings, setRatings] = useState(() => getRatings())
-    const [meta, setMeta] = useState(() => getMatrixMeta({ month: 'August', year: '2026', grade: grades[0] || '', section: roster.find((student) => student.grade === grades[0])?.section || '' }))
+    const [meta, setMeta] = useState(() => getMatrixMeta({
+        month: SOM_MONTHS[now.getMonth()],
+        year: String(now.getFullYear()),
+        grade: '',
+        section: '',
+    }))
     const [preview, setPreview] = useState(null)
     const [panel, setPanel] = useState('matrix')
     const [revision, setRevision] = useState(0)
+    const [syncError, setSyncError] = useState('')
 
-    const students = rosterFor(grade, activeSection)
+    // Server copy wins over this browser; the cache is refilled once on open.
+    useEffect(() => {
+        let cancelled = false
+        const onSync = (event) => {
+            if (event.detail && event.detail.ok === false) setSyncError(event.detail.message)
+        }
+        window.addEventListener(SOM_SYNC_EVENT, onSync)
+        hydrateSomFromApi().then((loaded) => {
+            if (cancelled || !loaded) return
+            setChecklist(getChecklist())
+            setTitles(getStarTitles())
+            setRatings(getRatings())
+            setRevision((value) => value + 1)
+        })
+        return () => {
+            cancelled = true
+            window.removeEventListener(SOM_SYNC_EVENT, onSync)
+        }
+    }, [])
+
+    const students = useMemo(
+        () => getSomRoster(scopedRows).filter(
+            (student) => classKeysMatch(student.grade, activeGrade)
+                && normalizeSectionKey(student.section) === normalizeSectionKey(activeSection),
+        ),
+        [scopedRows, activeGrade, activeSection],
+    )
     const subs = visibleSubs(checklist, context)
     const placements = titlePlacements(titles, students, subs, ratings, context)
+
+    useEffect(() => {
+        if (!activeGrade) return
+        const stored = getMatrixMeta(context)
+        setMeta({
+            ...stored,
+            classMentor: teacherName || stored.classMentor || '',
+            signoff: {
+                ...(stored.signoff || {}),
+                Teacher: teacherName || stored.signoff?.Teacher || stored.signoff?.['Class Mentor'] || '',
+            },
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when class context / teacher settles
+    }, [month, year, activeGrade, activeSection, teacherName])
 
     const refreshMeta = (next) => setMeta(getMatrixMeta(next))
     const changeContext = (patch) => {
         const next = { ...context, ...patch }
         if (patch.grade) {
-            const nextSections = [...new Set(roster.filter((student) => student.grade === patch.grade).map((student) => student.section))]
+            const nextSections = assignments.sectionsFor?.(patch.grade)?.length
+                ? assignments.sectionsFor(patch.grade)
+                : [
+                    ...new Set(
+                        roster
+                            .filter((student) => classKeysMatch(student.grade, patch.grade))
+                            .map((student) => student.section),
+                    ),
+                ]
             next.section = nextSections[0] || ''
             setSection(next.section)
+            setGrade(patch.grade)
         }
+        if (patch.section != null) setSection(patch.section)
+        if (patch.month != null) setMonth(patch.month)
+        if (patch.year != null) setYear(patch.year)
         refreshMeta(next)
     }
 
     const setRating = (studentId, subId, rating) => setRatings(upsertRating(context, studentId, subId, rating))
     const persistMeta = (next) => {
-        setMeta(next)
-        saveMatrixMeta(context, next)
+        const withTeacher = {
+            ...next,
+            classMentor: teacherName || next.classMentor || '',
+            signoff: {
+                ...(next.signoff || {}),
+                Teacher: teacherName || next.signoff?.Teacher || '',
+            },
+        }
+        setMeta(withTeacher)
+        saveMatrixMeta(context, withTeacher)
     }
 
     const printBody = () => {
-        const head = `<h1 style="text-align:center">${SCHOOL_PROFILE.name}</h1><p style="text-align:center">Star of the Month - ${month} ${year}</p><p>Grade: ${grade}${activeSection} &nbsp; Class Mentor: ${meta.classMentor || 'NA'}</p>`
+        const head = `<h1 style="text-align:center">${SCHOOL_PROFILE.name}</h1><p style="text-align:center">Star of the Month - ${month} ${year}</p><p>Grade: ${activeGrade}${activeSection} &nbsp; Teacher: ${teacherName || 'NA'}</p>`
         const header = `<tr><th>Sub Parameter</th>${students.map((student) => `<th>${student.name}</th>`).join('')}<th>Overall 3 Point Scale Rating</th></tr>`
         let lastCategory = ''
         const body = subs.map((item) => {
@@ -87,35 +253,53 @@ const SomMatrixPage = () => {
         }).join('')
         const totals = `<tr><td>Overall</td>${students.map((student) => `<td>${studentScore(subs, ratings, context, student.id) ?? 'NA'}</td>`).join('')}<td>${averageRatings(students.map((student) => studentScore(subs, ratings, context, student.id))) ?? 'NA'}</td></tr>`
         const summary = `<table><tr><th>Star Titles</th><th>Winners</th><th>Runner up 1</th><th>Runner up 2</th></tr>${placements.map((item) => `<tr><td>${item.name}</td><td>${item.winner ? `${item.winner.name} (${item.winner.score})` : ''}</td><td>${item.runnerUp1 ? `${item.runnerUp1.name} (${item.runnerUp1.score})` : ''}</td><td>${item.runnerUp2 ? `${item.runnerUp2.name} (${item.runnerUp2.score})` : ''}</td></tr>`).join('')}</table>`
-        const signoff = `<p style="margin-top:16px">Class Mentor &nbsp; Co-ordinator &nbsp; AVP-KG &nbsp; VP &nbsp; Principal</p>`
+        const signoff = `<p style="margin-top:16px">Teacher (${teacherName || 'NA'}) &nbsp; Co-ordinator &nbsp; AVP-KG &nbsp; VP &nbsp; Principal</p>`
         return `${head}<table>${header}${body}${totals}</table>${summary}${signoff}`
     }
 
     return (
         <section className='space-y-4'>
+            {syncError ? (
+                <p role='alert' className='text-sm text-[#B42318] bg-[#FEF3F2] border border-[#FECDCA] rounded-lg px-3 py-2'>
+                    {syncError} Your changes are kept in this browser; reload the page to retry.
+                </p>
+            ) : null}
             <div className='bg-white rounded-2xl shadow-md p-4 space-y-3'>
                 <h2 className='text-xl font-semibold'>{SCHOOL_PROFILE.name}</h2>
                 <p className='font-medium'>Star of the Month - {month} {year}</p>
                 <div className='grid md:grid-cols-5 gap-3'>
                     <label className='text-sm'>Month<select className={inputClass} value={month} onChange={(e) => { setMonth(e.target.value); changeContext({ month: e.target.value }) }}>{SOM_MONTHS.map((item) => <option key={item}>{item}</option>)}</select></label>
-                    <label className='text-sm'>Year<input className={inputClass} value={year} onChange={(e) => { setYear(e.target.value); changeContext({ year: e.target.value }) }} /></label>
-                    <label className='text-sm'>Grade<select className={inputClass} value={grade} onChange={(e) => { setGrade(e.target.value); changeContext({ grade: e.target.value }) }}>{grades.map((item) => <option key={item}>{item}</option>)}{!grades.length && <option value=''>No class</option>}</select></label>
-                    <label className='text-sm'>Section<select className={inputClass} value={activeSection} onChange={(e) => { setSection(e.target.value); changeContext({ section: e.target.value }) }}>{sections.map((item) => <option key={item}>{item}</option>)}</select></label>
-                    <label className='text-sm'>Class Mentor<input className={inputClass} value={meta.classMentor || ''} onChange={(e) => persistMeta({ ...meta, classMentor: e.target.value })} /></label>
+                    <label className='text-sm'>Year<select className={inputClass} value={year} onChange={(e) => { setYear(e.target.value); changeContext({ year: e.target.value }) }}>{yearOptions.map((item) => <option key={item} value={item}>{item}</option>)}{!yearOptions.includes(year) ? <option value={year}>{year}</option> : null}</select></label>
+                    <label className='text-sm'>Grade<select className={inputClass} value={activeGrade} onChange={(e) => { setGrade(e.target.value); changeContext({ grade: e.target.value }) }}>{grades.map((item) => <option key={item} value={item}>{item}</option>)}{!grades.length && <option value=''>No assigned class</option>}</select></label>
+                    <label className='text-sm'>Section<select className={inputClass} value={activeSection} onChange={(e) => { setSection(e.target.value); changeContext({ section: e.target.value }) }}>{sections.map((item) => <option key={item} value={item}>{item}</option>)}{!sections.length && <option value=''>No section</option>}</select></label>
+                    <label className='text-sm'>Teacher<input className={`${inputClass} bg-[#F8F9FC]`} value={teacherName || '—'} readOnly /></label>
                 </div>
-                <p className='text-sm text-[#667085]'>Grade: {grade || 'NA'}{activeSection} · Students are loaded from the class list, not from the sample PDF. <NavLink className='text-[#515DEF]' to={`${routeBase}/star-of-month`}>Open the earlier monthly rating list</NavLink></p>
+                <p className='text-sm text-[#667085]'>
+                    Grade: {activeGrade || 'NA'}{activeSection ? `-${activeSection}` : ''}
+                    {loadingStudents
+                        ? ' · Loading enrolled students…'
+                        : assignments.emptyReason
+                            ? ` · ${assignments.emptyReason}`
+                            : students.length
+                                ? ` · ${students.length} student(s) in this class/section.`
+                                : roster.length
+                                    ? ' · No enrolled students in this grade/section yet.'
+                                    : ' · No enrolled students in your assigned classes yet.'}
+                    {' '}
+                    <NavLink className='text-[#515DEF]' to={`${routeBase}/star-of-month`}>Open the earlier monthly rating list</NavLink>
+                </p>
                 <div className='flex flex-wrap gap-2'>
                     <button type='button' className='text-sm px-3 py-2 rounded-md bg-[#515DEF] text-white cursor-pointer' onClick={() => setPanel('matrix')}>Matrix</button>
                     <button type='button' className='text-sm px-3 py-2 rounded-md border cursor-pointer' onClick={() => setPanel('checklist')}>Checklist</button>
                     <button type='button' className='text-sm px-3 py-2 rounded-md border cursor-pointer' onClick={() => setPanel('import')}>Bulk upload</button>
                     <button type='button' className='text-sm px-3 py-2 rounded-md border cursor-pointer' onClick={() => openPrintDocument({ title: `SOM ${month} ${year}`, body: printBody(), css: '@page{size:A4 landscape;margin:8mm} th,td{font-size:10px}' })}>Print</button>
-                    <button type='button' className='text-sm px-3 py-2 rounded-md border cursor-pointer' onClick={() => downloadHtml(`som-${grade}${activeSection}-${month}-${year}.html`, `<!doctype html><html><body>${printBody()}</body></html>`)}>Export</button>
+                    <button type='button' className='text-sm px-3 py-2 rounded-md border cursor-pointer' onClick={() => downloadHtml(`som-${activeGrade}${activeSection}-${month}-${year}.html`, `<!doctype html><html><body>${printBody()}</body></html>`)}>Export</button>
                 </div>
             </div>
 
             {panel === 'checklist' && (
                 <ChecklistEditor
-                    key={`${month}-${year}-${grade}-${activeSection}-${revision}`}
+                    key={`${month}-${year}-${activeGrade}-${activeSection}-${revision}`}
                     checklist={checklist}
                     context={context}
                     disabledIds={getDisabledSubs(context)}
@@ -194,10 +378,30 @@ const SomMatrixPage = () => {
                         </tbody>
                     </table>
                     <div className='grid md:grid-cols-5 gap-3 mt-4 text-sm'>
-                        {['Class Mentor', 'Co-ordinator', 'AVP-KG', 'VP', 'Principal'].map((label) => (
-                            <label key={label}>{label}<input className={inputClass} value={meta.signoff?.[label] || ''} onChange={(e) => persistMeta({ ...meta, signoff: { ...(meta.signoff || {}), [label]: e.target.value } })} /></label>
+                        <label>
+                            Teacher
+                            <input className={`${inputClass} bg-[#F8F9FC]`} value={teacherName || '—'} readOnly />
+                        </label>
+                        {['Co-ordinator', 'AVP-KG', 'VP', 'Principal'].map((label) => (
+                            <label key={label}>
+                                {label}
+                                <input
+                                    className={inputClass}
+                                    value={meta.signoff?.[label] || ''}
+                                    onChange={(e) => persistMeta({
+                                        ...meta,
+                                        signoff: { ...(meta.signoff || {}), [label]: e.target.value },
+                                    })}
+                                />
+                            </label>
                         ))}
                     </div>
+                    <MatrixDocuments
+                        context={context}
+                        meta={meta}
+                        onChange={persistMeta}
+                        resourceId={`${year}|${month}|${activeGrade}|${activeSection}`}
+                    />
                 </div>
             )}
         </section>
@@ -256,52 +460,180 @@ const moveItem = (list, index, direction) => {
     return next
 }
 
-const ImportPanel = ({ context, students, subs, preview, setPreview, onImported }) => (
-    <div className='bg-white rounded-2xl shadow-md p-4 space-y-4'>
-        <div className='flex flex-wrap items-center gap-3'>
-            <button
-                type='button'
-                className='inline-flex items-center gap-2 text-sm border border-slate-300 px-3.5 py-2 rounded-xl text-slate-700 hover:bg-slate-50 transition cursor-pointer font-medium'
-                onClick={() => downloadCsv(`som-template-${context.grade}${context.section}.csv`, checklistTemplateCsv(context, students, subs))}
-            >
-                <Download size={15} />
-                <span>Download Template</span>
-            </button>
-            <label className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-[#434ecf] transition-all cursor-pointer shadow-md active:scale-95 border border-[#434ecf]'>
-                <Upload size={16} />
-                <span>Browse CSV File</span>
+const ImportPanel = ({ context, students, subs, preview, setPreview, onImported }) => {
+    const [reading, setReading] = useState(false)
+    const allPreviewRows = [...(preview?.rows || []), ...(preview?.duplicates || [])]
+
+    const onFile = async (event) => {
+        const file = event.target.files?.[0]
+        event.target.value = ''
+        if (!file) return
+        setReading(true)
+        try {
+            const next = await previewSomImportFile(file, context, students, subs, getRatings())
+            setPreview(next)
+        } catch (error) {
+            setPreview({ rows: [], duplicates: [], errors: [error?.message || 'Could not read the file.'] })
+        } finally {
+            setReading(false)
+        }
+    }
+
+    return (
+        <div className='bg-white rounded-2xl shadow-md p-4 space-y-3'>
+            <p className='text-sm text-[#667085]'>
+                Download the sample template, fill ratings (1, 2, 3, or NA only), then upload CSV or Excel for a preview before saving.
+            </p>
+            <div className='flex flex-wrap gap-2'>
+                <button
+                    type='button'
+                    className='text-sm border px-3 py-2 rounded-md cursor-pointer'
+                    onClick={() => downloadSomTemplateCsv(`som-template-${context.grade}${context.section}`, context, students, subs)}
+                >
+                    Download CSV template
+                </button>
+                <button
+                    type='button'
+                    className='text-sm border px-3 py-2 rounded-md cursor-pointer'
+                    onClick={() => downloadSomTemplateExcel(`som-template-${context.grade}${context.section}`, context, students, subs)}
+                >
+                    Download Excel template
+                </button>
+            </div>
+            <input
+                type='file'
+                accept='.csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'
+                disabled={reading}
+                onChange={onFile}
+            />
+            {reading ? <p className='text-sm text-[#667085]'>Reading file…</p> : null}
+            {preview && (
+                <div className='text-sm space-y-2'>
+                    <p>
+                        {preview.rows.length} new row(s). {(preview.duplicates || []).length} duplicate(s) blocked.
+                        {' '}{preview.errors.length} error(s).
+                    </p>
+                    {preview.errors.map((error) => <p key={error} className='text-[#B42318]'>{error}</p>)}
+                    {(preview.duplicates || []).length > 0 && (
+                        <p className='text-[#B54708]'>
+                            Existing matrix cells are treated as duplicates and will not be overwritten. Clear those cells in the matrix first, or remove them from the file.
+                        </p>
+                    )}
+                    {allPreviewRows.length > 0 && (
+                        <div className='overflow-x-auto max-h-64 border rounded-md'>
+                            <table className='min-w-full text-xs'>
+                                <thead>
+                                    <tr className='bg-[#F8F9FC]'>
+                                        {['Row', 'Student', 'Subparameter', 'Rating', 'Status'].map((label) => (
+                                            <th key={label} className='text-left px-2 py-1 border'>{label}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {allPreviewRows.slice(0, 100).map((row) => (
+                                        <tr key={`${row.rowNumber}-${row.studentId}-${row.subId}`}>
+                                            <td className='border px-2 py-1'>{row.rowNumber}</td>
+                                            <td className='border px-2 py-1'>{row.studentName}</td>
+                                            <td className='border px-2 py-1'>{row.subparameter}</td>
+                                            <td className='border px-2 py-1'>{row.rating}</td>
+                                            <td className={`border px-2 py-1 ${row.status === 'Duplicate' ? 'text-[#B54708]' : 'text-[#027A48]'}`}>{row.status}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    <button
+                        type='button'
+                        disabled={preview.errors.length > 0 || preview.rows.length === 0}
+                        className='bg-[#515DEF] text-white px-3 py-2 rounded-md disabled:opacity-40 cursor-pointer'
+                        onClick={() => onImported(importSomRows(context, preview.rows))}
+                    >
+                        Confirm import ({preview.rows.length})
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
+
+const MatrixDocuments = ({ context, meta, onChange, resourceId }) => {
+    const documents = Array.isArray(meta?.documents) ? meta.documents : []
+    const [uploading, setUploading] = useState(false)
+
+    const onUpload = async (event) => {
+        const file = event.target.files?.[0]
+        event.target.value = ''
+        if (!file) return
+        setUploading(true)
+        try {
+            const asset = await uploadProfileImage(file, 'som-matrix-doc', resourceId)
+            onChange({
+                ...meta,
+                documents: [
+                    ...documents,
+                    {
+                        fileId: asset.id,
+                        name: asset.originalName || file.name,
+                        uploadedAt: new Date().toISOString(),
+                    },
+                ],
+            })
+            toast.success('Document attached.')
+        } catch (error) {
+            toast.error(error?.message || 'Document upload failed.')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    const removeDoc = (fileId) => {
+        onChange({
+            ...meta,
+            documents: documents.filter((item) => item.fileId !== fileId),
+        })
+    }
+
+    return (
+        <div className='mt-4 border-t pt-4 space-y-2'>
+            <h3 className='text-sm font-medium text-[#1E1E1E]'>Supporting documents</h3>
+            <p className='text-xs text-[#667085]'>
+                Attach evidence for {context.month} {context.year} · {context.grade}-{context.section}. Files are stored securely and only staff with Star of the Month access can download them.
+            </p>
+            <label className={`inline-flex items-center gap-2 rounded-md bg-[#515DEF] px-4 py-2 text-sm font-medium text-white cursor-pointer ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                Browse
                 <input
                     type='file'
-                    accept='.csv,text/csv'
-                    className='hidden'
-                    onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        const reader = new FileReader()
-                        reader.onload = () => setPreview(previewSomImport(String(reader.result || ''), context, students, subs))
-                        reader.readAsText(file)
-                    }}
+                    accept='.pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,image/png,image/jpeg,image/*,application/pdf'
+                    disabled={uploading}
+                    onChange={onUpload}
+                    className='sr-only'
                 />
             </label>
+            {uploading ? <p className='text-xs text-[#667085]'>Uploading…</p> : null}
+            {!documents.length ? (
+                <p className='text-xs text-[#667085]'>No documents attached yet.</p>
+            ) : (
+                <ul className='space-y-1 text-sm'>
+                    {documents.map((doc) => (
+                        <li key={doc.fileId} className='flex flex-wrap items-center gap-3'>
+                            <a
+                                className='text-[#515DEF] underline'
+                                href={fileDownloadUrl(`/api/v1/files/${doc.fileId}/download`)}
+                                target='_blank'
+                                rel='noreferrer'
+                            >
+                                {doc.name || doc.fileId}
+                            </a>
+                            <button type='button' className='text-xs text-[#B42318] cursor-pointer' onClick={() => removeDoc(doc.fileId)}>
+                                Remove
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
-        {preview && (
-            <div className='text-sm space-y-2'>
-                <p>{preview.rows.length} valid row(s). {preview.errors.length} error(s).</p>
-                {preview.errors.map((error) => <p key={error} className='text-[#B42318]'>{error}</p>)}
-                <button type='button' disabled={preview.errors.length > 0 || preview.rows.length === 0} className='bg-[#515DEF] text-white px-3 py-2 rounded-md disabled:opacity-40 cursor-pointer' onClick={() => onImported(importSomRows(context, preview.rows))}>Import</button>
-            </div>
-        )}
-    </div>
-)
-
-const downloadCsv = (filename, text) => {
-    const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
+    )
 }
 
 export default SomMatrixPage

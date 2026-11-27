@@ -40,6 +40,11 @@ export const INSTITUTIONAL_PORTAL_LAYOUTS = Object.freeze({
     [ROLES.PRO]: portal(ROLES.PRO, 'Public relations and government licensing', 'PRO', true),
     [ROLES.FILE_ROOM]: portal(ROLES.FILE_ROOM, 'File room custody and archives', 'File Room', true),
     [ROLES.CCTV]: portal(ROLES.CCTV, 'Campus surveillance and camera room', 'CCTV', true),
+    [ROLES.HOSTEL_WARDEN]: portal(ROLES.HOSTEL_WARDEN, 'Hostel & residential management', 'Hostel Warden', true),
+    [ROLES.MANAGING_DIRECTOR]: portal(ROLES.MANAGING_DIRECTOR, 'Executive governance', 'Managing Director', true),
+    [ROLES.FINANCE_MANAGER]: portal(ROLES.FINANCE_MANAGER, 'Finance management', 'Finance Manager', true),
+    [ROLES.ACCOUNT_ASSISTANT]: portal(ROLES.ACCOUNT_ASSISTANT, 'Accounts desk', 'Account Assistant', true),
+    [ROLES.FINANCE_ASSISTANT]: portal(ROLES.FINANCE_ASSISTANT, 'Finance desk', 'Finance Assistant', true),
 })
 
 // Attach institutional roles as non-enumerable properties on PORTAL_LAYOUTS so direct access

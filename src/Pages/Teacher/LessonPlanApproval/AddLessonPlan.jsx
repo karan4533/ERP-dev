@@ -1,13 +1,25 @@
 import React from 'react'
 import LessonPlanEntryForm from '../../../Common/LessonPlanApproval/Components/LessonPlanEntryForm'
-import { TEACHER_NAME, TEACHER_ROLE } from '../../../Common/LessonPlanApproval/lessonPlanApprovalData'
+import { TEACHER_ROLE } from '../../../Common/LessonPlanApproval/lessonPlanApprovalData'
+import { useTeacherAssignments } from '../../../Common/Teacher/useTeacherAssignments'
+import { useAuth } from '../../../context/AuthContext'
 
-const AddLessonPlan = () => (
-    <LessonPlanEntryForm
-        submitterName={TEACHER_NAME}
-        submitterRole={TEACHER_ROLE}
-        successPath='/teacher/lesson-plan-approval'
-    />
-)
+const AddLessonPlan = () => {
+    const { name } = useAuth()
+    const assignments = useTeacherAssignments()
+    const submitterName = assignments.profile?.name || name || ''
+
+    return (
+        <LessonPlanEntryForm
+            submitterName={submitterName}
+            submitterRole={TEACHER_ROLE}
+            successPath='/teacher/lesson-plan-approval'
+            classOptions={assignments.classes}
+            sectionOptionsFor={assignments.sectionsFor}
+            subjectOptions={assignments.subjects}
+            emptyHint={assignments.emptyReason}
+        />
+    )
+}
 
 export default AddLessonPlan

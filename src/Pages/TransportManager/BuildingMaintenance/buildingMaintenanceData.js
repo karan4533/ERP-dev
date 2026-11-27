@@ -41,7 +41,6 @@ export async function upsertBuildingMaintenance(record) {
         date: '',
         category: '',
         location: '',
-        cost: '',
         remarks: '',
         status: 'Pending',
         ...record,

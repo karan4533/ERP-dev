@@ -1,4 +1,10 @@
-export const ORDERS = [
+import {
+    ensureCampusSeed,
+    hydrateCampusKey,
+    persistCampusJson,
+    usesCampusApiForKey,
+} from '../../../services/campusJsonStore'
+const DEFAULT_ORDERS = [
     {
         orderId: 'ORD-1042',
         customerName: 'Rahul Sharma',
@@ -83,3 +89,27 @@ export const orderStatusBadgeColor = {
     Completed: 'bg-[#4CAF5033] text-[#4CAF50]',
     Cancelled: 'bg-[#FF000033] text-[#FF0000]',
 }
+
+export const ORDERS_STORAGE_KEY = 'schoolerp-canteen-orders-v1'
+export function getOrders() {
+    return ensureCampusSeed('schoolerp-canteen-orders-v1', DEFAULT_ORDERS)
+}
+/**
+ * Persist orders to ops API when enabled. Resolves true only after a confirmed write
+ * (or offline localStorage write). Never treat a failed API replace as success.
+ */
+export async function saveOrders(rows) {
+    const result = await persistCampusJson(ORDERS_STORAGE_KEY, rows)
+    if (!result?.success) {
+        const err = new Error(result?.message || 'Canteen order could not be saved to the server.')
+        err.api = Boolean(result?.api)
+        throw err
+    }
+    return true
+}
+export function hydrateOrdersFromApi() {
+    if (!usesCampusApiForKey('schoolerp-canteen-orders-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-canteen-orders-v1', DEFAULT_ORDERS)
+}
+export const ORDERS = DEFAULT_ORDERS
+

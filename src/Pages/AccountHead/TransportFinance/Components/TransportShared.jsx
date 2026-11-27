@@ -2,6 +2,8 @@ import React from 'react'
 import {
     AlertTriangle,
     Bus,
+    ChevronLeft,
+    ChevronRight,
     ClipboardCheck,
     Fuel,
     MapPinned,
@@ -11,7 +13,10 @@ import {
     Wrench,
 } from 'lucide-react'
 
-const ICON_TONES = {
+export const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
+export const tdClass = 'px-2 py-4 text-[#667085]'
+
+export const ICON_TONES = {
     info: 'bg-[#515DEF1A] text-[#515DEF]',
     success: 'bg-[#4CAF501A] text-[#4CAF50]',
     warning: 'bg-[#FF98001A] text-[#FF9800]',
@@ -100,3 +105,40 @@ export const StaffAvatar = ({ initials, name }) => (
     </div>
 )
 
+export const TablePagination = ({ summary, pages = [1, 2, 3], activePage = 1 }) => (
+    <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-2'>
+        <p className='text-sm text-[#667085]'>{summary}</p>
+        <div className='flex items-center gap-2'>
+            <button type='button' className='size-8 flex items-center justify-center rounded-md border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
+                <ChevronLeft size={16} />
+            </button>
+            {pages.map((page) => (
+                <button
+                    key={page}
+                    type='button'
+                    className={`size-8 flex items-center justify-center rounded-md text-sm font-medium cursor-pointer transition-colors ${
+                        page === activePage
+                            ? 'bg-[#515DEF] text-white'
+                            : 'border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white'
+                    }`}
+                >
+                    {page}
+                </button>
+            ))}
+            <button type='button' className='size-8 flex items-center justify-center rounded-md border border-[#E2E8F0] text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    </div>
+)
+
+export const TableCard = ({ title, filters, children, footer }) => (
+    <div className='bg-white rounded-2xl shadow-md overflow-hidden'>
+        <div className='flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 p-4 border-b border-[#F2F4F7]'>
+            <h3 className='text-base font-semibold text-[#1E1E1E]'>{title}</h3>
+            {filters}
+        </div>
+        <div className='relative overflow-x-auto p-4 pt-0'>{children}</div>
+        {footer && <div className='px-4 pb-4'>{footer}</div>}
+    </div>
+)

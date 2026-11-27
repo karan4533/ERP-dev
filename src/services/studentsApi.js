@@ -35,6 +35,10 @@ export function mapMyStudentProfile(row) {
         admissionId: row.admissionId || null,
         studentUserId: row.studentUserId || null,
         parentUserId: row.parentUserId || null,
+        // Portal pages hide timetable / attendance until placementStatus is 'placed'.
+        placementStatus: row.placementStatus || '',
+        classTeacherEmail: row.classTeacherEmail || '',
+        sectionId: row.sectionId || null,
     }
 }
 
@@ -48,6 +52,9 @@ export function mapStudentListFromApi(row) {
         middleName: row.middleName || '',
         lastName: row.lastName || '',
         className: row.className || '',
+        section: row.section || '',
+        classSection: row.classSection || '',
+        placementStatus: row.placementStatus || '',
         admissionNumber: row.admissionNumber || '',
         gender: row.gender || '',
         mobileNumber: row.mobileNumber || '',

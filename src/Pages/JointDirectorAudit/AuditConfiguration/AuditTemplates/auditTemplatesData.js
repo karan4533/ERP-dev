@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export const TEMPLATE_DEPARTMENTS = [
     'Operations',
     'HR',
@@ -38,7 +39,7 @@ export const DEFAULT_TEMPLATE_FORM = {
     status: 'Draft',
 }
 
-export const AUDIT_TEMPLATES = [
+const DEFAULT_AUDIT_TEMPLATES = [
     {
         id: 'TPL-2026-001',
         templateName: 'Finance Process Compliance',
@@ -134,3 +135,18 @@ export const formatToday = () => {
     const year = today.getFullYear()
     return `${day}-${month}-${year}`
 }
+
+export const AUDIT_TEMPLATES_STORAGE_KEY = 'schoolerp-jd-audit-templates-v1'
+export function getAuditTemplates() {
+    return ensureCampusSeed('schoolerp-jd-audit-templates-v1', DEFAULT_AUDIT_TEMPLATES)
+}
+export function saveAuditTemplates(rows) {
+    return saveCampusJson('schoolerp-jd-audit-templates-v1', rows)
+}
+export function hydrateAuditTemplatesFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-templates-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-templates-v1', DEFAULT_AUDIT_TEMPLATES)
+}
+/** Static seed / fallback — list pages should call getAuditTemplates() after hydrate */
+export const AUDIT_TEMPLATES = DEFAULT_AUDIT_TEMPLATES
+

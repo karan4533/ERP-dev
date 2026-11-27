@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export const VISIBILITY_MODULES = [
     'Audit',
     'Observation',
@@ -52,7 +53,7 @@ export const permissionBadgeColor = {
     Submit: 'bg-[#00BCD41A] text-[#00BCD4]',
 }
 
-export const VISIBILITY_RULES = [
+const DEFAULT_VISIBILITY_RULES = [
     {
         id: 'VR-001',
         module: 'Audit',
@@ -133,3 +134,15 @@ export const buildVisibilityPayload = (formData) => ({
     permissions: { ...formData.permissions },
     active: formData.active,
 })
+export const VISIBILITY_RULES_STORAGE_KEY = 'schoolerp-jd-audit-visibility-rules-v1'
+export function getAuditVisibilityRules() {
+    return ensureCampusSeed('schoolerp-jd-audit-visibility-rules-v1', DEFAULT_VISIBILITY_RULES)
+}
+export function saveAuditVisibilityRules(rows) {
+    return saveCampusJson('schoolerp-jd-audit-visibility-rules-v1', rows)
+}
+export function hydrateAuditVisibilityRulesFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-visibility-rules-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-visibility-rules-v1', DEFAULT_VISIBILITY_RULES)
+}
+export const VISIBILITY_RULES = DEFAULT_VISIBILITY_RULES

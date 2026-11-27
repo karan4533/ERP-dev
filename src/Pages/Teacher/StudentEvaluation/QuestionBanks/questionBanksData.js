@@ -4,26 +4,6 @@ import { EXAM_TYPES } from '../../../../Common/demoDomain/examTypes'
 
 export { EXAM_TYPES }
 
-export const COGNITIVE_LEVELS = [
-    'Remembering / Knowledge (Level 1)',
-    'Understanding / Comprehension (Level 2)',
-    'Applying / Application (Level 3)',
-    'Analyzing / Analysis (Level 4)',
-    'Evaluating / Evaluation (Level 5)',
-    'Creating / Synthesis (Level 6)',
-]
-
-export const DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard', 'HOTS / Olympiad']
-
-export const QUESTION_TYPES = [
-    'Multiple Choice (MCQ)',
-    'Short Answer (2-3 Marks)',
-    'Long Answer (5 Marks)',
-    'Case-based / Assertion-Reason',
-    'Diagram / Chemical Equation',
-]
-
-
 const STORAGE_KEY = 'teacher-question-banks'
 
 export const formatDate = (date) => {

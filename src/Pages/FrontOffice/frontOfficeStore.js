@@ -1,6 +1,7 @@
 import {
     canUseFrontOfficeApi,
     createFrontOfficeRecordApi,
+    decideFrontOfficeRecordApi,
     deleteFrontOfficeRecordApi,
     listFrontOfficeRecordsApi,
     updateFrontOfficeRecordApi,
@@ -28,6 +29,18 @@ export const createFrontOfficeItem = async (collection, body) => {
 
 export const updateFrontOfficeItem = async (collection, id, body) => {
     const row = await updateFrontOfficeRecordApi(collection, id, body)
+    const list = peekFrontOfficeCollection(collection)
+    caches.set(
+        collection,
+        list.some((item) => item.id === id)
+            ? list.map((item) => (item.id === id ? row : item))
+            : [row, ...list],
+    )
+    return row
+}
+
+export const decideFrontOfficeItem = async (collection, id, decision) => {
+    const row = await decideFrontOfficeRecordApi(collection, id, decision)
     const list = peekFrontOfficeCollection(collection)
     caches.set(
         collection,

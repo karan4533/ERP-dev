@@ -2,6 +2,10 @@ import React, { useState } from 'react'
 import { Download } from 'lucide-react'
 import ExportModal from '../../../../../../Common/CommonComponents/ExportModal';
 
+const EXPORT_ROWS = [
+    {employee_number: 'EMP-NO1845', employee_name: 'Sandy', role: 'Teacher', attendance: '10', percentage: '70%'},
+]
+
 const DateWise = () => {
 
     const [exportModal, setExportModal] = useState(false)
@@ -56,7 +60,14 @@ const DateWise = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='date-wise'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
         </div>
     )
 }

@@ -9,10 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import reset_sqlite_memory_schema
 
 
 @pytest.fixture()
 def client():
+    reset_sqlite_memory_schema()
     with TestClient(app) as test_client:
         yield test_client
 
@@ -124,18 +126,31 @@ def test_upsert_list_and_calendar(client):
     assert again.json()[0]["attendanceStatus"] == "Absent"
 
 
-def test_teacher_can_mark_attendance(client):
+def test_teacher_can_mark_attendance_only_for_assigned_class(client):
     admin = _login(client)
     student_id = _enroll(client, admin)
     teacher = _login(client, "teacher@qmis.edu", "teacher123")
     day = "2026-10-13"
-    posted = client.post(
-        "/api/v1/attendance",
-        json={
-            "date": day,
-            "className": "Grade 3",
-            "marks": [{"studentId": student_id, "status": "Present"}],
-        },
-        headers=teacher,
+    body = {"date": day, "className": "Grade 3", "marks": [{"studentId": student_id, "status": "Present"}]}
+
+    # Policy: no class-teacher section, allocation or substitute duty -> no attendance access.
+    refused = client.post("/api/v1/attendance", json=body, headers=teacher)
+    assert refused.status_code == 403, refused.text
+    assert client.get("/api/v1/attendance", params={"date": day, "className": "Grade 3"}, headers=admin).json() == []
+
+    classes = client.get("/api/v1/masters/classes", headers=admin).json()
+    grade3 = next((c for c in classes if c["name"] == "Grade 3"), None) or client.post(
+        "/api/v1/masters/classes", json={"name": "Grade 3"}, headers=admin
+    ).json()
+    options = client.get("/api/v1/masters/class-teacher-options", headers=admin).json()
+    teacher_id = next(o["user_id"] for o in options if o["email"] == "teacher@qmis.edu")
+    section = client.post(
+        "/api/v1/masters/sections",
+        json={"class_id": grade3["id"], "name": "T", "class_teacher_user_id": teacher_id},
+        headers=admin,
     )
+    assert section.status_code == 201, section.text
+
+    posted = client.post("/api/v1/attendance", json=body, headers=teacher)
     assert posted.status_code == 200, posted.text
+    assert posted.json()[0]["studentId"] == student_id and posted.json()[0]["attendanceStatus"] == "Present"

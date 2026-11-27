@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'react-toastify'
 import { Plus } from 'lucide-react'
-import { DataTable, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
 import { FINE_TYPE_OPTIONS } from '../../financeDomain/financeConstants'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import { FormField, FormGrid, SettingsPanel, fieldClass } from './SettingsShared'
@@ -37,7 +36,6 @@ const FineRulesTab = () => {
 
     return (
         <div className='space-y-6'>
-            <IntegrationNotice state='demo' title='Browser-stored fine rules' description='Rules created here affect local fee demonstrations only. Production enforcement requires versioned server rules, approval, effective-date validation and audit history.' />
             <SettingsPanel title='Add fine rule' sub='Grace period is counted from the instalment due date.'>
                 <FormGrid>
                     <FormField label='Rule Name'><input className={fieldClass} value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} /></FormField>
@@ -61,22 +59,32 @@ const FineRulesTab = () => {
             </SettingsPanel>
 
             <SettingsPanel title='Configured rules'>
-                <DataTable
-                    caption='Configured fine rules'
-                    rows={fineRules}
-                    rowKey='id'
-                    emptyTitle='No fine rules configured'
-                    emptyDescription='Add a local rule above to validate the configuration UI.'
-                    columns={[
-                        { key: 'name', label: 'Name', required: true },
-                        { key: 'fineType', label: 'Type' },
-                        { key: 'gracePeriod', label: 'Grace', render: (rule) => `${rule.gracePeriod}d` },
-                        { key: 'fineValue', label: 'Value' },
-                        { key: 'maximumFine', label: 'Maximum' },
-                        { key: 'active', label: 'Status', render: (rule) => <StatusBadge status={rule.active ? 'Active' : 'Inactive'} /> },
-                    ]}
-                    renderActions={() => <button type='button' disabled title='Editing persisted fine rules requires the finance configuration API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Edit unavailable</button>}
-                />
+                <div className='overflow-x-auto'>
+                    <table className='w-full text-sm'>
+                        <thead className='text-xs bg-[#EDEEF5]'>
+                            <tr>
+                                <th className='px-2 py-3 text-left'>Name</th>
+                                <th className='px-2 py-3 text-left'>Type</th>
+                                <th className='px-2 py-3 text-left'>Grace</th>
+                                <th className='px-2 py-3 text-left'>Value</th>
+                                <th className='px-2 py-3 text-left'>Max</th>
+                                <th className='px-2 py-3 text-left'>Active</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {fineRules.map((rule) => (
+                                <tr key={rule.id} className='border-b border-[#F2F4F7]'>
+                                    <td className='px-2 py-3'>{rule.name}</td>
+                                    <td className='px-2 py-3'>{rule.fineType}</td>
+                                    <td className='px-2 py-3'>{rule.gracePeriod}d</td>
+                                    <td className='px-2 py-3'>{rule.fineValue}</td>
+                                    <td className='px-2 py-3'>{rule.maximumFine}</td>
+                                    <td className='px-2 py-3'>{rule.active ? 'Yes' : 'No'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </SettingsPanel>
         </div>
     )

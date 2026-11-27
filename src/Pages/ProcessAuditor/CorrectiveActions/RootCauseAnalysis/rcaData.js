@@ -1,5 +1,6 @@
 import { DEPARTMENTS, PRIORITIES, priorityBadgeColor } from '../../Observations/observationsData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, PRIORITIES, priorityBadgeColor }
 
 export const RCA_STATUSES = [
@@ -318,13 +319,13 @@ const DEFAULT_RCA_RECORDS = [
 ]
 
 export const saveRcaRecords = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
 }
 
 export const getRcaRecords = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+    if (stored) return stored
     } catch {
         /* ignore */
     }
@@ -337,3 +338,6 @@ export const getRcaById = (id) =>
 
 export const getRcaByObservationId = (observationId) =>
     getRcaRecords().find((item) => item.observationId === observationId) ?? null
+
+export const hydrateFromApi = (seed = DEFAULT_RCA_RECORDS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

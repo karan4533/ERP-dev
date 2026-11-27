@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import {
@@ -12,27 +12,51 @@ import {
     UserX,
     XCircle,
 } from 'lucide-react'
+import { toast } from 'react-toastify'
 import noProfile from '../../../assets/images/no-profile.png'
+import { useAuth } from '../../../context/AuthContext'
 import {
     ATTENDANCE_PERIODS,
     ATTENDANCE_PHASES,
     SCHOOL_NAME,
-    STUDENT_ATTENDANCE,
+    applyMarksToRoster,
+    buildAttendanceRoster,
     filterStudents,
     getAttendanceLocation,
+    getAttendanceMarks,
     getLocationColumnLabel,
     getPhaseStats,
+    hydrateTransportStudentAttendanceFromApi,
+    markStudentAttendance,
+    resolveDriverTripContext,
     statusStyles,
 } from './studentAttendanceData'
 
 const periodKey = (period) => period.toLowerCase()
 
 const StudentAttendance = () => {
+    const { email } = useAuth()
+    const [tripContext, setTripContext] = useState(() => resolveDriverTripContext(email))
     const [attendanceDate, setAttendanceDate] = useState(new Date())
     const [period, setPeriod] = useState('Morning')
     const [phase, setPhase] = useState('pickup')
     const [search, setSearch] = useState('')
-    const [records, setRecords] = useState(STUDENT_ATTENDANCE)
+    const [records, setRecords] = useState([])
+    const [savingId, setSavingId] = useState(null)
+
+    const reloadRoster = useCallback(() => {
+        const ctx = resolveDriverTripContext(email)
+        setTripContext(ctx)
+        const roster = buildAttendanceRoster({
+            routeName: ctx.routeName,
+            vehicleNumber: ctx.vehicleNumber,
+        })
+        setRecords(applyMarksToRoster(roster, getAttendanceMarks(), attendanceDate))
+    }, [email, attendanceDate])
+
+    useEffect(() => {
+        hydrateTransportStudentAttendanceFromApi().finally(() => reloadRoster())
+    }, [reloadRoster])
 
     const filteredRecords = useMemo(
         () => filterStudents(records, search),
@@ -47,24 +71,44 @@ const StudentAttendance = () => {
     const phaseOptions = ATTENDANCE_PHASES[period]
     const activePhase = phaseOptions.find((item) => item.key === phase)
     const locationColumnLabel = getLocationColumnLabel(period, phase)
+    const routeLabel = tripContext.routeName || 'Unassigned route'
+    const vehicleLabel = tripContext.vehicleNumber || 'No vehicle'
 
     const handlePeriodChange = (nextPeriod) => {
         setPeriod(nextPeriod)
         setPhase(ATTENDANCE_PHASES[nextPeriod][0].key)
     }
 
-    const markAttendance = (studentId, status) => {
-        setRecords((prev) => prev.map((record) => {
-            if (record.id !== studentId) return record
-            const bucket = periodKey(period)
-            return {
-                ...record,
-                [bucket]: {
-                    ...record[bucket],
-                    [phase]: status,
-                },
+    const markAttendance = async (record, status) => {
+        setSavingId(record.id)
+        try {
+            const result = await markStudentAttendance({
+                student: record,
+                attendanceDate,
+                period,
+                phase,
+                status,
+                routeName: tripContext.routeName,
+                vehicleNumber: tripContext.vehicleNumber,
+            })
+            if (result?.success === false) {
+                toast.error(result.message || 'Could not save attendance.')
+                return
             }
-        }))
+            setRecords((prev) => prev.map((row) => {
+                if (row.id !== record.id) return row
+                const bucket = periodKey(period)
+                return {
+                    ...row,
+                    [bucket]: {
+                        ...row[bucket],
+                        [phase]: status,
+                    },
+                }
+            }))
+        } finally {
+            setSavingId(null)
+        }
     }
 
     const currentStatus = (record) => record[periodKey(period)]?.[phase] ?? 'Pending'
@@ -79,7 +123,9 @@ const StudentAttendance = () => {
                             <h1 className='text-2xl md:text-3xl font-bold mt-1'>Student Attendance</h1>
                             <p className='text-white/85 text-sm mt-2 flex items-center gap-2'>
                                 <Bus size={16} />
-                                Erode Central Route · TN 33 AB 1234
+                                {routeLabel}
+                                {' · '}
+                                {vehicleLabel}
                             </p>
                         </div>
                         <div className='flex flex-col gap-1 min-w-[200px]'>
@@ -190,11 +236,12 @@ const StudentAttendance = () => {
                 <div className='mt-3 space-y-3'>
                     {filteredRecords.length === 0 ? (
                         <div className='text-center py-12 text-[#667085]'>
-                            No students found for the selected search.
+                            No transport students found for this route. Enroll students under Transport Manager → Student Transport.
                         </div>
                     ) : (
                         filteredRecords.map((record) => {
                             const status = currentStatus(record)
+                            const busy = savingId === record.id
                             return (
                                 <div
                                     key={record.id}
@@ -237,8 +284,9 @@ const StudentAttendance = () => {
                                             </span>
                                             <button
                                                 type='button'
-                                                onClick={() => markAttendance(record.id, 'Present')}
-                                                className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer ${
+                                                disabled={busy}
+                                                onClick={() => markAttendance(record, 'Present')}
+                                                className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer disabled:opacity-60 ${
                                                     status === 'Present'
                                                         ? 'bg-[#4CAF50] text-white border-[#4CAF50] shadow-sm'
                                                         : 'bg-white text-[#2E7D32] border-[#A5D6A7] hover:bg-[#E8F5E9]'
@@ -249,8 +297,9 @@ const StudentAttendance = () => {
                                             </button>
                                             <button
                                                 type='button'
-                                                onClick={() => markAttendance(record.id, 'Absent')}
-                                                className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer ${
+                                                disabled={busy}
+                                                onClick={() => markAttendance(record, 'Absent')}
+                                                className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer disabled:opacity-60 ${
                                                     status === 'Absent'
                                                         ? 'bg-[#FF5722] text-white border-[#FF5722] shadow-sm'
                                                         : 'bg-white text-[#C62828] border-[#EF9A9A] hover:bg-[#FFEBEE]'

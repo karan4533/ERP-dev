@@ -1,12 +1,36 @@
+import {
+    createFrontOfficeItem,
+    frontOfficeApiOn,
+    hydrateFrontOfficeCollection,
+    peekFrontOfficeCollection,
+    updateFrontOfficeItem,
+} from '../frontOfficeStore'
+import { getClasses, getSections } from '../../../Common/RBAC/academicsCatalogData'
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+
 const STORAGE_KEY = 'front-office-student-re-enrollment'
+const FO_COLLECTION = 'student-re-enrollments'
 
 export const ROUTE_BASE = '/front-office/student-re-enrollment'
 export const ADD_ROUTE = '/front-office/student-re-enrollment/add'
 
 export const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected', 'Re-Enrolled']
 
-export const GRADES = ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
-export const SECTIONS = ['A', 'B', 'C']
+const DEMO_GRADES = ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
+const DEMO_SECTIONS = ['A', 'B', 'C']
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+export const GRADES = liveArray(() => {
+    const fromCatalog = getClasses()
+    if (fromCatalog.length) return fromCatalog
+    return apiCatalogMode() ? [] : DEMO_GRADES
+})
+export const SECTIONS = liveArray(() => {
+    const fromCatalog = getSections()
+    if (fromCatalog.length) return fromCatalog
+    return apiCatalogMode() ? [] : DEMO_SECTIONS
+})
 export const ACADEMIC_YEARS = ['2024-2025', '2025-2026', '2026-2027']
 export const ORIGINAL_TC_OPTIONS = ['Yes', 'No']
 
@@ -87,7 +111,9 @@ const DEFAULT_RECORDS = [
     },
 ]
 
-export const getReEnrollments = () => {
+export const hydrateReEnrollmentsFromApi = () => hydrateFrontOfficeCollection(FO_COLLECTION)
+
+const localReEnrollments = () => {
     try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) return JSON.parse(stored)
@@ -96,6 +122,9 @@ export const getReEnrollments = () => {
     }
     return [...DEFAULT_RECORDS]
 }
+
+export const getReEnrollments = () =>
+    frontOfficeApiOn() ? peekFrontOfficeCollection(FO_COLLECTION) : localReEnrollments()
 
 export const saveReEnrollments = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
@@ -107,7 +136,7 @@ export const getReEnrollmentById = (id) =>
 export const generateReEnrollmentId = () => {
     const list = getReEnrollments()
     const max = list.reduce((acc, item) => {
-        const num = Number(item.id.replace('SRE-', ''))
+        const num = Number(String(item.id).replace('SRE-', ''))
         return Number.isFinite(num) ? Math.max(acc, num) : acc
     }, 0)
     return `SRE-${String(max + 1).padStart(3, '0')}`
@@ -153,15 +182,23 @@ const buildRecord = (form, existingId) => {
     }
 }
 
-export const addReEnrollment = (form) => {
-    const record = buildRecord(form)
-    saveReEnrollments([record, ...getReEnrollments()])
-    return record
+export const addReEnrollment = async (form) => {
+    if (frontOfficeApiOn()) {
+        const draft = buildRecord(form, 'SRE-TEMP')
+        const { id: _omit, ...body } = draft
+        return createFrontOfficeItem(FO_COLLECTION, body)
+    }
+    const withId = buildRecord(form)
+    saveReEnrollments([withId, ...localReEnrollments()])
+    return withId
 }
 
-export const updateReEnrollment = (id, form) => {
+export const updateReEnrollment = async (id, form) => {
     const record = buildRecord(form, id)
-    saveReEnrollments(getReEnrollments().map((item) => (item.id === id ? record : item)))
+    if (frontOfficeApiOn()) {
+        return updateFrontOfficeItem(FO_COLLECTION, id, record)
+    }
+    saveReEnrollments(localReEnrollments().map((item) => (item.id === id ? record : item)))
     return record
 }
 

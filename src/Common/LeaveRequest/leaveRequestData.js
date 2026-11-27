@@ -1,5 +1,7 @@
 import { ROLES } from '../../constants/roles'
 import { getLeaveApproverConfig, getSubmitterProfile, resolveRoleKey } from './leaveRequestConfigs'
+import { canUseLeaveApi, createLeaveApi, decideLeaveApi, listLeaveApi } from '../../services/leaveApi'
+import { syncAllStaffLeavesIntoHr, syncStaffLeaveIntoHr } from './leaveHrPayrollBridge'
 
 export const STORAGE_KEY = 'schoolerp-leave-requests'
 export const LEAVE_REQUESTS_UPDATED_EVENT = 'schoolerp-leave-requests-updated'
@@ -80,7 +82,24 @@ const readStorage = (storage) => {
     }
 }
 
+// With a real backend session the server is the source of truth, so what it returned is held in
+// memory only: nothing is written to localStorage or sessionStorage, and a reload or another
+// person signing in on the same browser never sees the previous person's leave requests.
+let apiMemoryRequests = []
+const usesApiMemory = () => canUseLeaveApi()
+
+/** Drop the in-memory copy (call on sign-out). */
+export const clearLeaveRequestMemory = () => {
+    apiMemoryRequests = []
+    try {
+        window.dispatchEvent(new CustomEvent(LEAVE_REQUESTS_UPDATED_EVENT))
+    } catch {
+        /* ignore */
+    }
+}
+
 const loadRawFromStorage = () => {
+    if (usesApiMemory()) return apiMemoryRequests
     if (typeof localStorage !== 'undefined') {
         const localItems = readStorage(localStorage)
         if (localItems.length > 0) return localItems
@@ -92,6 +111,15 @@ const loadRawFromStorage = () => {
 }
 
 const saveRawToStorage = (requests) => {
+    if (usesApiMemory()) {
+        apiMemoryRequests = Array.isArray(requests) ? requests : []
+        try {
+            window.dispatchEvent(new CustomEvent(LEAVE_REQUESTS_UPDATED_EVENT))
+        } catch {
+            /* ignore */
+        }
+        return
+    }
     try {
         const payload = JSON.stringify(requests)
         localStorage.setItem(STORAGE_KEY, payload)
@@ -125,6 +153,180 @@ const loadFromStorage = () => loadRawFromStorage().map(normalizeLeaveRequest)
 
 const saveToStorage = (requests) => {
     saveRawToStorage(requests.map(normalizeLeaveRequest))
+}
+
+// ---------------------------------------------------------------------------
+// API source of truth (Y-4). When a real backend session exists the store below
+// is only a cache of what the server returned; writes go to the API first.
+// ---------------------------------------------------------------------------
+
+const API_ROLE_LABELS = {
+    superadmin: 'Super Admin',
+    admin: 'Admin',
+    director: 'Director',
+    principal: 'Principal',
+    hr: 'HR',
+    gatekeepermanager: 'Gate Keeper Manager',
+    transportmanager: 'Transport Manager',
+}
+
+const isoToDmy = (iso) => {
+    if (!iso) return ''
+    const [year, month, day] = String(iso).slice(0, 10).split('-')
+    return `${day}-${month}-${year}`
+}
+
+const toIso = (value) => {
+    const date = value instanceof Date ? value : new Date(value)
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${date.getFullYear()}-${month}-${day}`
+}
+
+const ROLE_LABELS = {
+    superadmin: 'Super Admin',
+    admin: 'Admin',
+    director: 'Director',
+    principal: 'Principal',
+    teacher: 'Teacher',
+    coordinator: 'Coordinator',
+    hr: 'HR',
+    prm: 'Front Office',
+    pro: 'PRO',
+    gatekeeper: 'Gate Keeper',
+    gatekeepermanager: 'Gate Keeper Manager',
+    transportmanager: 'Transport Manager',
+    driver: 'Driver',
+}
+
+const mapApiLeave = (item) => {
+    const submitterRole = resolveRoleKey(item.submitterRole)
+    const chain = Array.isArray(item.chain) ? item.chain : []
+    const email = String(item.requestedBy || '').trim()
+    // Prefer the live requester identity from the API — never substitute DEFAULT_SUBMITTER_PROFILES
+    // demo names ("Demo Teacher", etc.) which made the Super Admin inbox look unwired.
+    const displayName = email.includes('@')
+        ? (email.split('@')[0] || email)
+        : (email || 'Staff')
+    const roleLabel =
+        ROLE_LABELS[submitterRole]
+        || (submitterRole ? String(submitterRole).replace(/^\w/, (c) => c.toUpperCase()) : 'Staff')
+    return {
+        id: item.id,
+        leaveRequestId: item.leaveRequestId,
+        employeeId: item.employeeId || email,
+        requestedBy: displayName,
+        requestedByEmail: email.includes('@') ? email : '',
+        submitterRole,
+        role: roleLabel,
+        department: roleLabel,
+        leaveType: item.leaveType,
+        fromDate: isoToDmy(item.fromDate),
+        toDate: isoToDmy(item.toDate),
+        totalDays: item.totalDays,
+        hours: item.hours ?? null,
+        appliedDate: isoToDmy(item.appliedDate),
+        reason: item.reason,
+        requestedTo: API_ROLE_LABELS[item.requestedTo] || item.requestedTo,
+        approverRole: item.approverRole || chain[chain.length - 1] || null,
+        reachedRoles: chain.slice(0, (item.currentLevel ?? 0) + 1),
+        chain,
+        status: item.status,
+        approverRemarks: item.approverRemarks || '',
+        fromApi: true,
+    }
+}
+
+/** Earlier builds mirrored server data into the browser; remove those stale copies once the API has answered. */
+const purgeBrowserLeaveCopies = () => {
+    try {
+        localStorage?.removeItem(STORAGE_KEY)
+        sessionStorage?.removeItem(STORAGE_KEY)
+    } catch {
+        /* ignore */
+    }
+}
+
+/** Replace the cache with the signed-in user's server data (kept in memory). Returns true when the API was used. */
+export const hydrateLeaveRequestsFromApi = async () => {
+    if (!canUseLeaveApi()) return false
+    try {
+        // Super Admin / Admin / HR can list campus-wide leave via box=all (403 for other roles).
+        // Isolate each call so one failing box does not wipe the inbox.
+        const settled = await Promise.allSettled([
+            listLeaveApi('mine'),
+            listLeaveApi('received'),
+            listLeaveApi('all'),
+        ])
+        const merged = new Map()
+        settled.forEach((result) => {
+            if (result.status !== 'fulfilled' || !Array.isArray(result.value)) return
+            result.value.forEach((item) => {
+                if (item?.id) merged.set(item.id, mapApiLeave(item))
+            })
+        })
+        const rows = [...merged.values()]
+        saveRawToStorage(rows)
+        purgeBrowserLeaveCopies()
+        try {
+            syncAllStaffLeavesIntoHr(rows)
+        } catch {
+            /* HR bridge is best-effort */
+        }
+        return true
+    } catch {
+        return false
+    }
+}
+
+/** Create through the API. `payload.fromDate/toDate` are Date objects; `payload.hours` for Permission. */
+export const createLeaveRequestViaApi = async ({ leaveType, fromDate, toDate, hours, reason }) => {
+    await createLeaveApi({
+        leaveType,
+        fromDate: toIso(fromDate),
+        toDate: toIso(toDate),
+        hours,
+        reason,
+    })
+    await hydrateLeaveRequestsFromApi()
+}
+
+export const decideLeaveRequestViaApi = async (id, status, remarks) => {
+    const decided = await decideLeaveApi(id, status === 'Approved' ? 'approve' : 'deny', remarks)
+    await hydrateLeaveRequestsFromApi()
+    const fromCache = loadFromStorage().find(
+        (request) =>
+            request.id === id ||
+            request.leaveRequestId === id ||
+            (decided?.id && request.id === decided.id),
+    )
+    const resolved = fromCache ?? (decided ? mapApiLeave(decided) : null)
+    if (resolved) {
+        try {
+            syncStaffLeaveIntoHr(resolved)
+        } catch {
+            /* ignore */
+        }
+    }
+    return resolved
+}
+
+/** Approver can act now: pending and the request is waiting on this role. */
+export const isAwaitingApprover = (request, approverRole) =>
+    Boolean(request) &&
+    request.status === 'Pending' &&
+    resolveRoleKey(request.approverRole) === resolveRoleKey(approverRole)
+
+const roleReachedRequest = (request, role) => {
+    const want = resolveRoleKey(role)
+    // HR / Admin can review any staff leave that has entered the shared leave store.
+    if (want === ROLES.HR || want === ROLES.ADMIN || want === ROLES.SUPER_ADMIN) {
+        return Boolean(request)
+    }
+    if (Array.isArray(request.reachedRoles)) {
+        return request.reachedRoles.map(resolveRoleKey).includes(want)
+    }
+    return resolveRoleKey(request.approverRole) === want
 }
 
 const readLegacyArray = (key) => {
@@ -211,6 +413,7 @@ const mapLegacyManagerRequest = (request) => ({
 
 export const migrateLegacyLeaveRequestsIfNeeded = () => {
     try {
+        if (usesApiMemory()) return // the server owns leave requests; old browser copies are not imported
         if (typeof localStorage === 'undefined' && typeof sessionStorage === 'undefined') return
         if (localStorage?.getItem(MIGRATION_FLAG) === '1') return
 
@@ -245,6 +448,7 @@ export const migrateLegacyLeaveRequestsIfNeeded = () => {
 
 export const migrateSessionLeaveRequestsToLocalIfNeeded = () => {
     try {
+        if (usesApiMemory()) return
         if (typeof localStorage === 'undefined' || typeof sessionStorage === 'undefined') return
         if (localStorage.getItem(SESSION_MIGRATION_FLAG) === '1') return
 
@@ -270,7 +474,9 @@ const generateLeaveRequestId = (requests) => {
 export const getAllLeaveRequests = () => loadFromStorage()
 
 export const getLeaveRequestById = (id) =>
-    loadFromStorage().find((request) => request.id === id) ?? null
+    loadFromStorage().find(
+        (request) => request.id === id || request.leaveRequestId === id,
+    ) ?? null
 
 export const getMyLeaveRequestsForRole = (submitterRole) => {
     const resolvedRole = resolveRoleKey(submitterRole)
@@ -279,6 +485,7 @@ export const getMyLeaveRequestsForRole = (submitterRole) => {
 
 export const ensureTeacherStudentLeaveSeed = () => {
     const current = loadFromStorage()
+    if (canUseLeaveApi()) return current // never inject demo rows over server data
     if (current.some((request) => resolveRoleKey(request.approverRole) === ROLES.TEACHER)) return current
     const seed = {
         id: 'LV-STU-001',
@@ -304,12 +511,12 @@ export const ensureTeacherStudentLeaveSeed = () => {
 
 export const getReceivedLeaveRequestsForRole = (approverRole) => {
     const resolvedRole = resolveRoleKey(approverRole)
-    return loadFromStorage().filter((request) => resolveRoleKey(request.approverRole) === resolvedRole)
+    return loadFromStorage().filter((request) => roleReachedRequest(request, resolvedRole))
 }
 
 export const canApproverAccessRequest = (request, approverRole) => {
     if (!request) return false
-    return resolveRoleKey(request.approverRole) === resolveRoleKey(approverRole)
+    return roleReachedRequest(request, approverRole)
 }
 
 export const canSubmitterAccessRequest = (request, submitterRole) => {
@@ -318,7 +525,7 @@ export const canSubmitterAccessRequest = (request, submitterRole) => {
 }
 
 export const getPendingLeaveApprovalCount = (approverRole) =>
-    getReceivedLeaveRequestsForRole(approverRole).filter((request) => request.status === 'Pending').length
+    getReceivedLeaveRequestsForRole(approverRole).filter((request) => isAwaitingApprover(request, approverRole)).length
 
 export const createLeaveRequest = (
     {
@@ -343,6 +550,7 @@ export const createLeaveRequest = (
         leaveRequestId,
         employeeId,
         requestedBy,
+        requestedByEmail: String(employeeId || '').includes('@') ? employeeId : '',
         submitterRole: resolvedSubmitterRole,
         role,
         department,
@@ -354,29 +562,74 @@ export const createLeaveRequest = (
         reason,
         requestedTo: approverConfig.requestedToLabel,
         approverRole: approverConfig.approverRole,
+        reachedRoles: [approverConfig.approverRole].filter(Boolean),
         status: 'Pending',
         approverRemarks: '',
     })
 
     requests.unshift(newRequest)
     saveToStorage(requests)
+    try {
+        syncStaffLeaveIntoHr(newRequest)
+    } catch {
+        /* ignore */
+    }
     return newRequest
 }
 
 export const updateLeaveRequestStatus = (id, status, approverRemarks = '', approverRole) => {
     const requests = loadFromStorage()
-    const index = requests.findIndex((request) => request.id === id)
+    const index = requests.findIndex((request) => request.id === id || request.leaveRequestId === id)
     if (index === -1) return null
 
     const current = requests[index]
     if (approverRole && !canApproverAccessRequest(current, approverRole)) return null
 
+    const actor = resolveRoleKey(approverRole)
+    const submitter = resolveRoleKey(current.submitterRole)
+    const nextStatus = String(status || '').trim()
+    const remarks = approverRemarks || current.approverRemarks
+
+    // Offline chain: Driver → Transport Manager → HR (mirrors backend leave.chain_for).
+    if (
+        nextStatus === 'Approved'
+        && actor === ROLES.TRANSPORT_MANAGER
+        && submitter === ROLES.DRIVER
+    ) {
+        requests[index] = normalizeLeaveRequest({
+            ...current,
+            status: 'Pending',
+            approverRole: ROLES.HR,
+            requestedTo: 'HR',
+            reachedRoles: [ROLES.TRANSPORT_MANAGER, ROLES.HR],
+            deptHeadApprovedAt: new Date().toISOString(),
+            approverRemarks: remarks,
+        })
+        saveToStorage(requests)
+        try {
+            syncStaffLeaveIntoHr(requests[index])
+        } catch {
+            /* ignore */
+        }
+        return requests[index]
+    }
+
     requests[index] = normalizeLeaveRequest({
         ...current,
-        status,
-        approverRemarks: approverRemarks || current.approverRemarks,
+        status: nextStatus,
+        approverRemarks: remarks,
+        reachedRoles: Array.from(new Set([
+            ...(Array.isArray(current.reachedRoles) ? current.reachedRoles : []),
+            actor,
+            ...(nextStatus === 'Approved' ? [ROLES.HR] : []),
+        ].filter(Boolean))),
     })
     saveToStorage(requests)
+    try {
+        syncStaffLeaveIntoHr(requests[index])
+    } catch {
+        /* ignore */
+    }
     return requests[index]
 }
 

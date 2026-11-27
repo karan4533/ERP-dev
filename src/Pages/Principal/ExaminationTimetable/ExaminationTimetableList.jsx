@@ -1,31 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, Eye, Plus, EllipsisIcon } from 'lucide-react'
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import TimeTableModal from './Components/TimeTableModal'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
-import { useAuth } from '../../../context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 import {
-    CREATE_ROUTE,
     approvalStatusColor,
     examStatusColor,
     getClassSectionLabel,
+    getExamTimetableRoutes,
     getExamTimetables,
+    mapExamApiToTimetableRecord,
 } from './examinationTimetableData'
+import { canUseExamsApi, listExamsApi } from '../../../services/examsApi'
 
 const ExaminationTimetableList = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const location = useLocation()
-    const [records, setRecords] = useState(() => getExamTimetables())
+    const navigate = useNavigate()
+    const { createPath, editPath, canEdit } = getExamTimetableRoutes(location.pathname)
+    const api = canUseExamsApi()
+    const [records, setRecords] = useState(() => (api ? [] : getExamTimetables()))
+    const [loadError, setLoadError] = useState('')
+    const [loading, setLoading] = useState(api)
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
-    const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
     const [exportModal, setExportModal] = useState(false)
     const [selectedRecord, setSelectedRecord] = useState(null)
@@ -33,8 +38,34 @@ const ExaminationTimetableList = () => {
     const [statusFilter, setStatusFilter] = useState('')
 
     useEffect(() => {
-        setRecords(getExamTimetables())
-    }, [location.key])
+        if (!api) {
+            setRecords(getExamTimetables())
+            setLoading(false)
+            setLoadError('')
+            return undefined
+        }
+        let cancelled = false
+        setLoading(true)
+        listExamsApi()
+            .then((rows) => {
+                if (!cancelled) {
+                    setRecords(rows.map(mapExamApiToTimetableRecord))
+                    setLoadError('')
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setRecords([])
+                    setLoadError(err?.message || 'Could not load campus exams.')
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [api, location.key])
 
     const filteredRecords = useMemo(() => {
         const query = search.trim().toLowerCase()
@@ -120,12 +151,16 @@ const ExaminationTimetableList = () => {
                     <div>
                         <h2 className='text-xl font-medium text-black'>Examination Timetable List</h2>
                         <p className='text-sm text-[#667085] mt-1'>
-                            Create examination timetables for Director approval.
+                            {api
+                                ? 'Campus exams from GET /exams (exams.write for create/submit).'
+                                : 'Create examination timetables for Director approval.'}
                         </p>
+                        {loading && <p className='text-sm text-[#667085] mt-1'>Loading exams…</p>}
+                        {loadError && <p className='text-sm text-[#B42318] mt-1'>{loadError}</p>}
                     </div>
                     <div className='flex gap-x-2'>
                         <NavLink
-                            to={CREATE_ROUTE}
+                            to={createPath}
                             className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
                         >
                             <Plus size={16} />
@@ -161,7 +196,7 @@ const ExaminationTimetableList = () => {
                             {filteredRecords.length === 0 ? (
                                 <tr>
                                     <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>
-                                        No examination timetables found.
+                                        {loading ? 'Loading exams…' : loadError ? 'Exams could not be loaded.' : 'No examination timetables found.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -198,14 +233,20 @@ const ExaminationTimetableList = () => {
                                                 <button type='button' className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                     View
                                                 </button>
-                                                <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                    Edit
-                                                </button>
-                                                {canDelete && (
+                                                {canEdit ? (
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => navigate(editPath(record.id))}
+                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                ) : null}
+                                                {!api && showDelete ? (
                                                     <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                         Delete
                                                     </button>
-                                                )}
+                                                ) : null}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -231,9 +272,20 @@ const ExaminationTimetableList = () => {
                 </div>
             </div>
 
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='examination-timetable'
+                rows={filteredRecords.map((r) => ({
+                    examName: r.examName || r.title,
+                    className: r.className,
+                    subject: r.subject,
+                    examDate: r.examDate || r.date,
+                    status: r.status,
+                }))}
+                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'}.</>}
+            />
             <TimeTableModal
                 open={Boolean(selectedRecord)}
                 onClose={() => setSelectedRecord(null)}

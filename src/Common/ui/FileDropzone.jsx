@@ -22,9 +22,9 @@ const FileDropzone = ({
     const selectedValue = value || internalValue
     const supportedTypes = acceptDocuments ? DOCUMENT_TYPES : IMAGE_TYPES
 
-    const commitValue = (nextValue) => {
+    const commitValue = (nextValue, file = null) => {
         setInternalValue(nextValue)
-        onChange?.(nextValue)
+        onChange?.(nextValue, file)
     }
 
     const handleFile = (file) => {
@@ -42,12 +42,12 @@ const FileDropzone = ({
         setFileName(file.name)
         setFileType(file.type)
         if (valueMode === 'name') {
-            commitValue(file.name)
+            commitValue(file.name, file)
             return
         }
 
         const reader = new FileReader()
-        reader.onload = () => commitValue(String(reader.result || ''))
+        reader.onload = () => commitValue(String(reader.result || ''), file)
         reader.onerror = () => setError('The file could not be read. Try another file.')
         reader.readAsDataURL(file)
     }
@@ -56,7 +56,7 @@ const FileDropzone = ({
         setFileName('')
         setFileType('')
         setError('')
-        commitValue('')
+        commitValue('', null)
     }
 
     return (

@@ -15,12 +15,8 @@ import {
     ONLINE_CLASS_STATUSES,
     statusBadgeColor,
 } from './onlineClassData'
-import { useAuth } from '../../../context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
 
 const OnlineClass = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
@@ -188,11 +184,9 @@ const OnlineClass = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            {canDelete && (
-                                                <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
-                                                    Delete
-                                                </button>
-                                            )}
+                                            <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                Delete
+                                            </button>
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -219,9 +213,11 @@ const OnlineClass = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal exportModal={exportModal} setExportModal={setExportModal}
+                unavailableReason='Export is not available on this page yet.'
+            />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </section>
     )
 }

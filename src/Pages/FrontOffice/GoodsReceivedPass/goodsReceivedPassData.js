@@ -1,5 +1,36 @@
+import {
+    createFrontOfficeItem,
+    deleteFrontOfficeItem,
+    frontOfficeApiOn,
+    hydrateFrontOfficeCollection,
+    peekFrontOfficeCollection,
+    updateFrontOfficeItem,
+} from '../frontOfficeStore'
+
 const STORAGE_KEY = 'goods-received-pass-front-office'
 const GR_COUNTER_KEY = 'goods-received-pass-gr-counter'
+
+/**
+ * Shared Goods Received Pass routes for Front Office + Stationery Store Manager.
+ * Store has list + view routes only; add/edit are null until those routes are mounted.
+ */
+export const getGoodsReceivedPassPaths = () => {
+    const path = typeof window !== 'undefined' ? String(window.location.pathname || '') : ''
+    if (path.startsWith('/stationery-store-manager')) {
+        return {
+            list: '/stationery-store-manager/goods-received-pass',
+            add: '/stationery-store-manager/goods-received-pass/add',
+            view: (id) => `/stationery-store-manager/goods-received-pass/view/${id}`,
+            edit: (id) => `/stationery-store-manager/goods-received-pass/edit/${id}`,
+        }
+    }
+    return {
+        list: '/front-office/goods-received-pass-list',
+        add: '/front-office/add-goods-received-pass',
+        view: (id) => `/front-office/goods-received-pass/view/${id}`,
+        edit: (id) => `/front-office/goods-received-pass/edit/${id}`,
+    }
+}
 
 export const PAYMENT_TYPES = ['CASH', 'CREDIT']
 
@@ -66,92 +97,7 @@ export const normalizeSignatories = (signatories = {}) =>
         return acc
     }, {})
 
-const DEFAULT_GOODS_RECEIVED_PASSES = [
-    {
-        id: 'grp-0001',
-        grNo: '0001',
-        supplierName: 'Apex Educational Supplies Pvt Ltd',
-        date: '2026-11-02',
-        time: '10:30',
-        timePeriod: 'AM',
-        poNo: 'PO-2026-001',
-        poDate: '2026-10-25',
-        invoiceNo: 'INV-APX-8821',
-        invoiceDate: '2026-11-01',
-        dcNo: 'DC-9921',
-        dcDate: '2026-11-01',
-        vehicleNo: 'TN-09-CB-1245',
-        paymentType: 'CREDIT',
-        remarks: 'Bulk textbook & notebook shipment for Term 2. Received in good condition.',
-        materials: [
-            { id: 'mat-1', description: 'Grade 10 Mathematics Workbooks', quantity: 250, remarks: 'Verified intact', lpNo: 'LP-01' },
-            { id: 'mat-2', description: 'A4 Ruled Notebooks (200 pgs)', quantity: 500, remarks: 'Box sealed', lpNo: 'LP-02' }
-        ],
-        signatories: {
-            storeKeeper: { role: 'Store Keeper', name: 'Selvam R.' },
-            checkedBy: { name: 'Muthu K.' },
-            authorizedSignatory: { role: 'Authorised Signatory', name: 'Admin Office' }
-        },
-        status: 'Approved',
-        createdAt: '02/11/2026 10:45 AM'
-    },
-    {
-        id: 'grp-0002',
-        grNo: '0002',
-        supplierName: 'TechMatrix Digital Solutions',
-        date: '2026-11-05',
-        time: '02:15',
-        timePeriod: 'PM',
-        poNo: 'PO-2026-004',
-        poDate: '2026-10-28',
-        invoiceNo: 'INV-TM-4410',
-        invoiceDate: '2026-11-04',
-        dcNo: 'DC-8812',
-        dcDate: '2026-11-04',
-        vehicleNo: 'KA-01-MJ-5510',
-        paymentType: 'CREDIT',
-        remarks: 'New projector lamps and HDMI cables for Senior Wing audio-visual setup.',
-        materials: [
-            { id: 'mat-3', description: 'Dell 4K Projector Replacement Lamp', quantity: 4, remarks: 'Serial checked', lpNo: 'LP-03' },
-            { id: 'mat-4', description: 'High-Speed HDMI 2.1 Braided Cables (10m)', quantity: 15, remarks: 'Tested okay', lpNo: 'LP-04' }
-        ],
-        signatories: {
-            storeKeeper: { role: 'Store Keeper', name: 'Selvam R.' },
-            checkedBy: { name: 'Sanjay V.' },
-            authorizedSignatory: { role: '', name: '' }
-        },
-        status: 'Partially Approved',
-        createdAt: '05/11/2026 02:30 PM'
-    },
-    {
-        id: 'grp-0003',
-        grNo: '0003',
-        supplierName: 'GreenClean Hygiene & Chemicals',
-        date: '2026-11-09',
-        time: '09:00',
-        timePeriod: 'AM',
-        poNo: 'PO-2026-007',
-        poDate: '2026-11-02',
-        invoiceNo: 'INV-GC-1190',
-        invoiceDate: '2026-11-08',
-        dcNo: 'DC-3301',
-        dcDate: '2026-11-08',
-        vehicleNo: 'TN-22-AX-9912',
-        paymentType: 'CASH',
-        remarks: 'Monthly deep-cleaning sanitizers, floor disinfectant drums, and microfiber mops.',
-        materials: [
-            { id: 'mat-5', description: 'Hospital-Grade Floor Cleaner (20L Drum)', quantity: 10, remarks: 'Batch certified', lpNo: 'LP-05' },
-            { id: 'mat-6', description: 'Hand Sanitizer Dispensers (500ml)', quantity: 50, remarks: 'Intact', lpNo: 'LP-06' }
-        ],
-        signatories: {
-            storeKeeper: { role: '', name: '' },
-            checkedBy: { name: '' },
-            authorizedSignatory: { role: '', name: '' }
-        },
-        status: 'Pending',
-        createdAt: '09/11/2026 09:15 AM'
-    }
-]
+const DEFAULT_GOODS_RECEIVED_PASSES = []
 
 export const calculateTotalItems = (materials = []) =>
     materials.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
@@ -197,6 +143,8 @@ export const generateGrNo = () => {
     return formatPassNumber(next)
 }
 
+const FO_COLLECTION = 'goods-received-passes'
+
 const hydrateRecord = (record) => ({
     ...record,
     signatories: normalizeSignatories(record.signatories),
@@ -204,7 +152,12 @@ const hydrateRecord = (record) => ({
     status: record.status ?? deriveOverallStatus(record.signatories),
 })
 
-export const getGoodsReceivedPasses = () => {
+export const hydrateGoodsReceivedPassesFromApi = async () => {
+    const rows = await hydrateFrontOfficeCollection(FO_COLLECTION)
+    return rows.map(hydrateRecord)
+}
+
+const localGoodsReceivedPasses = () => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
         const records = JSON.parse(stored).map(hydrateRecord)
@@ -216,6 +169,11 @@ export const getGoodsReceivedPasses = () => {
     return DEFAULT_GOODS_RECEIVED_PASSES.map(hydrateRecord)
 }
 
+export const getGoodsReceivedPasses = () =>
+    frontOfficeApiOn()
+        ? peekFrontOfficeCollection(FO_COLLECTION).map(hydrateRecord)
+        : localGoodsReceivedPasses()
+
 export const saveGoodsReceivedPasses = (records) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
@@ -223,12 +181,18 @@ export const saveGoodsReceivedPasses = (records) => {
 export const getGoodsReceivedPassById = (id) =>
     getGoodsReceivedPasses().find((record) => record.id === id) ?? null
 
-export const addGoodsReceivedPass = (payload) => {
-    const records = getGoodsReceivedPasses()
-    const grNo = generateGrNo()
-    const record = hydrateRecord({
-        id: `grp-${grNo}`,
-        grNo,
+/** Cache first; in API mode fetch the collection when the record is not cached yet (direct links). */
+export const loadGoodsReceivedPassById = async (id) => {
+    const cached = getGoodsReceivedPassById(id)
+    if (cached || !frontOfficeApiOn()) return cached
+    const rows = await hydrateGoodsReceivedPassesFromApi()
+    return rows.find((record) => record.id === id) ?? null
+}
+
+export const addGoodsReceivedPass = async (payload) => {
+    const grNo = frontOfficeApiOn() ? undefined : generateGrNo()
+    const draft = hydrateRecord({
+        ...(grNo ? { id: `grp-${grNo}`, grNo } : {}),
         ...payload,
         status: deriveOverallStatus(payload.signatories),
         createdAt: new Date().toLocaleString('en-IN', {
@@ -240,11 +204,14 @@ export const addGoodsReceivedPass = (payload) => {
             hour12: true,
         }).replace(',', ''),
     })
-    saveGoodsReceivedPasses([record, ...records])
-    return record
+    if (frontOfficeApiOn()) {
+        return hydrateRecord(await createFrontOfficeItem(FO_COLLECTION, draft))
+    }
+    saveGoodsReceivedPasses([draft, ...localGoodsReceivedPasses()])
+    return draft
 }
 
-export const updateGoodsReceivedPass = (id, payload) => {
+export const updateGoodsReceivedPass = async (id, payload) => {
     const records = getGoodsReceivedPasses()
     const index = records.findIndex((record) => record.id === id)
     if (index === -1) return null
@@ -253,14 +220,20 @@ export const updateGoodsReceivedPass = (id, payload) => {
         ...payload,
         status: deriveOverallStatus(payload.signatories ?? records[index].signatories),
     })
+    if (frontOfficeApiOn()) {
+        return hydrateRecord(await updateFrontOfficeItem(FO_COLLECTION, id, updated))
+    }
     records[index] = updated
     saveGoodsReceivedPasses(records)
     return updated
 }
 
-export const deleteGoodsReceivedPass = (id) => {
-    const records = getGoodsReceivedPasses().filter((record) => record.id !== id)
-    saveGoodsReceivedPasses(records)
+export const deleteGoodsReceivedPass = async (id) => {
+    if (frontOfficeApiOn()) {
+        await deleteFrontOfficeItem(FO_COLLECTION, id)
+        return
+    }
+    saveGoodsReceivedPasses(localGoodsReceivedPasses().filter((record) => record.id !== id))
 }
 
 export const getNextGrPreview = () => {

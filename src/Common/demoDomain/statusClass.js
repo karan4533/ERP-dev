@@ -7,6 +7,11 @@ export function statusClass(status) {
     if (value.includes('above average')) return 'bg-[#4CAF5033] text-[#4CAF50]'
     if (value === 'average') return 'bg-[#FF980033] text-[#FF9800]'
     if (value.includes('below average')) return 'bg-[#FF572233] text-[#FF5722]'
+    if (value === 'present' || value === 'checked in' || value === 'checked out' || value === 'on time') {
+        return 'bg-[#4CAF5033] text-[#4CAF50]'
+    }
+    if (value === 'absent') return 'bg-[#FF000033] text-[#FF0000]'
+    if (value === 'half day' || value === 'late') return 'bg-[#FF980033] text-[#FF9800]'
     if (GOOD.some((item) => value === item || value.includes(item))) return 'bg-[#4CAF5033] text-[#4CAF50]'
     if (BAD.some((item) => value === item || value.includes(item))) return 'bg-[#FF000033] text-[#FF0000]'
     if (MID.some((item) => value === item || value.includes(item))) return 'bg-[#FF980033] text-[#FF9800]'

@@ -16,6 +16,11 @@ class StartIn(BaseModel):
     userId: UUID
 
 
+class GroupIn(BaseModel):
+    userIds: list[UUID]
+    title: str | None = None
+
+
 class FlagsIn(BaseModel):
     archived: bool | None = None
     deleted: bool | None = None
@@ -49,6 +54,13 @@ def start_route(
     body: StartIn, db: Session = Depends(get_db), user: User = Depends(require_permission("communication.write"))
 ) -> dict:
     return svc.start_conversation(db, user, body.userId)
+
+
+@router.post("/conversations/groups", status_code=201)
+def group_route(
+    body: GroupIn, db: Session = Depends(get_db), user: User = Depends(require_permission("communication.write"))
+) -> dict:
+    return svc.create_group(db, user, body.userIds, body.title)
 
 
 @router.post("/conversations/{conversation_id}/messages", status_code=201)

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { toast } from 'react-toastify'
 import { useActiveStudent } from '../../../context/ActiveStudentContext'
 import { createTcRequest } from '../../../Common/TcRequest/tcRequestData'
 
@@ -13,20 +14,34 @@ const AddTcRequest = () => {
     const [reason, setReason] = useState('')
     const [transferTo, setTransferTo] = useState('')
     const [lastDateOfAttendance, setLastDateOfAttendance] = useState('')
+    const [saving, setSaving] = useState(false)
 
-    const handleSubmit = (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault()
-        const created = createTcRequest({
-            studentId: activeStudent.id,
-            studentName: activeStudent.name,
-            classSection: activeStudent.classSection,
-            admissionNumber: activeStudent.admissionNumber,
-            reason,
-            transferTo,
-            lastDateOfAttendance,
-            requestedBy: isParentPortal ? 'Parent' : 'Student',
-        })
-        navigate(`${routePrefix}/tc-request/view/${created.id}`)
+        if (!activeStudent?.id) {
+            toast.error('Select a child before requesting a TC.')
+            return
+        }
+
+        setSaving(true)
+        try {
+            const created = await createTcRequest({
+                studentId: activeStudent.id,
+                studentName: activeStudent.name,
+                classSection: activeStudent.classSection,
+                admissionNumber: activeStudent.admissionNumber,
+                reason,
+                transferTo,
+                lastDateOfAttendance,
+                requestedBy: isParentPortal ? 'Parent' : 'Student',
+            })
+            toast.success('TC request submitted to PRM.')
+            navigate(`${routePrefix}/tc-request/view/${created.id}`)
+        } catch (error) {
+            toast.error(error?.message || 'Could not submit TC request.')
+        } finally {
+            setSaving(false)
+        }
     }
 
     return (
@@ -51,15 +66,15 @@ const AddTcRequest = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Student Name</label>
-                        <input type='text' readOnly value={activeStudent.name} className={`${inputClass} bg-[#F9FAFB]`} />
+                        <input type='text' readOnly value={activeStudent?.name || ''} className={`${inputClass} bg-[#F9FAFB]`} />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Class / Section</label>
-                        <input type='text' readOnly value={activeStudent.classSection} className={`${inputClass} bg-[#F9FAFB]`} />
+                        <input type='text' readOnly value={activeStudent?.classSection || ''} className={`${inputClass} bg-[#F9FAFB]`} />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Admission Number</label>
-                        <input type='text' readOnly value={activeStudent.admissionNumber} className={`${inputClass} bg-[#F9FAFB]`} />
+                        <input type='text' readOnly value={activeStudent?.admissionNumber || ''} className={`${inputClass} bg-[#F9FAFB]`} />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Requested By</label>
@@ -117,9 +132,10 @@ const AddTcRequest = () => {
                     </button>
                     <button
                         type='submit'
-                        className='bg-[#515DEF] text-white text-sm px-8 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'
+                        disabled={saving}
+                        className='bg-[#515DEF] text-white text-sm px-8 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'
                     >
-                        Submit to PRM
+                        {saving ? 'Submitting…' : 'Submit to PRM'}
                     </button>
                 </div>
             </form>

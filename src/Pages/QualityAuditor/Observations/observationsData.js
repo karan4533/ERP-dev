@@ -1,10 +1,18 @@
 import { DEPARTMENTS } from '../AuditManagement/MyAudits/myAuditsData'
 
+import {
+    loadCampusJson,
+    saveCampusJson,
+    persistCampusJson,
+    hydrateCampusKey,
+    usesCampusApiForKey,
+    getCampusLoadState,
+} from '../../../services/campusJsonStore'
 export { DEPARTMENTS }
 
-export const PRIORITIES = ['Critical', 'Major', 'Minor', 'Observation', 'Positive Practice']
+export const PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 
-export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Observation', 'Positive Practice']
+export const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
 export const OBSERVATION_STATUSES = ['Open', 'Assigned', 'In Review', 'Resolved', 'Closed']
 
@@ -31,17 +39,6 @@ export const TIMELINE_STAGES = [
     'ATR Submitted',
     'Verified',
     'Closed',
-]
-
-export const RESPONSIBLE_PERSONS = [
-    'Dr. Meera Sharma',
-    'Mr. Vikram Singh',
-    'Mr. Ganesh Pillai',
-    'Mr. Arjun Mehta',
-    'Mr. Suresh Patel',
-    'Ms. Kavita Rao',
-    'Mr. Ramesh Iyer',
-    'Prof. Anil Kapoor',
 ]
 
 export const statusBadgeColor = {
@@ -95,15 +92,25 @@ const buildObservation = ({
     department,
     location,
     category,
+    grade = '',
+    section = '',
+    subject = '',
+    rating = '',
+    referenceNumber,
     title,
     description,
     priority,
     severity,
+    recipient,
+    recipientRole = '',
+    recipientDepartment = '',
     responsibleDepartment,
     responsiblePerson,
     assignTo,
     reportTo,
     evidence,
+    evidenceFile = null,
+    componentId = '',
     dueDate,
     status,
     createdDate = '10-06-2026',
@@ -111,19 +118,30 @@ const buildObservation = ({
 }) => ({
     id: observationId,
     observationId,
+    referenceNumber: referenceNumber || observationId,
     auditReference,
+    auditStream: 'QUALITY',
     department,
     location,
     category,
+    grade,
+    section,
+    subject,
+    rating,
     title,
     description,
     priority,
     severity,
+    recipient: recipient || responsiblePerson || '',
+    recipientRole,
+    recipientDepartment,
     responsibleDepartment,
     responsiblePerson,
     assignTo: assignTo ?? responsiblePerson,
     reportTo: reportTo ?? '',
     evidence: evidence ?? '',
+    evidenceFile,
+    componentId,
     dueDate,
     status,
     timeline: buildTimeline(status, createdDate, createdTime),
@@ -133,8 +151,8 @@ const buildObservation = ({
 
 const DEFAULT_OBSERVATIONS = [
     buildObservation({
-        observationId: 'OBS-PA-2026-014',
-        auditReference: 'AUD-PA-2026-043',
+        observationId: 'OBS-QA-2026-014',
+        auditReference: 'AUD-QA-2026-043',
         department: 'Canteen',
         location: 'Canteen Building — Kitchen',
         category: 'Safety & Hygiene',
@@ -151,8 +169,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '10-06-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-013',
-        auditReference: 'AUD-PA-2026-041',
+        observationId: 'OBS-QA-2026-013',
+        auditReference: 'AUD-QA-2026-041',
         department: 'Finance',
         location: 'Admin Block — Room 102',
         category: 'Financial Control',
@@ -170,8 +188,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '09-06-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-012',
-        auditReference: 'AUD-PA-2026-045',
+        observationId: 'OBS-QA-2026-012',
+        auditReference: 'AUD-QA-2026-045',
         department: 'Housekeeping',
         location: 'Main Academic Block — 2nd Floor',
         category: 'Housekeeping',
@@ -189,8 +207,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '05-06-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-011',
-        auditReference: 'AUD-PA-2026-038',
+        observationId: 'OBS-QA-2026-011',
+        auditReference: 'AUD-QA-2026-038',
         department: 'Transport',
         location: 'Transport Office — Fleet Yard',
         category: 'Transport',
@@ -208,8 +226,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '06-06-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-009',
-        auditReference: 'AUD-PA-2026-039',
+        observationId: 'OBS-QA-2026-009',
+        auditReference: 'AUD-QA-2026-039',
         department: 'IT Support',
         location: 'IT Server Room',
         category: 'IT Security',
@@ -227,8 +245,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '01-06-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-007',
-        auditReference: 'AUD-PA-2026-031',
+        observationId: 'OBS-QA-2026-007',
+        auditReference: 'AUD-QA-2026-031',
         department: 'Canteen',
         location: 'Canteen Building',
         category: 'Safety & Hygiene',
@@ -246,8 +264,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '22-05-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-005',
-        auditReference: 'AUD-PA-2026-022',
+        observationId: 'OBS-QA-2026-005',
+        auditReference: 'AUD-QA-2026-022',
         department: 'Finance',
         location: 'Admin Block — Finance Wing',
         category: 'Financial Control',
@@ -265,8 +283,8 @@ const DEFAULT_OBSERVATIONS = [
         createdDate: '01-05-2026',
     }),
     buildObservation({
-        observationId: 'OBS-PA-2026-003',
-        auditReference: 'AUD-PA-2026-018',
+        observationId: 'OBS-QA-2026-003',
+        auditReference: 'AUD-QA-2026-018',
         department: 'Academic',
         location: 'Examination Cell',
         category: 'Documentation',
@@ -286,16 +304,34 @@ const DEFAULT_OBSERVATIONS = [
 ]
 
 export const saveObservations = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
+}
+
+const belongsToQualityStream = (item) => {
+    const stream = String(item?.auditStream || item?.stream || '').trim().toUpperCase()
+    if (stream === 'PROCESS') return false
+    if (stream === 'QUALITY') return true
+    const blob = [
+        item?.id,
+        item?.observationId,
+        item?.auditReference,
+        item?.auditNumber,
+        item?.atrNumber,
+        item?.scheduleId,
+    ].join(' ')
+    if (/\b(OBS|AUD|ATR|SCH|RCA)-PA\b/.test(blob)) return false
+    return true
 }
 
 export const getObservations = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+        if (Array.isArray(stored)) return stored.filter(belongsToQualityStream)
     } catch {
         /* ignore */
     }
+    // Server mode: an unloaded or failed register is not data — never show demo rows.
+    if (usesCampusApiForKey(STORAGE_KEY)) return []
     saveObservations(DEFAULT_OBSERVATIONS)
     return DEFAULT_OBSERVATIONS
 }
@@ -310,60 +346,122 @@ export const getClosedObservations = () =>
     getObservations().filter((item) => CLOSED_STATUSES.includes(item.status))
 
 export const generateObservationId = () => {
-    const list = getObservations()
-    const max = list.reduce((acc, item) => {
-        const num = Number(item.observationId.split('-').pop())
-        return Number.isNaN(num) ? acc : Math.max(acc, num)
+    const prefix = `OBS-QA-${new Date().getFullYear()}-`
+    const max = getObservations().reduce((acc, item) => {
+        const id = String(item.observationId || item.id || '')
+        if (!id.startsWith(prefix)) return acc
+        const num = Number(id.slice(prefix.length))
+        return Number.isFinite(num) ? Math.max(acc, num) : acc
     }, 0)
-    return `OBS-PA-2026-${String(max + 1).padStart(3, '0')}`
+    return `${prefix}${String(max + 1).padStart(3, '0')}`
 }
 
+/** Grade / Section / Subject are optional: a cleared field is stored as '' and never refilled. */
+const optionalText = (value) => (value == null ? '' : String(value).trim())
+
 export const emptyObservationForm = () => ({
-    auditReference: 'NA',
-    department: 'NA',
-    location: 'NA',
-    category: 'NA',
-    grade: 'NA',
-    section: 'NA',
-    subject: 'NA',
-    rating: 'NA',
+    auditReference: '',
+    department: '',
+    location: '',
+    category: '',
+    grade: '',
+    section: '',
+    subject: '',
+    rating: '',
+    referenceNumber: '',
     title: '',
     description: '',
     priority: 'Medium',
     severity: 'Medium',
-    responsibleDepartment: 'NA',
-    responsiblePerson: 'NA',
-    evidence: 'NA',
+    recipient: '',
+    recipientRole: '',
+    recipientDepartment: '',
+    responsibleDepartment: '',
+    responsiblePerson: '',
+    evidence: '',
+    evidenceFile: null,
+    attachmentName: '',
+    componentId: '',
     dueDate: '',
     status: 'Open',
 })
 
-export const createObservation = (form) => {
-    const observationId = generateObservationId()
+const buildNewObservation = (form) => {
+    const observationId = form.observationId || generateObservationId()
     const now = new Date()
-    const createdDate = now.toLocaleDateString('en-GB').replace(/\//g, '-')
-    const createdTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    const createdDate = form.createdDate || now.toLocaleDateString('en-GB').replace(/\//g, '-')
+    const createdTime = form.createdTime || now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    const title = form.title?.trim() || form.category || form.description?.slice(0, 80) || observationId
 
-    const record = buildObservation({
+    return buildObservation({
         observationId,
         ...form,
+        title,
+        grade: optionalText(form.grade),
+        section: optionalText(form.section),
+        subject: optionalText(form.subject),
+        referenceNumber: form.referenceNumber?.trim() || observationId,
+        recipient: form.recipient || form.responsiblePerson || '',
+        responsiblePerson: form.responsiblePerson || form.recipient || '',
         status: form.status || 'Open',
         createdDate,
         createdTime,
     })
+}
 
-    const next = [record, ...getObservations()]
-    saveObservations(next)
+const withoutRecord = (list, record) =>
+    list.filter((item) => item.id !== record.id && item.observationId !== record.observationId)
+
+export const createObservation = (form) => {
+    const record = buildNewObservation(form)
+    saveObservations([record, ...withoutRecord(getObservations(), record)])
     return record
 }
 
-export const AUDIT_REFERENCES = [
-    'AUD-PA-2026-041',
-    'AUD-PA-2026-042',
-    'AUD-PA-2026-043',
-    'AUD-PA-2026-044',
-    'AUD-PA-2026-038',
-    'AUD-PA-2026-039',
-    'AUD-PA-2026-045',
-    'AUD-PA-2026-046',
-]
+/** Create from the Create Observation page: resolves only after the server confirms the save. */
+export const createObservationAsync = async (form) => {
+    const loadState = getObservationsLoadState()
+    if (loadState.api && loadState.status !== 'loaded') {
+        return { success: false, message: loadState.error || 'Observations have not loaded yet. Refresh and try again.' }
+    }
+    const record = buildNewObservation(form)
+    const result = await persistCampusJson(STORAGE_KEY, [record, ...withoutRecord(getObservations(), record)])
+    if (result?.success === false) return { success: false, message: result.message || 'Could not save the observation.' }
+    return { success: true, record }
+}
+
+export const getObservationsLoadState = () => getCampusLoadState(STORAGE_KEY)
+
+export const upsertObservation = (form) => {
+    const existingId = form.id || form.observationId
+    const loadState = getObservationsLoadState()
+    if (loadState.api && loadState.status !== 'loaded') {
+        // The register replace needs the real server list; refuse rather than overwrite it.
+        return { ...form, observationId: existingId, saveBlocked: true, message: loadState.error || 'Observations have not loaded yet.' }
+    }
+    const current = getObservations()
+    const match = existingId
+        ? current.find((item) => item.id === existingId || item.observationId === existingId)
+        : null
+
+    if (match?.auditReference && form.auditReference && match.auditReference !== form.auditReference) {
+        return { ...form, saveBlocked: true, message: `Observation ${existingId} already belongs to audit ${match.auditReference}.` }
+    }
+    if (match) {
+        const record = {
+            ...match,
+            ...form,
+            id: match.id,
+            observationId: match.observationId,
+            auditStream: 'QUALITY',
+        }
+        const next = [record, ...current.filter((item) => item.id !== match.id && item.observationId !== match.observationId)]
+        saveObservations(next)
+        return record
+    }
+
+    return createObservation({ ...form, auditStream: 'QUALITY' })
+}
+
+export const hydrateFromApi = (seed = DEFAULT_OBSERVATIONS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

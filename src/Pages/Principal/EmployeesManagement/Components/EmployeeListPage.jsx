@@ -139,7 +139,13 @@ const EmployeeListPage = ({ title, columns, rows, viewPath }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='employee-list-page'
+                rows={Array.isArray(rows) ? rows : []}
+                exportDescription={<>You are exporting {Array.isArray(rows) ? rows.length : 0} record(s).</>}
+            />
         </section>
     )
 }

@@ -1,8 +1,9 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const BUDGET_THRESHOLD = 75000
 
 export const REQUEST_TYPES = ['Financial Request', 'General Request']
 
-export const REQUESTS = [
+const DEFAULT_REQUESTS = [
     {
         requestId: 'JD-REQ-2026-001',
         requestType: 'Financial Request',
@@ -147,3 +148,16 @@ export const requestTypeBadgeColor = {
 }
 
 export const formatAmount = (amount) => (amount != null ? `₹${amount.toLocaleString('en-IN')}` : '—')
+
+export const REQUESTS_STORAGE_KEY = 'schoolerp-jd-approvals-v1'
+export function getRequests() {
+    return ensureCampusSeed('schoolerp-jd-approvals-v1', DEFAULT_REQUESTS)
+}
+export function saveRequests(rows) {
+    return saveCampusJson('schoolerp-jd-approvals-v1', rows)
+}
+export function hydrateRequestsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-approvals-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-approvals-v1', DEFAULT_REQUESTS)
+}
+export const REQUESTS = DEFAULT_REQUESTS

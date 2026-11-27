@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -12,7 +12,8 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
 import ResponseTypeFormModal from './ResponseTypeFormModal'
 import {
-    RESPONSE_TYPES_LIST,
+    getAuditResponseTypes,
+    hydrateAuditResponseTypesFromApi,
     RESPONSE_TYPE_STATUS_OPTIONS,
     createResponseTypeId,
     getResponseTypeStatus,
@@ -23,7 +24,10 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const ResponseTypesList = () => {
-    const [responseTypes, setResponseTypes] = useState(RESPONSE_TYPES_LIST)
+    const [responseTypes, setResponseTypes] = useState(() => getAuditResponseTypes())
+    useEffect(() => {
+        hydrateAuditResponseTypesFromApi().finally(() => setResponseTypes(getAuditResponseTypes()))
+    }, [])
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [exportModal, setExportModal] = useState(false)
@@ -261,7 +265,14 @@ const ResponseTypesList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='responsetypeslist'
+                title='ResponseTypesList'
+                rows={Array.isArray(filteredTypes) ? filteredTypes : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredTypes) ? filteredTypes.length : 0} record(s).</>}
+            />
             <ResponseTypeFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

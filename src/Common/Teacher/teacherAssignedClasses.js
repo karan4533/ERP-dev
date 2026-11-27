@@ -9,6 +9,7 @@ import {
 import {
     getClassTimetables,
     hydrateClassTimetablesFromApi,
+    slotStartMinutes,
     CLASS_TIMETABLES_UPDATED_EVENT,
 } from '../../Pages/Principal/ClassTimetable/classTimetableData'
 import { apiRequest, getAccessToken, isApiAuthEnabled } from '../../services/apiClient'
@@ -362,49 +363,69 @@ export const getTeacherWeeklyScheduleFromTimetables = (teacherName = '', teacher
     const timeSlots = new Map()
     const days = new Set()
 
+    const lower = (value) => String(value || '').trim().toLowerCase()
+
+    // Email settles identity when both sides have one (two staff can share a name). Employee ids only
+    // count when they match: older timetables hold seed TEA-* ids while HR now returns EMP-* codes.
     const ownsTimetable = (tt) => {
-        const ownerId = String(tt.ownerTeacherId || '').trim().toLowerCase()
-        const ownerEmail = String(tt.ownerTeacherEmail || '').trim().toLowerCase()
-        const ownerName = String(tt.ownerTeacherName || '').trim().toLowerCase()
+        const ownerId = lower(tt.ownerTeacherId)
+        const ownerEmail = lower(tt.ownerTeacherEmail)
         if (employeeId && ownerId && ownerId === employeeId) return true
-        if (email && ownerEmail && ownerEmail === email) return true
-        if (name && ownerName && ownerName === name) return true
-        return false
+        if (email && ownerEmail) return ownerEmail === email
+        return Boolean(name && lower(tt.ownerTeacherName) === name)
     }
 
-    const rowMatchesTeacher = (row) => {
-        const teacher = String(row.teacher || '').trim().toLowerCase()
-        const rowEmp = String(row.teacherId || row.employeeId || '').trim().toLowerCase()
-        if (employeeId && rowEmp && rowEmp === employeeId) return true
-        if (name && teacher && teacher === name) return true
-        return false
+    const periodIsMine = (row, tt, ownedByTeacher) => {
+        const rowId = lower(row.teacherId || row.employeeId)
+        if (employeeId && rowId && rowId === employeeId) return true
+        const rowEmail = lower(row.teacherEmail)
+        if (email && rowEmail) return rowEmail === email
+        const rowName = lower(row.teacher)
+        if (ownedByTeacher) {
+            // A period in my timetable that was handed to someone else by name is theirs.
+            return !rowName || rowName === name || rowName === lower(tt.ownerTeacherName)
+        }
+        return Boolean(name && rowName && rowName === name)
     }
 
     timetables.forEach((tt) => {
         const ownedByTeacher = ownsTimetable(tt)
+        const pending = tt.approvalStatus === 'Pending'
         ;(tt.timelines || []).forEach((row) => {
-            if (!ownedByTeacher && !rowMatchesTeacher(row)) return
+            if (!periodIsMine(row, tt, ownedByTeacher)) return
             if (!row.day || !row.startTime || !row.endTime || !row.subject) return
             const label = `${row.startTime} - ${row.endTime}`
             if (!timeSlots.has(label)) {
                 timeSlots.set(label, {
                     label,
                     time: `${row.startTime} -\n${row.endTime}`,
+                    start: slotStartMinutes(row.startTime),
                 })
             }
             days.add(row.day)
             if (!schedule[label]) schedule[label] = {}
             const rowClass = row.className || tt.className || ''
             const rowSection = row.section || tt.section || ''
-            schedule[label][row.day] = {
+            const classLabel = `${String(rowClass).replace(/^Grade\s+/i, '')}${rowSection ? `-${rowSection}` : ''}`.replace(/-$/, '')
+            const entry = {
                 subject: row.subject,
-                className: `${String(rowClass).replace(/^Grade\s+/i, '')}${rowSection ? `-${rowSection}` : ''}`.replace(/-$/, ''),
+                className: pending ? `${classLabel} (pending approval)`.trim() : classLabel,
             }
+            const existing = schedule[label][row.day]
+            schedule[label][row.day] = existing
+                ? {
+                    subject: `${existing.subject} / ${entry.subject}`,
+                    className: `${existing.className} / ${entry.className} (clash)`,
+                    clash: true,
+                }
+                : entry
         })
     })
 
     return {
-        timeSlots: [...timeSlots.values()],
+        timeSlots: [...timeSlots.values()]
+            .sort((a, b) => a.start - b.start)
+            .map(({ label, time }) => ({ label, time })),
         days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].filter((d) => days.has(d)),
         schedule,
         hasData: timeSlots.size > 0,

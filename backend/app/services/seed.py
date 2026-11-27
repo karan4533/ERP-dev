@@ -70,8 +70,14 @@ def seed_reference_data(db: Session) -> None:
     # Demo logins have well-known passwords, so they exist only in explicit development mode.
     if settings.seed_demo_accounts:
         _seed_demo_users(db, campus, roles_by_code)
+        # SessionLocal uses autoflush=False; HR link lookups must see pending users.
+        db.flush()
         _seed_demo_parent_student_link(db, campus)
         _ensure_demo_staff_hr_links(db, campus)
+        # Demo calendar holidays/exams for local UAT (not auto-seeded on every list).
+        from app.services.calendar import ensure_defaults as ensure_calendar_defaults
+
+        ensure_calendar_defaults(db, campus.id)
     if created_campus:
         write_audit(
             db,
@@ -127,6 +133,7 @@ def _seed_demo_users(db: Session, campus: Campus, roles_by_code: dict[str, Role]
         ("coordinator", settings.coordinator_seed_email, settings.coordinator_seed_password),
         ("principal", settings.principal_seed_email, settings.principal_seed_password),
         ("prm", settings.prm_seed_email, settings.prm_seed_password),
+        ("pro", settings.pro_seed_email, settings.pro_seed_password),
         ("director", settings.director_seed_email, settings.director_seed_password),
         ("jointdirector", "jointdirector@qmis.edu", "jd12345678"),
         ("jointdirectorassistant", "jointdirectorassistant@qmis.edu", "jda1234567"),
@@ -143,6 +150,9 @@ def _seed_demo_users(db: Session, campus: Campus, roles_by_code: dict[str, Role]
         ("itsupportmanager", "itsupportmanager@qmis.edu", "itsupport123"),
         ("stationerystoremanager", "stationerystoremanager@qmis.edu", "stationery123"),
         ("housekeepingmanager", "housekeepingmanager@qmis.edu", "housekeeping123"),
+        ("maintenancemanager", settings.maintenance_seed_email, settings.maintenance_seed_password),
+        ("fileroom", settings.fileroom_seed_email, settings.fileroom_seed_password),
+        ("cctv", settings.cctv_seed_email, settings.cctv_seed_password),
         ("parent", "parent@qmis.edu", "parent123"),
         ("student", "student@qmis.edu", "student123"),
     ):

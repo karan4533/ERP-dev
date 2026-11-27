@@ -9,36 +9,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 //   → month is 1-indexed (1 = January … 12 = December)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Mock API (replace with your real fetch) ──────────────────────────────────
-// month is 1-indexed (1 = January … 12 = December)
-async function defaultFetchAttendance(year, month) {
-  // Simulate network delay
-  await new Promise((r) => setTimeout(r, 600));
-
-  // Swap this block with a real API call:
-  // const res = await fetch(`/api/attendance?year=${year}&month=${month}`);
-  // if (!res.ok) throw new Error("Failed to load attendance");
-  // return res.json();
-
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const data = {};
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month - 1, day);
-    const weekday = date.getDay(); // 0 = Sunday, 6 = Saturday
-    const key = `${year}-${pad(month)}-${pad(day)}`;
-
-    if (weekday === 0 || weekday === 6) {
-      data[key] = "H"; // Weekends are always holidays
-    } else {
-      // Roughly 1 in 6 weekdays absent, rest present
-      data[key] = day % 6 === 0 ? "A" : "P";
-    }
-  }
-
-  return data;
+/** Fallback when no API fetcher is provided — never invent attendance marks. */
+async function defaultFetchAttendance() {
+  return {};
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -145,10 +119,17 @@ export default function AttendanceCalendar({
   fetchAttendance = defaultFetchAttendance,
   initialYear,
   initialMonth, // 0-indexed
+  year, // controlled mode: pass year + month (0-indexed) + onMonthChange
+  month,
+  onMonthChange,
+  onLoaded, // (data, { error }) after each month loads
 }) {
   const now = new Date();
-  const [viewYear, setViewYear] = useState(initialYear ?? now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(initialMonth ?? now.getMonth()); // 0-indexed
+  const controlled = year != null && month != null;
+  const [ownYear, setOwnYear] = useState(initialYear ?? now.getFullYear());
+  const [ownMonth, setOwnMonth] = useState(initialMonth ?? now.getMonth()); // 0-indexed
+  const viewYear = controlled ? year : ownYear;
+  const viewMonth = controlled ? month : ownMonth;
   const [attendance, setAttendance] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -163,25 +144,32 @@ export default function AttendanceCalendar({
         if (!cancelled) {
           setAttendance(data ?? {});
           setLoading(false);
+          onLoaded?.(data ?? {}, { error: null });
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message ?? "Failed to load attendance");
+          const message = err.message ?? "Failed to load attendance";
+          setError(message);
           setLoading(false);
+          onLoaded?.({}, { error: message });
         }
       });
 
     return () => { cancelled = true; };
-  }, [viewYear, viewMonth, fetchAttendance]);
+  }, [viewYear, viewMonth, fetchAttendance, onLoaded]);
 
+  function goTo(nextYear, nextMonth) {
+    if (controlled) onMonthChange?.(nextYear, nextMonth);
+    else { setOwnYear(nextYear); setOwnMonth(nextMonth); }
+  }
   function prevMonth() {
-    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
-    else setViewMonth((m) => m - 1);
+    if (viewMonth === 0) goTo(viewYear - 1, 11);
+    else goTo(viewYear, viewMonth - 1);
   }
   function nextMonth() {
-    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
-    else setViewMonth((m) => m + 1);
+    if (viewMonth === 11) goTo(viewYear + 1, 0);
+    else goTo(viewYear, viewMonth + 1);
   }
 
   // Build grid cells (prev tail + current + next lead)

@@ -100,8 +100,11 @@ def test_demo_gateway_email_whatsapp_and_rfid_off(client):
     )
     assert confirmed.status_code == 200, confirmed.text
     assert confirmed.json()["intent"]["status"] == "PAID"
-
-    paid = client.post(
+    # The verified gateway payment settles the instalment and issues the receipt itself...
+    receipt = confirmed.json()["receipt"]
+    assert receipt and receipt["amountPaid"] == 2000 and receipt["paymentMode"] == "PAYMENT_GATEWAY"
+    # ...so collecting the same instalment again at the desk is refused (no double payment).
+    again = client.post(
         "/api/v1/finance/actions/collect-payment",
         headers=headers,
         json={
@@ -110,8 +113,8 @@ def test_demo_gateway_email_whatsapp_and_rfid_off(client):
             "allocations": [{"installmentId": "INST-D1", "amount": 2000}],
         },
     )
-    assert paid.status_code == 200, paid.text
-    receipt_id = paid.json()["receipt"]["id"]
+    assert again.status_code == 400 and "already settled" in again.text
+    receipt_id = receipt["id"]
 
     email = client.post(
         "/api/v1/finance/actions/send-receipt",

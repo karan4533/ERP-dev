@@ -34,5 +34,9 @@ class StudentAttendance(Base):
     check_in_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
     check_out_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
     marked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # manual = saved by staff (wins); auto = written by biometric sync (marked_by stays NULL).
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual", server_default="manual")
+    # Biometric punch record id an auto row came from.
+    source_ref: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

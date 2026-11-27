@@ -7,13 +7,33 @@ os.environ["JWT_SECRET"] = "test-secret-qmis-erp-finance-actions"
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.main import app
+from app.services.integrations import payments
 
 
 @pytest.fixture()
-def client():
+def client(monkeypatch):
+    # monkeypatch.setattr restores the setting after each test, so other suites keep razorpay.
+    monkeypatch.setattr(settings, "payment_provider", "stub")
     with TestClient(app) as test_client:
         yield test_client
+
+
+def test_stub_provider_is_not_configured_outside_development(monkeypatch):
+    monkeypatch.setattr(settings, "payment_provider", "stub")
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setenv("INTEGRATIONS_MODE", "")
+    intent = payments.create_payment_intent(amount=500, reference="PAY-PROD-1", student_id="STU-1")
+    assert intent["status"] == "NOT_CONFIGURED"
+    assert intent["providerConfigured"] is False
+
+
+def test_stub_provider_opens_an_intent_in_development(monkeypatch):
+    monkeypatch.setattr(settings, "payment_provider", "stub")
+    monkeypatch.setattr(settings, "environment", "development")
+    intent = payments.create_payment_intent(amount=500, reference="PAY-DEV-1", student_id="STU-1")
+    assert intent["status"] == "OPEN" and intent["gateway"] == "stub"
 
 
 def _login(client: TestClient, email="accounthead@qmis.edu", password="accounts123") -> dict:
@@ -159,11 +179,10 @@ def test_collect_payment_includes_late_fee_in_balance(client):
         json={"receiptId": receipt_id, "channel": "whatsapp"},
     )
     assert sent.status_code == 200, sent.text
-    # Without WhatsApp credentials, delivery must stay NOT_CONFIGURED (never fake success).
-    assert sent.json()["delivery"]["status"] == "NOT_CONFIGURED"
+    assert sent.json()["delivery"]["status"] == "queued_stub"
     assert sent.json()["delivery"]["delivered"] is False
     assert sent.json()["receipt"]["communication"]["whatsapp"] is False
-    assert sent.json()["receipt"]["communication"]["whatsappStatus"] == "NOT_CONFIGURED"
+    assert sent.json()["receipt"]["communication"]["whatsappStatus"] == "queued_stub"
 
 
 def test_gateway_intent_and_approval(client):
@@ -177,14 +196,20 @@ def test_gateway_intent_and_approval(client):
     assert intent.status_code == 200, intent.text
     assert intent.json()["intent"]["gateway"] == "stub"
     reference = intent.json()["intent"]["reference"]
-    # Stub gateway cannot be confirmed without Razorpay credentials — honest 503.
     confirmed = client.post(
         "/api/v1/finance/actions/gateway-confirm",
         headers=headers,
         json={"reference": reference},
     )
-    assert confirmed.status_code == 503, confirmed.text
-    assert confirmed.json()["detail"]["code"] == "NOT_CONFIGURED"
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["intent"]["status"] == "PAID"
+    again = client.post(
+        "/api/v1/finance/actions/gateway-confirm",
+        headers=headers,
+        json={"reference": reference},
+    )
+    assert again.status_code == 200
+    assert again.json().get("skipped") is True
     decided = client.post(
         "/api/v1/finance/actions/decide-approval",
         headers=headers,
@@ -192,6 +217,111 @@ def test_gateway_intent_and_approval(client):
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["approval"]["status"] == "Approved"
+
+
+def _state(client, headers) -> dict:
+    return client.get("/api/v1/finance/state", headers=headers).json()["data"]
+
+
+def _installment(data: dict, installment_id: str) -> dict:
+    return next(row for row in data["installments"] if row["id"] == installment_id)
+
+
+def test_verified_gateway_payment_settles_the_instalments_once(client):
+    headers = _login(client)
+    _seed_state(client, headers)
+    intent = client.post("/api/v1/finance/actions/gateway-intent", headers=headers,
+                         json={"studentId": "STU-1", "amount": 400, "installmentIds": ["INST-1"]}).json()["intent"]
+    confirmed = client.post("/api/v1/finance/actions/gateway-confirm", headers=headers,
+                            json={"reference": intent["reference"]})
+    assert confirmed.status_code == 200, confirmed.text
+    receipt = confirmed.json()["receipt"]
+    assert receipt["amountPaid"] == 400 and receipt["paymentMode"] == "PAYMENT_GATEWAY"
+
+    data = _state(client, headers)
+    row = _installment(data, "INST-1")
+    assert row["paidAmount"] == 400 and row["status"] == "PARTIALLY_PAID"
+    link = next(item for item in data["paymentLinks"] if item["reference"] == intent["reference"])
+    assert link["status"] == "PAID" and link["receiptNo"] == receipt["receiptNo"]
+    assert any(t["paymentMode"] == "PAYMENT_GATEWAY" for t in data["transactions"])
+    assert data.get("bankBookEntries"), "gateway receipts post to the bank book"
+
+    again = client.post("/api/v1/finance/actions/gateway-confirm", headers=headers, json={"reference": intent["reference"]})
+    assert again.json().get("skipped") is True
+    data = _state(client, headers)
+    assert _installment(data, "INST-1")["paidAmount"] == 400
+    assert len([r for r in data["receipts"] if r["receiptNo"] == receipt["receiptNo"]]) == 1
+
+
+def test_gateway_payment_for_an_already_settled_instalment_is_flagged_not_lost(client):
+    headers = _login(client)
+    _seed_state(client, headers)
+    intent = client.post("/api/v1/finance/actions/gateway-intent", headers=headers,
+                         json={"studentId": "STU-1", "amount": 1000, "installmentIds": ["INST-1"]}).json()["intent"]
+    desk = client.post("/api/v1/finance/actions/collect-payment", headers=headers, json={
+        "studentId": "STU-1", "paymentMode": "CASH", "allocations": [{"installmentId": "INST-1", "amount": 1000}]})
+    assert desk.status_code == 200, desk.text
+    confirmed = client.post("/api/v1/finance/actions/gateway-confirm", headers=headers, json={"reference": intent["reference"]})
+    assert confirmed.status_code == 200 and confirmed.json()["receipt"] is None
+    data = _state(client, headers)
+    assert _installment(data, "INST-1")["paidAmount"] == 1000
+    link = next(item for item in data["paymentLinks"] if item["reference"] == intent["reference"])
+    assert link["status"] == "PAID" and link["unallocatedAmount"] == 1000
+    assert any(entry["action"] == "GATEWAY_PAYMENT_UNALLOCATED" for entry in data["auditLog"])
+
+
+def test_a_cheque_cleared_twice_pays_its_instalment_once(client):
+    headers = _login(client)
+    _seed_state(client, headers)
+    held = client.post("/api/v1/finance/actions/collect-payment", headers=headers, json={
+        "studentId": "STU-1", "paymentMode": "CHEQUE", "allocations": [{"installmentId": "INST-1", "amount": 1000}],
+        "details": {"chequeNo": "123456", "bank": "SBI", "chequeDate": "2026-10-01"}})
+    assert held.status_code == 200, held.text
+    cheque_id = _state(client, headers)["cheques"][0]["id"]
+    for status in ("CLEARED", "RECEIVED", "CLEARED"):
+        moved = client.post("/api/v1/finance/actions/settle-cheque", headers=headers,
+                            json={"chequeId": cheque_id, "status": status})
+        assert moved.status_code == 200, moved.text
+    assert _installment(_state(client, headers), "INST-1")["paidAmount"] == 1000
+
+
+def test_parent_gets_one_in_app_confirmation_per_payment(client):
+    admin = _login(client, "admin@qmis.edu", "admin123")
+    admission = client.post("/api/v1/admissions", headers=admin, json={
+        "first_name": "Ira", "mobile_number": "9000011111", "class_name": "Grade 7",
+        "parent_account_email": "parent.ira@example.com"})
+    assert admission.status_code == 201, admission.text
+    enrolled = client.post(f"/api/v1/admissions/{admission.json()['id']}/enroll", headers=admin, json={
+        "parent_account_email": "parent.ira@example.com", "parent_account_password": "Parent-Test-2026"})
+    assert enrolled.status_code == 200, enrolled.text
+    student_id = str(enrolled.json()["student_id"])
+
+    headers = _login(client)
+    seeded = client.put("/api/v1/finance/state", headers=headers, json={"data": {
+        "students": [{"id": student_id, "name": "Ira", "admissionNo": "ADM-IRA", "className": "Grade 7", "academicYear": "2026-2027"}],
+        "installments": [{"id": "INST-IRA", "studentId": student_id, "feeHead": "Tuition", "feeAmount": 1500,
+                          "netAmount": 1500, "paidAmount": 0, "balanceAmount": 1500, "status": "UNPAID"}],
+        "transactions": [], "receipts": [], "cheques": [], "paymentLinks": [], "concessions": [], "auditLog": [],
+        "sequence": {"pay": 1, "rec": 1, "txn": 1, "voucher": 1, "link": 1}, "meta": {"seeded": True}}})
+    assert seeded.status_code == 200, seeded.text
+    paid = client.post("/api/v1/finance/actions/collect-payment", headers=headers, json={
+        "studentId": student_id, "paymentMode": "UPI", "allocations": [{"installmentId": "INST-IRA", "amount": 1500}]})
+    assert paid.status_code == 200, paid.text
+    receipt_no = paid.json()["receipt"]["receiptNo"]
+
+    first_login = _login(client, "parent.ira@example.com", "Parent-Test-2026")
+    changed = client.post("/api/v1/auth/change-password", headers=first_login,
+                          json={"current_password": "Parent-Test-2026", "new_password": "Parent-Test-2027"})
+    assert changed.status_code == 200, changed.text
+    parent = _login(client, "parent.ira@example.com", "Parent-Test-2027")
+    notes = client.get("/api/v1/notifications", headers=parent)
+    assert notes.status_code == 200, notes.text
+    mine = [n for n in notes.json() if n.get("entityType") == "fee_receipt" and n.get("entityId") == receipt_no]
+    assert len(mine) == 1
+    assert "1,500" in mine[0]["title"] and receipt_no in mine[0]["body"]
+    # staff do not receive the parent's confirmation
+    staff_notes = client.get("/api/v1/notifications", headers=headers).json()
+    assert not any(n.get("entityId") == receipt_no for n in staff_notes)
 
 
 def test_hr_concession_and_payroll_voucher(client):

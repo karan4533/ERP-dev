@@ -1,223 +1,314 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, Radio, ShieldCheck, X, CheckCircle2, Save, Edit3 } from 'lucide-react'
-import { toast } from 'react-toastify'
+import { Calendar, ChevronLeft, ChevronRight, Download, Save } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { BiometricAttendancePage } from '../../../Common/demoDomain/DemoScreens'
+import { listAttendanceApi, listMyAttendanceClassesApi, upsertAttendanceApi } from '../../../services/attendanceApi'
+import { isApiAttendanceEnabled } from '../../../services/apiClient'
 import {
     ATTENDANCE_LIST,
+    ATTENDANCE_SESSIONS,
     ATTENDANCE_STATUSES,
     CLASSES,
     SECTIONS,
     statusBadgeColor,
-    inOutStatusBadgeColor,
 } from './attendanceData'
 
-const CLASS_ATTENDANCE_STORAGE_KEY = 'schoolerp-class-attendance-records'
+const toIsoDate = (value) => {
+    if (!value) return ''
+    const d = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
-const ClassAttendance = () => {
-    const [records, setRecords] = useState(() => {
-        try {
-            if (typeof localStorage !== 'undefined') {
-                const stored = localStorage.getItem(CLASS_ATTENDANCE_STORAGE_KEY)
-                if (stored) {
-                    const parsed = JSON.parse(stored)
-                    if (Array.isArray(parsed) && parsed.length > 0) return parsed
-                }
-            }
-        } catch {
-            /* ignore */
-        }
-        return ATTENDANCE_LIST
-    })
+const ClassAttendance = ({ canOverrideBiometric = false }) => {
+    const [searchParams, setSearchParams] = useSearchParams()
+    const activeTab = searchParams.get('tab') === 'biometric' ? 'biometric' : 'manual'
+    const api = isApiAttendanceEnabled()
     const [selectedDate, setSelectedDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [searchTerm, setSearchTerm] = useState('')
     const [classFilter, setClassFilter] = useState('')
     const [sectionFilter, setSectionFilter] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [entriesPerPage, setEntriesPerPage] = useState(10)
-    const [isManualMode, setIsManualMode] = useState(false)
+    const [sessionFilter, setSessionFilter] = useState('FN')
+    const [search, setSearch] = useState('')
+    const [rows, setRows] = useState(() => (api ? [] : ATTENDANCE_LIST))
+    // Status per student as last loaded from the server: only rows changed from it are saved, so
+    // untouched biometric (auto) marks stay auto instead of becoming manual on every save.
+    const [savedStatus, setSavedStatus] = useState({})
+    const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState('')
+    const [saveMessage, setSaveMessage] = useState('')
+    const [dirty, setDirty] = useState(false)
+    const [classOptions, setClassOptions] = useState(null)
+    const [substituteDuties, setSubstituteDuties] = useState([])
+    const [optionsError, setOptionsError] = useState('')
+    const optionsDate = toIsoDate(selectedDate)
 
-    // Save class attendance to localStorage
-    const handleSaveClassAttendance = () => {
-        try {
-            localStorage.setItem(CLASS_ATTENDANCE_STORAGE_KEY, JSON.stringify(records))
-            window.dispatchEvent(new Event('schoolerp-student-attendance-sync'))
-            toast.success('Class attendance records saved successfully!')
-        } catch (err) {
-            toast.error('Failed to save attendance records.')
-        }
-    }
-
-    // Mark all filtered students as present
-    const handleMarkAllPresent = () => {
-        setRecords((prev) =>
-            prev.map((r) => {
-                const matchesClass = !classFilter || r.className === classFilter
-                const matchesSection = !sectionFilter || r.section === sectionFilter
-                if (matchesClass && matchesSection) {
-                    return {
-                        ...r,
-                        attendanceStatus: 'Present',
-                        inOutStatus: 'On Time',
-                        time: r.time && r.time !== '—' ? r.time : '08:00 AM',
-                        isOverridden: true,
-                        overrideNote: 'Marked Present via Manual Roster',
-                        overriddenBy: 'Class Mentor',
-                        overriddenAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    }
+    useEffect(() => {
+        if (!api) return undefined
+        let cancelled = false
+        listMyAttendanceClassesApi(optionsDate || undefined)
+            .then((data) => {
+                if (!cancelled) {
+                    setClassOptions(data.classes)
+                    setSubstituteDuties(data.substituteDuties)
+                    setOptionsError('')
                 }
-                return r
             })
-        )
-        toast.info('All students marked as Present.')
+            .catch((err) => {
+                if (!cancelled) {
+                    setClassOptions([])
+                    setSubstituteDuties([])
+                    setOptionsError(err.message || 'Could not load your classes')
+                }
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [api, optionsDate])
+
+    const classNames = useMemo(
+        () => (api ? (classOptions || []).map((item) => item.className) : CLASSES),
+        [api, classOptions],
+    )
+    const sectionNames = useMemo(() => {
+        if (!api) return SECTIONS
+        const list = classOptions || []
+        const chosen = classFilter ? list.filter((item) => item.className === classFilter) : list
+        return [...new Set(chosen.flatMap((item) => item.sections || []))].sort()
+    }, [api, classOptions, classFilter])
+
+    const canEdit = api && Boolean(classFilter)
+
+    const applyLoaded = (data) => {
+        const list = Array.isArray(data) ? data : []
+        setRows(list)
+        setSavedStatus(Object.fromEntries(list.map((row) => [String(row.studentId), row.attendanceStatus || ''])))
+        setDirty(false)
     }
 
-    // Quick status toggle for individual student in manual mode
-    const handleQuickStatusChange = (recordId, newStatus) => {
-        setRecords((prev) =>
-            prev.map((r) =>
-                r.id === recordId
-                    ? {
-                          ...r,
-                          attendanceStatus: newStatus,
-                          inOutStatus: newStatus === 'Present' ? 'On Time' : newStatus === 'Late Present' ? 'Late' : '—',
-                          time: newStatus === 'Absent' ? '—' : r.time && r.time !== '—' ? r.time : '08:00 AM',
-                          isOverridden: true,
-                          overrideNote: `Status updated to ${newStatus}`,
-                          overriddenBy: 'Class Mentor',
-                          overriddenAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      }
-                    : r
-            )
-        )
-    }
-
-    // Class Mentor Attendance Override Modal State
-    const [overrideDialog, setOverrideDialog] = useState({
-        open: false,
-        record: null,
-        newStatus: 'Present',
-        reason: '',
-    })
-
-    const handleOpenOverride = (record) => {
-        setOverrideDialog({
-            open: true,
-            record,
-            newStatus: record.attendanceStatus === 'Present' ? 'Late Present' : 'Present',
-            reason: '',
+    const reload = () => {
+        if (!api) {
+            setRows(ATTENDANCE_LIST)
+            setLoading(false)
+            setError('')
+            return Promise.resolve()
+        }
+        setLoading(true)
+        setError('')
+        const date = toIsoDate(selectedDate)
+        return listAttendanceApi({
+            date,
+            className: classFilter || undefined,
+            section: sectionFilter || undefined,
+            session: sessionFilter || 'FN',
+            roster: Boolean(classFilter),
         })
+            .then(applyLoaded)
+            .catch((err) => {
+                setError(err.message || 'Failed to load attendance')
+                setRows([])
+            })
+            .finally(() => {
+                setLoading(false)
+            })
     }
 
-    const handleSaveOverride = (e) => {
-        e.preventDefault()
-        if (!overrideDialog.reason.trim()) {
-            toast.error('A mentor justification note is required to override biometric attendance.')
+    useEffect(() => {
+        let cancelled = false
+        setSaveMessage('')
+        if (!api) {
+            setRows(ATTENDANCE_LIST)
+            return undefined
+        }
+        setLoading(true)
+        setError('')
+        const date = toIsoDate(selectedDate)
+        listAttendanceApi({
+            date,
+            className: classFilter || undefined,
+            section: sectionFilter || undefined,
+            session: sessionFilter || 'FN',
+            roster: Boolean(classFilter),
+        })
+            .then((data) => {
+                if (cancelled) return
+                const list = Array.isArray(data) ? data : []
+                setRows(list)
+                setSavedStatus(Object.fromEntries(list.map((row) => [String(row.studentId), row.attendanceStatus || ''])))
+                setDirty(false)
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setError(err.message || 'Failed to load attendance')
+                    setRows([])
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [api, selectedDate, classFilter, sectionFilter, sessionFilter])
+
+    const displayRows = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        return rows.filter((record) => {
+            if (statusFilter && record.attendanceStatus !== statusFilter) return false
+            if (!query) return true
+            const haystack = `${record.admissionNumber || ''} ${record.studentId || ''} ${record.studentName || ''}`.toLowerCase()
+            return haystack.includes(query)
+        })
+    }, [rows, search, statusFilter])
+
+    const updateRowStatus = (studentId, attendanceStatus) => {
+        setRows((current) =>
+            current.map((row) =>
+                String(row.studentId) === String(studentId) ? { ...row, attendanceStatus } : row,
+            ),
+        )
+        setDirty(true)
+        setSaveMessage('')
+    }
+
+    const markAll = (attendanceStatus) => {
+        setRows((current) => current.map((row) => ({ ...row, attendanceStatus })))
+        setDirty(true)
+        setSaveMessage('')
+    }
+
+    const handleSave = async () => {
+        if (!canEdit || saving) return
+        const marks = rows
+            .filter((row) => row.studentId && row.attendanceStatus)
+            .filter((row) => row.attendanceStatus !== savedStatus[String(row.studentId)])
+            .map((row) => ({
+                studentId: row.studentId,
+                status: row.attendanceStatus,
+                inOutStatus: row.inOutStatus && row.inOutStatus !== '—' ? row.inOutStatus : undefined,
+            }))
+        if (marks.length === 0) {
+            setSaveMessage('No changes to save. Set Present/Absent for at least one student first.')
             return
         }
-
-        setRecords((prev) =>
-            prev.map((r) =>
-                r.id === overrideDialog.record.id
-                    ? {
-                          ...r,
-                          attendanceStatus: overrideDialog.newStatus,
-                          inOutStatus: overrideDialog.newStatus === 'Present' ? 'In Time' : 'Late',
-                          isOverridden: true,
-                          overrideNote: overrideDialog.reason.trim(),
-                          overriddenBy: 'Class Mentor (Mr. Anil Kumar)',
-                          overriddenAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      }
-                    : r
-            )
-        )
-
-        toast.success(`Biometric attendance overridden for ${overrideDialog.record.studentName}`)
-        setOverrideDialog({ open: false, record: null, newStatus: 'Present', reason: '' })
+        setSaving(true)
+        setError('')
+        setSaveMessage('')
+        try {
+            await upsertAttendanceApi({
+                date: toIsoDate(selectedDate),
+                className: classFilter,
+                section: sectionFilter || undefined,
+                session: sessionFilter || 'FN',
+                marks: marks.map((mark) => ({ ...mark, session: sessionFilter || 'FN' })),
+            })
+            const half = sessionFilter === 'AN' ? 'afternoon' : 'morning'
+            setSaveMessage(`Saved ${half} attendance for ${marks.length} student(s).`)
+            await reload()
+        } catch (err) {
+            setError(err.message || 'Failed to save attendance')
+        } finally {
+            setSaving(false)
+        }
     }
 
-    const filteredRecords = records.filter((r) => {
-        const matchesSearch =
-            !searchTerm ||
-            r.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            r.studentId.toLowerCase().includes(searchTerm.toLowerCase())
-        const matchesClass = !classFilter || r.className === classFilter
-        const matchesSection = !sectionFilter || r.section === sectionFilter
-        const matchesStatus = !statusFilter || r.attendanceStatus === statusFilter
-        return matchesSearch && matchesClass && matchesSection && matchesStatus
-    })
+    const clearFilters = () => {
+        setClassFilter('')
+        setSectionFilter('')
+        setStatusFilter('')
+        setSessionFilter('FN')
+        setSearch('')
+        setSelectedDate(new Date())
+        setSaveMessage('')
+    }
+
+    const sessionMeta = ATTENDANCE_SESSIONS.find((item) => item.id === sessionFilter) || ATTENDANCE_SESSIONS[0]
+
+    const setTab = (tab) => {
+        const next = new URLSearchParams(searchParams)
+        if (tab === 'manual') next.delete('tab')
+        else next.set('tab', tab)
+        setSearchParams(next, { replace: true })
+    }
 
     return (
-        <section>
-            {/* ESSL Biometric Server Live Sync Card */}
-            <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 p-4 mb-5 shadow-xs'>
-                <div className='flex items-center gap-3'>
-                    <span className='relative flex h-3.5 w-3.5'>
-                        <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75'></span>
-                        <span className='relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-600'></span>
-                    </span>
-                    <div>
-                        <div className='flex items-center gap-2'>
-                            <p className='text-sm font-bold text-emerald-950'>
-                                ESSL Biometric Ingestion Server: Active &amp; Synchronized
-                            </p>
-                            <span className='inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800'>
-                                <ShieldCheck size={13} />
-                                eTimeTrackLive v14
-                            </span>
-                        </div>
-                        <p className='text-xs text-emerald-700 mt-0.5'>
-                            Device: ESSL SilkBio-101TC · Main Gate &amp; Academic Block · Auto-Sync: 08:35 AM · 1,248 Attendance Punches Logged
-                        </p>
-                    </div>
-                </div>
-                <div className='flex items-center gap-2'>
-                    <button
-                        type='button'
-                        onClick={() => setIsManualMode(!isManualMode)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                            isManualMode
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-white/90 text-emerald-900 border-emerald-300 hover:bg-white'
-                        }`}
-                    >
-                        <Edit3 size={14} />
-                        {isManualMode ? 'Mode: Manual Roster Marking' : 'Switch to Manual Marking'}
-                    </button>
-                    <span className='text-xs font-medium text-emerald-800 bg-white/80 border border-emerald-200 rounded-lg px-3 py-1.5'>
-                        Class Mentor Biometric Override Authorized
-                    </span>
-                </div>
+        <section className='space-y-4'>
+            <div className='bg-white rounded-2xl shadow-md p-2 inline-flex gap-1'>
+                <button
+                    type='button'
+                    onClick={() => setTab('manual')}
+                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${activeTab === 'manual' ? 'bg-[#515DEF] text-white' : 'text-[#667085] hover:bg-[#F5F6FB]'}`}
+                >
+                    Manual Attendance
+                </button>
+                <button
+                    type='button'
+                    onClick={() => setTab('biometric')}
+                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${activeTab === 'biometric' ? 'bg-[#515DEF] text-white' : 'text-[#667085] hover:bg-[#F5F6FB]'}`}
+                >
+                    Biometric (ESSL)
+                </button>
             </div>
 
+            {activeTab === 'biometric' ? (
+                <BiometricAttendancePage canOverride={canOverrideBiometric} />
+            ) : (
+            <>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button
                         type='button'
-                        onClick={() => {
-                            setSearchTerm('')
-                            setClassFilter('')
-                            setSectionFilter('')
-                            setStatusFilter('')
-                        }}
+                        onClick={clearFilters}
                         className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
                     >
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
+                    {api && (
+                        <div className='text-sm text-[#667085]'>
+                            <p>
+                                Mark attendance twice a day — <strong>Morning (FN)</strong> and <strong>Afternoon (AN)</strong>.
+                                Missing one half counts as <strong>Half Day</strong> leave.
+                            </p>
+                            <p>
+                                Marks tagged <strong>biometric</strong> came from the attendance device sync. A mark you save
+                                replaces it for that half, and later syncs keep your mark.
+                            </p>
+                            {substituteDuties.map((duty) => (
+                                <p key={duty.id} className='text-[#515DEF]'>
+                                    Substitute duty: {duty.className}-{duty.section}, {duty.period} ({duty.startTime}–{duty.endTime}) — available only during this period.
+                                </p>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='session-filter' className='text-base font-medium text-[#808080]'>Session</label>
+                        <select
+                            id='session-filter'
+                            value={sessionFilter}
+                            onChange={(e) => setSessionFilter(e.target.value)}
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            {ATTENDANCE_SESSIONS.map((item) => (
+                                <option key={item.id} value={item.id}>{item.label}</option>
+                            ))}
+                        </select>
+                        <p className='text-xs text-[#808080]'>{sessionMeta.hint}</p>
+                    </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
                         <input
                             type='text'
                             id='search'
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
                             placeholder='Student ID, name...'
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         />
@@ -227,14 +318,22 @@ const ClassAttendance = () => {
                         <select
                             id='class-filter'
                             value={classFilter}
-                            onChange={(e) => setClassFilter(e.target.value)}
+                            onChange={(e) => {
+                                setClassFilter(e.target.value)
+                                setSectionFilter('')
+                            }}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {CLASSES.map((item) => (
-                                <option key={item} value={item}>Class {item}</option>
+                            {classNames.map((item) => (
+                                <option key={item} value={item}>{api ? item : `Class ${item}`}</option>
                             ))}
                         </select>
+                        {api && classOptions && classOptions.length === 0 && (
+                            <p className='text-xs text-[#B42318]'>
+                                {optionsError || 'No classes are assigned to you for Manual Attendance. Ask Principal to complete Teacher Allocation (or a live Substitute Duty) for the current academic year.'}
+                            </p>
+                        )}
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='section-filter' className='text-base font-medium text-[#808080]'>Section</label>
@@ -245,7 +344,7 @@ const ClassAttendance = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {SECTIONS.map((item) => (
+                            {sectionNames.map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -283,32 +382,37 @@ const ClassAttendance = () => {
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <div className='flex items-center gap-3'>
-                        <h2 className='text-xl font-medium text-black'>Attendance List</h2>
-                        {isManualMode && (
-                            <span className='inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200'>
-                                Manual Mode Active
-                            </span>
-                        )}
+                    <div>
+                        <h2 className='text-xl font-medium text-black'>
+                            Attendance List — {sessionMeta.label}
+                        </h2>
+                        {saveMessage && <p className='text-sm text-[#027A48] mt-1'>{saveMessage}</p>}
                     </div>
-                    <div className='flex items-center gap-2'>
-                        {isManualMode && (
+                    <div className='flex flex-wrap gap-2'>
+                        {canEdit && (
                             <>
                                 <button
                                     type='button'
-                                    onClick={handleMarkAllPresent}
-                                    className='flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors cursor-pointer shadow-xs'
+                                    onClick={() => markAll('Present')}
+                                    className='bg-white text-[#4CAF50] text-sm px-3 py-2 rounded-md border border-[#4CAF50] hover:opacity-90 cursor-pointer'
                                 >
-                                    <CheckCircle2 size={14} />
-                                    Mark All Present
+                                    Mark all Present
                                 </button>
                                 <button
                                     type='button'
-                                    onClick={handleSaveClassAttendance}
-                                    className='flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors cursor-pointer shadow-xs'
+                                    onClick={() => markAll('Absent')}
+                                    className='bg-white text-[#B42318] text-sm px-3 py-2 rounded-md border border-[#B42318] hover:opacity-90 cursor-pointer'
                                 >
-                                    <Save size={14} />
-                                    Save Class Attendance
+                                    Mark all Absent
+                                </button>
+                                <button
+                                    type='button'
+                                    disabled={saving || !dirty}
+                                    onClick={handleSave}
+                                    className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2 disabled:opacity-60'
+                                >
+                                    <Save size={16} />
+                                    {saving ? 'Saving…' : 'Save attendance'}
                                 </button>
                             </>
                         )}
@@ -322,20 +426,6 @@ const ClassAttendance = () => {
                         </button>
                     </div>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select
-                        value={entriesPerPage}
-                        onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-                        className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'
-                    >
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                        <option value='40'>40</option>
-                        <option value='50'>50</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -344,90 +434,76 @@ const ClassAttendance = () => {
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Student Name</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Section</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Time</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Attendance Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>In &amp; out Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Class Mentor Action</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Session mark</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Day status</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>FN</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>AN</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRecords.slice(0, entriesPerPage).map((record) => (
-                                <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.studentId}</td>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E]'>
-                                        {record.studentName}
-                                        {record.isOverridden && (
-                                            <span className='block text-[11px] font-semibold text-[#515DEF]' title={`Overridden at ${record.overriddenAt}: ${record.overrideNote}`}>
-                                                ★ Mentor Override: {record.overrideNote}
-                                            </span>
-                                        )}
+                            {loading && (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-10 text-center text-[#667085]'>Loading attendance…</td>
+                                </tr>
+                            )}
+                            {!loading && error && (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-10 text-center text-red-500'>{error}</td>
+                                </tr>
+                            )}
+                            {!loading && !error && displayRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-10 text-center text-[#667085]'>
+                                        {api && !classFilter
+                                            ? 'Select a class to load the roster and mark attendance.'
+                                            : 'No attendance marks for this date.'}
                                     </td>
+                                </tr>
+                            )}
+                            {!loading && !error && displayRows.map((record) => (
+                                <tr key={`${record.studentId}-${record.session || sessionFilter}`} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
+                                    <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.admissionNumber || record.studentId}</td>
+                                    <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.studentName}</td>
                                     <td className='px-2 py-4'>{record.className}</td>
-                                    <td className='px-2 py-4'>{record.section}</td>
-                                    <td className='px-2 py-4'>{record.time}</td>
+                                    <td className='px-2 py-4'>{record.section || '—'}</td>
                                     <td className='px-2 py-4'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.attendanceStatus]}`}>
-                                            {record.attendanceStatus}
-                                        </span>
-                                    </td>
-                                    <td className='px-2 py-4'>
-                                        {record.inOutStatus === '—' ? (
-                                            '—'
-                                        ) : (
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${inOutStatusBadgeColor[record.inOutStatus]}`}>
-                                                {record.inOutStatus}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className='px-2 py-4 rounded-e-lg'>
-                                        {isManualMode ? (
-                                            <div className='flex items-center gap-1'>
-                                                <button
-                                                    type='button'
-                                                    title='Mark Present'
-                                                    onClick={() => handleQuickStatusChange(record.id, 'Present')}
-                                                    className={`px-2 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors ${
-                                                        record.attendanceStatus === 'Present'
-                                                            ? 'bg-emerald-600 text-white'
-                                                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                    }`}
-                                                >
-                                                    P
-                                                </button>
-                                                <button
-                                                    type='button'
-                                                    title='Mark Late Present'
-                                                    onClick={() => handleQuickStatusChange(record.id, 'Late Present')}
-                                                    className={`px-2 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors ${
-                                                        record.attendanceStatus === 'Late Present'
-                                                            ? 'bg-amber-600 text-white'
-                                                            : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                                    }`}
-                                                >
-                                                    L
-                                                </button>
-                                                <button
-                                                    type='button'
-                                                    title='Mark Absent'
-                                                    onClick={() => handleQuickStatusChange(record.id, 'Absent')}
-                                                    className={`px-2 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors ${
-                                                        record.attendanceStatus === 'Absent'
-                                                            ? 'bg-rose-600 text-white'
-                                                            : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                                                    }`}
-                                                >
-                                                    A
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                type='button'
-                                                onClick={() => handleOpenOverride(record)}
-                                                className='inline-flex items-center rounded border border-[#515DEF] px-2.5 py-1 text-xs font-semibold text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                                        {canEdit ? (
+                                            <select
+                                                value={record.attendanceStatus || ''}
+                                                onChange={(e) => updateRowStatus(record.studentId, e.target.value)}
+                                                className='text-sm border border-[#D9D9D9] rounded-md px-2 py-1.5 bg-white'
                                             >
-                                                Override
-                                            </button>
+                                                <option value=''>Unset</option>
+                                                {ATTENDANCE_STATUSES.map((status) => (
+                                                    <option key={status} value={status}>{status}</option>
+                                                ))}
+                                            </select>
+                                        ) : record.attendanceStatus ? (
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.attendanceStatus] || ''}`}>
+                                                {record.attendanceStatus}
+                                            </span>
+                                        ) : (
+                                            '—'
                                         )}
+                                    </td>
+                                    <td className='px-2 py-4'>
+                                        {record.dayStatus ? (
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.dayStatus] || ''}`}>
+                                                {record.dayStatus}
+                                            </span>
+                                        ) : '—'}
+                                    </td>
+                                    <td className='px-2 py-4 text-xs'>
+                                        {record.fn?.status || '—'}
+                                        {record.fn?.source === 'auto' ? ' · biometric' : ''}
+                                        {record.fn?.checkInTime ? ` · in ${record.fn.checkInTime}` : ''}
+                                        {record.fn?.checkOutTime ? ` · out ${record.fn.checkOutTime}` : ''}
+                                    </td>
+                                    <td className='px-2 py-4 text-xs rounded-e-lg'>
+                                        {record.an?.status || '—'}
+                                        {record.an?.source === 'auto' ? ' · biometric' : ''}
+                                        {record.an?.checkInTime ? ` · in ${record.an.checkInTime}` : ''}
+                                        {record.an?.checkOutTime ? ` · out ${record.an.checkOutTime}` : ''}
                                     </td>
                                 </tr>
                             ))}
@@ -436,100 +512,43 @@ const ClassAttendance = () => {
                 </div>
             </div>
 
-            {/* Class Mentor Attendance Override Modal */}
-            {overrideDialog.open && (
-                <div
-                    className='fixed inset-0 z-250 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs'
-                    role='dialog'
-                    aria-modal='true'
-                >
-                    <div className='w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl'>
-                        <div className='flex items-center justify-between border-b border-[var(--erp-line)] pb-3'>
-                            <div>
-                                <h3 className='text-lg font-bold text-[var(--erp-ink)]'>
-                                    Class Mentor Attendance Override
-                                </h3>
-                                <p className='text-xs text-[var(--erp-muted)]'>
-                                    {overrideDialog.record?.studentName} ({overrideDialog.record?.studentId})
-                                </p>
-                            </div>
-                            <button
-                                type='button'
-                                onClick={() => setOverrideDialog({ open: false, record: null, newStatus: 'Present', reason: '' })}
-                                className='p-1 text-[var(--erp-muted)] hover:bg-[var(--erp-canvas)] rounded-lg'
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSaveOverride} className='mt-4 space-y-4'>
-                            <div>
-                                <label className='block text-xs font-semibold text-[var(--erp-slate)] mb-1'>
-                                    Current Biometric Status
-                                </label>
-                                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${statusBadgeColor[overrideDialog.record?.attendanceStatus]}`}>
-                                    {overrideDialog.record?.attendanceStatus}
-                                </span>
-                            </div>
-
-                            <div>
-                                <label className='block text-xs font-semibold text-[var(--erp-slate)] mb-1'>
-                                    Override To Status *
-                                </label>
-                                <select
-                                    value={overrideDialog.newStatus}
-                                    onChange={(e) => setOverrideDialog((prev) => ({ ...prev, newStatus: e.target.value }))}
-                                    className='w-full rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 py-2 text-sm text-[var(--erp-ink)] focus:outline-none focus:ring-2 focus:ring-[#515DEF]'
-                                >
-                                    <option value='Present'>Present</option>
-                                    <option value='Late Present'>Late Present</option>
-                                    <option value='Half Day'>Half Day</option>
-                                    <option value='Absent'>Absent</option>
-                                    <option value='Medical Leave'>Medical Leave / On Duty</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className='block text-xs font-semibold text-[var(--erp-slate)] mb-1'>
-                                    Mentor Justification Note *
-                                </label>
-                                <textarea
-                                    required
-                                    rows={3}
-                                    value={overrideDialog.reason}
-                                    onChange={(e) => setOverrideDialog((prev) => ({ ...prev, reason: e.target.value }))}
-                                    placeholder='State reason for override (e.g., Biometric sensor failure, Inter-school competition on-duty)...'
-                                    className='w-full rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 py-2 text-sm text-[var(--erp-ink)] focus:outline-none focus:ring-2 focus:ring-[#515DEF]'
-                                />
-                            </div>
-
-                            <div className='flex items-center justify-end gap-2 border-t border-[var(--erp-line)] pt-4'>
-                                <button
-                                    type='button'
-                                    onClick={() => setOverrideDialog({ open: false, record: null, newStatus: 'Present', reason: '' })}
-                                    className='rounded-lg border border-[var(--erp-line-strong)] px-4 py-2 text-sm font-semibold text-[var(--erp-slate)] hover:bg-[var(--erp-canvas)]'
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type='submit'
-                                    className='rounded-lg bg-[#515DEF] px-5 py-2 text-sm font-semibold text-white hover:bg-[#434dbd]'
-                                >
-                                    Submit Override
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+            <div className='flex justify-between items-center px-4 mt-4'>
+                <p className='text-sm font-medium text-[#515DEF]'>
+                    {displayRows.length === 0
+                        ? 'Showing 0 entries'
+                        : `Showing 1 to ${displayRows.length} of ${displayRows.length} entries`}
+                </p>
+                <div className='flex justify-center gap-x-2 flex-wrap'>
+                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
+                        <ChevronLeft size={16} />
+                    </button>
+                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
+                        1
+                    </button>
+                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
+                        <ChevronRight size={16} />
+                    </button>
                 </div>
-            )}
+            </div>
 
-            {exportModal && (
-                <ExportModal
-                    isOpen={exportModal}
-                    onClose={() => setExportModal(false)}
-                    data={filteredRecords}
-                    filename='Attendance_List'
-                />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='class-attendance'
+                rows={displayRows.map((r) => ({
+                    studentId: r.admissionNumber || r.studentId,
+                    studentName: r.studentName,
+                    className: r.className,
+                    section: r.section || '',
+                    session: r.session || sessionFilter,
+                    attendanceStatus: r.attendanceStatus || '',
+                    dayStatus: r.dayStatus || '',
+                    fn: r.fn?.status || '',
+                    an: r.an?.status || '',
+                }))}
+                exportDescription={<>You are exporting {displayRows.length} record{displayRows.length === 1 ? '' : 's'}.</>}
+            />
+            </>
             )}
         </section>
     )

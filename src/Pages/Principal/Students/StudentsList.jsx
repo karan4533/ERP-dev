@@ -7,6 +7,10 @@ import mo_user from "../../../assets/images/no-profile.png"
 import Dropdown from '../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../Common/CommonComponents/ExportModal';
 
+const EXPORT_ROWS = [
+    {profile: '', admission_number: 'ADM-NO1845', name: 'Sandy Selva', gender: 'Male', email: 'san@gmail.com', mobile_number: '9944076993', date_of_birth: '20-12-1996', country: 'India', state: 'TamilNadu', city: 'Pudukkottai'},
+]
+
 const StudentsList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -191,7 +195,14 @@ const StudentsList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='students-list'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
         </section>
     )

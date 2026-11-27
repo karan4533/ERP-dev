@@ -1,5 +1,6 @@
 import { getObservations, OPEN_STATUSES, CLOSED_STATUSES, statusBadgeColor } from '../../Observations/observationsData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS } from '../../Observations/observationsData'
 export { statusBadgeColor }
 
@@ -69,13 +70,13 @@ const DEFAULT_DATA = {
 }
 
 export const saveActionsReports = (data) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    saveCampusJson(STORAGE_KEY, data)
 }
 
 export const getActionsReports = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+    if (stored) return stored
     } catch {
         /* ignore */
     }
@@ -101,3 +102,6 @@ export const daysLeftBadgeClass = (daysLeft) => {
     if (daysLeft === 'Due today') return 'text-[#FF9800] font-semibold'
     return 'text-[#667085]'
 }
+
+export const hydrateFromApi = (seed = []) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

@@ -1,52 +1,88 @@
 import { CLASSES, SECTIONS, SUBJECTS } from '../../AssignedClass/assignedClassData'
+import {
+    createAcademicsCollectionStore,
+    nextPrefixedId,
+} from '../../../../services/academicsCollectionStore'
+import {
+    canUseAcademicFileUploads,
+    primaryAttachmentMeta,
+    uploadAcademicAttachments,
+} from '../../../../services/academicAttachments'
 
-const STORAGE_KEY = 'teacher-student-deliverables-study-materials'
+export { CLASSES, SECTIONS, SUBJECTS }
 
 export const DEFAULT_ROUTE_BASE = '/teacher/student-deliverables/study-materials'
 export const ACADEMICS_ROUTE_BASE = '/teacher/academics/study-materials'
+export const STUDY_MATERIALS_UPDATED_EVENT = 'schoolerp-study-materials-updated'
 
-const DEFAULT_STUDY_MATERIALS = []
-
-export const getStudyMaterials = () => {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
-    } catch {
-        /* ignore */
+const normalizeRecord = (raw) => {
+    const id = String(raw?.id || raw?.materialId || '').trim()
+    return {
+        id,
+        materialId: String(raw?.materialId || id).trim() || id,
+        title: String(raw?.title || '').trim(),
+        description: String(raw?.description || '').trim(),
+        subject: String(raw?.subject || '').trim(),
+        className: String(raw?.className || '').trim(),
+        section: String(raw?.section || '').trim(),
+        fileName: String(raw?.fileName || '—').trim() || '—',
+        fileType: String(raw?.fileType || 'pdf').trim() || 'pdf',
+        fileId: raw?.fileId || null,
+        createdBy: String(raw?.createdBy || '').trim(),
+        createdAt: String(raw?.createdAt || '').trim(),
     }
-    return DEFAULT_STUDY_MATERIALS
 }
 
-export const saveStudyMaterials = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+const store = createAcademicsCollectionStore({
+    collection: 'study-materials',
+    storageKey: 'teacher-student-deliverables-study-materials',
+    eventName: STUDY_MATERIALS_UPDATED_EVENT,
+    normalize: normalizeRecord,
+    offlineFallback: () => [],
+})
+
+export const hydrateStudyMaterialsFromApi = store.hydrate
+export const clearStudyMaterialsMemory = store.clearMemory
+
+export const getStudyMaterials = () => store.getAll()
+
+export const saveStudyMaterials = (records) => store.saveAll(records)
+
+export const getStudyMaterialById = (id) => {
+    const key = String(id || '')
+    return getStudyMaterials().find((item) => item.id === key || item.materialId === key) ?? null
 }
 
-export const getStudyMaterialById = (id) =>
-    getStudyMaterials().find((item) => item.id === id) ?? null
+export const generateMaterialId = () => nextPrefixedId(getStudyMaterials(), 'SM', 1001)
 
-export const generateMaterialId = () => {
-    const list = getStudyMaterials()
-    const max = list.reduce((acc, item) => {
-        const num = Number(item.materialId.split('-').pop())
-        return Number.isFinite(num) ? Math.max(acc, num) : acc
-    }, 1000)
-    return `SM-${max + 1}`
-}
-
-export const addStudyMaterial = (values) => {
-    const materialId = generateMaterialId()
-    const record = {
+export const addStudyMaterial = async (values, meta = {}) => {
+    await store.ensureHydrated()
+    const existing = getStudyMaterials()
+    const materialId = nextPrefixedId(existing, 'SM', 1001)
+    const pendingFiles = Array.isArray(values?.pendingFiles) ? values.pendingFiles : []
+    const { pendingFiles: _ignored, ...rest } = values || {}
+    const record = normalizeRecord({
+        ...rest,
         id: materialId,
         materialId,
-        title: values.title,
-        description: values.description,
-        subject: values.subject,
-        className: values.className,
-        section: values.section,
-        fileName: values.fileName || '—',
-        fileType: values.fileType || 'pdf',
+        createdBy: meta.createdBy || '',
+        createdAt: new Date().toISOString(),
+    })
+    await saveStudyMaterials([record, ...existing])
+    if (canUseAcademicFileUploads() && pendingFiles.length) {
+        const { assets, failures } = await uploadAcademicAttachments('study-materials', record.id, pendingFiles)
+        if (failures.length) {
+            const detail = failures.map((row) => `${row.fileName}: ${row.message}`).join('; ')
+            throw new Error(`Study material was saved, but the attachment did not upload. ${detail}`)
+        }
+        const metaFields = primaryAttachmentMeta(assets)
+        if (metaFields.fileId) {
+            const updated = normalizeRecord({ ...record, ...metaFields })
+            const current = getStudyMaterials().filter((row) => row.id !== record.id)
+            await saveStudyMaterials([updated, ...current])
+            return updated
+        }
     }
-    saveStudyMaterials([record, ...getStudyMaterials()])
     return record
 }
 
@@ -65,5 +101,3 @@ export const filterStudyMaterials = (items, filters) =>
 
         return matchesSearch && matchesSubject && matchesClass && matchesSection
     })
-
-export { CLASSES, SECTIONS, SUBJECTS }

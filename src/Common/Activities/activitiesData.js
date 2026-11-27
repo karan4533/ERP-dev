@@ -1,4 +1,14 @@
-import { applyWorkflowDecision, WORKFLOW_TYPES } from '../approvals/approvalEngine.js'
+import {
+    canUseActivitiesApi,
+    createActivityApi,
+    deleteActivityApi,
+    listActivitiesApi,
+    updateActivityApi,
+    approveActivityApi as approveActivityOnServer,
+} from '../../services/activitiesApi'
+import { isApiActivitiesEnabled } from '../../services/apiClient'
+import { dmyToIso, isoToDmy } from '../../services/documentsApi'
+
 const STORAGE_KEY = 'school-erp-activities'
 
 export const MD_APPROVAL_STATUS = {
@@ -28,23 +38,8 @@ const DEFAULT_ACTIVITIES = [
         coach: 'APAR Sports Academy',
         description: 'District level open and children chess tournament.',
         submittedBy: 'Admin',
-        approvalStatus: 'Approved',
         mdApprovalStatus: MD_APPROVAL_STATUS.APPROVED,
-        isFeeApplicable: false,
-        feeAmount: 0,
-        feeCategory: 'None',
-        participants: [
-            { studentId: 'STU-001', studentName: 'Kabir Singh', className: '10-A', attended: true, result: 'Winner', award: 'Gold Trophy' },
-            { studentId: 'STU-002', studentName: 'Meera Nair', className: '11-B', attended: true, result: 'Runner Up', award: 'Silver Medal' },
-            { studentId: 'STU-003', studentName: 'Ananya Iyer', className: '9-C', attended: true, result: 'Third Place', award: 'Bronze Medal' }
-        ],
-        approvalHistory: [
-            { id: 'H1', tierNumber: 1, tierName: 'Front Office Verification', status: 'Approved', actor: 'PRM Officer', actorRole: 'prm', remarks: 'Event logistics and venue booking cleared.', decidedAt: '2025-08-02T10:00:00.000Z' },
-            { id: 'H2', tierNumber: 2, tierName: 'Principal Endorsement', status: 'Approved', actor: 'Dr. Ramanathan (Principal)', actorRole: 'principal', remarks: 'Approved for inter-school sports schedule.', decidedAt: '2025-08-03T11:30:00.000Z' },
-            { id: 'H3', tierNumber: 3, tierName: 'Director Sanction', status: 'Approved', actor: 'Director of Academics', actorRole: 'director', remarks: 'Final sanction granted.', decidedAt: '2025-08-04T15:00:00.000Z' }
-        ],
         submittedDate: '01-08-2025',
-        participantCount: 64,
         players: [
             { id: 'PLY-001', rank: 1, name: 'Kabir Singh', category: 'Open', className: 'Class 10 - A', school: 'APAR Sports Academy', rating: '1325', score: '5.5/6', tieBreak: '24.0', result: 'Winner' },
             { id: 'PLY-002', rank: 2, name: 'Meera Nair', category: 'Open', className: 'Class 11 - B', school: 'APAR Sports Academy', rating: '1262', score: '5/6', tieBreak: '22.5', result: 'Runner Up' },
@@ -54,132 +49,6 @@ const DEFAULT_ACTIVITIES = [
             { id: 'PLY-006', rank: 6, name: 'Aarav Sharma', category: 'Under 09', className: 'Class 3 - A', school: 'APAR Sports Academy', rating: 'Unrated', score: '3/6', tieBreak: '16.5', result: 'Completed' },
         ],
     },
-    {
-        id: 'ACT-CUL-001',
-        type: 'cultural',
-        eventName: 'Annual Classical Music & Dance Symphony 2025',
-        eventType: 'Music & Dance Festival',
-        className: 'Grades 6 to 12',
-        eventDate: '22-09-2025',
-        startTime: '10:00 AM',
-        endTime: '04:00 PM',
-        venue: 'Main Auditorium, Cultural Block',
-        coordinator: 'Sunita Rao',
-        coach: '',
-        description: 'Inter-house classical Carnatic and Hindustani music performance, choir showcase, and folk dance exposition.',
-        submittedBy: 'Admin',
-        mdApprovalStatus: MD_APPROVAL_STATUS.APPROVED,
-        submittedDate: '10-09-2025',
-        participantCount: 142,
-    },
-    {
-        id: 'ACT-CUL-002',
-        type: 'cultural',
-        eventName: 'Inter-School Sanskrit Drama & One-Act Play',
-        eventType: 'Theatre & Drama',
-        className: 'Grades 9 to 12',
-        eventDate: '14-10-2025',
-        startTime: '02:00 PM',
-        endTime: '06:00 PM',
-        venue: 'Open Air Amphitheatre',
-        coordinator: 'Meenakshi Sundaram',
-        coach: '',
-        description: 'Dramatic staging of classical drama with student-directed acoustic orchestra and stage design.',
-        submittedBy: 'Teacher',
-        mdApprovalStatus: MD_APPROVAL_STATUS.PENDING,
-        submittedDate: '28-09-2025',
-        participantCount: 65,
-    },
-    {
-        id: 'ACT-SPT-002',
-        type: 'sports',
-        eventName: 'State Invitational Athletics & Track Meet 2025',
-        eventType: 'Track & Field',
-        className: 'Grades 5 to 12',
-        eventDate: '05-10-2025',
-        startTime: '08:00 AM',
-        endTime: '04:30 PM',
-        venue: 'Main Sports Complex & Synthetic 400m Track',
-        coordinator: '',
-        coach: 'Coach Vikram Singh',
-        description: 'Inter-school championship featuring 100m, 200m, 400m sprint, 4x100m relay, long jump, and shot put finals.',
-        submittedBy: 'Sports HOD',
-        mdApprovalStatus: MD_APPROVAL_STATUS.APPROVED,
-        submittedDate: '15-09-2025',
-        participantCount: 220,
-    },
-    {
-        id: 'ACT-CMP-001',
-        type: 'competition',
-        eventName: 'National Science & Cyber Olympiad (State Chapter)',
-        eventType: 'Science Olympiad',
-        className: 'Grades 8 to 11',
-        eventDate: '18-09-2025',
-        startTime: '09:30 AM',
-        endTime: '12:30 PM',
-        venue: 'Computer Lab 1 & 2, Tech Block',
-        coordinator: 'Dr. Ramesh Nathan',
-        coach: '',
-        description: 'State-wide competitive coding, logic theoretical puzzles, and experimental physics problem solving.',
-        submittedBy: 'Admin',
-        mdApprovalStatus: MD_APPROVAL_STATUS.APPROVED,
-        submittedDate: '01-09-2025',
-        participantCount: 88,
-    },
-    {
-        id: 'ACT-CMP-002',
-        type: 'competition',
-        eventName: 'State Inter-School Mathematics Olympiad & Quiz',
-        eventType: 'Mathematics Olympiad',
-        className: 'Grades 9 & 10',
-        eventDate: '28-10-2025',
-        startTime: '10:00 AM',
-        endTime: '01:00 PM',
-        venue: 'Senior Wing Seminar Hall',
-        coordinator: 'Priya Menon',
-        coach: '',
-        description: 'Advanced calculus, combinatorics, and geometry tournament with rolling trophy for the top school team.',
-        submittedBy: 'Teacher',
-        mdApprovalStatus: MD_APPROVAL_STATUS.PENDING,
-        submittedDate: '25-09-2025',
-        participantCount: 45,
-    },
-    {
-        id: 'ACT-ACD-001',
-        type: 'academic',
-        eventName: 'Model United Nations (MUN) 2025 General Assembly',
-        eventType: 'Debate & Diplomacy',
-        className: 'Grades 9 to 12',
-        eventDate: '12-11-2025',
-        startTime: '09:00 AM',
-        endTime: '05:00 PM',
-        venue: 'Conference Hall A & B',
-        coordinator: 'Kavita Menon',
-        coach: '',
-        description: 'Simulation of UN committees debating global climate finance, diplomatic treaties, and AI ethics in education.',
-        submittedBy: 'Coordinator',
-        mdApprovalStatus: MD_APPROVAL_STATUS.APPROVED,
-        submittedDate: '20-09-2025',
-        participantCount: 110,
-    },
-    {
-        id: 'ACT-ADM-001',
-        type: 'administrative',
-        eventName: 'Annual Day Gala & Student Excellence Convocation',
-        eventType: 'Annual Convocation',
-        className: 'All Students & Faculty',
-        eventDate: '20-12-2025',
-        startTime: '04:00 PM',
-        endTime: '08:30 PM',
-        venue: 'Main Campus Open Grounds',
-        coordinator: 'Principal Office',
-        coach: '',
-        description: 'Flagship institutional celebration, annual awards distribution, Star of the Year recognition, and patron address.',
-        submittedBy: 'Principal',
-        mdApprovalStatus: MD_APPROVAL_STATUS.APPROVED,
-        submittedDate: '01-09-2025',
-        participantCount: 1850,
-    },
 ]
 
 const mergeDefaultActivities = (records) => {
@@ -188,43 +57,98 @@ const mergeDefaultActivities = (records) => {
     return missingDefaults.length > 0 ? [...missingDefaults, ...records] : records
 }
 
-let _memoryActivities = null
+let apiActivities = []
 
-export const getActivities = () => {
-    if (_memoryActivities && Array.isArray(_memoryActivities) && _memoryActivities.length > 0) {
-        return _memoryActivities
+const mapApiActivity = (row) => ({
+    ...row,
+    eventDate: isoToDmy(row.eventDate) || row.eventDate,
+    submittedDate: isoToDmy(row.submittedDate) || row.submittedDate,
+    fromApi: true,
+})
+
+export const hydrateActivitiesFromApi = async (type) => {
+    const rows = (await listActivitiesApi(type)).map(mapApiActivity)
+    if (type) {
+        apiActivities = [...apiActivities.filter((item) => item.type !== type), ...rows]
+    } else {
+        apiActivities = rows
     }
     try {
-        if (typeof localStorage !== 'undefined') {
-            const stored = localStorage.getItem(STORAGE_KEY)
-            if (stored) {
-                const parsed = JSON.parse(stored)
-                const records = Array.isArray(parsed) ? parsed : []
-                const merged = mergeDefaultActivities(records)
-                if (merged.length !== records.length) {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
-                }
-                _memoryActivities = merged
-                return _memoryActivities
-            }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ACTIVITIES))
+        localStorage.removeItem(STORAGE_KEY)
+    } catch {
+        /* ignore */
+    }
+    return type ? rows : apiActivities
+}
+
+export const clearActivitiesMemory = () => {
+    apiActivities = []
+}
+
+const toApiPayload = (payload) => ({
+    type: payload.type,
+    eventName: payload.eventName,
+    eventType: payload.eventType,
+    className: payload.className,
+    eventDate: dmyToIso(payload.eventDate) || payload.eventDate,
+    startTime: payload.startTime,
+    endTime: payload.endTime,
+    venue: payload.venue,
+    coordinator: payload.coordinator,
+    coach: payload.coach,
+    description: payload.description,
+    players: payload.players,
+})
+
+export const addActivityViaApi = async (payload) => {
+    const mapped = mapApiActivity(await createActivityApi(toApiPayload(payload)))
+    apiActivities = [mapped, ...apiActivities.filter((item) => item.id !== mapped.id)]
+    notifyCalendarUpdated()
+    return mapped
+}
+
+export const updateActivityViaApi = async (id, payload) => {
+    const mapped = mapApiActivity(await updateActivityApi(id, toApiPayload({ ...payload, type: payload.type })))
+    apiActivities = apiActivities.map((item) => (item.id === mapped.id ? mapped : item))
+    notifyCalendarUpdated()
+    return mapped
+}
+
+export const approveActivityViaApi = async (id, status) => {
+    const mapped = mapApiActivity(await approveActivityOnServer(id, status))
+    apiActivities = apiActivities.map((item) => (item.id === mapped.id ? mapped : item))
+    notifyCalendarUpdated()
+    return mapped
+}
+
+export const deleteActivityViaApi = async (id) => {
+    await deleteActivityApi(id)
+    apiActivities = apiActivities.filter((item) => item.id !== id)
+    notifyCalendarUpdated()
+}
+
+export const getActivities = () => {
+    // API auth / activities flag: never paint DEFAULT chess-tournament seed into the UI.
+    if (canUseActivitiesApi() || isApiActivitiesEnabled()) {
+        return [...apiActivities]
+    }
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+            const parsed = JSON.parse(stored)
+            const records = Array.isArray(parsed) ? parsed : []
+            // Offline-only: still avoid auto-merging demo defaults into an empty wiped store.
+            return Array.isArray(records) ? records.map((activity) => ({ ...activity })) : []
         }
     } catch {
         /* ignore */
     }
-    _memoryActivities = DEFAULT_ACTIVITIES.map((activity) => ({ ...activity }))
-    return _memoryActivities
+    return []
 }
 
 export const saveActivities = (records) => {
-    _memoryActivities = records
-    try {
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
-        }
-    } catch {
-        /* ignore */
-    }
+    if (canUseActivitiesApi()) return
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
 }
 
 export const getActivitiesByType = (type) =>
@@ -259,7 +183,7 @@ export const parseActivityDateToIso = (dateStr) => {
     return ''
 }
 
-export const notifyCalendarUpdated = () => {
+export function notifyCalendarUpdated() {
     if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event(CALENDAR_UPDATED_EVENT))
     }
@@ -422,95 +346,6 @@ export const updateActivityMdApproval = (id, status) => {
     saveActivities(next)
     notifyCalendarUpdated()
     return next.find((item) => item.id === id) ?? null
-}
-
-
-export const advanceActivityWorkflow = ({
-    activityId,
-    decision,
-    actor,
-    actorRole,
-    remarks
-}) => {
-    const list = getActivities()
-    const index = list.findIndex((a) => a.id === activityId)
-    if (index === -1) throw new Error(`Activity not found: ${activityId}`)
-
-    const current = list[index]
-    const updated = applyWorkflowDecision({
-        workflowType: WORKFLOW_TYPES.EXTRA_CURRICULAR_ACTIVITY,
-        entity: {
-            ...current,
-            status: current.approvalStatus || current.mdApprovalStatus || 'Submitted'
-        },
-        decision,
-        actor,
-        actorRole,
-        remarks
-    })
-
-    // Sync legacy mdApprovalStatus
-    updated.approvalStatus = updated.status
-    if (updated.status === 'Approved') {
-        updated.mdApprovalStatus = MD_APPROVAL_STATUS.APPROVED
-    } else if (updated.status === 'Rejected') {
-        updated.mdApprovalStatus = MD_APPROVAL_STATUS.REJECTED
-    } else {
-        updated.mdApprovalStatus = MD_APPROVAL_STATUS.PENDING
-    }
-
-    list[index] = updated
-    saveActivities(list)
-    notifyCalendarUpdated()
-    return updated
-}
-
-export const enrollStudentInActivity = (activityId, student) => {
-    const list = getActivities()
-    const index = list.findIndex((a) => a.id === activityId)
-    if (index === -1) return null
-
-    const participants = list[index].participants || []
-    if (participants.some((p) => p.studentId === student.studentId)) {
-        return list[index] // already enrolled
-    }
-
-    const newParticipant = {
-        studentId: student.studentId || `STU-${Date.now()}`,
-        studentName: student.studentName || student.name || 'Student',
-        className: student.className || 'General',
-        enrolledAt: new Date().toLocaleDateString('en-GB'),
-        attended: false,
-        result: 'Enrolled',
-        award: null
-    }
-
-    list[index].participants = [...participants, newParticipant]
-    list[index].participantCount = list[index].participants.length
-    saveActivities(list)
-    return list[index]
-}
-
-export const updateStudentActivityAttendance = (activityId, studentId, attended, result = '', award = '') => {
-    const list = getActivities()
-    const index = list.findIndex((a) => a.id === activityId)
-    if (index === -1) return null
-
-    const participants = (list[index].participants || []).map((p) => {
-        if (p.studentId === studentId) {
-            return {
-                ...p,
-                attended: Boolean(attended),
-                result: result || p.result || (attended ? 'Attended' : 'Absent'),
-                award: award !== undefined ? award : p.award
-            }
-        }
-        return p
-    })
-
-    list[index].participants = participants
-    saveActivities(list)
-    return list[index]
 }
 
 export const getPersonInCharge = (activity, personField) =>

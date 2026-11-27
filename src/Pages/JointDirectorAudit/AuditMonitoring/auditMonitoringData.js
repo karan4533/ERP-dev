@@ -1,3 +1,5 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
+
 export const MONITORING_STATUSES = ['In Progress', 'Completed']
 
 export const DEPARTMENTS = [
@@ -12,7 +14,7 @@ export const DEPARTMENTS = [
     'Stationery Store',
 ]
 
-export const AUDIT_MONITORING = [
+const DEFAULT_AUDIT_MONITORING = [
     {
         id: 'AUD-2026-016',
         title: 'Staff Attendance & HR Compliance',
@@ -127,7 +129,20 @@ export const AUDIT_MONITORING = [
 ]
 
 export const getAuditMonitoringById = (id) =>
-    AUDIT_MONITORING.find((item) => item.id === id) ?? null
+    getAuditMonitoring().find((item) => item.id === id) ?? null
+
+export const AUDIT_MONITORING_STORAGE_KEY = 'schoolerp-jd-audit-monitoring-v1'
+export function getAuditMonitoring() {
+    return ensureCampusSeed('schoolerp-jd-audit-monitoring-v1', DEFAULT_AUDIT_MONITORING)
+}
+export function saveAuditMonitoring(rows) {
+    return saveCampusJson('schoolerp-jd-audit-monitoring-v1', rows)
+}
+export function hydrateAuditMonitoringFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-monitoring-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-monitoring-v1', DEFAULT_AUDIT_MONITORING)
+}
+export const AUDIT_MONITORING = DEFAULT_AUDIT_MONITORING
 
 export const statusBadgeColor = {
     'In Progress': 'bg-[#FF980033] text-[#FF9800]',

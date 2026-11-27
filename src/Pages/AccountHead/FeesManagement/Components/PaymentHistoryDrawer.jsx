@@ -1,10 +1,39 @@
-import React from 'react'
-import { Eye, X } from 'lucide-react'
+import React, { useState } from 'react'
+import { Eye, MessageCircle, X } from 'lucide-react'
+import { toast } from 'react-toastify'
 import { paymentModeLabel } from '../../financeDomain/financeConstants'
 import { formatCurrency, formatDisplayDate } from '../../financeDomain/financeHelpers'
 
-const PaymentHistoryDrawer = ({ isOpen, onClose, receipts, onViewReceipt }) => {
+const PaymentHistoryDrawer = ({ isOpen, onClose, receipts, onViewReceipt, onSendWhatsApp }) => {
+    const [sendingId, setSendingId] = useState('')
     if (!isOpen) return null
+
+    const sendWhatsApp = async (row) => {
+        if (!onSendWhatsApp) {
+            toast.info('WhatsApp send is not available here.')
+            return
+        }
+        setSendingId(row.id)
+        try {
+            const result = await onSendWhatsApp({ receiptId: row.id, channel: 'whatsapp' })
+            const status = result?.delivery?.status
+            if (result?.success === false) {
+                toast.error(result.message || 'WhatsApp send failed.')
+            } else if (status === 'MOCK_QUEUED') {
+                toast.info('WhatsApp MOCK_QUEUED to local outbox — not a real WhatsApp delivery.')
+            } else if (status === 'NOT_CONFIGURED' || status === 'queued_stub') {
+                toast.info(result?.delivery?.message || 'WhatsApp is NOT_CONFIGURED until API credentials are connected.')
+            } else if ((status === 'sent' || status === 'SENT') && result?.delivery?.delivered) {
+                toast.success(`WhatsApp receipt sent for ${row.receiptNo}.`)
+            } else if (status === 'FAILED' || status === 'failed') {
+                toast.error(result?.delivery?.message || 'WhatsApp provider rejected the message.')
+            } else {
+                toast.info(result?.delivery?.message || `WhatsApp status: ${status || 'unknown'}`)
+            }
+        } finally {
+            setSendingId('')
+        }
+    }
 
     return (
         <div className='fixed inset-0 z-50 flex justify-end'>
@@ -17,7 +46,7 @@ const PaymentHistoryDrawer = ({ isOpen, onClose, receipts, onViewReceipt }) => {
                     </button>
                 </div>
                 <div className='overflow-x-auto'>
-                    <table className='w-full text-sm text-left min-w-[640px]'>
+                    <table className='w-full text-sm text-left min-w-[720px]'>
                         <thead className='text-xs bg-[#EDEEF5]'>
                             <tr>
                                 <th className='px-2 py-3'>Date</th>
@@ -43,9 +72,21 @@ const PaymentHistoryDrawer = ({ isOpen, onClose, receipts, onViewReceipt }) => {
                                     <td className='px-2 py-3'>{paymentModeLabel(row.paymentMode)}</td>
                                     <td className='px-2 py-3'>{row.status}</td>
                                     <td className='px-2 py-3'>
-                                        <button type='button' onClick={() => onViewReceipt(row)} className='text-[#515DEF] cursor-pointer'>
-                                            <Eye size={16} />
-                                        </button>
+                                        <div className='flex items-center gap-2'>
+                                            <button type='button' onClick={() => onViewReceipt(row)} className='text-[#515DEF] cursor-pointer' aria-label='View receipt'>
+                                                <Eye size={16} />
+                                            </button>
+                                            <button
+                                                type='button'
+                                                disabled={sendingId === row.id}
+                                                onClick={() => sendWhatsApp(row)}
+                                                className='text-[#25D366] cursor-pointer disabled:opacity-50'
+                                                aria-label='Send receipt on WhatsApp'
+                                                title='Send receipt on WhatsApp'
+                                            >
+                                                <MessageCircle size={16} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

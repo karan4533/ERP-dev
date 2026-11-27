@@ -1,40 +1,109 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react'
+import { Calendar, EllipsisIcon, Plus, Download } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
+import ListPagination, { PageSizeSelect } from '../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../Common/useListPagination'
+import { emptyListMessage } from '../../../Common/listPagination'
+import { filterListRows } from '../../../Common/listFiltering'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
-import { STUDENT_TRANSPORTS, CLASS_SECTIONS } from './studentTransportData'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
+import { toast } from 'react-toastify'
+import {
+    CLASS_SECTIONS,
+    deleteStudentTransport,
+    getStudentTransports,
+    hydrateStudentTransportsFromApi,
+} from './studentTransportData'
+import { ensureClassCatalogHydrated } from '../../../services/classDetailsApi'
+import { CLASS_CATALOG_UPDATED_EVENT } from '../../../Common/RBAC/academicsCatalogData'
 
 const StudentTransport = () => {
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
+    const [studentTransports, setStudentTransports] = useState(() => getStudentTransports())
+    const [catalogTick, setCatalogTick] = useState(0)
+    useEffect(() => {
+        hydrateStudentTransportsFromApi().finally(() => setStudentTransports(getStudentTransports()))
+        ensureClassCatalogHydrated()
+        const refresh = () => setCatalogTick((value) => value + 1)
+        window.addEventListener(CLASS_CATALOG_UPDATED_EVENT, refresh)
+        return () => window.removeEventListener(CLASS_CATALOG_UPDATED_EVENT, refresh)
+    }, [])
+    void catalogTick
+
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
+    const [search, setSearch] = useState('')
+    const [classSection, setClassSection] = useState('')
     const [exportModal, setExportModal] = useState(false)
-    const [editRequestModal, setEditRequestModal] = useState(false)
-    const [deleteRequestModal, setDeleteRequestModal] = useState(false)
+
+    const filteredTransports = useMemo(
+        () => filterListRows(studentTransports, {
+            search,
+            searchKeys: ['studentId', 'studentName', 'classSection', 'admissionNumber', 'routeName', 'startLocation', 'endLocation', 'vehicleNumber', 'supportStaff', 'driverName', 'driverContact'],
+            equals: { classSection },
+            fromDate,
+            toDate,
+            dateKeys: ['createdDate'],
+        }),
+        [studentTransports, search, classSection, fromDate, toDate],
+    )
+    const pagination = useListPagination(filteredTransports, {
+        resetKey: [search, classSection, fromDate?.getTime(), toDate?.getTime()].join('|'),
+    })
+
+    const clearFilters = () => {
+        setSearch('')
+        setClassSection('')
+        setFromDate(null)
+        setToDate(null)
+    }
+    const [deleteModal, setDeleteModal] = useState(false)
+    const [pendingDeleteId, setPendingDeleteId] = useState(null)
+    const [deleting, setDeleting] = useState(false)
+
+    const openDelete = (recordId) => {
+        if (!showDelete) return
+        setPendingDeleteId(recordId)
+        setDeleteModal(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!showDelete || !pendingDeleteId || deleting) return
+        setDeleting(true)
+        const result = await deleteStudentTransport(pendingDeleteId)
+        setDeleting(false)
+        setDeleteModal(false)
+        setPendingDeleteId(null)
+        if (result?.success === false) {
+            toast.error(result.message || 'Could not delete record.')
+            return
+        }
+        setStudentTransports(getStudentTransports())
+        toast.success(result?.api ? 'Record deleted from campus API.' : 'Record deleted.')
+    }
 
     return (
         <section>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
+                    <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type='text' id='search' placeholder='Student ID, name, route...' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
+                        <input type='text' id='search' value={search} onChange={(e) => setSearch(e.target.value)} placeholder='Student ID, name, route...' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='class-filter' className='text-base font-medium text-[#808080]'>Class & Section</label>
-                        <select id='class-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                        <select id='class-filter' value={classSection} onChange={(e) => setClassSection(e.target.value)} className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
                             {CLASS_SECTIONS.map((item) => (
                                 <option key={item} value={item}>{item}</option>
@@ -93,16 +162,7 @@ const StudentTransport = () => {
                         </button>
                     </div>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                        <option value='40'>40</option>
-                        <option value='50'>50</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
+                <PageSizeSelect pagination={pagination} className='my-2' />
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -123,7 +183,12 @@ const StudentTransport = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {STUDENT_TRANSPORTS.map((record) => (
+                            {filteredTransports.length === 0 ? (
+                                <tr>
+                                    <td colSpan={13} className='px-2 py-8 text-center text-[#667085]'>{emptyListMessage(studentTransports.length)}</td>
+                                </tr>
+                            ) : null}
+                            {pagination.rows.map((record) => (
                                 <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.studentId}</td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.studentName}</td>
@@ -145,20 +210,21 @@ const StudentTransport = () => {
                                             >
                                                 View
                                             </NavLink>
-                                            <button
-                                                type='button'
-                                                onClick={() => setEditRequestModal(true)}
-                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                            <NavLink
+                                                to={`/transport-manager/student-transport/edit/${record.id}`}
+                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Edit
-                                            </button>
-                                            <button
-                                                type='button'
-                                                onClick={() => setDeleteRequestModal(true)}
-                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                            >
-                                                Delete
-                                            </button>
+                                            </NavLink>
+                                            {showDelete ? (
+                                                <button
+                                                    type='button'
+                                                    onClick={() => openDelete(record.id)}
+                                                    className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                >
+                                                    Delete
+                                                </button>
+                                            ) : null}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -168,26 +234,24 @@ const StudentTransport = () => {
                 </div>
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {STUDENT_TRANSPORTS.length} of {STUDENT_TRANSPORTS.length} entries
-                </p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            <ListPagination pagination={pagination} />
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='studenttransport'
+                title='StudentTransport'
+                rows={filteredTransports}
+                exportDescription={<>You are exporting {filteredTransports.length} record(s).</>}
+            />
+            <DeleteRequestModal
+                deleteRequestModal={deleteModal}
+                setDeleteRequestModal={setDeleteModal}
+                onConfirm={handleConfirmDelete}
+                title='Delete Student Transport?'
+                message='This will permanently remove this student transport record. This action cannot be undone.'
+                confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+            />
         </section>
     )
 }

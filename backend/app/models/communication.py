@@ -1,14 +1,18 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, utcnow
 
 
 class Conversation(Base):
-    """A two-person inbox thread. ``pair_key`` is the two user ids sorted and joined, unique per campus."""
+    """An inbox thread, unique per campus by ``pair_key``.
+
+    Two-person threads use the two user ids sorted and joined; group threads use ``group:<random hex>``
+    so every group is distinct even with the same members.
+    """
 
     __tablename__ = "conversations"
     __table_args__ = (UniqueConstraint("campus_id", "pair_key", name="uq_conversations_campus_pair"),)
@@ -16,6 +20,9 @@ class Conversation(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     campus_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campuses.id"), nullable=False)
     pair_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    is_group: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

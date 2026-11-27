@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Search } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import { filterListRows } from '../../../../Common/listFiltering'
 import {
     getAuditReports,
     DEPARTMENTS,
@@ -16,13 +17,39 @@ import {
 const AuditReports = () => {
     const location = useLocation()
     const [records, setRecords] = useState(() => getAuditReports())
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const [searchInput, setSearchInput] = useState('')
+    const [appliedSearch, setAppliedSearch] = useState('')
+    const [department, setDepartment] = useState('')
+    const [campus, setCampus] = useState('')
+    const [status, setStatus] = useState('')
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
 
     useEffect(() => {
         setRecords(getAuditReports())
     }, [location.pathname])
+
+    const clearFilters = () => {
+        setSearchInput('')
+        setAppliedSearch('')
+        setDepartment('')
+        setCampus('')
+        setStatus('')
+        setFromDate(null)
+        setToDate(null)
+    }
+
+    const applySearch = () => setAppliedSearch(searchInput.trim())
+
+    const filtered = useMemo(() => filterListRows(records, {
+        search: appliedSearch,
+        searchKeys: ['auditNumber', 'auditName', 'department', 'campus', 'auditor', 'status'],
+        equals: { department, campus, status },
+        fromDate,
+        toDate,
+        dateKeys: ['auditDate'],
+    }), [records, appliedSearch, department, campus, status, fromDate, toDate])
 
     return (
         <section>
@@ -31,28 +58,54 @@ const AuditReports = () => {
                     View and download completed audit reports with compliance scores and findings.
                 </p>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
+                    <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
                         Clear Filters
                     </button>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type='text' id='search' placeholder='Audit no, audit name...' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
+                        <div className='flex gap-2'>
+                            <input
+                                type='text'
+                                id='search'
+                                value={searchInput}
+                                onChange={(event) => setSearchInput(event.target.value)}
+                                onKeyDown={(event) => { if (event.key === 'Enter') applySearch() }}
+                                placeholder='Audit no, audit name...'
+                                className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                            />
+                            <button
+                                type='button'
+                                onClick={applySearch}
+                                className='shrink-0 bg-[#515DEF] text-white text-sm px-3 py-2 rounded-md hover:opacity-90 cursor-pointer inline-flex items-center gap-1'
+                            >
+                                <Search size={14} />
+                                Search
+                            </button>
+                        </div>
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='department-filter' className='text-base font-medium text-[#808080]'>Department</label>
-                        <select id='department-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                        <select id='department-filter' value={department} onChange={(event) => setDepartment(event.target.value)} className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
                             {DEPARTMENTS.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
                     </div>
-                    
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='campus-filter' className='text-base font-medium text-[#808080]'>Campus</label>
+                        <select id='campus-filter' value={campus} onChange={(event) => setCampus(event.target.value)} className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                            <option value=''>All</option>
+                            {CAMPUSES.map((item) => (
+                                <option key={item} value={item}>{item}</option>
+                            ))}
+                        </select>
+                    </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='status-filter' className='text-base font-medium text-[#808080]'>Status</label>
-                        <select id='status-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                        <select id='status-filter' value={status} onChange={(event) => setStatus(event.target.value)} className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
                             {REPORT_STATUSES.map((item) => (
                                 <option key={item} value={item}>{item}</option>
@@ -119,7 +172,11 @@ const AuditReports = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {records.map((record) => (
+                            {filtered.length === 0 ? (
+                                <tr>
+                                    <td colSpan={10} className='px-2 py-8 text-center text-[#667085]'>No reports match the filters.</td>
+                                </tr>
+                            ) : filtered.map((record) => (
                                 <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className='px-2 py-4 font-medium text-[#515DEF] rounded-s-lg whitespace-nowrap'>{record.auditNumber}</td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] max-w-[180px] truncate' title={record.auditName}>{record.auditName}</td>
@@ -153,7 +210,7 @@ const AuditReports = () => {
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {records.length} of {records.length} entries
+                    Showing 1 to {filtered.length} of {filtered.length} entries
                 </p>
                 <div className='flex justify-center gap-x-2 flex-wrap'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
@@ -168,7 +225,27 @@ const AuditReports = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                rows={filtered}
+                columns={[
+                    { key: 'auditNumber', label: 'Audit No' },
+                    { key: 'auditName', label: 'Audit Name' },
+                    { key: 'department', label: 'Department' },
+                    { key: 'campus', label: 'Campus' },
+                    { key: 'auditor', label: 'Auditor' },
+                    { key: 'auditDate', label: 'Audit Date' },
+                    { key: 'compliancePercent', label: 'Compliance %' },
+                    { key: 'findings', label: 'Findings' },
+                    { key: 'status', label: 'Status' },
+                ]}
+                filename='audit-reports'
+                title='Audit Reports'
+                enableDateRange
+                dateKeys={['auditDate']}
+                exportDescription={<>You are exporting {filtered.length} audit report(s) for the selected filters.</>}
+            />
         </section>
     )
 }

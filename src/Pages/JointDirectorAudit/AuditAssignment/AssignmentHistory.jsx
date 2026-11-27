@@ -1,11 +1,5 @@
-import React from 'react'
-import AuditAssignmentPlaceholder from './AuditAssignmentPlaceholder'
+import AssignAudits from './AssignAudits'
 
-const AssignmentHistory = () => (
-    <AuditAssignmentPlaceholder
-        title='Assignment History'
-        description='Review past audit assignments and assignment changes. This section will be implemented next.'
-    />
-)
+const AssignmentHistory = () => <AssignAudits mode='history' />
 
 export default AssignmentHistory

@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { IntegrationNotice } from '../../../../Common/ui'
 import { COMMUNICATION_ALERTS, FINANCE_MANAGER_ALERTS } from '../settingsData'
 import { SettingRow, SettingsPanel } from './SettingsShared'
 
@@ -21,7 +20,6 @@ const NotificationsTab = () => {
 
     return (
         <div className='space-y-6'>
-            <IntegrationNotice state='demo' title='Delivery services disconnected' description='Toggles are local preference previews. Email, SMS and messaging delivery require server-side templates, consent, queues and audit logging.' />
             <SettingsPanel title='Alerts for the Finance Manager'>
                 {financeAlerts.map((item) => (
                     <SettingRow

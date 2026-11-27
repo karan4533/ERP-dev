@@ -1,6 +1,5 @@
-import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
-import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
+import { staffCommonRoutes } from '../Common/staffCommonRoutes'
 import { Route, Routes as ReactRoutes, Navigate } from 'react-router-dom'
 import Dashboard from '../Pages/ProcessAuditor/Dashboard/Dashboard'
 import MyAudits from '../Pages/ProcessAuditor/AuditManagement/MyAudits/MyAudits'
@@ -27,18 +26,14 @@ import ComplianceReports from '../Pages/ProcessAuditor/Reports/ComplianceReports
 import PendingActionsReport from '../Pages/ProcessAuditor/Reports/ActionsReports/PendingActionsReport'
 import ClosedActionsReport from '../Pages/ProcessAuditor/Reports/ActionsReports/ClosedActionsReport'
 import { AuditComponentsPage, SharedDeviationsPage } from '../Common/demoDomain/WorkflowScreens'
-
-const Placeholder = ({ title }) => (
-    <div className='bg-white rounded-2xl shadow-md p-8 text-center'>
-        <h2 className='text-xl font-semibold text-black'>{title}</h2>
-        <p className='text-sm text-[#667085] mt-2'>This page will be implemented next.</p>
-    </div>
-)
+import CommunicationPage from '../Common/Communication/CommunicationPage'
+import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
 
 const ProcessAuditorRoutes = () => {
     return (
         <ReactRoutes>
             <Route path="/process-auditor/dashboard" element={<Dashboard />} />
+            {TaskManagementRoutes({ basePath: '/process-auditor' })}
 
             <Route path="/process-auditor/audit-management/my-audits" element={<MyAudits />} />
             <Route path="/process-auditor/audit-management/my-audits/view/:id" element={<ViewMyAudit />} />
@@ -67,13 +62,14 @@ const ProcessAuditorRoutes = () => {
             <Route path="/process-auditor/reports/pending-actions" element={<PendingActionsReport />} />
             <Route path="/process-auditor/reports/closed-actions" element={<ClosedActionsReport />} />
             <Route path="/process-auditor/reports" element={<Navigate to="/process-auditor/reports/audit-reports" replace />} />
-            <Route path="/process-auditor/communication" element={<Placeholder title="Communication" />} />
+            <Route path="/process-auditor/communication" element={<Navigate to="/process-auditor/communication/inbox" replace />} />
+            <Route path="/process-auditor/communication/inbox" element={<CommunicationPage roleKey="processAuditor" />} />
+            <Route path="/process-auditor/communication/inbox/:conversationId" element={<CommunicationPage roleKey="processAuditor" />} />
             <Route path="/process-auditor/components" element={<AuditComponentsPage />} />
             <Route path="/process-auditor/shared-deviations" element={<SharedDeviationsPage />} />
 
-                        <Route path="/process-auditor/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
-            {EnterpriseOperationsRoutes({ basePath: '/process-auditor', role: 'processauditor' })}
             <Route path="*" element={<Navigate to="/process-auditor/dashboard" replace />} />
+            {staffCommonRoutes('/process-auditor', 'processAuditor', 'Process Auditor', { communication: false, leaveKey: 'processauditor' })}
         </ReactRoutes>
     )
 }

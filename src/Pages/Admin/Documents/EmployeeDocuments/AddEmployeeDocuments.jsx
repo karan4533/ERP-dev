@@ -2,13 +2,17 @@ import React, { useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { Calendar } from 'lucide-react'
 import DynamicDocumentFields from './Components/DynamicDocumentFields'
 import {
     addEmployeeDocumentRecord,
     formatPlanDate,
     RECORD_STATUS_OPTIONS,
+    saveEmployeeDocumentsViaApi,
 } from './employeeDocumentsData'
+import { canUseDocumentsApi } from '../../../../services/documentsApi'
+import { ADMIN_EMPLOYEE_DOCUMENT_PATHS } from '../documentRoutePaths'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full bg-white'
@@ -20,13 +24,14 @@ const createInitialSlot = () => ({
     status: 'Pending',
 })
 
-const AddEmployeeDocuments = () => {
+const AddEmployeeDocuments = ({ paths = ADMIN_EMPLOYEE_DOCUMENT_PATHS } = {}) => {
     const navigate = useNavigate()
     const [employeeId, setEmployeeId] = useState('')
     const [employeeName, setEmployeeName] = useState('')
     const [submittedDate, setSubmittedDate] = useState(new Date())
     const [status, setStatus] = useState('In Progress')
     const [documentSlots, setDocumentSlots] = useState([createInitialSlot()])
+    const [saving, setSaving] = useState(false)
 
     const isValid = () => {
         if (!employeeId.trim() || !employeeName.trim()) return false
@@ -36,8 +41,34 @@ const AddEmployeeDocuments = () => {
         return validSlots.length > 0
     }
 
-    const handleSave = () => {
-        if (!isValid()) return
+    const handleSave = async () => {
+        if (!isValid() || saving) return
+
+        if (canUseDocumentsApi()) {
+            setSaving(true)
+            try {
+                const saved = await saveEmployeeDocumentsViaApi({
+                    employeeId,
+                    submittedDate: formatPlanDate(submittedDate),
+                    status,
+                    documentSlots: documentSlots.filter((slot) => slot.label.trim() && slot.fileName.trim()),
+                })
+                toast.success(`Employee documents saved${saved?.employeeName ? ` for ${saved.employeeName}` : ''}.`)
+            } catch (error) {
+                toast.error(
+                    error?.status === 403
+                        ? 'You do not have permission to upload employee documents.'
+                        : error?.status === 404
+                          ? 'No employee has that Employee ID.'
+                          : error?.message || 'The documents could not be saved. Please try again.',
+                )
+                setSaving(false)
+                return
+            }
+            setSaving(false)
+            navigate(paths.list)
+            return
+        }
 
         addEmployeeDocumentRecord({
             employeeId,
@@ -49,7 +80,7 @@ const AddEmployeeDocuments = () => {
             ),
         })
 
-        navigate('/admin/documents/employee-documents')
+        navigate(paths.list)
     }
 
     return (
@@ -135,7 +166,7 @@ const AddEmployeeDocuments = () => {
             <div className='flex sm:justify-end justify-center gap-x-4 mt-6'>
                 <button
                     type='button'
-                    onClick={() => navigate('/admin/documents/employee-documents')}
+                    onClick={() => navigate(paths.list)}
                     className='bg-white text-[#515DEF] text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:bg-[#515DEF] hover:text-white hover:border-[#515DEF] transition-all duration-200 cursor-pointer md:w-auto w-full'
                 >
                     Discard Changes
@@ -143,7 +174,7 @@ const AddEmployeeDocuments = () => {
                 <button
                     type='button'
                     onClick={handleSave}
-                    disabled={!isValid()}
+                    disabled={!isValid() || saving}
                     className='bg-[#515DEF] text-white text-sm text-center px-12 py-2 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                     Save Changes

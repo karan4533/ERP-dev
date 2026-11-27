@@ -1,10 +1,30 @@
-export const CLASS_OPTIONS = ['6th', '7th', '8th', '9th', '10th', '11th', '12th']
+import { getClasses, getSections } from '../../../../Common/RBAC/academicsCatalogData'
+import { getAccessToken, isApiAuthEnabled } from '../../../../services/apiClient'
+import { liveArray } from '../../../../Common/RBAC/liveArray'
 
-export const SECTION_OPTIONS = ['A', 'B', 'C', 'D']
+const DEMO_CLASS_OPTIONS = ['6th', '7th', '8th', '9th', '10th', '11th', '12th']
+const DEMO_SECTION_OPTIONS = ['A', 'B', 'C', 'D']
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+export const CLASS_OPTIONS = liveArray(() => {
+    const fromCatalog = getClasses()
+    if (fromCatalog.length) return fromCatalog
+    return apiCatalogMode() ? [] : DEMO_CLASS_OPTIONS
+})
+
+export const SECTION_OPTIONS = liveArray(() => {
+    const fromCatalog = getSections()
+    if (fromCatalog.length) return fromCatalog
+    return apiCatalogMode() ? [] : DEMO_SECTION_OPTIONS
+})
 
 export const statusBadgeColor = {
     Present: 'bg-[#4CAF5033] text-[#4CAF50]',
     Absent: 'bg-[#FF000033] text-[#FF0000]',
+    // Statuses the attendance API can return in addition to Present / Absent.
+    Late: 'bg-[#FF980033] text-[#E65100]',
+    Holiday: 'bg-[#2196F333] text-[#1565C0]',
+    'Not marked': 'bg-[#9E9E9E33] text-[#616161]',
 }
 
 export const STUDENT_ATTENDANCE = [
@@ -124,32 +144,4 @@ export const filterStudentAttendance = (records, { search = '', className = '', 
 
         return matchesSearch && matchesClass && matchesSection
     })
-}
-
-const STORAGE_KEY = 'schoolerp-admin-student-attendance-v1'
-
-export const getStoredStudentAttendance = () => {
-    try {
-        if (typeof localStorage !== 'undefined') {
-            const raw = localStorage.getItem(STORAGE_KEY)
-            if (raw) {
-                const parsed = JSON.parse(raw)
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed
-            }
-        }
-    } catch {
-        /* ignore */
-    }
-    return STUDENT_ATTENDANCE
-}
-
-export const saveStoredStudentAttendance = (records) => {
-    try {
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
-            window.dispatchEvent(new Event('schoolerp-student-attendance-sync'))
-        }
-    } catch {
-        /* ignore */
-    }
 }

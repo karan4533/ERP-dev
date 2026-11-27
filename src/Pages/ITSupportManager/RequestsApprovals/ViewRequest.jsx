@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import pdf_icon from '../../../assets/images/pdf-icon.png'
-import { getRequestById, approvalStatusBadgeColor, stageBadgeColor } from './requestsData'
+import { getRequestById, hydrateRequestsFromApi, approvalStatusBadgeColor, stageBadgeColor } from './requestsData'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -21,7 +21,19 @@ const Field = ({ label, value }) => (
 const ViewRequest = () => {
     const navigate = useNavigate()
     const { id } = useParams()
-    const request = getRequestById(id)
+    const [loaded, setLoaded] = useState({ id: null, request: null })
+
+    useEffect(() => {
+        let cancelled = false
+        hydrateRequestsFromApi().finally(() => {
+            if (!cancelled) setLoaded({ id, request: getRequestById(id) ?? null })
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [id])
+
+    const request = loaded.id === id ? loaded.request : getRequestById(id)
 
     return (
         <section className='space-y-6'>
@@ -54,27 +66,27 @@ const ViewRequest = () => {
                     <Section title='Request Details'>
                         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                             <Field label='Request ID' value={request.requestId} />
-                            <Field label='Request Type' value={request.requestTypeFull} />
+                            <Field label='Request Type' value={request.requestTypeFull || '—'} />
                             <Field label='Title' value={request.title} />
-                            <Field label='Submitted Date' value={request.submittedDate} />
+                            <Field label='Submitted Date' value={request.submittedDate || '—'} />
                             <div className='lg:col-span-3'>
-                                <Field label='Description' value={request.description} />
+                                <Field label='Description' value={request.description || '—'} />
                             </div>
                         </div>
                     </Section>
 
                     <Section title='Financial Details'>
                         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                            <Field label='Estimated Cost' value={request.estimatedCost} />
-                            <Field label='Budget Category' value={request.budgetCategory} />
-                            <Field label='Amount' value={request.amount} />
+                            <Field label='Estimated Cost' value={request.estimatedCost || '—'} />
+                            <Field label='Budget Category' value={request.budgetCategory || '—'} />
+                            <Field label='Amount' value={request.amount || '—'} />
                         </div>
                     </Section>
 
                     <Section title='Vendor Details'>
                         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
-                            <Field label='Vendor Name' value={request.vendor} />
-                            <Field label='Vendor Contact' value={request.vendorContact} />
+                            <Field label='Vendor Name' value={request.vendor || '—'} />
+                            <Field label='Vendor Contact' value={request.vendorContact || '—'} />
                         </div>
                     </Section>
 
@@ -86,6 +98,13 @@ const ViewRequest = () => {
                             <Field label='Status' value={request.status} />
                             <Field label='Current Stage' value={request.currentStage} />
                             <Field label='Approval Status' value={request.approvalStatus} />
+                            {request.decidedAt && (
+                                <>
+                                    <Field label='Decided By' value={request.decidedByName || request.decidedBy} />
+                                    <Field label='Decided At' value={new Date(request.decidedAt).toLocaleString('en-GB')} />
+                                    <Field label='JD Remark' value={request.decisionRemark || '—'} />
+                                </>
+                            )}
                         </div>
                     </Section>
 

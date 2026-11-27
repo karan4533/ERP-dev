@@ -1,21 +1,34 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'lucide-react'
+import { Download, EllipsisIcon } from 'lucide-react'
+import { toast } from 'react-toastify'
 import mo_user from '../../../assets/images/no-profile.png'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import ListPagination, { PageSizeSelect } from '../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../Common/useListPagination'
+import { emptyListMessage } from '../../../Common/listPagination'
 import RemoveAllocationModal from './Components/RemoveAllocationModal'
 import {
-    DEPARTMENTS,
-    GRADES,
-    ROUTE_BASE,
-    SUBJECTS,
     ALLOCATION_STATUSES,
     allocationStatusColor,
+    canSaveTeacherAllocations,
     emptyTeacherAllocationFilters,
     filterTeacherAllocationRows,
+    getAllocationHydrateError,
+    getAllocationHydrateStatus,
+    getDepartments,
+    getGrades,
+    getSubjects,
     getTeacherAllocationRows,
+    getTeacherRosterStatus,
+    hydrateTeacherAllocationsFromApi,
+    hydrateTeachersFromDirectory,
+    isUsingDemoAllocations,
+    isUsingDemoTeacherRoster,
     removeTeacherAllocation,
+    ROUTE_BASE,
+    TEACHER_ALLOCATIONS_UPDATED_EVENT,
 } from './teacherAllocationData'
 
 const filterInputClass =
@@ -23,20 +36,44 @@ const filterInputClass =
 
 const TeacherAllocationList = () => {
     const location = useLocation()
-    const routeBase = location.pathname.startsWith('/admin') ? '/admin/academic/teacher-allocation' : ROUTE_BASE
     const [rows, setRows] = useState(() => getTeacherAllocationRows())
     const [filters, setFilters] = useState(emptyTeacherAllocationFilters)
     const [exportModal, setExportModal] = useState(false)
-    const [entriesPerPage, setEntriesPerPage] = useState(10)
     const [removeTarget, setRemoveTarget] = useState(null)
+    const [usingDemoRoster, setUsingDemoRoster] = useState(() => isUsingDemoTeacherRoster())
+    const [usingDemoAllocations, setUsingDemoAllocations] = useState(() => isUsingDemoAllocations())
+    const [rosterStatus, setRosterStatus] = useState(() => (getTeacherRosterStatus() === 'idle' ? 'loading' : getTeacherRosterStatus()))
+    const [allocHydrateStatus, setAllocHydrateStatus] = useState(() => getAllocationHydrateStatus())
+    const [allocHydrateError, setAllocHydrateError] = useState(() => getAllocationHydrateError())
 
     const filteredRows = useMemo(() => filterTeacherAllocationRows(rows, filters), [rows, filters])
+    const pagination = useListPagination(filteredRows, { resetKey: JSON.stringify(filters) })
+    const departments = getDepartments()
+    const grades = getGrades()
+    const subjects = getSubjects()
+
+    const refreshRows = () => {
+        setRows(getTeacherAllocationRows())
+        setUsingDemoRoster(isUsingDemoTeacherRoster())
+        setUsingDemoAllocations(isUsingDemoAllocations())
+        setRosterStatus(getTeacherRosterStatus())
+        setAllocHydrateStatus(getAllocationHydrateStatus())
+        setAllocHydrateError(getAllocationHydrateError())
+    }
+
+    const reloadAllocations = async () => {
+        await hydrateTeacherAllocationsFromApi({ force: true })
+        await hydrateTeachersFromDirectory({ force: true })
+        refreshRows()
+    }
 
     useEffect(() => {
-        setRows(getTeacherAllocationRows())
+        ;(async () => {
+            await reloadAllocations()
+        })()
+        window.addEventListener(TEACHER_ALLOCATIONS_UPDATED_EVENT, refreshRows)
+        return () => window.removeEventListener(TEACHER_ALLOCATIONS_UPDATED_EVENT, refreshRows)
     }, [location.key])
-
-    const refreshRows = () => setRows(getTeacherAllocationRows())
 
     const updateFilter = (key, value) => {
         setFilters((current) => ({ ...current, [key]: value }))
@@ -44,10 +81,20 @@ const TeacherAllocationList = () => {
 
     const clearFilters = () => setFilters(emptyTeacherAllocationFilters)
 
-    const handleRemoveConfirm = () => {
+    const handleRemoveConfirm = async () => {
         if (!removeTarget) return
-        removeTeacherAllocation(removeTarget.employeeId)
+        if (!canSaveTeacherAllocations() && allocHydrateStatus !== 'idle') {
+            toast.error(allocHydrateError || 'Allocations are not ready. Retry loading first.')
+            return
+        }
+        const result = await removeTeacherAllocation(removeTarget.employeeId)
         setRemoveTarget(null)
+        if (!result.success) {
+            toast.error((result.errors && result.errors[0]) || 'Could not remove allocation.')
+            refreshRows()
+            return
+        }
+        toast.success('Allocation cleared.')
         refreshRows()
     }
 
@@ -62,7 +109,40 @@ const TeacherAllocationList = () => {
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <p className='text-sm text-[#667085] mb-4'>
                     Allocate newly joined and existing teachers to classes, subjects, and class teacher roles.
+                    Teachers come from HR Employee Database after offer accept / staff create.
                 </p>
+                {usingDemoRoster ? (
+                    <p className='text-sm text-[#B54708] bg-[#FFFAEB] border border-[#FEDF89] rounded-lg px-3 py-2 mb-4'>
+                        Demo mode: showing sample teachers (TEA-1001…). Sign in with API enabled and ensure HR has Active
+                        teachers — then refresh this page to allocate real employees.
+                    </p>
+                ) : null}
+                {usingDemoAllocations ? (
+                    <p className='text-sm text-[#B54708] bg-[#FFFAEB] border border-[#FEDF89] rounded-lg px-3 py-2 mb-4'>
+                        Demo mode: allocation rows are local sample data only (not saved to the server).
+                    </p>
+                ) : null}
+                {allocHydrateStatus === 'loading' ? (
+                    <p className='text-sm text-[#667085] mb-4'>Loading teacher allocations…</p>
+                ) : null}
+                {allocHydrateStatus === 'error' ? (
+                    <p className='text-sm text-[#B54708] bg-[#FFFAEB] border border-[#FEDF89] rounded-lg px-3 py-2 mb-4 flex flex-wrap items-center gap-3'>
+                        <span>{allocHydrateError || 'Teacher allocations could not be loaded. Saving is blocked until this succeeds.'}</span>
+                        <button type='button' onClick={() => void reloadAllocations()} className='text-[#515DEF] underline cursor-pointer'>
+                            Retry
+                        </button>
+                    </p>
+                ) : null}
+                {!usingDemoRoster && rosterStatus === 'loading' ? (
+                    <p className='text-sm text-[#667085] mb-4'>Loading teachers from HR…</p>
+                ) : null}
+                {!usingDemoRoster && (rosterStatus === 'error' || rosterStatus === 'empty') ? (
+                    <p className='text-sm text-[#B54708] bg-[#FFFAEB] border border-[#FEDF89] rounded-lg px-3 py-2 mb-4'>
+                        {rosterStatus === 'error'
+                            ? 'Teachers could not be loaded from HR. Refresh the page to try again.'
+                            : 'No active teachers found in HR. Add teachers in HR (Employee Management), then refresh.'}
+                    </p>
+                ) : null}
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button
                         type='button'
@@ -71,9 +151,6 @@ const TeacherAllocationList = () => {
                     >
                         Clear Filters
                     </button>
-                    <select className={`${filterInputClass} md:max-w-xs sm:max-w-full`}>
-                        <option value=''>From Beginning</option>
-                    </select>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
@@ -96,7 +173,7 @@ const TeacherAllocationList = () => {
                             className={filterInputClass}
                         >
                             <option value=''>All</option>
-                            {DEPARTMENTS.map((item) => (
+                            {departments.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -110,7 +187,7 @@ const TeacherAllocationList = () => {
                             className={filterInputClass}
                         >
                             <option value=''>All</option>
-                            {GRADES.map((item) => (
+                            {grades.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -124,7 +201,7 @@ const TeacherAllocationList = () => {
                             className={filterInputClass}
                         >
                             <option value=''>All</option>
-                            {SUBJECTS.map((item) => (
+                            {subjects.map((item) => (
                                 <option key={item} value={item}>{item}</option>
                             ))}
                         </select>
@@ -158,18 +235,7 @@ const TeacherAllocationList = () => {
                         Export
                     </button>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select
-                        value={entriesPerPage}
-                        onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-                        className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'
-                    >
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={30}>30</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
+                <PageSizeSelect pagination={pagination} className='my-2' />
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -185,7 +251,12 @@ const TeacherAllocationList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRows.slice(0, entriesPerPage).map((row) => (
+                            {filteredRows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={8} className='px-2 py-8 text-center text-[#667085]'>{emptyListMessage(rows.length)}</td>
+                                </tr>
+                            ) : null}
+                            {pagination.rows.map((row) => (
                                 <tr key={row.employeeId} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{row.employeeId}</td>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{row.name}</td>
@@ -207,7 +278,7 @@ const TeacherAllocationList = () => {
                                     <td className='px-2 py-4 text-center rounded-e-lg'>
                                         <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
                                             <NavLink
-                                                to={`${routeBase}/allocate/${row.employeeId}`}
+                                                to={`${ROUTE_BASE}/allocate/${row.employeeId}`}
                                                 className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                             >
                                                 Allocate
@@ -215,13 +286,13 @@ const TeacherAllocationList = () => {
                                             {row.status !== 'Not Allocated' && (
                                                 <>
                                                     <NavLink
-                                                        to={`${routeBase}/view/${row.employeeId}`}
+                                                        to={`${ROUTE_BASE}/view/${row.employeeId}`}
                                                         className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                     >
                                                         View
                                                     </NavLink>
                                                     <NavLink
-                                                        to={`${routeBase}/edit/${row.employeeId}`}
+                                                        to={`${ROUTE_BASE}/edit/${row.employeeId}`}
                                                         className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                     >
                                                         Edit
@@ -244,24 +315,15 @@ const TeacherAllocationList = () => {
                 </div>
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {Math.min(filteredRows.length, entriesPerPage)} of {filteredRows.length} entries
-                </p>
-                <div className='flex gap-x-2'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            <ListPagination pagination={pagination} />
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} exportDescription={exportDescription} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='teacher-allocation'
+                rows={Array.isArray(filteredRows) ? filteredRows : []}
+                exportDescription={exportDescription}
+            />
             <RemoveAllocationModal
                 open={Boolean(removeTarget)}
                 teacherName={removeTarget?.name}

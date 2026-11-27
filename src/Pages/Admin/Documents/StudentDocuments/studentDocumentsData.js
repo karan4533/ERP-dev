@@ -1,6 +1,15 @@
 import { getAllEnrolledStudents } from '../../../../Common/StudentDatabase/enrolledStudentsData'
 import { getAdmissionById } from '../../FrontOffice/AdminssionList/admissionListData'
 import { getAllCreatedUsers } from '../../../../Common/RBAC/createdUsersData'
+import {
+    canUseDocumentsApi,
+    deleteDocumentItemApi,
+    dmyToIso,
+    isoToDmy,
+    listDocumentRecordsApi,
+    patchDocumentRecordApi,
+    putDocumentItemApi,
+} from '../../../../services/documentsApi'
 
 const STORAGE_KEY = 'schoolErpAdminStudentDocuments'
 
@@ -41,10 +50,76 @@ const writeJson = (key, value) => {
     localStorage.setItem(key, JSON.stringify(value))
 }
 
-export const getStudentDocumentRecords = () => readJson(STORAGE_KEY, [])
+// With a real backend session the documents (and their files) live on the server. What it returned is
+// held in memory only, never written to the browser's storage.
+let apiRecords = []
+
+const typeIdForKey = (key) => `doc-${key}`
+const keyForTypeId = (typeId) => String(typeId).replace(/^doc-/, '')
+
+const mapApiRecord = (row) => ({
+    id: row.subject_id,
+    studentId: row.subject_id,
+    admissionNumber: row.subject_ref,
+    studentName: row.name,
+    className: row.class_name || '',
+    section: '',
+    submittedDate: isoToDmy(row.submitted_date),
+    status: row.status,
+    documents: Object.fromEntries(
+        row.items.map((item) => [
+            typeIdForKey(item.key),
+            { fileName: item.file_name, status: item.status, itemId: item.id, fileId: item.file_id, downloadUrl: item.download_url },
+        ]),
+    ),
+    fromApi: true,
+})
+
+/** Load the signed-in user's view of student documents from the server. */
+export const hydrateStudentDocumentsFromApi = async () => {
+    const rows = await listDocumentRecordsApi('students')
+    apiRecords = rows.map(mapApiRecord)
+    return apiRecords
+}
+
+/** Drop the in-memory copy (call on sign-out). */
+export const clearStudentDocumentsMemory = () => {
+    apiRecords = []
+}
+
+export const getStudentDocumentRecords = () => (canUseDocumentsApi() ? apiRecords : readJson(STORAGE_KEY, []))
 
 export const saveStudentDocumentRecords = (records) => {
     writeJson(STORAGE_KEY, records)
+}
+
+/**
+ * Save through the API: upload each newly chosen file, remove a document whose file was taken off, then
+ * set the submitted date. Safe to retry; an upload for a type replaces the earlier file. The status is
+ * decided by the server (Completed once all four are in).
+ */
+export const saveStudentDocumentsViaApi = async ({ studentId, submittedDate, documentSlots }) => {
+    const existing = apiRecords.find((record) => record.id === studentId)
+    const iso = dmyToIso(submittedDate)
+    for (const slot of documentSlots) {
+        const had = existing?.documents?.[slot.typeId]
+        if (slot.file) {
+            await putDocumentItemApi('students', studentId, {
+                label: keyForTypeId(slot.typeId),
+                file: slot.file,
+                submittedDate: iso,
+            })
+        } else if (had && !slot.fileName?.trim()) {
+            await deleteDocumentItemApi('students', studentId, had.itemId)
+        }
+    }
+    let records = await hydrateStudentDocumentsFromApi()
+    const saved = records.find((record) => record.id === studentId)
+    if (saved && iso && saved.submittedDate !== submittedDate) {
+        await patchDocumentRecordApi('students', studentId, { submittedDate: iso })
+        records = await hydrateStudentDocumentsFromApi()
+    }
+    return records.find((record) => record.id === studentId) ?? null
 }
 
 export const getStudentDocumentRecordById = (id) =>
@@ -205,4 +280,5 @@ export const recordToDocumentSlots = (record) =>
         label: type.label,
         fileName: record.documents?.[type.id]?.fileName || '',
         status: record.documents?.[type.id]?.status || 'Pending',
+        downloadUrl: record.documents?.[type.id]?.downloadUrl || '',
     }))

@@ -2,6 +2,10 @@ import React, { useState } from 'react'
 import { Download } from 'lucide-react'
 import ExportModal from '../../../../../../Common/CommonComponents/ExportModal';
 
+const EXPORT_ROWS = [
+    {class: '10', section: 'A', attendance: '45', percentage: '82%'},
+]
+
 const ClassWise = () => {
 
     const [exportModal, setExportModal] = useState(false)
@@ -54,7 +58,14 @@ const ClassWise = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='class-wise'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
         </div>
     )
 }

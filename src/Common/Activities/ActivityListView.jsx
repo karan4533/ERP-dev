@@ -8,25 +8,38 @@ import Dropdown from '../CommonComponents/Dropdown'
 import ExportModal from '../CommonComponents/ExportModal'
 import {
     MD_APPROVAL_STATUS,
+    approveActivityViaApi,
     deleteActivity,
+    deleteActivityViaApi,
     getActivitiesByType,
+    hydrateActivitiesFromApi,
     getPersonInCharge,
     mdApprovalBadgeColor,
+    updateActivityMdApproval,
 } from './activitiesData'
 import { getActivityConfig, getActivityRoutes, getActivityEditPath, getActivityViewPath } from './activityConfigs'
+import { canUseActivitiesApi } from '../../services/activitiesApi'
+import { canShowDeleteOption } from '../CommonComponents/approvalGates'
 import { getClassDisplayLabel, getClassSelectOptions } from '../RBAC/academicsCatalogData'
+import {
+    getFeeActivitiesVisibleInModule,
+    hydrateActivityFeesFromApi,
+} from '../../Pages/AccountHead/FeesManagement/activityFees'
 
 export default function ActivityListView({ roleKey, activityType }) {
     const location = useLocation()
     const config = getActivityConfig(activityType)
     const routes = getActivityRoutes(activityType, roleKey)
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const showDelete = canShowDeleteOption(roleKey)
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
     const [statusFilter, setStatusFilter] = useState('')
     const [classFilter, setClassFilter] = useState('')
     const [search, setSearch] = useState('')
     const [refreshKey, setRefreshKey] = useState(0)
+    const [loading, setLoading] = useState(canUseActivitiesApi())
+    const [feeActivityNames, setFeeActivityNames] = useState(() => getFeeActivitiesVisibleInModule())
     const classOptions = useMemo(() => getClassSelectOptions(), [])
 
     const activities = useMemo(() => {
@@ -37,6 +50,39 @@ export default function ActivityListView({ roleKey, activityType }) {
     useEffect(() => {
         setRefreshKey((value) => value + 1)
     }, [location.pathname])
+
+    useEffect(() => {
+        if (!canUseActivitiesApi()) {
+            setLoading(false)
+            return undefined
+        }
+        let active = true
+        setLoading(true)
+        hydrateActivitiesFromApi(activityType)
+            .then(() => {
+                if (active) setRefreshKey((value) => value + 1)
+            })
+            .catch(() => {
+                if (active) toast.error('Activities could not be loaded from the API.')
+            })
+            .finally(() => {
+                if (active) setLoading(false)
+            })
+        return () => {
+            active = false
+        }
+    }, [activityType, location.key])
+
+    useEffect(() => {
+        let active = true
+        hydrateActivityFeesFromApi()
+            .catch(() => false)
+            .finally(() => {
+                if (!active) return
+                setFeeActivityNames(getFeeActivitiesVisibleInModule())
+            })
+        return () => { active = false }
+    }, [location.key, refreshKey])
 
     const filteredActivities = useMemo(() => {
         const query = search.trim().toLowerCase()
@@ -49,19 +95,64 @@ export default function ActivityListView({ roleKey, activityType }) {
         })
     }, [activities, search, statusFilter, classFilter])
 
-    const handleDelete = (activity) => {
+    const handleDelete = async (activity) => {
+        if (!showDelete) return
         if (!window.confirm(`Delete "${activity.eventName}"? This cannot be undone.`)) return
-        deleteActivity(activity.id)
-        setRefreshKey((value) => value + 1)
-        toast.success('Activity deleted.')
+        try {
+            if (canUseActivitiesApi()) {
+                await deleteActivityViaApi(activity.id)
+            } else {
+                deleteActivity(activity.id)
+            }
+            setRefreshKey((value) => value + 1)
+            toast.success('Activity deleted.')
+        } catch (caught) {
+            toast.error(caught?.message || 'Activity could not be deleted.')
+        }
     }
 
+    const handleApproval = async (activity, status) => {
+        try {
+            if (canUseActivitiesApi()) {
+                await approveActivityViaApi(activity.id, status)
+            } else {
+                updateActivityMdApproval(activity.id, status)
+            }
+            setRefreshKey((value) => value + 1)
+            toast.success(status === MD_APPROVAL_STATUS.APPROVED ? 'Activity approved.' : 'Activity rejected.')
+        } catch (caught) {
+            toast.error(caught?.message || 'Approval could not be saved.')
+        }
+    }
+
+    const isApprover = roleKey === 'superadmin'
+    const isReadOnly = roleKey === 'pro'
     const personLabel = config.personLabel
-    const approvalStatusHeader = roleKey === 'admin' ? 'Super Admin Approval Status' : 'MD Approval Status'
+    const approvalStatusHeader =
+        roleKey === 'admin' || roleKey === 'superadmin' ? 'Super Admin Approval Status' : 'MD Approval Status'
     const showPlayersColumn = activityType === 'sports'
 
     return (
         <section>
+            {feeActivityNames.length > 0 && (
+                <div className='bg-white rounded-2xl shadow-md p-4 mb-4'>
+                    <h2 className='text-lg font-medium text-[#1E1E1E]'>Fee activities</h2>
+                    <p className='text-sm text-[#667085] mt-1 mb-3'>
+                        Activity names enrolled from Fees Management → Activity Fees.
+                    </p>
+                    <div className='flex flex-wrap gap-2'>
+                        {feeActivityNames.map((item) => (
+                            <span
+                                key={item.id}
+                                className='inline-flex items-center px-3 py-1.5 rounded-md bg-[#EDEEF5] text-sm font-medium text-[#0C1E5B]'
+                            >
+                                {item.name}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button
@@ -108,7 +199,7 @@ export default function ActivityListView({ roleKey, activityType }) {
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>
-                            {roleKey === 'admin' ? 'Super Admin Approval Status' : 'MD Approval Status'}
+                            {roleKey === 'admin' || roleKey === 'superadmin' ? 'Super Admin Approval Status' : 'MD Approval Status'}
                         </label>
                         <select
                             value={statusFilter}
@@ -156,13 +247,15 @@ export default function ActivityListView({ roleKey, activityType }) {
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
                     <h2 className='text-xl font-medium text-black'>{config.listTitle}</h2>
                     <div className='flex gap-x-2'>
-                        <NavLink
-                            to={routes.add}
-                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                        >
-                            <Plus size={16} />
-                            {config.addButtonLabel}
-                        </NavLink>
+                        {!isApprover && !isReadOnly && (
+                            <NavLink
+                                to={routes.add}
+                                className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                            >
+                                <Plus size={16} />
+                                {config.addButtonLabel}
+                            </NavLink>
+                        )}
                         <button
                             type='button'
                             onClick={() => setExportModal(true)}
@@ -202,10 +295,18 @@ export default function ActivityListView({ roleKey, activityType }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredActivities.length === 0 ? (
+                            {loading ? (
                                 <tr>
                                     <td colSpan={showPlayersColumn ? 12 : 11} className='px-2 py-8 text-center text-[#667085]'>
-                                        No activities found.
+                                        Loading activities from the API…
+                                    </td>
+                                </tr>
+                            ) : filteredActivities.length === 0 ? (
+                                <tr>
+                                    <td colSpan={showPlayersColumn ? 12 : 11} className='px-2 py-8 text-center text-[#667085]'>
+                                        {canUseActivitiesApi()
+                                            ? 'No activities on the server yet. Ask Admin to submit a cultural, sports, or competition activity.'
+                                            : 'No activities found.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -236,19 +337,44 @@ export default function ActivityListView({ roleKey, activityType }) {
                                                 >
                                                     View
                                                 </NavLink>
-                                                <NavLink
-                                                    to={getActivityEditPath(activityType, roleKey, activity.id)}
-                                                    className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                >
-                                                    Edit
-                                                </NavLink>
-                                                <button
-                                                    type='button'
-                                                    onClick={() => handleDelete(activity)}
-                                                    className='w-full text-left p-2 text-[#F44336] hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                >
-                                                    Delete
-                                                </button>
+                                                {isApprover ? (
+                                                    activity.mdApprovalStatus === MD_APPROVAL_STATUS.PENDING ? (
+                                                        <>
+                                                            <button
+                                                                type='button'
+                                                                onClick={() => handleApproval(activity, MD_APPROVAL_STATUS.APPROVED)}
+                                                                className='w-full text-left p-2 text-[#2E7D32] hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Approve
+                                                            </button>
+                                                            <button
+                                                                type='button'
+                                                                onClick={() => handleApproval(activity, MD_APPROVAL_STATUS.REJECTED)}
+                                                                className='w-full text-left p-2 text-[#F44336] hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Reject
+                                                            </button>
+                                                        </>
+                                                    ) : null
+                                                ) : isReadOnly ? null : (
+                                                    <>
+                                                        <NavLink
+                                                            to={getActivityEditPath(activityType, roleKey, activity.id)}
+                                                            className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Edit
+                                                        </NavLink>
+                                                        {showDelete ? (
+                                                            <button
+                                                                type='button'
+                                                                onClick={() => handleDelete(activity)}
+                                                                className='w-full text-left p-2 text-[#F44336] hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        ) : null}
+                                                    </>
+                                                )}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -276,7 +402,13 @@ export default function ActivityListView({ roleKey, activityType }) {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='activity-list-view'
+                rows={Array.isArray(filteredActivities) ? filteredActivities : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredActivities) ? filteredActivities.length : 0} record(s).</>}
+            />
         </section>
     )
 }

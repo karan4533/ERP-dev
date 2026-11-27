@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Headset, Monitor, Ticket, ClipboardCheck, AlertTriangle } from 'lucide-react'
-import { getTickets, ticketCounts } from '../../../Common/demoDomain/itTickets'
+import { getTickets, hydrateTicketsFromApi, ticketCounts, TICKETS_UPDATED_EVENT } from '../../../Common/demoDomain/itTickets'
+import { getAssets, hydrateAssetsFromApi } from '../AssetManagement/assetData'
 
 const priorityBadgeColor = {
     High: 'bg-[#FF572233] text-[#FF5722]',
@@ -18,24 +19,52 @@ const statusBadgeColor = {
     Closed: 'bg-[#4CAF5033] text-[#4CAF50]',
 }
 
+const SERVICE_STATUSES = new Set(['Under Repair'])
+
+const readDashboard = () => {
+    const assets = getAssets()
+    return {
+        counts: ticketCounts(),
+        recent: getTickets().slice(0, 5),
+        assetTotal: assets.length,
+        assetsUnderService: assets.filter((asset) => SERVICE_STATUSES.has(asset.status)).length,
+    }
+}
+
 const Dashboard = () => {
     const navigate = useNavigate()
-    const counts = ticketCounts()
-    const recent = getTickets().slice(0, 5)
+    const [data, setData] = useState(() => readDashboard())
+
+    useEffect(() => {
+        let active = true
+        const refresh = () => {
+            if (active) setData(readDashboard())
+        }
+        Promise.all([hydrateTicketsFromApi(), hydrateAssetsFromApi()]).finally(refresh)
+        window.addEventListener(TICKETS_UPDATED_EVENT, refresh)
+        window.addEventListener('focus', refresh)
+        return () => {
+            active = false
+            window.removeEventListener(TICKETS_UPDATED_EVENT, refresh)
+            window.removeEventListener('focus', refresh)
+        }
+    }, [])
+
+    const { counts, recent, assetTotal, assetsUnderService } = data
     const summaryCards = [
         { label: 'Open Tickets', value: counts.open, icon: Ticket, color: 'bg-[#515DEF]/10 text-[#515DEF]' },
         { label: 'Pending Tickets', value: counts.pending, icon: ClipboardCheck, color: 'bg-[#FF9800]/10 text-[#FF9800]' },
         { label: 'Resolved Tickets', value: counts.resolved, icon: ClipboardCheck, color: 'bg-[#4CAF50]/10 text-[#4CAF50]' },
         { label: 'Critical Tickets', value: counts.critical, icon: AlertTriangle, color: 'bg-[#FF0000]/10 text-[#FF0000]' },
-        { label: 'Assets', value: '6', icon: Monitor, color: 'bg-[#4CAF50]/10 text-[#4CAF50]' },
-        { label: 'Assets Under Service', value: '1', icon: Headset, color: 'bg-[#FF9800]/10 text-[#FF9800]' },
+        { label: 'Assets', value: assetTotal, icon: Monitor, color: 'bg-[#4CAF50]/10 text-[#4CAF50]' },
+        { label: 'Assets Under Service', value: assetsUnderService, icon: Headset, color: 'bg-[#FF9800]/10 text-[#FF9800]' },
     ]
 
     return (
         <section className='space-y-6'>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <h2 className='text-xl font-semibold text-black'>IT Support Team Manager Dashboard</h2>
-                <p className='text-sm text-[#667085] mt-0.5'>Counts come from the shared ticket store in this browser.</p>
+                <p className='text-sm text-[#667085] mt-0.5'>Ticket and asset counts come from the live IT stores after hydrate.</p>
             </div>
             <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4'>
                 {summaryCards.map((card) => (
@@ -59,6 +88,11 @@ const Dashboard = () => {
                         </tr>
                     </thead>
                     <tbody>
+                        {recent.length === 0 && (
+                            <tr>
+                                <td colSpan={5} className='px-2 py-6 text-center text-[#667085]'>No tickets yet.</td>
+                            </tr>
+                        )}
                         {recent.map((ticket) => (
                             <tr key={ticket.ticketId} className='border-b text-[#667085] border-[#f2f4f7]'>
                                 <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{ticket.ticketId}</td>

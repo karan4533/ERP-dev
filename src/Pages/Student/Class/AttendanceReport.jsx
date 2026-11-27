@@ -1,13 +1,97 @@
-import React, { useMemo, useState } from 'react'
-import { Download, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Calendar } from 'lucide-react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { useActiveStudent } from '../../../context/ActiveStudentContext'
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
+import { studentAttendanceCalendarApi } from '../../../services/attendanceApi'
+import PlacementAwaitingNotice, { isStudentPlaced } from './Components/PlacementAwaitingNotice'
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+const statusLabel = {
+    P: 'Present',
+    A: 'Absent',
+    H: 'Holiday',
+}
 
 const AttendanceReport = () => {
+    const { activeStudent } = useActiveStudent()
+    const [selectMonth, setSelectMonth] = useState(new Date())
+    const [statusFilter, setStatusFilter] = useState('')
+    const [calendar, setCalendar] = useState({})
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+    const [exportModal, setExportModal] = useState(false)
+    const [entriesPerPage, setEntriesPerPage] = useState(10)
 
-    const [selectMonth, setSelectMonth] = useState(new Date());
-    const [exportModal, setExportModal] = useState(false);
+    const placed = isStudentPlaced(activeStudent)
+
+    useEffect(() => {
+        if (!placed || !activeStudent?.id || !selectMonth) {
+            setCalendar({})
+            return undefined
+        }
+        if (!isApiAuthEnabled() || !getAccessToken()) {
+            setCalendar({})
+            setError('Sign in to load attendance.')
+            return undefined
+        }
+        let cancelled = false
+        setLoading(true)
+        setError('')
+        const year = selectMonth.getFullYear()
+        const month = selectMonth.getMonth() + 1
+        studentAttendanceCalendarApi(activeStudent.id, year, month)
+            .then((data) => {
+                if (!cancelled) setCalendar(data && typeof data === 'object' ? data : {})
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setCalendar({})
+                    setError(err.message || 'Could not load attendance report.')
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => { cancelled = true }
+    }, [placed, activeStudent?.id, selectMonth])
+
+    const rows = useMemo(() => {
+        return Object.entries(calendar)
+            .map(([dateKey, code]) => {
+                const d = new Date(`${dateKey}T12:00:00`)
+                return {
+                    dateKey,
+                    dateLabel: Number.isNaN(d.getTime())
+                        ? dateKey
+                        : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    day: Number.isNaN(d.getTime()) ? '—' : DAY_NAMES[d.getDay()],
+                    status: statusLabel[code] || code || '—',
+                    code,
+                }
+            })
+            .filter((row) => !statusFilter || row.code === statusFilter)
+            .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    }, [calendar, statusFilter])
+
+    const pageRows = rows.slice(0, entriesPerPage)
+
+    if (!placed) {
+        return (
+            <section>
+                <div className='bg-white rounded-2xl shadow-md p-4'>
+                    <h2 className='text-xl font-medium text-black mb-2'>Attendance Report</h2>
+                    <PlacementAwaitingNotice
+                        studentName={activeStudent?.name}
+                        featureLabel='attendance reports'
+                    />
+                </div>
+            </section>
+        )
+    }
 
     return (
         <section>
@@ -15,17 +99,14 @@ const AttendanceReport = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end'>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Select Month</label>
-
                         <div className='relative w-full'>
                             <DatePicker
                                 selected={selectMonth}
-                                onChange={(date) => setSelectMonth(date)}
-                                isClearable={true}
-                                showMonthYearDropdown={true}
-                                scrollableMonthYearDropdown={true}
+                                onChange={(date) => setSelectMonth(date || new Date())}
+                                showMonthYearPicker
+                                dateFormat='MMMM yyyy'
                                 className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-3 pr-10 focus:outline-none'
                             />
-
                             <Calendar
                                 size={16}
                                 className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none'
@@ -34,88 +115,100 @@ const AttendanceReport = () => {
                     </div>
 
                     <div className='flex flex-col gap-y-2'>
-                        <label htmlFor="class" className='text-base font-medium text-[#808080]'>Exams Filter</label>
-                        <select name="" id="" className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'>
-                            <option value="">All</option>
+                        <label className='text-base font-medium text-[#808080]'>Status</label>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
+                        >
+                            <option value=''>All</option>
+                            <option value='P'>Present</option>
+                            <option value='A'>Absent</option>
+                            <option value='H'>Holiday</option>
                         </select>
                     </div>
 
-                    <button onClick={() => setExportModal(true)} className='bg-[#515DEF] text-white flex items-center gap-x-2 justify-center uppercase text-sm px-6 py-3 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
-                        <Download className='w-4 h-4' />
+                    <button
+                        type='button'
+                        onClick={() => setExportModal(true)}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-3 rounded-lg'
+                    >
                         Download Report
                     </button>
 
-                    <button className='bg-[#515DEF] text-white uppercase text-sm px-6 py-3 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
+                    <button
+                        type='button'
+                        onClick={() => { setStatusFilter(''); setSelectMonth(new Date()) }}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-3 rounded-lg'
+                    >
                         Clear Filters
                     </button>
                 </div>
             </div>
 
-
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
-                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
-                    <h2 className='text-xl font-medium text-black'>Attendance Report List</h2>
-                </div>
+                <h2 className='text-xl font-medium text-black mb-4'>Attendance Report List</h2>
+                {error && <p className='text-sm text-[#B54708] mb-3'>{error}</p>}
                 <div className='flex gap-x-2 items-center my-2'>
-                    <select name="" id="" className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value="10">10</option>
-                        <option value="20">20</option>
-                        <option value="30">30</option>
-                        <option value="40">40</option>
-                        <option value="50">50</option>
+                    <select
+                        value={entriesPerPage}
+                        onChange={(e) => setEntriesPerPage(Number(e.target.value))}
+                        className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'
+                    >
+                        {[10, 20, 30, 40, 50].map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                        ))}
                     </select>
                     <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
                 </div>
-                <div className="relative overflow-x-auto">
-                    <table className="w-full text-sm text-left rtl:text-right">
-                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
-                            <tr className='rounded-lg'>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg">Date</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Status</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Day</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase">Remarks</th>
-                                <th className="px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg">Class Timing</th>
+                <div className='relative overflow-x-auto'>
+                    <table className='w-full text-sm text-left'>
+                        <thead className='text-xs bg-[#EDEEF5]'>
+                            <tr>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Date</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Day</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Remarks</th>
                             </tr>
                         </thead>
-
                         <tbody>
-                            <tr className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
-                                <td className="px-2 py-4 rounded-s-lg">18 May 2026</td>
-                                <td className="px-2 py-4">Present</td>
-                                <td className="px-2 py-4">Monday</td>
-                                <td className="px-2 py-4">Attended Science Class</td>
-                                <td className="px-2 py-4 rounded-e-lg">10:30 AM - 11:15 AM</td>
-                            </tr>
+                            {loading && (
+                                <tr>
+                                    <td colSpan={4} className='px-2 py-10 text-center text-[#667085]'>Loading…</td>
+                                </tr>
+                            )}
+                            {!loading && pageRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className='px-2 py-10 text-center text-[#667085]'>
+                                        No attendance marked for this month yet.
+                                    </td>
+                                </tr>
+                            )}
+                            {!loading && pageRows.map((row) => (
+                                <tr key={row.dateKey} className='border-b text-[#667085] border-[#f2f4f7]'>
+                                    <td className='px-2 py-4'>{row.dateLabel}</td>
+                                    <td className='px-2 py-4'>{row.status}</td>
+                                    <td className='px-2 py-4'>{row.day}</td>
+                                    <td className='px-2 py-4'>
+                                        {row.code === 'H' ? 'Holiday / non-working day' : '—'}
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
+                <p className='text-sm font-medium text-[#515DEF] mt-4'>
+                    Showing {pageRows.length === 0 ? 0 : 1} to {pageRows.length} of {rows.length} entries
+                </p>
             </div>
 
-            {/* Pagination */}
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to 10 of 20 entries</p>
-
-                <div className="flex justify-center gap-x-2 flex-wrap">
-                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
-                        <ChevronLeft size={16} />
-                    </button>
-
-                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
-                        1
-                    </button>
-
-                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
-                        2
-                    </button>
-
-                    <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
-
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='attendance-report'
+                rows={rows}
+                exportDescription={<>You are exporting {rows.length} record(s).</>}
+            />
         </section>
     )
 }

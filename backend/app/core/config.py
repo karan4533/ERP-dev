@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     admin_seed_password: str = "admin123"
     superadmin_seed_email: str = "superadmin@qmis.edu"
     superadmin_seed_password: str = "superadmin123"
+    # Production central operators (emails only — passwords are never configured here).
+    # Provision via scripts/provision_central_admins.py (create-missing-only + temp handoff).
+    central_admin_email: str = "Adminerp@gmail.com"
+    central_superadmin_email: str = "superadminerp@gmail.com"
     hr_seed_email: str = "hr@qmis.edu"
     hr_seed_password: str = "hr12345"
     accounthead_seed_email: str = "accounthead@qmis.edu"
@@ -47,9 +51,22 @@ class Settings(BaseSettings):
     principal_seed_password: str = "principal123"
     prm_seed_email: str = "prm@qmis.edu"
     prm_seed_password: str = "prm12345"
+    # Local/demo only when seed_demo_accounts is enabled — never for production CI.
+    pro_seed_email: str = "pro@qmis.edu"
+    pro_seed_password: str = "pro12345"
     director_seed_email: str = "director@qmis.edu"
     director_seed_password: str = "director123"
+    # Local/demo only when seed_demo_accounts is enabled — never for production CI.
+    fileroom_seed_email: str = "fileroom@qmis.edu"
+    fileroom_seed_password: str = "fileroom123"
+    cctv_seed_email: str = "cctv@qmis.edu"
+    cctv_seed_password: str = "cctv12345"
+    # Local/demo only when seed_demo_accounts is enabled — never for production CI.
+    maintenance_seed_email: str = "maintenancemanager@qmis.edu"
+    maintenance_seed_password: str = "maintenance123"
     upload_dir: str = "uploads"
+    # Campus wall-clock time, used where a rule depends on the local date/period (substitute duty).
+    campus_timezone: str = "Asia/Kolkata"
 
     # --- Brute-force protection (in-memory, per API process) ---
     login_max_failures: int = 5  # failed logins per email before lockout
@@ -85,12 +102,32 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     school_display_name: str = "Queen Mira International School"
 
-    # WhatsApp provider HTTP API. Empty URL + non-demo = NOT_CONFIGURED.
+    # WhatsApp provider HTTP API (AskEva: https://backend.askeva.io/v1/message/send-message).
+    # Empty URL + non-demo = NOT_CONFIGURED. Token alone is not enough without URL.
     whatsapp_api_url: str = ""
     whatsapp_api_token: str = ""
     whatsapp_from: str = ""
+    # Optional Meta-approved AskEva templates. Free-form text is tried first (open session);
+    # these names are used only when AskEva returns "Session is not opened!".
+    # whatsapp_template_name = default for enquiry/admission/generic only (never fees/results).
+    whatsapp_template_name: str = ""
+    whatsapp_template_language: str = "en"
+    whatsapp_template_enquiry: str = ""
+    whatsapp_template_admission: str = ""
+    whatsapp_template_enrollment: str = ""
+    whatsapp_template_fee_receipt: str = ""
+    whatsapp_template_fee_due: str = ""
+    whatsapp_template_payment_link: str = ""
+    whatsapp_template_result: str = ""
     # RFID / eSSL punch import — off until school confirms.
     rfid_import_enabled: bool = False
+    # Background loop converting stored biometric punches into attendance (services.attendance_sync).
+    # Off by default; the run-now endpoint POST /api/v1/attendance/sync works either way.
+    attendance_auto_sync_enabled: bool = False
+    attendance_auto_sync_interval_minutes: int = 15
+    # Lowest grade that gets its own student portal login; younger children (pre-primary and
+    # below this grade) use the parent login only. School policy: Grades 6–12.
+    student_login_min_grade: int = 6
 
     # ProTrack365 Open API (https://api.protrack365.com) — bus GPS.
     # Primary admin + optional secondary fleet (devices may live on different vendor accounts).

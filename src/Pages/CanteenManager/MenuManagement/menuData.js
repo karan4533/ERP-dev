@@ -1,4 +1,7 @@
-export const MENU_ITEMS = [
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+
+const DEFAULT_MENU_ITEMS = [
     {
         menuId: 'MENU001',
         itemName: 'Veg Biryani',
@@ -99,3 +102,19 @@ export const comboBadgeColor = {
     Yes: 'bg-[#2196F333] text-[#2196F3]',
     No: 'bg-[#66708533] text-[#667085]',
 }
+
+export const MENU_ITEMS_STORAGE_KEY = 'schoolerp-canteen-menu-v1'
+export function getMenuItems() {
+    const seed = usesCampusApiForKey(MENU_ITEMS_STORAGE_KEY) ? [] : DEFAULT_MENU_ITEMS
+    return ensureCampusSeed(MENU_ITEMS_STORAGE_KEY, seed)
+}
+export function saveMenuItems(rows) {
+    return saveCampusJson(MENU_ITEMS_STORAGE_KEY, rows)
+}
+export function hydrateMenuItemsFromApi() {
+    if (!usesCampusApiForKey(MENU_ITEMS_STORAGE_KEY)) return Promise.resolve(false)
+    return hydrateCampusKey(MENU_ITEMS_STORAGE_KEY, [])
+}
+/** Prefer getMenuItems() after hydrate — empty seed when API mode is on. */
+export const MENU_ITEMS = liveArray(getMenuItems)
+

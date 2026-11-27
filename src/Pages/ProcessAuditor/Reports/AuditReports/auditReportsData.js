@@ -1,5 +1,6 @@
 import { DEPARTMENTS, CAMPUSES } from '../../AuditManagement/AuditHistory/auditHistoryData'
 
+import { loadCampusJson, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, CAMPUSES }
 
 export const REPORT_STATUSES = ['Completed', 'Approved', 'Closed']
@@ -229,13 +230,22 @@ const DEFAULT_AUDIT_REPORTS = [
 ]
 
 export const saveAuditReports = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
+}
+
+const belongsToProcessStream = (item) => {
+    const stream = String(item?.auditStream || item?.stream || '').trim().toUpperCase()
+    if (stream === 'QUALITY') return false
+    if (stream === 'PROCESS') return true
+    const blob = [item?.id, item?.auditNumber, item?.observationId].join(' ')
+    if (/\b(OBS|AUD|ATR|SCH|RCA)-QA\b/.test(blob)) return false
+    return true
 }
 
 export const getAuditReports = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
+        const stored = loadCampusJson(STORAGE_KEY, null)
+        if (Array.isArray(stored)) return stored.filter(belongsToProcessStream)
     } catch {
         /* ignore */
     }
@@ -245,3 +255,6 @@ export const getAuditReports = () => {
 
 export const getAuditReportById = (id) =>
     getAuditReports().find((item) => item.id === id || item.auditNumber === id) ?? null
+
+export const hydrateFromApi = (seed = DEFAULT_AUDIT_REPORTS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

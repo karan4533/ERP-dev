@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Award, CalendarDays, MapPin, Search, Trophy, UsersRound } from 'lucide-react'
-import { getChessResultActivities } from './activitiesData'
+import { getChessResultActivities, hydrateActivitiesFromApi } from './activitiesData'
+import { canUseActivitiesApi } from '../../services/activitiesApi'
 
 const resultBadgeColor = {
     Winner: 'bg-[#4CAF5033] text-[#4CAF50]',
@@ -26,8 +27,25 @@ const StatTile = ({ icon: Icon, label, value, tone }) => (
 export default function ChessResultPage() {
     const [search, setSearch] = useState('')
     const [selectedId, setSelectedId] = useState('')
+    const [refreshKey, setRefreshKey] = useState(0)
 
-    const chessResults = useMemo(() => getChessResultActivities(), [])
+    useEffect(() => {
+        if (!canUseActivitiesApi()) return undefined
+        let active = true
+        hydrateActivitiesFromApi('sports')
+            .then(() => {
+                if (active) setRefreshKey((value) => value + 1)
+            })
+            .catch(() => {})
+        return () => {
+            active = false
+        }
+    }, [])
+
+    const chessResults = useMemo(() => {
+        void refreshKey
+        return getChessResultActivities()
+    }, [refreshKey])
     const filteredResults = useMemo(() => {
         const query = search.trim().toLowerCase()
         if (!query) return chessResults

@@ -7,6 +7,10 @@ const ClassInfo = ({
     form,
     teachers = [],
     onChange,
+    apiMode = false,
+    years = [],
+    academicYearId = '',
+    onAcademicYearChange,
 }) => {
     return (
         <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-6 lg:mt-8 mt-2'>
@@ -24,6 +28,25 @@ const ClassInfo = ({
                     ))}
                 </select>
             </div>
+            {apiMode ? (
+                <div className='flex flex-col gap-y-2'>
+                    <label htmlFor='academicYear' className='text-base font-medium text-[#1E1E1E]'>Academic Year:</label>
+                    <select
+                        id='academicYear'
+                        value={academicYearId}
+                        onChange={(e) => onAcademicYearChange?.(e.target.value)}
+                        className={inputClass}
+                    >
+                        <option value=''>Current academic year</option>
+                        {years.filter((year) => year.isActive).map((year) => (
+                            <option key={year.id} value={year.id}>
+                                {year.name}{year.isCurrent ? ' (current)' : ''}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            ) : null}
+            {apiMode ? null : (<>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='classTeacher' className='text-base font-medium text-[#1E1E1E]'>Class Teacher:</label>
                 <select
@@ -68,6 +91,7 @@ const ClassInfo = ({
                     className={inputClass}
                 />
             </div>
+            </>)}
         </div>
     )
 }

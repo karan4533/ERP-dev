@@ -8,6 +8,10 @@ import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 
+const EXPORT_ROWS = [
+    {exam_name: 'Mid Term', class: '6 - A', subject: 'Mathematics', exam_date: '10-09-2025', start_time: '09:00 AM', end_time: '12:00 PM', room: 'Room 101', invigilator: 'Mr. Ravi'},
+]
+
 const ExamList = () => {
     
     const [fromDate, setFromDate] = useState(new Date());
@@ -169,7 +173,14 @@ const ExamList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='exam-list'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
 

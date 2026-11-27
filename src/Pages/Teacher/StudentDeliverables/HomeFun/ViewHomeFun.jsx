@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Eye, FileUp, Upload } from 'lucide-react'
 import pdf_icon from '../../../../assets/images/pdf-icon.png'
@@ -8,14 +8,19 @@ import {
     getHomeFunItemById,
     getHomeFunSubmissionRecord,
     getRecordAssessmentType,
+    HOME_FUN_UPDATED_EVENT,
+    hydrateHomeFunFromApi,
     statusBadgeColor,
     typeBadgeColor,
 } from './homeFunData'
 import {
     getStudentSubmission,
+    HOME_FUN_SUBMISSIONS_UPDATED_EVENT,
     saveStudentSubmission,
 } from '../../../Student/StudentDeliverables/studentHomeFunSubmissions'
 import { useActiveStudent } from '../../../../context/ActiveStudentContext'
+import { hydrateEnrolledStudentsFromApi } from '../../../../Common/StudentDatabase/enrolledStudentsData'
+import { getStudentsList } from '../../../../Common/StudentDatabase/studentDatabaseData'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -61,7 +66,7 @@ const SubmissionStatButton = ({ label, count, colorClass, statusType, record, on
 }
 
 const StudentSubmissionSection = ({ record }) => {
-    const { activeStudentId } = useActiveStudent()
+    const { activeStudentId, activeStudent } = useActiveStudent()
     const [submission, setSubmission] = useState(() =>
         getStudentSubmission(record.assignmentId, record.assignmentTitle, activeStudentId),
     )
@@ -119,6 +124,7 @@ const StudentSubmissionSection = ({ record }) => {
             fileSize: fileData.size,
             additionalNote: note.trim(),
             dueDate: record.dueDate,
+            studentName: activeStudent?.name || '',
         }, activeStudentId)
         setSubmission(saved)
         setSuccessMessage('Your assignment has been submitted successfully.')
@@ -235,13 +241,58 @@ const StudentSubmissionSection = ({ record }) => {
 }
 
 const ViewHomeFun = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }) => {
-    const { id } = useParams()
+    const { id: rawId } = useParams()
+    const id = decodeURIComponent(String(rawId || '').trim())
     const navigate = useNavigate()
     const [studentsModal, setStudentsModal] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [record, setRecord] = useState(() => getHomeFunItemById(id))
+    const [statsTick, setStatsTick] = useState(0)
     const isStudent = viewMode === 'student'
 
-    const record = getHomeFunItemById(id)
-    const submissionRecord = record ? getHomeFunSubmissionRecord(record) : null
+    useEffect(() => {
+        let cancelled = false
+        setLoading(true)
+        setRecord(getHomeFunItemById(id))
+
+        const refreshRecord = () => {
+            if (cancelled) return
+            setRecord(getHomeFunItemById(id))
+            setStatsTick((n) => n + 1)
+        }
+
+        // Load the assignment first — don't block the page on student roster hydrate.
+        hydrateHomeFunFromApi()
+            .catch(() => false)
+            .finally(() => {
+                if (cancelled) return
+                refreshRecord()
+                setLoading(false)
+            })
+
+        hydrateEnrolledStudentsFromApi()
+            .catch(() => false)
+            .finally(() => {
+                if (!cancelled) setStatsTick((n) => n + 1)
+            })
+
+        const onHomeFunUpdated = () => refreshRecord()
+        const onSubmissionsUpdated = () => setStatsTick((n) => n + 1)
+        window.addEventListener(HOME_FUN_UPDATED_EVENT, onHomeFunUpdated)
+        window.addEventListener(HOME_FUN_SUBMISSIONS_UPDATED_EVENT, onSubmissionsUpdated)
+        window.addEventListener('storage', onSubmissionsUpdated)
+        return () => {
+            cancelled = true
+            window.removeEventListener(HOME_FUN_UPDATED_EVENT, onHomeFunUpdated)
+            window.removeEventListener(HOME_FUN_SUBMISSIONS_UPDATED_EVENT, onSubmissionsUpdated)
+            window.removeEventListener('storage', onSubmissionsUpdated)
+        }
+    }, [id])
+
+    const submissionRecord = useMemo(() => {
+        if (!record) return null
+        return getHomeFunSubmissionRecord(record, getStudentsList())
+    }, [record, statsTick])
     const assessmentType = record ? getRecordAssessmentType(record) : ''
     const isHomework = assessmentType === 'Homework'
 
@@ -249,7 +300,7 @@ const ViewHomeFun = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }) =
         setStudentsModal({ record: item, statusType })
     }
 
-    const showTeacherSubmissions = !isStudent && submissionRecord
+    const showTeacherSubmissions = !isStudent && Boolean(submissionRecord)
 
     return (
         <section className='space-y-6'>
@@ -264,7 +315,11 @@ const ViewHomeFun = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }) =
                 </button>
             </div>
 
-            {!record || (!isStudent && !submissionRecord) ? (
+            {loading && !record ? (
+                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                    Loading assignment details…
+                </div>
+            ) : !record ? (
                 <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
                     Record not found or could not be loaded.
                 </div>

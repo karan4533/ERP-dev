@@ -1,6 +1,7 @@
 import noProfile from '../../assets/images/no-profile.png'
 import { getAdmissionById } from '../../Pages/Admin/FrontOffice/AdminssionList/admissionListData'
-import { getClasses, getSections } from '../RBAC/academicsCatalogData'
+import { getClasses, getSections, getSectionsForClass } from '../RBAC/academicsCatalogData'
+import { getAccessToken, isApiAuthEnabled } from '../../services/apiClient'
 import {
     getAllEnrolledStudents,
     updateEnrolledStudentRecord,
@@ -10,7 +11,8 @@ const STORAGE_KEY = 'school-erp-student-allocation'
 const LEGACY_STORAGE_KEY = 'director-student-allocation'
 
 export const ALLOCATION_STATUSES = ['Pending Allocation', 'Pending Approval', 'Allocated', 'Rejected']
-export const SECTION_OPTIONS = ['A', 'B', 'C']
+const DEMO_SECTION_OPTIONS = ['A', 'B', 'C']
+export const SECTION_OPTIONS = DEMO_SECTION_OPTIONS
 
 export const TEACHER_NAME = 'Sandy Selva'
 export const TEACHER_ROLE = 'Teacher'
@@ -42,14 +44,18 @@ const displayValue = (value) => {
     return text || '—'
 }
 
-export const getSectionOptions = () => {
-    const catalogSections = getSections()
-    return catalogSections.length > 0 ? catalogSections : SECTION_OPTIONS
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+export const getSectionOptions = (className = '') => {
+    const catalogSections = className ? getSectionsForClass(className) : getSections()
+    if (catalogSections.length > 0) return catalogSections
+    return apiCatalogMode() ? [] : DEMO_SECTION_OPTIONS
 }
 
 export const getClassOptions = () => {
     const classes = getClasses()
-    return classes.length > 0 ? classes : ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
+    if (classes.length > 0) return classes
+    return apiCatalogMode() ? [] : ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
 }
 
 export const completeStudentAllocation = (id, className, section) => {

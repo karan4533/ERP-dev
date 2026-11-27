@@ -20,6 +20,7 @@ from app.services.integrations.statuses import FAILED, MOCK_QUEUED, NOT_CONFIGUR
 log = logging.getLogger(__name__)
 
 RAZORPAY_ORDERS = "https://api.razorpay.com/v1/orders"
+RAZORPAY_ORDER_PAYMENTS = "https://api.razorpay.com/v1/orders/{order_id}/payments"
 
 
 def _key_id() -> str:
@@ -36,7 +37,19 @@ def _key_secret() -> str:
 
 def create_payment_intent(*, amount: float, reference: str, student_id: str | None) -> dict:
     """Return gateway intent fields for storage on the finance payment link."""
-    if not settings.razorpay_configured or settings.payment_provider.lower() != "razorpay":
+    provider = str(settings.payment_provider or "").strip().lower()
+    # A stub intent is only honoured in development / demo; production treats it as NOT_CONFIGURED.
+    if provider == "stub" and (settings.is_development or settings.demo_integrations):
+        return {
+            "gateway": "stub",
+            "status": OPEN,
+            "providerConfigured": True,
+            "liveVerified": False,
+            "providerOrderId": None,
+            "url": f"/student/payment/fees-payment?ref={reference}",
+            "message": "Stub payment intent (local / test)",
+        }
+    if not settings.razorpay_configured or provider != "razorpay":
         return {
             "gateway": "stub",
             "status": NOT_CONFIGURED,
@@ -131,6 +144,36 @@ def create_payment_intent(*, amount: float, reference: str, student_id: str | No
             "url": None,
             "message": f"Razorpay error: {type(exc).__name__}",
         }
+
+
+def fetch_captured_payment_for_order(order_id: str) -> dict | None:
+    """Ask Razorpay which payment (if any) captured this order — used when Checkout closes without handler."""
+    if not order_id or not settings.razorpay_configured:
+        return None
+    if settings.demo_integrations and str(order_id).startswith("order_demo_"):
+        return None
+    try:
+        response = httpx.get(
+            RAZORPAY_ORDER_PAYMENTS.format(order_id=order_id),
+            auth=(_key_id(), _key_secret()),
+            timeout=20,
+        )
+        if response.status_code >= 400:
+            log.warning("razorpay_order_payments_failed status=%s", response.status_code)
+            return None
+        items = (response.json() or {}).get("items") or []
+        paid = [
+            row for row in items
+            if str(row.get("status") or "").lower() in {"captured", "authorized"}
+        ]
+        if not paid:
+            return None
+        # Prefer captured; otherwise first authorized.
+        paid.sort(key=lambda row: 0 if str(row.get("status") or "").lower() == "captured" else 1)
+        return paid[0]
+    except Exception:  # noqa: BLE001
+        log.warning("razorpay_order_payments_error")
+        return None
 
 
 def verify_razorpay_signature(*, order_id: str, payment_id: str, signature: str) -> bool:

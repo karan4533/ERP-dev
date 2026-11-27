@@ -103,7 +103,23 @@ const PendingActionsReport = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                rows={records}
+                columns={[
+                    { key: 'observationId', label: 'Observation ID' },
+                    { key: 'observation', label: 'Observation' },
+                    { key: 'department', label: 'Department' },
+                    { key: 'assignedTo', label: 'Assigned To' },
+                    { key: 'dueDate', label: 'Due Date' },
+                    { key: 'daysLeft', label: 'Days Left' },
+                    { key: 'status', label: 'Status' },
+                ]}
+                filename='quality-pending-actions-report'
+                title='Pending Actions'
+                exportDescription={<>You are exporting {records.length} pending action(s).</>}
+            />
         </section>
     )
 }

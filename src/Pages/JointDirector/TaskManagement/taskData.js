@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const ASSIGNEE_OPTIONS = [
     'Joint Director Assistant',
     'Canteen Manager',
@@ -11,7 +12,7 @@ export const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Urgent']
 
 export const STATUS_OPTIONS = ['Pending', 'In Progress', 'Completed', 'In Complete']
 
-export const TASKS = [
+const DEFAULT_TASKS = [
     {
         taskId: 'JD-T-001',
         title: 'Quarterly department review — Canteen',
@@ -80,3 +81,15 @@ export const statusBadgeColor = {
     'In Progress': 'bg-[#FF980033] text-[#FF9800]',
     'In Complete': 'bg-[#FF000033] text-[#FF0000]',
 }
+export const TASKS_STORAGE_KEY = 'schoolerp-jd-tasks-v1'
+export function getJdTasks() {
+    return ensureCampusSeed('schoolerp-jd-tasks-v1', DEFAULT_TASKS)
+}
+export function saveJdTasks(rows) {
+    return saveCampusJson('schoolerp-jd-tasks-v1', rows)
+}
+export function hydrateJdTasksFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-tasks-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-tasks-v1', DEFAULT_TASKS)
+}
+export const TASKS = DEFAULT_TASKS

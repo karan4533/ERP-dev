@@ -37,7 +37,7 @@ const AdmissionDetailsForm = ({ record, section, onSectionChange, sectionEditabl
                             className={editableClass}
                         >
                             <option value=''>Select Section</option>
-                            {getSectionOptions().map((item) => (
+                            {getSectionOptions(admission.className).map((item) => (
                                 <option key={item} value={item}>
                                     {item}
                                 </option>

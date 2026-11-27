@@ -2,6 +2,14 @@ import { addDays } from 'date-fns'
 import { generateId, toDateKey } from '../../../../Common/MeetingsCalendar/utils/dateHelpers'
 import { DEPARTMENTS, FREQUENCIES, getMyAudits } from '../MyAudits/myAuditsData'
 
+import {
+    loadCampusJson,
+    saveCampusJson,
+    persistCampusJson,
+    hydrateCampusKey,
+    usesCampusApiForKey,
+    getCampusLoadState,
+} from '../../../../services/campusJsonStore'
 export { DEPARTMENTS, FREQUENCIES }
 
 export const SCHEDULE_STATUSES = ['Scheduled', 'Pending', 'In Progress', 'Completed', 'Overdue']
@@ -15,6 +23,8 @@ export const statusBadgeColor = {
 }
 
 const STORAGE_KEY = 'process-auditor-audit-schedule'
+export const SCHEDULE_STORAGE_KEY = STORAGE_KEY
+export const getAuditSchedulesLoadState = () => getCampusLoadState(STORAGE_KEY)
 
 export const parseDisplayDate = (value) => {
     const [day, month, year] = value.split('-').map(Number)
@@ -181,16 +191,83 @@ export const migrateSchedules = (records) => {
 }
 
 export const saveAuditSchedules = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    saveCampusJson(STORAGE_KEY, records)
+}
+
+const frequencyFromPayload = (payload) => {
+    if (!payload?.isRecurring) return 'Ad-hoc'
+    if (payload.recurrenceType === 'Weekly') return 'WEEKLY'
+    if (payload.recurrenceType === 'Monthly') return 'MONTHLY'
+    return payload.recurrenceType || 'Ad-hoc'
+}
+
+/** Saves a new schedule; resolves `{ success, message?, record? }` only after the server confirms. */
+export const addAuditSchedule = async (payload) => {
+    const loadState = getCampusLoadState(STORAGE_KEY)
+    if (loadState.api && loadState.status !== 'loaded') {
+        return { success: false, message: loadState.error || 'Schedules have not loaded yet. Refresh and try again.' }
+    }
+    if (!String(payload?.auditName || '').trim()) return { success: false, message: 'Schedule name is required.' }
+    if (!payload?.startDate) return { success: false, message: 'Start date is required.' }
+    const current = getAuditSchedules()
+    const scheduleId = `SCH-PA-${Date.now()}`
+    const record = buildSchedule({
+        scheduleId,
+        auditId: payload.auditId || `AUD-PA-${Date.now()}`,
+        auditName: payload.auditName,
+        department: payload.department || 'Academic',
+        frequency: frequencyFromPayload(payload),
+        assignedDate: payload.startDate,
+        dueDate: payload.startDate,
+        assignedBy: payload.assignedBy || 'Process Auditor',
+        status: 'Scheduled',
+    })
+    const saved = {
+        ...record,
+        isRecurring: payload.isRecurring,
+        recurrenceType: payload.isRecurring ? payload.recurrenceType : '',
+        dayOfWeek: payload.dayOfWeek,
+        dayOfMonth: payload.dayOfMonth,
+        startDate: payload.startDate,
+        endDate: payload.endDate || '',
+        componentId: payload.componentId || '',
+        componentName: payload.componentName || '',
+        rubric1: payload.rubric1 || '',
+        rubric2: payload.rubric2 || '',
+        rubric3: payload.rubric3 || '',
+        rubric4: payload.rubric4 || '',
+    }
+    const result = await persistCampusJson(STORAGE_KEY, [...current, saved])
+    if (result?.success === false) return { success: false, message: result.message || 'Could not save the schedule.' }
+    return { success: true, record: saved }
+}
+
+const coerceScheduleRecords = (stored) => {
+    if (stored == null) return null
+    if (typeof stored === 'string') {
+        try {
+            const parsed = JSON.parse(stored)
+            return Array.isArray(parsed) ? parsed : null
+        } catch {
+            return null
+        }
+    }
+    return Array.isArray(stored) ? stored : null
 }
 
 export const getAuditSchedules = () => {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return migrateSchedules(JSON.parse(stored))
+        const stored = coerceScheduleRecords(loadCampusJson(STORAGE_KEY, null))
+        // Any array (including empty) is authoritative once hydrated / after a save.
+        // Never reseed+replace on [] — that wiped newly saved schedules in API mode.
+        if (Array.isArray(stored)) {
+            if (usesCampusApiForKey(STORAGE_KEY) || stored.length) return migrateSchedules(stored)
+        }
     } catch {
         /* ignore */
     }
+    // Server mode: an unloaded or failed collection is not data — never show demo schedules.
+    if (usesCampusApiForKey(STORAGE_KEY)) return []
     saveAuditSchedules(DEFAULT_AUDIT_SCHEDULES)
     return DEFAULT_AUDIT_SCHEDULES
 }
@@ -210,6 +287,7 @@ export const buildSeedCalendarEvents = () => {
     const today = new Date()
     const todayKey = toDateKey(today)
     const events = schedulesToCalendarEvents(getAuditSchedules())
+    if (usesCampusApiForKey(STORAGE_KEY)) return events
 
     if (!events.some((event) => event.date === todayKey)) {
         events.unshift({
@@ -235,3 +313,6 @@ export const buildSeedCalendarEvents = () => {
 
     return events
 }
+
+export const hydrateFromApi = (seed = DEFAULT_AUDIT_SCHEDULES) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

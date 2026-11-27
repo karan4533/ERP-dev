@@ -1,8 +1,22 @@
-import { SECTIONS, SUBJECTS, getClasses } from '../../Pages/Teacher/AssignedClass/assignedClassData.js'
-import { liveArray } from '../RBAC/liveArray.js'
-import { appendApprovalDecision } from '../approvals/approvalHistory.js'
+import { SECTIONS, SUBJECTS, getClasses } from '../../Pages/Teacher/AssignedClass/assignedClassData'
+import { liveArray } from '../RBAC/liveArray'
+import {
+    canUseLessonPlansApi,
+    completeLessonPlanApi,
+    createLessonPlanApi,
+    decideLessonPlanApi,
+    listLessonPlansApi,
+    mapLessonPlanFromApi,
+    patchLessonPlanApi,
+    submitLessonPlanApi,
+} from '../../services/lessonPlansApi'
+import { LESSON_PLAN_ATTACHMENT_RESOURCE } from '../../services/academicAttachments'
+import { uploadFileWithProgress } from '../../services/filesApi'
 
 const STORAGE_KEY = 'school-erp-lesson-plan-approvals'
+let apiCache = null
+let apiHydratePromise = null
+let apiHydrateKey = ''
 
 export const TEACHER_NAME = 'Mr. Anil Kumar'
 export const TEACHER_ROLE = 'Teacher'
@@ -10,8 +24,14 @@ export const COORDINATOR_NAME = 'Ms. Priya Nair'
 export const COORDINATOR_ROLE = 'Coordinator'
 
 export const SUBJECT_OPTIONS = SUBJECTS
-export const getClassOptions = () => getClasses().map((item) => `Grade ${item}`)
-export const CLASS_OPTIONS = liveArray(() => getClasses().map((item) => `Grade ${item}`))
+const asClassLabel = (item) => {
+    const text = String(item || '').trim()
+    if (!text) return ''
+    if (/^(pre-kg|lkg|ukg|grade\s+)/i.test(text)) return text
+    return `Grade ${text}`
+}
+export const getClassOptions = () => getClasses().map(asClassLabel).filter(Boolean)
+export const CLASS_OPTIONS = liveArray(getClassOptions)
 export const SECTION_OPTIONS = SECTIONS
 
 export const ACADEMIC_YEAR_OPTIONS = ['2026-27', '2024-2025', '2025-2026', '2026-2027']
@@ -20,22 +40,18 @@ export const MONTH_OPTIONS = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-export const APPROVAL_STATUSES = ['Draft', 'Pending', 'Coordinator Reviewed', 'Principal Approved', 'Approved', 'Rejected']
+export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected']
 export const TRACK_STATUSES = ['On Track', 'Behind Schedule', 'Completed']
-export const SUBMITTER_ROLES = ['Teacher', 'Coordinator']
+export const SUBMITTER_ROLES = ['Teacher', 'Co-ordinator']
 
 export const approvalStatusColor = {
-    Draft: 'bg-[#64748B33] text-[#64748B]',
     Pending: 'bg-[#FF980033] text-[#FF9800]',
-    'Coordinator Reviewed': 'bg-[#2196F333] text-[#2196F3]',
     Approved: 'bg-[#4CAF5033] text-[#4CAF50]',
     Rejected: 'bg-[#FF000033] text-[#FF0000]',
 }
 
 export const approvalStatusBarColor = {
-    Draft: '#64748B',
     Pending: '#FF9800',
-    'Coordinator Reviewed': '#2196F3',
     Approved: '#4CAF50',
     Rejected: '#FF0000',
 }
@@ -51,55 +67,51 @@ export const markAsDoneBarColor = {
     Pending: '#2196F3',
 }
 
-let _memoryPlans = null
-
-const DEFAULT_LESSON_PLANS = [
-    {
-        id: 'LP-001',
-        subject: 'Mathematics',
-        submitterName: 'Mr. Anil Kumar',
-        submitterRole: 'Teacher',
-        className: 'Grade 10',
-        section: 'A',
-        title: 'Quadratic Equations & Complex Roots',
-        description: 'Comprehensive study of quadratic expressions, factoring, and the quadratic formula.',
-        approvalStatus: 'Pending',
-        trackStatus: 'On Track',
-        academicYear: '2026-27',
-        month: 'September',
-        weekNo: '1',
-        submittedAt: '01-09-2026 10:00 AM',
-        planningRows: [
-            { day: 'Day 1', mainConcepts: 'Standard Form of Quadratic Equation', teachingMethod: 'Lecture & Board work', evaluationMethod: 'Classwork quiz' },
-            { day: 'Day 2', mainConcepts: 'Factorisation method', teachingMethod: 'Interactive solving', evaluationMethod: 'Homework sheet' }
-        ],
-        approvalHistory: []
-    }
-]
+const DEFAULT_LESSON_PLANS = []
 
 export const getLessonPlans = () => {
+    // API mode: never fall back to stale localStorage (fail closed until hydrate).
+    if (canUseLessonPlansApi()) return apiCache || []
     try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) return JSON.parse(stored)
     } catch {
         /* ignore */
     }
-    if (_memoryPlans && Array.isArray(_memoryPlans) && _memoryPlans.length > 0) {
-        return _memoryPlans
-    }
-    _memoryPlans = DEFAULT_LESSON_PLANS.map((p) => ({ ...p }))
-    return _memoryPlans
+    return [...DEFAULT_LESSON_PLANS]
 }
 
 export const saveLessonPlans = (plans) => {
-    _memoryPlans = plans
-    try {
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(plans))
-        }
-    } catch {
-        /* ignore */
+    if (canUseLessonPlansApi()) {
+        apiCache = plans
+        return
     }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(plans))
+}
+
+/** Hydrate lesson plans from GET /lesson-plans (mine by default for teacher portal). */
+export async function hydrateLessonPlansFromApi({ mine = true, status } = {}) {
+    if (!canUseLessonPlansApi()) return getLessonPlans()
+    const key = `${mine ? 'mine' : 'all'}|${status || ''}`
+    // Share an in-flight load only when it asks for the same list (a coordinator has both "mine" and review lists).
+    if (apiHydratePromise && apiHydrateKey === key) return apiHydratePromise
+    apiHydrateKey = key
+    const work = listLessonPlansApi({ mine, status })
+        .then((rows) => {
+            const mapped = rows.map(mapLessonPlanFromApi)
+            // A newer request for a different list owns the cache; never overwrite it with an older answer.
+            if (apiHydratePromise === work) apiCache = mapped
+            return mapped
+        })
+        .catch(() => {
+            apiCache = apiCache || []
+            return apiCache
+        })
+        .finally(() => {
+            if (apiHydratePromise === work) apiHydratePromise = null
+        })
+    apiHydratePromise = work
+    return work
 }
 
 export const formatSubmittedAt = () => {
@@ -154,20 +166,62 @@ const buildLessonPlanRecord = (plans, payload, submittedAt) => {
         toDate: payload.toDate,
         submittedAt,
         approvalStatus: 'Pending',
-        approvalHistory: appendApprovalDecision([], {
-            status: 'Submitted',
-            actor: payload.submitterName || payload.submitterRole || 'Academic staff',
-            actorRole: payload.submitterRole || '',
-            remarks: 'Submitted for Director review.',
-            decidedAt: new Date().toISOString(),
-        }),
         trackStatus: 'On Track',
         markAsDone: false,
         attachment: payload.attachment || '',
     }
 }
 
-export const addLessonPlan = (payload) => {
+// "October" + academic year "2026-27" → "2026-10"; Jan–May fall in the second calendar year
+// (the school year starts in June).
+export const toLessonPlanMonth = (month, academicYear) => {
+    const text = String(month || '').trim()
+    if (/^\d{4}-\d{2}$/.test(text)) return text
+    const index = MONTH_OPTIONS.findIndex((name) => name.toLowerCase() === text.toLowerCase())
+    const now = new Date()
+    if (index === -1) return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const startYear = Number(String(academicYear || '').match(/(20\d{2})/)?.[1]) || now.getFullYear()
+    const year = index < 5 ? startYear + 1 : startYear
+    return `${year}-${String(index + 1).padStart(2, '0')}`
+}
+
+const replaceInCache = (mapped) => {
+    apiCache = (apiCache || []).map((item) => (item.id === mapped.id ? mapped : item))
+    return apiCache
+}
+
+export const addLessonPlan = async (payload) => {
+    if (canUseLessonPlansApi()) {
+        const pendingFiles = Array.isArray(payload?.pendingFiles) ? payload.pendingFiles : []
+        const { pendingFiles: _ignored, ...contentPayload } = payload || {}
+        const monthValue = toLessonPlanMonth(payload.month, payload.academicYear)
+        const created = await createLessonPlanApi({
+            className: String(payload.className || '').replace(/^Grade\s+/i, ''),
+            section: payload.section || null,
+            subject: payload.subject,
+            month: monthValue,
+            title: payload.chapterName || payload.title || null,
+            content: {
+                ...contentPayload,
+                planningRows: payload.planningRows || [],
+                attachment: pendingFiles[0]?.name || payload.attachment || '',
+            },
+            fileId: payload.fileId || null,
+        })
+        let plan = created
+        if (pendingFiles.length) {
+            const asset = await uploadFileWithProgress(pendingFiles[0], {
+                resourceType: LESSON_PLAN_ATTACHMENT_RESOURCE,
+                resourceId: created.id,
+            })
+            plan = await patchLessonPlanApi(created.id, { fileId: asset.id })
+        }
+        // "Submit for Approval": a created plan is only a draft until it enters the approval chain.
+        const submitted = await submitLessonPlanApi(plan.id)
+        const mapped = mapLessonPlanFromApi(submitted)
+        apiCache = [mapped, ...(apiCache || [])]
+        return mapped
+    }
     const plans = getLessonPlans()
     const submittedAt = formatSubmittedAt()
     const record = buildLessonPlanRecord(plans, payload, submittedAt)
@@ -194,23 +248,22 @@ export const addLessonPlans = (payloads) => {
     return records
 }
 
-export const updateLessonPlanStatus = (id, approvalStatus, decision = {}) => {
+export const updateLessonPlanStatus = async (id, approvalStatus, comment = '') => {
+    if (canUseLessonPlansApi()) {
+        const plan = (apiCache || []).find((item) => item.id === id)
+        if (!plan?.approvalId) {
+            throw new Error('This lesson plan has not been submitted for approval yet.')
+        }
+        await decideLessonPlanApi(plan.approvalId, approvalStatus === 'Approved' ? 'approve' : 'deny', comment)
+        return getLessonPlans()
+    }
     const plans = getLessonPlans()
     const updated = plans.map((item) => {
         if (item.id !== id) return item
-        const options = typeof decision === 'string' ? { remarks: decision } : decision
-        const decidedAt = options.decidedAt || new Date().toISOString()
-        const approvalHistory = appendApprovalDecision(getLessonPlanApprovalHistory(item), {
-            status: approvalStatus,
-            actor: options.actor || 'Director',
-            actorRole: options.actorRole || 'Director',
-            remarks: options.remarks || '',
-            decidedAt,
-        })
         if (approvalStatus === 'Approved') {
-            return { ...item, approvalStatus, trackStatus: 'Completed', approvalHistory, updatedAt: decidedAt }
+            return { ...item, approvalStatus, trackStatus: 'Completed' }
         }
-        return { ...item, approvalStatus, approvalHistory, rejectionReason: options.remarks || '', updatedAt: decidedAt }
+        return { ...item, approvalStatus }
     })
     saveLessonPlans(updated)
     return updated
@@ -226,37 +279,22 @@ export const getSummaryCounts = (plans) => ({
 export const getLessonPlansBySubmitter = (submitterName) =>
     getLessonPlans().filter((item) => item.submitterName === submitterName)
 
-export const getLessonPlanApprovalHistory = (plan) => {
-    if (!plan) return []
-    if (Array.isArray(plan.approvalHistory) && plan.approvalHistory.length) {
-        return plan.approvalHistory
-    }
-
-    let history = appendApprovalDecision([], {
-        status: 'Submitted',
-        actor: plan.submitterName || 'Academic staff',
-        actorRole: plan.submitterRole || '',
-        remarks: 'Submitted for Director review.',
-        decidedAt: plan.submittedAt,
-    })
-    if (plan.approvalStatus === 'Approved' || plan.approvalStatus === 'Rejected') {
-        history = appendApprovalDecision(history, {
-            status: plan.approvalStatus,
-            actor: 'Director',
-            actorRole: 'Director',
-            remarks: plan.rejectionReason || (plan.approvalStatus === 'Rejected' ? 'Rejected before rationale tracking was enabled.' : ''),
-            decidedAt: plan.updatedAt,
-        })
-    }
-    return history
-}
-
 export const getApprovedLessonPlansBySubmitter = (submitterName) =>
     getLessonPlans().filter(
         (item) => item.submitterName === submitterName && item.approvalStatus === 'Approved'
     )
 
-export const markLessonPlanAsDone = (id, completionRemarks = '') => {
+/** Submit a plan that was saved as a draft (older saves never entered approval). */
+export const submitDraftLessonPlan = async (id) => {
+    const submitted = await submitLessonPlanApi(id)
+    return replaceInCache(mapLessonPlanFromApi(submitted))
+}
+
+export const markLessonPlanAsDone = async (id, completionRemarks = '') => {
+    if (canUseLessonPlansApi()) {
+        const updated = await completeLessonPlanApi(id, completionRemarks.trim())
+        return replaceInCache(mapLessonPlanFromApi(updated))
+    }
     const plans = getLessonPlans()
     const updated = plans.map((item) =>
         item.id === id
@@ -464,31 +502,4 @@ export const clearFilterChip = (filters, chipKey) => {
         return { ...filters, search: '' }
     }
     return { ...filters, [chipKey]: '' }
-}
-
-
-export const advanceLessonPlanTier = ({ id, decision, actor, actorRole, remarks }) => {
-    const plans = getLessonPlans()
-    const target = plans.find((p) => p.id === id)
-    if (!target) throw new Error(`Lesson plan not found: ${id}`)
-
-    let nextStatus = 'Approved'
-    if (decision === 'Rejected') {
-        nextStatus = 'Rejected'
-    } else {
-        const current = target.approvalStatus
-        if (current === 'Pending' || current === 'Draft') {
-            nextStatus = 'Coordinator Reviewed'
-        } else if (current === 'Coordinator Reviewed') {
-            nextStatus = 'Principal Approved'
-        } else {
-            nextStatus = 'Approved'
-        }
-    }
-
-    return updateLessonPlanStatus(id, nextStatus, {
-        actor,
-        actorRole,
-        remarks
-    })
 }

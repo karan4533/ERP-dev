@@ -15,6 +15,9 @@ const LessonPlanGroupedTable = ({
     actionLabel = 'View',
     statusMode = 'approval',
 }) => {
+    const colSpan =
+        (showTeacherColumn ? 1 : 0) + (showLatestSubmitted ? 1 : 0) + 5
+
     if (!groups.length) {
         return (
             <EmptyState

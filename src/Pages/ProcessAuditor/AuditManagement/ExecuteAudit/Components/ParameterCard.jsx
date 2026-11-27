@@ -28,7 +28,7 @@ const ParameterCard = ({
     onOpenSop,
 }) => {
     const [showUrlInput, setShowUrlInput] = useState(!!value.evidence?.url)
-    const nonCompliant = isNonCompliant(null, value.response)
+    const nonCompliant = isNonCompliant(parameter.responseType, value.response)
     const visualStatus = value.response === 'Error'
         ? 'error'
         : getParameterVisualStatus(parameter, value, observation)

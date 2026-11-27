@@ -1,8 +1,15 @@
+/**
+ * Staff Star of the Month / Year — shared browser SoT (localStorage).
+ * Not a REST domain yet; do not claim live multi-user persistence.
+ */
+
 export const MAX_STARS = 3
 
 export const RATING_CATEGORY = 'Overall Performance'
 
 export const SOY_MONTH_COUNT = 10
+
+export const STORAGE_KEY = 'director-staff-star-ratings'
 
 export const EMPLOYEE_TYPE_OPTIONS = [
     { value: 'teacher', label: 'Teacher' },
@@ -58,7 +65,8 @@ const buildSomRating = ({
     description,
 })
 
-export const MOCK_SOM_RATINGS = [
+/** Seed rows used only when localStorage is empty (first visit). */
+export const SEED_SOM_RATINGS = [
     buildSomRating({ ratingId: 'SOM-001', month: 'June 2025', academicYear: '2025-2026', employeeType: 'teacher', employeeId: 'TEA-1001', employeeName: 'Mr. Ravi Kumar', department: 'Mathematics', rating: 3, description: 'Outstanding classroom delivery and student outcomes.' }),
     buildSomRating({ ratingId: 'SOM-002', month: 'June 2025', academicYear: '2025-2026', employeeType: 'teacher', employeeId: 'TEA-1002', employeeName: 'Ms. Anitha Verma', department: 'English', rating: 2, description: 'Good engagement; consistent assignment follow-up.' }),
     buildSomRating({ ratingId: 'SOM-003', month: 'June 2025', academicYear: '2025-2026', employeeType: 'coordinator', employeeId: 'COO-1001', employeeName: 'Sandy Selva', department: 'Science', rating: 3, description: 'Excellent department coordination.' }),
@@ -77,17 +85,74 @@ export const MOCK_SOM_RATINGS = [
     buildSomRating({ ratingId: 'SOM-016', month: 'March 2026', academicYear: '2025-2026', employeeType: 'coordinator', employeeId: 'COO-1001', employeeName: 'Sandy Selva', department: 'Science', rating: 3, description: 'Year-end department review leadership.' }),
 ]
 
+/** @deprecated use getSomRatings() — kept for any leftover imports */
+export const MOCK_SOM_RATINGS = SEED_SOM_RATINGS
+
+export const saveSomRatings = (items) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+}
+
+export const getSomRatings = () => {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed)) return parsed
+        }
+    } catch {
+        /* ignore corrupt cache */
+    }
+    // No auto-seed of SEED_SOM_RATINGS — empty until real ratings are saved.
+    return []
+}
+
+export const nextSomRatingId = (items = getSomRatings()) => {
+    let max = 0
+    items.forEach((row) => {
+        const match = String(row.ratingId || '').match(/SOM-(\d+)/i)
+        if (match) max = Math.max(max, Number(match[1]))
+    })
+    return `SOM-${String(max + 1).padStart(3, '0')}`
+}
+
+export const addSomRating = ({
+    month,
+    academicYear = ACADEMIC_YEARS[0],
+    employeeType,
+    employeeId,
+    employeeName,
+    department,
+    rating,
+    description,
+}) => {
+    const items = getSomRatings()
+    const row = buildSomRating({
+        ratingId: nextSomRatingId(items),
+        month,
+        academicYear,
+        employeeType,
+        employeeId,
+        employeeName,
+        department,
+        rating: Number(rating) || 0,
+        description: description || '',
+    })
+    const next = [row, ...items]
+    saveSomRatings(next)
+    return row
+}
+
 export const getEmployeeTypeLabel = (type) =>
     EMPLOYEE_TYPE_OPTIONS.find((opt) => opt.value === type)?.label ?? type
 
 export const getAvailableSomMonths = () => {
-    const months = [...new Set(MOCK_SOM_RATINGS.map((item) => item.month))]
+    const months = [...new Set(getSomRatings().map((item) => item.month))]
     const order = ACADEMIC_YEAR_MONTHS
     return months.sort((a, b) => order.indexOf(a) - order.indexOf(b))
 }
 
 export const getSomRatingsByMonth = (month) =>
-    MOCK_SOM_RATINGS.filter((item) => item.month === month)
+    getSomRatings().filter((item) => item.month === month)
 
 export const getStarOfMonth = (month) => {
     const monthRatings = getSomRatingsByMonth(month)
@@ -98,7 +163,7 @@ export const getStarOfMonth = (month) => {
 }
 
 export const getConsolidatedSoyRatings = (academicYear = '2025-2026') => {
-    const yearRatings = MOCK_SOM_RATINGS.filter((item) => item.academicYear === academicYear)
+    const yearRatings = getSomRatings().filter((item) => item.academicYear === academicYear)
     const grouped = yearRatings.reduce((acc, item) => {
         if (!acc[item.employeeId]) {
             acc[item.employeeId] = {

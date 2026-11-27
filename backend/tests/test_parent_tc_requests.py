@@ -76,7 +76,7 @@ def test_parent_can_create_and_list_own_child_tc_but_cannot_forward(client):
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["id"].startswith("TC-REQ-")
-    assert body["status"] == "Pending PRM Review"
+    assert body["status"] == "Pending Manager NOCs"
     assert body["studentId"] == student_id
 
     listed = client.get("/api/v1/tc-requests", headers=parent)

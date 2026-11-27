@@ -6,8 +6,8 @@ import { addUnitTest, ROUTE_BASE } from './unitTestsData'
 const AddUnitTest = () => {
     const navigate = useNavigate()
 
-    const handleSave = (values) => {
-        addUnitTest(values)
+    const handleSave = async (values) => {
+        await addUnitTest(values)
         navigate(ROUTE_BASE)
     }
 

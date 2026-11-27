@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react'
 import { Eye } from 'lucide-react'
 import { toast } from 'react-toastify'
 import TimeTableModal from '../../Pages/Principal/ExaminationTimetable/Components/TimeTableModal'
+import { mapExamApiToTimetableRecord } from '../../Pages/Principal/ExaminationTimetable/examinationTimetableData'
+import { canUseExamsApi, getExamApi } from '../../services/examsApi'
 import { examTypeLabel, forwardExamTimetable } from './examScheduleData'
 
 /**
@@ -19,7 +21,31 @@ const ExamSchedulePanel = ({
     emptyMessage = 'No exam timetables to show yet.',
 }) => {
     const [selected, setSelected] = useState(null)
+    const [viewLoadingId, setViewLoadingId] = useState(null)
     const displayRows = useMemo(() => rows, [rows])
+
+    const openTimetable = async (exam) => {
+        const fallback = exam.record
+            ? { ...exam.record, examName: exam.record.examName || exam.name }
+            : { ...exam, examName: exam.name }
+        const hasTimelines = Array.isArray(fallback.timelines) && fallback.timelines.length > 0
+        if (hasTimelines || !canUseExamsApi()) {
+            setSelected(fallback)
+            return
+        }
+        setViewLoadingId(exam.id)
+        try {
+            const detail = await getExamApi(exam.id)
+            setSelected(mapExamApiToTimetableRecord(detail))
+        } catch (err) {
+            setSelected(fallback)
+            if (!fallback.timelines?.length) {
+                toast.error(err?.message || 'Could not load exam timetable details.')
+            }
+        } finally {
+            setViewLoadingId(null)
+        }
+    }
 
     const handleForward = (row) => {
         forwardExamTimetable(row.id, 'Coordinator')
@@ -76,15 +102,12 @@ const ExamSchedulePanel = ({
                                             <div className='flex flex-wrap gap-2'>
                                                 <button
                                                     type='button'
-                                                    onClick={() => setSelected(
-                                                        exam.record
-                                                            ? { ...exam.record, examName: exam.record.examName || exam.name }
-                                                            : { ...exam, examName: exam.name },
-                                                    )}
-                                                    className='inline-flex items-center gap-1 bg-[#515DEF] text-white text-xs px-3 py-1.5 rounded-md hover:opacity-90 cursor-pointer'
+                                                    disabled={viewLoadingId === exam.id}
+                                                    onClick={() => openTimetable(exam)}
+                                                    className='inline-flex items-center gap-1 bg-[#515DEF] text-white text-xs px-3 py-1.5 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-60'
                                                 >
                                                     <Eye size={14} />
-                                                    View Timetable
+                                                    {viewLoadingId === exam.id ? 'Loading…' : 'View Timetable'}
                                                 </button>
                                                 {mode === 'forward' && (
                                                     <button

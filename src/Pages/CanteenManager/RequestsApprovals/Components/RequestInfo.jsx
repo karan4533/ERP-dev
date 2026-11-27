@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar } from 'lucide-react'
@@ -18,8 +18,8 @@ const selectClass =
 const readOnlyClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full bg-[#F9F9F9]'
 
-const RequestInfo = () => {
-    const [requiredByDate, setRequiredByDate] = useState(null)
+const RequestInfo = ({ form, onChange, requestedBy }) => {
+    const set = (key) => (event) => onChange({ ...form, [key]: event.target.value })
 
     return (
         <div className='space-y-8 lg:mt-8 mt-2'>
@@ -28,7 +28,7 @@ const RequestInfo = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor="request-type" className='text-base font-medium text-[#1E1E1E]'>Request Type *</label>
-                        <select id="request-type" className={selectClass} defaultValue="">
+                        <select id="request-type" className={selectClass} value={form.requestTypeFull} onChange={set('requestTypeFull')}>
                             <option value="" disabled>Select request type</option>
                             {REQUEST_TYPE_OPTIONS.map((type) => (
                                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -37,15 +37,15 @@ const RequestInfo = () => {
                     </div>
                     <div className='flex flex-col gap-y-2 lg:col-span-2'>
                         <label htmlFor="request-title" className='text-base font-medium text-[#1E1E1E]'>Request Title *</label>
-                        <input type="text" id="request-title" placeholder="Enter request title" className={inputClass} />
+                        <input type="text" id="request-title" maxLength={200} value={form.title} onChange={set('title')} placeholder="Enter request title" className={inputClass} />
                     </div>
                     <div className='lg:col-span-3 flex flex-col gap-y-2'>
                         <label htmlFor="description" className='text-base font-medium text-[#1E1E1E]'>Description *</label>
-                        <textarea id="description" rows={3} placeholder="Describe the request in detail" className={`${inputClass} resize-none`} />
+                        <textarea id="description" rows={3} maxLength={2000} value={form.description} onChange={set('description')} placeholder="Describe the request in detail" className={`${inputClass} resize-none`} />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor="priority" className='text-base font-medium text-[#1E1E1E]'>Priority *</label>
-                        <select id="priority" className={selectClass} defaultValue="">
+                        <select id="priority" className={selectClass} value={form.priority} onChange={set('priority')}>
                             <option value="" disabled>Select priority</option>
                             {PRIORITY_OPTIONS.map((priority) => (
                                 <option key={priority} value={priority}>{priority}</option>
@@ -56,8 +56,8 @@ const RequestInfo = () => {
                         <label className='text-base font-medium text-[#1E1E1E]'>Required By Date</label>
                         <div className='relative'>
                             <DatePicker
-                                selected={requiredByDate}
-                                onChange={setRequiredByDate}
+                                selected={form.requiredByDate}
+                                onChange={(date) => onChange({ ...form, requiredByDate: date })}
                                 isClearable
                                 dateFormat="dd/MM/yyyy"
                                 placeholderText="Select date"
@@ -74,11 +74,11 @@ const RequestInfo = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor="estimated-amount" className='text-base font-medium text-[#1E1E1E]'>Estimated Amount</label>
-                        <input type="text" id="estimated-amount" placeholder="e.g. ₹45,000" className={inputClass} />
+                        <input type="text" id="estimated-amount" maxLength={40} value={form.estimatedAmount} onChange={set('estimatedAmount')} placeholder="e.g. ₹45,000" className={inputClass} />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor="budget-category" className='text-base font-medium text-[#1E1E1E]'>Budget Category</label>
-                        <select id="budget-category" className={selectClass} defaultValue="">
+                        <select id="budget-category" className={selectClass} value={form.budgetCategory} onChange={set('budgetCategory')}>
                             <option value="">Select category</option>
                             {BUDGET_CATEGORIES.map((category) => (
                                 <option key={category} value={category}>{category}</option>
@@ -93,7 +93,7 @@ const RequestInfo = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#1E1E1E]'>Requested By</label>
-                        <input type="text" readOnly value={AUTO_FILLED.requestedBy} className={readOnlyClass} />
+                        <input type="text" readOnly value={requestedBy || AUTO_FILLED.requestedBy} className={readOnlyClass} />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#1E1E1E]'>Department</label>

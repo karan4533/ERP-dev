@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -14,7 +14,7 @@ import VisibilityRuleFormModal from './VisibilityRuleFormModal'
 import {
     VISIBILITY_MODULES,
     VISIBILITY_ROLES,
-    VISIBILITY_RULES,
+    getAuditVisibilityRules, hydrateAuditVisibilityRulesFromApi, saveAuditVisibilityRules,
     buildVisibilityPayload,
     createVisibilityRuleId,
     formatPermissionSummary,
@@ -27,7 +27,17 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const VisibilityRulesList = () => {
-    const [rules, setRules] = useState(VISIBILITY_RULES)
+    const [rules, setRulesState] = useState(() => getAuditVisibilityRules())
+    useEffect(() => {
+        hydrateAuditVisibilityRulesFromApi().finally(() => setRulesState(getAuditVisibilityRules()))
+    }, [])
+    const setRules = (updater) => {
+        setRulesState((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater
+            saveAuditVisibilityRules(next)
+            return next
+        })
+    }
     const [search, setSearch] = useState('')
     const [moduleFilter, setModuleFilter] = useState('')
     const [roleFilter, setRoleFilter] = useState('')
@@ -314,7 +324,14 @@ const VisibilityRulesList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='visibilityruleslist'
+                title='VisibilityRulesList'
+                rows={Array.isArray(filteredRules) ? filteredRules : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRules) ? filteredRules.length : 0} record(s).</>}
+            />
             <VisibilityRuleFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

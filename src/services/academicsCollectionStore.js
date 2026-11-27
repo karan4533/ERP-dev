@@ -4,6 +4,7 @@ import {
     replaceAcademicsCollectionApi,
     stripAcademicsMeta,
 } from './academicsApi'
+import { REPLACE_BLOCKED_MESSAGE } from './campusLoadGuard'
 
 /**
  * Shared in-memory + DB store for campus academics collections.
@@ -17,6 +18,8 @@ export function createAcademicsCollectionStore({
     offlineFallback = () => [],
 }) {
     let apiMemory = null
+    // True only after a successful list from the server; a failed load leaves apiMemory = [] which is not data.
+    let loaded = false
     let hydratePromise = null
     let persistPromise = null
 
@@ -57,6 +60,7 @@ export function createAcademicsCollectionStore({
         hydratePromise = listAcademicsCollectionApi(collection)
             .then((rows) => {
                 apiMemory = normalizeList(rows)
+                loaded = true
                 purgeBrowserCopies()
                 emitUpdated()
                 return true
@@ -91,6 +95,8 @@ export function createAcademicsCollectionStore({
     const saveAll = async (records) => {
         const list = normalizeList(records)
         if (canUseAcademicsApi()) {
+            if (!loaded) throw new Error(REPLACE_BLOCKED_MESSAGE)
+            const previous = apiMemory
             apiMemory = list
             emitUpdated()
             persistPromise = replaceAcademicsCollectionApi(collection, cleanList(list))
@@ -100,6 +106,11 @@ export function createAcademicsCollectionStore({
                     }
                     emitUpdated()
                     return apiMemory
+                })
+                .catch((error) => {
+                    apiMemory = previous
+                    emitUpdated()
+                    throw error
                 })
                 .finally(() => {
                     persistPromise = null
@@ -114,6 +125,7 @@ export function createAcademicsCollectionStore({
 
     const clearMemory = () => {
         apiMemory = null
+        loaded = false
         emitUpdated()
     }
 

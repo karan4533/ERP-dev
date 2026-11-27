@@ -11,6 +11,12 @@ export const getConversationApi = (id) => apiRequest(`/communication/conversatio
 export const startConversationApi = (userId) =>
     apiRequest('/communication/conversations', { method: 'POST', body: { userId } })
 
+export const createGroupConversationApi = (userIds, title) =>
+    apiRequest('/communication/conversations/groups', {
+        method: 'POST',
+        body: { userIds, title: title || null },
+    })
+
 export const sendMessageApi = (conversationId, { body, file }) => {
     const form = new FormData()
     if (body) form.append('body', body)

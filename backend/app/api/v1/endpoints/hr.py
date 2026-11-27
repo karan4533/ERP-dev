@@ -7,7 +7,9 @@ from app.models import User
 from app.schemas.phase0 import EmployeeCreate, EmployeeOut
 from app.services.hr import (
     LIST_COLLECTIONS,
+    apply_relieving,
     create_employee,
+    my_relieving_applications,
     create_staff,
     create_item,
     documents_for_employee,
@@ -27,6 +29,25 @@ from app.services.hr import (
 )
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
+
+
+# Declared before the generic /{collection} routes so "relieving" is not read as a collection name.
+@router.get("/relieving/mine")
+def my_relieving_route(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("hr.self")),
+) -> list[dict]:
+    return my_relieving_applications(db, user)
+
+
+@router.post("/relieving", status_code=201)
+def apply_relieving_route(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("hr.self")),
+) -> dict:
+    """Any staff member applies for relieving on their own employee record; HR reviews it in Exit Formalities."""
+    return apply_relieving(db, user, body)
 
 
 @router.get("/employees", response_model=list[EmployeeOut])

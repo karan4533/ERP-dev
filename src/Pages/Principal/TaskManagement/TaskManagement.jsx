@@ -7,12 +7,12 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal';
-import { useAuth } from '../../../context/AuthContext';
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions';
+
+const EXPORT_ROWS = [
+    {task_id: 'TASK001', task_title: 'Submit Monthly Attendance Report', task_description: 'Prepare and submit the attendance report for all Grade 9 students.', assigned_to: 'Mr. Ravi', priority: 'High', assigned_date: '01-08-2025', due_date: '05-08-2025', status: 'Completed'},
+]
 
 const TaskManagement = () => {
-    const { role } = useAuth();
-    const canDelete = canRoleDelete(role);
 
     const [fromDate, setFromDate] = useState(new Date());
     const [toDate, setToDate] = useState(new Date());
@@ -152,11 +152,9 @@ const TaskManagement = () => {
                                         <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                             Edit
                                         </button>
-                                        {canDelete && (
-                                            <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                                Delete
-                                            </button>
-                                        )}
+                                        <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                            Delete
+                                        </button>
                                     </Dropdown>
                                 </td>
                             </tr>
@@ -183,11 +181,9 @@ const TaskManagement = () => {
                                         <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                             Edit
                                         </button>
-                                        {canDelete && (
-                                            <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                                Delete
-                                            </button>
-                                        )}
+                                        <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                            Delete
+                                        </button>
                                     </Dropdown>
                                 </td>
                             </tr>
@@ -214,11 +210,9 @@ const TaskManagement = () => {
                                         <button onClick={() => setEditRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                             Edit
                                         </button>
-                                        {canDelete && (
-                                            <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
-                                                Delete
-                                            </button>
-                                        )}
+                                        <button onClick={() => setDeleteRequestModal(true)} className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
+                                            Delete
+                                        </button>
                                     </Dropdown>
                                 </td>
                             </tr>
@@ -250,11 +244,18 @@ const TaskManagement = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='task-management'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 
-            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
 
         </section>
     )

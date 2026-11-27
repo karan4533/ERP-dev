@@ -1,11 +1,5 @@
-import React from 'react'
-import AuditAssignmentPlaceholder from './AuditAssignmentPlaceholder'
+import AssignAudits from './AssignAudits'
 
-const ReassignAudit = () => (
-    <AuditAssignmentPlaceholder
-        title='Reassign Audit'
-        description='Reassign audits to different auditors when needed. This section will be implemented next.'
-    />
-)
+const ReassignAudit = () => <AssignAudits mode='reassign' />
 
 export default ReassignAudit

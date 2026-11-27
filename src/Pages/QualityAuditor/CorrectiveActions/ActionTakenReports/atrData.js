@@ -1,5 +1,12 @@
 import { DEPARTMENTS } from '../../Observations/observationsData'
 
+import {
+    getCampusLoadState,
+    hydrateCampusKey,
+    loadCampusJson,
+    saveCampusJson,
+    usesCampusApiForKey,
+} from '../../../../services/campusJsonStore'
 export { DEPARTMENTS }
 
 export const ATR_STATUSES = [
@@ -67,6 +74,7 @@ const buildAtr = ({
     atrNumber,
     observationId,
     auditNumber,
+    auditStream: 'QUALITY',
     department,
     assignedTo,
     reportTo,
@@ -82,10 +90,10 @@ const buildAtr = ({
 
 const DEFAULT_ATR_RECORDS = [
     buildAtr({
-        id: 'ATR-PA-2026-005',
-        atrNumber: 'ATR-PA-2026-005',
-        observationId: 'OBS-PA-2026-011',
-        auditNumber: 'AUD-PA-2026-038',
+        id: 'ATR-QA-2026-005',
+        atrNumber: 'ATR-QA-2026-005',
+        observationId: 'OBS-QA-2026-011',
+        auditNumber: 'AUD-QA-2026-038',
         department: 'Transport',
         assignedTo: 'Mr. Suresh Patel',
         reportTo: 'Director of Operations',
@@ -127,10 +135,10 @@ const DEFAULT_ATR_RECORDS = [
         statusTimeline: buildStatusTimeline(7),
     }),
     buildAtr({
-        id: 'ATR-PA-2026-004',
-        atrNumber: 'ATR-PA-2026-004',
-        observationId: 'OBS-PA-2026-014',
-        auditNumber: 'AUD-PA-2026-043',
+        id: 'ATR-QA-2026-004',
+        atrNumber: 'ATR-QA-2026-004',
+        observationId: 'OBS-QA-2026-014',
+        auditNumber: 'AUD-QA-2026-043',
         department: 'Canteen',
         assignedTo: 'Mr. Ramesh Iyer',
         reportTo: 'Director of Operations',
@@ -168,10 +176,10 @@ const DEFAULT_ATR_RECORDS = [
         statusTimeline: buildStatusTimeline(5),
     }),
     buildAtr({
-        id: 'ATR-PA-2026-003',
-        atrNumber: 'ATR-PA-2026-003',
-        observationId: 'OBS-PA-2026-009',
-        auditNumber: 'AUD-PA-2026-039',
+        id: 'ATR-QA-2026-003',
+        atrNumber: 'ATR-QA-2026-003',
+        observationId: 'OBS-QA-2026-009',
+        auditNumber: 'AUD-QA-2026-039',
         department: 'IT Support',
         assignedTo: 'Mr. Arjun Mehta',
         reportTo: 'IT Manager',
@@ -209,10 +217,10 @@ const DEFAULT_ATR_RECORDS = [
         statusTimeline: buildStatusTimeline(7),
     }),
     buildAtr({
-        id: 'ATR-PA-2026-002',
-        atrNumber: 'ATR-PA-2026-002',
-        observationId: 'OBS-PA-2026-012',
-        auditNumber: 'AUD-PA-2026-045',
+        id: 'ATR-QA-2026-002',
+        atrNumber: 'ATR-QA-2026-002',
+        observationId: 'OBS-QA-2026-012',
+        auditNumber: 'AUD-QA-2026-045',
         department: 'Housekeeping',
         assignedTo: 'Mr. Ganesh Pillai',
         reportTo: 'Facility Manager',
@@ -251,10 +259,10 @@ const DEFAULT_ATR_RECORDS = [
         statusTimeline: buildStatusTimeline(5),
     }),
     buildAtr({
-        id: 'ATR-PA-2026-001',
-        atrNumber: 'ATR-PA-2026-001',
-        observationId: 'OBS-PA-2026-013',
-        auditNumber: 'AUD-PA-2026-041',
+        id: 'ATR-QA-2026-001',
+        atrNumber: 'ATR-QA-2026-001',
+        observationId: 'OBS-QA-2026-013',
+        auditNumber: 'AUD-QA-2026-041',
         department: 'Finance',
         assignedTo: 'Mr. Vikram Singh',
         reportTo: 'Finance Manager',
@@ -296,17 +304,26 @@ const DEFAULT_ATR_RECORDS = [
     }),
 ]
 
-export const saveAtrRecords = (records) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+export const saveAtrRecords = (records) => saveCampusJson(STORAGE_KEY, records)
+
+/** { status: idle|loading|loaded|failed, error, api } for the ATR collection. */
+export const getAtrLoadState = () => getCampusLoadState(STORAGE_KEY)
+
+const belongsToQualityStream = (item) => {
+    const stream = String(item?.auditStream || item?.stream || '').trim().toUpperCase()
+    if (stream === 'PROCESS') return false
+    if (stream === 'QUALITY') return true
+    const blob = [item?.id, item?.atrNumber, item?.observationId, item?.auditNumber].join(' ')
+    if (/\b(OBS|AUD|ATR|SCH|RCA)-PA\b/.test(blob)) return false
+    return true
 }
 
 export const getAtrRecords = () => {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) return JSON.parse(stored)
-    } catch {
-        /* ignore */
-    }
+    const stored = loadCampusJson(STORAGE_KEY, null)
+    if (Array.isArray(stored)) return stored.filter(belongsToQualityStream)
+    // Server mode: an unloaded or failed collection is not data — never seed demo rows over it.
+    if (usesCampusApiForKey(STORAGE_KEY)) return []
+    // Offline demo mode only: seed the browser copy.
     saveAtrRecords(DEFAULT_ATR_RECORDS)
     return DEFAULT_ATR_RECORDS
 }
@@ -316,3 +333,94 @@ export const getAtrById = (id) =>
 
 export const getAtrByObservationId = (observationId) =>
     getAtrRecords().find((item) => item.observationId === observationId) ?? null
+
+const generateCapaId = () => {
+    const list = getAtrRecords()
+    const max = list.reduce((acc, item) => {
+        const num = Number(String(item.atrNumber || item.id || '').split('-').pop())
+        return Number.isNaN(num) ? acc : Math.max(acc, num)
+    }, 0)
+    return `ATR-QA-2026-${String(max + 1).padStart(3, '0')}`
+}
+
+export const upsertCapaRecord = ({
+    observationId,
+    auditNumber,
+    department,
+    assignedTo,
+    reportTo,
+    dueDate,
+    findingRating,
+    riskLevel,
+    title,
+    evidence,
+}) => {
+    const loadState = getAtrLoadState()
+    if (loadState.api && loadState.status !== 'loaded') {
+        // Numbering and merge need the real server list; refuse rather than overwrite or collide.
+        return { observationId, saveBlocked: true, message: loadState.error || 'Action Taken Reports have not loaded yet.' }
+    }
+    const existing = getAtrByObservationId(observationId)
+    if (existing?.auditNumber && auditNumber && existing.auditNumber !== auditNumber) {
+        return { observationId, saveBlocked: true, message: `Observation ${observationId} already has a CAPA under audit ${existing.auditNumber}.` }
+    }
+    const atrNumber = existing?.atrNumber || generateCapaId()
+    const now = new Date()
+    const record = buildAtr({
+        id: existing?.id || atrNumber,
+        atrNumber,
+        observationId,
+        auditNumber,
+        department: department || '',
+        assignedTo: assignedTo || '',
+        reportTo: reportTo || '',
+        status: existing?.status || 'Submitted',
+        submittedBy: assignedTo || 'Pending owner',
+        submittedOn: existing?.submittedOn || now.toLocaleDateString('en-GB').replace(/\//g, '-'),
+        submittedOnTime:
+            existing?.submittedOnTime ||
+            now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        actionTaken: existing?.actionTaken || {
+            actionTaken: '',
+            solutionImplemented: '',
+            completionDate: dueDate || '',
+            responsiblePerson: assignedTo || '',
+            outcomeResult: '',
+            additionalRemarks: title || '',
+        },
+        evidence: existing?.evidence || {
+            beforePhotos: [],
+            afterPhotos: [],
+            documents: [],
+            videos: [],
+            links: [],
+            attachments: evidence || null,
+        },
+        verification: existing?.verification || {
+            departmentHead: reportTo || '',
+            acknowledgedOn: '',
+            acknowledgedOnTime: '',
+            superAdminDecision: 'Pending',
+            decisionOn: '',
+            decisionOnTime: '',
+            superAdminRemarks: '',
+        },
+        statusTimeline: existing?.statusTimeline || buildStatusTimeline(1),
+    })
+
+    const enriched = {
+        ...record,
+        dueDate: dueDate || existing?.dueDate || '',
+        findingRating: findingRating || existing?.findingRating || '',
+        riskLevel: riskLevel || existing?.riskLevel || '',
+        capaType: 'CAPA',
+        auditStream: 'QUALITY',
+    }
+
+    const next = [enriched, ...getAtrRecords().filter((item) => item.id !== enriched.id && item.atrNumber !== enriched.atrNumber)]
+    saveAtrRecords(next)
+    return enriched
+}
+
+export const hydrateFromApi = (seed = DEFAULT_ATR_RECORDS) => hydrateCampusKey(STORAGE_KEY, seed)
+export const usesApiStore = () => usesCampusApiForKey(STORAGE_KEY)

@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, UserPlus } from 'lucide-react'
 import { toast } from 'react-toastify'
 import UserCreationForm from './Components/UserCreationForm'
-import { ConfirmAction, IntegrationNotice, PageHeader, Surface } from '../ui'
-import { CREATABLE_ROLE_LABELS } from './createdUsersData'
+import { canUseAdminUsersApi, listCreatableRolesApi } from '../../services/adminUsersApi'
 
 const CreateUserPage = ({
     routeBase,
@@ -13,31 +12,57 @@ const CreateUserPage = ({
     fixedRole,
     fixedRoleLabel,
     pageTitle = 'Create User',
-    pageDescription = 'Complete the user profile and set the login email. OTP remains any 6-digit code at sign-in.',
+    pageDescription = 'Complete the user profile and set the login email.',
     submitLabel = 'Create User',
     successMessage = 'User created successfully.',
     onSuccess,
     renderAfterForm,
+    passwordLabel,
+    passwordPlaceholder,
+    passwordHelp,
+    hidePassword = false,
+    staffCode = '',
+    roleOptions = null,
 }) => {
     const navigate = useNavigate()
     const [form, setForm] = useState(defaultForm)
     const [error, setError] = useState('')
-    const [confirmOpen, setConfirmOpen] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
+    const [apiRoleOptions, setApiRoleOptions] = useState(roleOptions)
+
+    useEffect(() => {
+        if (roleOptions || !canUseAdminUsersApi()) return undefined
+        let cancelled = false
+        listCreatableRolesApi()
+            .then((rows) => {
+                if (!cancelled && Array.isArray(rows) && rows.length) {
+                    setApiRoleOptions(rows.map((row) => ({ role: row.role, label: row.label || row.role })))
+                }
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [roleOptions])
 
     const updateField = (key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }))
     }
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
+        if (submitting) return
         setError('')
-        const result = onSubmit(form)
+        setSubmitting(true)
+        let result
+        try {
+            // onSubmit may be synchronous (local store) or return a promise (API).
+            result = await onSubmit(form)
+        } finally {
+            setSubmitting(false)
+        }
         if (!result.success) {
             setError(result.message)
-            setConfirmOpen(false)
             return
         }
 
-        setConfirmOpen(false)
         toast.success(successMessage)
 
         if (onSuccess) {
@@ -49,7 +74,7 @@ const CreateUserPage = ({
     }
 
     return (
-        <section className='space-y-5'>
+        <section className='space-y-6'>
             <button
                 type='button'
                 onClick={() => navigate(routeBase)}
@@ -59,20 +84,30 @@ const CreateUserPage = ({
                 Back to list
             </button>
 
-            <PageHeader title={pageTitle} description={pageDescription} context='Identity and access provisioning' />
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex items-center gap-3 mb-2'>
+                    <div className='p-2 rounded-xl bg-[#515DEF]/10 text-[#515DEF]'>
+                        <UserPlus size={20} />
+                    </div>
+                    <div>
+                        <h1 className='text-2xl font-semibold text-black'>{pageTitle}</h1>
+                        <p className='text-sm text-[#667085] mt-1'>{pageDescription}</p>
+                    </div>
+                </div>
+            </div>
 
-            <IntegrationNotice
-                state='demo'
-                title='Local provisioning only'
-                description='This creates a browser-local profile. The production identity service must issue invitations, establish credentials and record the provisioning audit event.'
-            />
-
-            <Surface title='User profile' description='Required identity fields are validated when you review the account.' contentClassName='p-4 sm:p-5'>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
                 <UserCreationForm
                     form={form}
                     onChange={updateField}
                     fixedRole={fixedRole}
                     fixedRoleLabel={fixedRoleLabel}
+                    passwordLabel={passwordLabel}
+                    passwordPlaceholder={passwordPlaceholder}
+                    passwordHelp={passwordHelp}
+                    hidePassword={hidePassword}
+                    staffCode={staffCode}
+                    roleOptions={apiRoleOptions}
                 />
 
                 {renderAfterForm?.({ form, updateField })}
@@ -82,30 +117,15 @@ const CreateUserPage = ({
                 <div className='mt-6'>
                     <button
                         type='button'
-                        onClick={() => setConfirmOpen(true)}
-                        className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-6 py-2.5 rounded-md hover:opacity-90 cursor-pointer'
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-6 py-2.5 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'
                     >
                         <Save size={16} />
-                        Review {submitLabel.toLowerCase()}
+                        {submitting ? 'Saving…' : submitLabel}
                     </button>
                 </div>
-            </Surface>
-
-            <ConfirmAction
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={handleSubmit}
-                title={`Create ${fixedRoleLabel || CREATABLE_ROLE_LABELS[form.role] || form.role} account?`}
-                description='Review the identity and access consequences before provisioning.'
-                confirmLabel={submitLabel}
-            >
-                <div className='space-y-2'>
-                    <p><strong>Identity:</strong> {[form.firstName, form.lastName].filter(Boolean).join(' ') || 'Name not entered'} · {form.email || 'Email not entered'}</p>
-                    <p><strong>Role:</strong> {fixedRoleLabel || CREATABLE_ROLE_LABELS[form.role] || form.role}</p>
-                    <p><strong>Status:</strong> {form.status}. Inactive accounts cannot sign in.</p>
-                    {fixedRole && <p>New administrators start with dashboard access only. A Super Admin must explicitly grant optional modules after creation.</p>}
-                </div>
-            </ConfirmAction>
+            </div>
         </section>
     )
 }

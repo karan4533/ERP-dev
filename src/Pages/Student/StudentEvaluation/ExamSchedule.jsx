@@ -1,41 +1,101 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import ExamTimeTableModal from '../../Teacher/CreateExamSchedule/Components/ExamTimeTableModal'
-import { getExamSchedules } from '../../Teacher/CreateExamSchedule/createExamScheduleData'
+import { buildTimetableFromSubjects } from '../../Teacher/CreateExamSchedule/createExamScheduleData'
+import {
+    filterStudentVisibleExams,
+    loadMergedExamRecords,
+} from '../../../Common/ExamSchedule/examScheduleData'
+import { useActiveStudent } from '../../../context/ActiveStudentContext'
+import { canUseExamsApi } from '../../../services/examsApi'
 
-const STUDENT_CLASS = '10'
-const STUDENT_SECTION = 'A'
+const classKeysMatch = (left, right) => {
+    const normalize = (value) => String(value || '').trim().toLowerCase().replace(/^grade\s+/, '')
+    return normalize(left) === normalize(right)
+}
+
+const sectionMatches = (examSection, studentSection) => {
+    const label = String(examSection || '').trim()
+    if (!label || /^all$/i.test(label)) return true
+    if (!studentSection) return true
+    const parts = label.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+    return parts.includes(String(studentSection).trim().toLowerCase())
+}
+
+/** Approved campus exams for the student's class (also keeps forwarded-local overlay). */
+const filterPortalExams = (records, student) => {
+    if (!student?.className && !student?.classSection) {
+        return filterStudentVisibleExams(records, student)
+    }
+    const className = student.className || String(student.classSection || '').split(/[-–]/)[0]
+    const section = student.section || String(student.classSection || '').split(/[-–]/)[1] || ''
+
+    const approved = records.filter((row) => {
+        const approval = String(row.approvalStatus || row.status || '').toLowerCase()
+        if (!(approval.includes('approv') || approval.includes('publish'))) return false
+        if (!classKeysMatch(row.className, className)) return false
+        return sectionMatches(row.section, section)
+    })
+    if (approved.length) return approved
+    return filterStudentVisibleExams(records, { ...student, className, section })
+}
 
 const ExamSchedule = () => {
-    const location = useLocation()
-    const [schedules, setSchedules] = useState(() => getExamSchedules())
+    const { activeStudent } = useActiveStudent()
+    const [schedules, setSchedules] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
     const [timeTableModal, setTimeTableModal] = useState(null)
 
     useEffect(() => {
-        setSchedules(getExamSchedules())
-    }, [location.pathname])
+        let cancelled = false
+        setLoading(true)
+        setError('')
+        loadMergedExamRecords()
+            .then((rows) => {
+                if (cancelled) return
+                setSchedules(Array.isArray(rows) ? rows : [])
+            })
+            .catch((err) => {
+                if (cancelled) return
+                setSchedules([])
+                setError(err?.message || 'Could not load exam schedules.')
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => { cancelled = true }
+    }, [])
 
     const filteredSchedules = useMemo(() => {
         const query = search.trim().toLowerCase()
-
-        return schedules.filter((record) => {
-            if (record.approvalStatus !== 'Approved') return false
-            if (record.className !== STUDENT_CLASS || record.section !== STUDENT_SECTION) return false
-
-            if (query) {
-                const haystack = `${record.examId} ${record.examName} ${record.teacherName}`.toLowerCase()
-                if (!haystack.includes(query)) return false
-            }
-
-            return true
-        })
-    }, [schedules, search])
+        return filterPortalExams(schedules, activeStudent)
+            .map((record) => {
+                const timelines = Array.isArray(record.timelines) ? record.timelines : []
+                return {
+                    ...record,
+                    examId: record.examId || record.id,
+                    examName: record.examName || record.name || 'Exam',
+                    classLabel: record.section
+                        ? `${record.className} - ${record.section}`
+                        : (record.className || '—'),
+                    teacherName: record.teacherName || '—',
+                    timetable: buildTimetableFromSubjects(timelines),
+                }
+            })
+            .filter((record) => {
+                if (query) {
+                    const haystack = `${record.examId} ${record.examName} ${record.teacherName}`.toLowerCase()
+                    if (!haystack.includes(query)) return false
+                }
+                return true
+            })
+    }, [schedules, search, activeStudent])
 
     return (
         <section>
@@ -52,9 +112,11 @@ const ExamSchedule = () => {
                     >
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
+                    <p className='text-sm text-[#667085]'>
+                        {canUseExamsApi()
+                            ? 'Showing approved campus exams for your class.'
+                            : 'Offline demo schedules (sign in for campus exams).'}
+                    </p>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
@@ -97,64 +159,61 @@ const ExamSchedule = () => {
                         </div>
                     </div>
                 </div>
+                {error && <p className='mt-4 text-sm text-red-600'>{error}</p>}
             </div>
 
             <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
                     <h2 className='text-xl font-medium text-black'>Exam Schedule List</h2>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
-                <div className='relative overflow-x-auto'>
-                    <table className='w-full text-sm text-left rtl:text-right'>
-                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
-                            <tr className='rounded-lg'>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Exam ID</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Exam Name</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Start Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>End Date</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Teacher Name</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>View Timetable</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredSchedules.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className='px-2 py-8 text-center text-[#667085]'>
-                                        No approved exam schedules found for your class.
-                                    </td>
+                {loading ? (
+                    <p className='text-sm text-[#667085] py-8 text-center'>Loading exam schedules…</p>
+                ) : (
+                    <div className='relative overflow-x-auto'>
+                        <table className='w-full text-sm text-left rtl:text-right'>
+                            <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                                <tr className='rounded-lg'>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Exam ID</th>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Exam Name</th>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Start Date</th>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>End Date</th>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Teacher Name</th>
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>View Timetable</th>
                                 </tr>
-                            ) : (
-                                filteredSchedules.map((record) => (
-                                    <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.examId}</td>
-                                        <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.examName}</td>
-                                        <td className='px-2 py-4'>{record.classLabel ?? `${record.className} - ${record.section}`}</td>
-                                        <td className='px-2 py-4'>{record.startDate}</td>
-                                        <td className='px-2 py-4'>{record.endDate}</td>
-                                        <td className='px-2 py-4'>{record.teacherName}</td>
-                                        <td className='px-2 py-4 rounded-e-lg'>
-                                            <button
-                                                type='button'
-                                                onClick={() => setTimeTableModal(record)}
-                                                className='bg-[#515DEF] text-white text-sm px-3 py-1.5 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer whitespace-nowrap'
-                                            >
-                                                View
-                                            </button>
+                            </thead>
+                            <tbody>
+                                {filteredSchedules.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className='px-2 py-8 text-center text-[#667085]'>
+                                            No approved exam schedules found for your class.
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : (
+                                    filteredSchedules.map((record) => (
+                                        <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
+                                            <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{String(record.examId).slice(0, 8)}</td>
+                                            <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.examName}</td>
+                                            <td className='px-2 py-4'>{record.classLabel}</td>
+                                            <td className='px-2 py-4'>{record.startDate}</td>
+                                            <td className='px-2 py-4'>{record.endDate}</td>
+                                            <td className='px-2 py-4'>{record.teacherName}</td>
+                                            <td className='px-2 py-4 rounded-e-lg'>
+                                                <button
+                                                    type='button'
+                                                    onClick={() => setTimeTableModal(record)}
+                                                    className='bg-[#515DEF] text-white text-sm px-3 py-1.5 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer whitespace-nowrap'
+                                                >
+                                                    View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             <div className='flex justify-between items-center px-4 mt-4'>

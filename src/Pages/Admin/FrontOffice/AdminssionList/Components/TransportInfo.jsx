@@ -26,7 +26,9 @@ const TransportInfo = ({ form, onChange }) => {
     const handleRouteChange = (event) => {
         const nextRoute = event.target.value
         update('route', nextRoute)
-        if (form.busStop && !getBusStopsByRoute(nextRoute).includes(form.busStop)) {
+        // Typed (custom) routes keep a typed stop; only a switch between two known routes clears it.
+        const switchingKnownRoutes = ROUTE_OPTIONS.includes(form.route) && ROUTE_OPTIONS.includes(nextRoute)
+        if (switchingKnownRoutes && form.busStop && !getBusStopsByRoute(nextRoute).includes(form.busStop)) {
             update('busStop', '')
         }
     }
@@ -44,29 +46,43 @@ const TransportInfo = ({ form, onChange }) => {
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='routeList' className='text-base font-medium text-[#1E1E1E]'>Route List:</label>
-                <select id='routeList' value={form.route} onChange={handleRouteChange} disabled={!schoolBusSelected} className={schoolBusSelected ? inputClass : disabledClass}>
-                    <option value=''>{schoolBusSelected ? 'Select Route List' : 'Select School Bus first'}</option>
+                <input
+                    id='routeList'
+                    type='text'
+                    list='routeListOptions'
+                    maxLength={80}
+                    autoComplete='off'
+                    value={form.route}
+                    onChange={handleRouteChange}
+                    disabled={!schoolBusSelected}
+                    placeholder={schoolBusSelected ? 'Choose or type a route' : 'Select School Bus first'}
+                    className={schoolBusSelected ? inputClass : disabledClass}
+                />
+                <datalist id='routeListOptions'>
                     {ROUTE_OPTIONS.map((item) => (
-                        <option key={item} value={item}>{item}</option>
+                        <option key={item} value={item} />
                     ))}
-                </select>
+                </datalist>
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='busStop' className='text-base font-medium text-[#1E1E1E]'>Bus Stop:</label>
-                <select
+                <input
                     id='busStop'
+                    type='text'
+                    list='busStopOptions'
+                    maxLength={80}
+                    autoComplete='off'
                     value={form.busStop}
                     onChange={(event) => update('busStop', event.target.value)}
                     disabled={!schoolBusSelected || !form.route}
+                    placeholder={!schoolBusSelected ? 'Select School Bus first' : form.route ? 'Choose or type a bus stop' : 'Enter route first'}
                     className={schoolBusSelected && form.route ? inputClass : disabledClass}
-                >
-                    <option value=''>
-                        {!schoolBusSelected ? 'Select School Bus first' : form.route ? 'Select Bus Stop' : 'Select route first'}
-                    </option>
+                />
+                <datalist id='busStopOptions'>
                     {busStops.map((item) => (
-                        <option key={item} value={item}>{item}</option>
+                        <option key={item} value={item} />
                     ))}
-                </select>
+                </datalist>
             </div>
         </div>
     )

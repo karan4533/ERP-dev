@@ -1,64 +1,118 @@
-import { useMemo, useState } from 'react'
-import { DataTable, DataToolbar, IntegrationNotice } from '../../../../Common/ui'
+import React, { useMemo } from 'react'
+import { Search } from 'lucide-react'
 import {
-    matchesWalletRole,
     SPENDING_HISTORY,
-    SPENDING_SUMMARY,
+    spendCategoryBadgeColor,
 } from '../walletManagementData'
-import { RoleChip, SummaryCards, UserAvatar } from './WalletShared'
+import {
+    RoleChip,
+    SummaryCards,
+    TableCard,
+    TablePagination,
+    UserAvatar,
+    tdClass,
+    thClass,
+} from './WalletShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency, formatDisplayDate } from '../../financeDomain/financeHelpers'
+import { SOURCE_MODULES } from '../../financeDomain/financeConstants'
 
-const CATEGORY_FILTERS = ['All categories', 'Canteen', 'Stationery', 'Events', 'Other']
+const SpendingHistoryTab = () => {
+    const { transactions, financePersistence } = useFinance()
+    const apiLive = Boolean(financePersistence?.apiEnabled)
 
-const SpendingHistoryTab = ({ spendingHistory = SPENDING_HISTORY, initialRole = 'All Roles' }) => {
-    const [query, setQuery] = useState('')
-    const [category, setCategory] = useState(CATEGORY_FILTERS[0])
-    const rows = useMemo(() => spendingHistory.filter((row) => {
-        if (!matchesWalletRole(row.role, initialRole)) return false
-        if (category !== CATEGORY_FILTERS[0] && row.category !== category) return false
-        const normalizedQuery = query.trim().toLowerCase()
-        if (!normalizedQuery) return true
-        return [row.id, row.user, row.role, row.vendor, row.category, row.dateTime, row.amount]
-            .join(' ')
-            .toLowerCase()
-            .includes(normalizedQuery)
-    }), [category, initialRole, query, spendingHistory])
-    const columns = [
-        { key: 'user', label: 'User', required: true, render: (row) => <UserAvatar initials={row.initials} name={row.user} /> },
-        { key: 'role', label: 'Role', render: (row) => <RoleChip role={row.role} /> },
-        { key: 'vendor', label: 'Vendor / item', required: true },
-        { key: 'category', label: 'Category', render: (row) => <span className='inline-flex rounded-full bg-[var(--erp-indigo-soft)] px-2 py-1 text-xs font-semibold text-[var(--erp-indigo)]'>{row.category}</span> },
-        { key: 'dateTime', label: 'Date & time' },
-        { key: 'amount', label: 'Amount', render: (row) => <span className='font-semibold text-[var(--erp-danger)]'>{row.amount}</span> },
+    const liveRows = useMemo(() => (transactions || [])
+        .filter((row) => row.direction === 'OUT' && (
+            row.sourceModule === SOURCE_MODULES.WALLET
+            || String(row.category || '').toLowerCase().includes('wallet')
+        ))
+        .map((row) => ({
+            id: row.id,
+            initials: String(row.narration || 'W').slice(0, 2).toUpperCase(),
+            user: row.narration || row.vendorId || 'Wallet spend',
+            role: row.role || '—',
+            vendor: row.category || row.sourceModule || 'Wallet',
+            category: row.category || 'Other',
+            dateTime: formatDisplayDate(row.transactionDate) || '—',
+            amount: formatCurrency(row.amount || 0),
+            amountNum: Number(row.amount) || 0,
+        })), [transactions])
+
+    const rows = apiLive ? liveRows : (liveRows.length ? liveRows : SPENDING_HISTORY)
+    const total = rows.reduce((sum, row) => sum + (row.amountNum || 0), 0)
+    const summaryCards = [
+        { label: 'Spend rows', value: String(rows.length), sub: apiLive ? 'Wallet OUT from snapshot' : 'Demo or snapshot', iconTone: 'warning' },
+        { label: 'Total listed', value: formatCurrency(total), sub: 'Sum of table', iconTone: 'danger' },
+        { label: 'Source', value: apiLive ? 'API' : 'Demo', sub: apiLive ? 'No seed spend register' : 'May include offline seed', iconTone: 'success' },
+        { label: 'Note', value: '—', sub: 'Gateway/vendor catalog still illustrative', iconTone: 'warning' },
     ]
-    const resetFilters = () => {
-        setQuery('')
-        setCategory(CATEGORY_FILTERS[0])
-    }
 
     return (
-        <div className='space-y-5'>
-            <IntegrationNotice state='demo' title='Sample spending reference' description='Spending rows and summary cards are demonstration records. Production disputes, merchant evidence and balance effects require the connected wallet ledger.' />
-            <SummaryCards cards={SPENDING_SUMMARY} />
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='wallet-spending-register-title'>
-                <div className='px-4 pt-4 sm:px-5'><h3 id='wallet-spending-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>Spending history</h3></div>
-                <DataToolbar
-                    query={query}
-                    onQueryChange={setQuery}
-                    searchLabel='Search wallet spending'
-                    searchPlaceholder='User, vendor, category or amount…'
-                    resultCount={rows.length}
-                    onReset={resetFilters}
-                    filters={(
-                        <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Category
-                            <select value={category} onChange={(event) => setCategory(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
-                                {CATEGORY_FILTERS.map((item) => <option key={item}>{item}</option>)}
-                            </select>
-                        </label>
-                    )}
-                />
-                <DataTable caption='Wallet spending history' rows={rows} columns={columns} rowKey='id' emptyTitle='No spending records found' emptyDescription='Reset the filters or choose another role to review the sample spending history.' />
-            </section>
-        </div>
+    <div className='space-y-6'>
+        <SummaryCards cards={summaryCards} />
+
+        <TableCard
+            title='Spending history — user wise'
+            filters={(
+                <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
+                    <div className='relative min-w-[160px]'>
+                        <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
+                        <input
+                            type='text'
+                            placeholder='Search user...'
+                            className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
+                        />
+                    </div>
+                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'>
+                        <option>All Categories</option>
+                        <option>Canteen</option>
+                        <option>Stationery</option>
+                        <option>Events</option>
+                        <option>Other</option>
+                    </select>
+                    <input type='date' className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[140px]' />
+                </div>
+            )}
+            footer={<TablePagination summary={`${rows.length} spend entr${rows.length === 1 ? 'y' : 'ies'}`} />}
+        >
+            <table className='w-full text-sm text-left mt-4'>
+                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                    <tr>
+                        <th className={`${thClass} rounded-s-lg`}>User</th>
+                        <th className={thClass}>Role</th>
+                        <th className={thClass}>Vendor / Item</th>
+                        <th className={thClass}>Category</th>
+                        <th className={thClass}>Date & time</th>
+                        <th className={`${thClass} rounded-e-lg`}>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.length === 0 ? (
+                        <tr>
+                            <td colSpan={6} className={`${tdClass} text-[#667085]`}>
+                                No wallet OUT transactions on the campus finance snapshot yet.
+                            </td>
+                        </tr>
+                    ) : rows.map((row) => (
+                        <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                            <td className={`${tdClass} rounded-s-lg`}>
+                                <UserAvatar initials={row.initials} name={row.user} />
+                            </td>
+                            <td className={tdClass}><RoleChip role={row.role} /></td>
+                            <td className={tdClass}>{row.vendor}</td>
+                            <td className={tdClass}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${spendCategoryBadgeColor[row.category] || 'bg-[#EDEEF5] text-[#667085]'}`}>
+                                    {row.category}
+                                </span>
+                            </td>
+                            <td className={tdClass}>{row.dateTime}</td>
+                            <td className={`${tdClass} rounded-e-lg font-semibold text-[#FF5722]`}>{row.amount}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </TableCard>
+    </div>
     )
 }
 

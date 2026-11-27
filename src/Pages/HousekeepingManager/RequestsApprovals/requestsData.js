@@ -1,4 +1,14 @@
-export const REQUESTS = [
+import {
+    ensureCampusSeed,
+    hydrateCampusKey,
+    persistCampusJson,
+    saveCampusJson,
+    setCampusMemory,
+    usesCampusApiForKey,
+    getCampusLoadState,
+} from '../../../services/campusJsonStore'
+
+const DEFAULT_REQUESTS = [
     {
         requestId: 'REQ-HK-2026-005',
         requestType: 'Stock Replenishment',
@@ -137,5 +147,107 @@ export const priorityBadgeColor = {
     Urgent: 'bg-[#FF000033] text-[#FF0000]',
 }
 
+export const EMPTY_REQUEST_FORM = {
+    requestType: '',
+    title: '',
+    description: '',
+    priority: '',
+    estimatedAmount: '',
+    budgetCategory: '',
+    vendor: '',
+    vendorContact: '',
+    quotationName: '',
+    supportingNames: [],
+    lineItems: [
+        { item: '', quantity: '', estimatedCost: '' },
+        { item: '', quantity: '', estimatedCost: '' },
+    ],
+}
+
+export const validateRequestForm = (form) => {
+    if (!REQUEST_TYPE_OPTIONS.includes(form.requestType)) return 'Select a request type.'
+    if (!form.title.trim()) return 'Enter a request title.'
+    if (!form.description.trim()) return 'Enter a description.'
+    if (!PRIORITY_OPTIONS.includes(form.priority)) return 'Select a priority.'
+    return ''
+}
+
+const todayDmy = () => {
+    const now = new Date()
+    return `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`
+}
+
+const nextRequestId = (rows) => {
+    const prefix = `REQ-HK-${new Date().getFullYear()}-`
+    const max = rows.reduce((acc, row) => {
+        const id = String(row.requestId || row.id || '')
+        const serial = id.startsWith(prefix) ? Number(id.slice(prefix.length)) : 0
+        return Number.isFinite(serial) ? Math.max(acc, serial) : acc
+    }, 0)
+    return `${prefix}${String(max + 1).padStart(3, '0')}`
+}
+
+/** Load the latest list first so a new request never overwrites requests saved elsewhere. */
+export async function addRequest(form, { requestedBy } = {}) {
+    if (usesCampusApiForKey(REQUESTS_STORAGE_KEY)) {
+        const loaded = await hydrateRequestsFromApi()
+        if (!loaded) return { success: false, message: 'Could not load the current requests. Please try again.' }
+    }
+    const rows = getRequests()
+    const amount = form.estimatedAmount.trim()
+    const lineItems = (form.lineItems || [])
+        .map((row) => ({
+            item: String(row.item || '').trim(),
+            quantity: String(row.quantity || '').trim(),
+            estimatedCost: String(row.estimatedCost || '').trim(),
+        }))
+        .filter((row) => row.item || row.quantity || row.estimatedCost)
+    const requestId = nextRequestId(rows)
+    const record = {
+        id: requestId,
+        requestId,
+        requestType: form.requestType,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        priority: form.priority,
+        vendor: form.vendor.trim(),
+        vendorContact: form.vendorContact.trim(),
+        amount,
+        estimatedAmount: amount,
+        budgetCategory: form.budgetCategory,
+        submittedDate: todayDmy(),
+        approvalStatus: AUTO_FILLED.status,
+        currentStage: AUTO_FILLED.sentTo,
+        requestedBy: requestedBy || AUTO_FILLED.requestedBy,
+        department: AUTO_FILLED.department,
+        sentTo: AUTO_FILLED.sentTo,
+        status: AUTO_FILLED.status,
+        lineItems,
+        attachments: [form.quotationName, ...(form.supportingNames || [])].filter(Boolean),
+    }
+    const saved = await persistCampusJson(REQUESTS_STORAGE_KEY, [record, ...rows])
+    if (!saved.success) {
+        if (saved.api) setCampusMemory(REQUESTS_STORAGE_KEY, rows, { push: false })
+        return { success: false, message: saved.message || 'The request could not be saved.' }
+    }
+    return { success: true, record }
+}
+
 export const getRequestById = (id) =>
-    REQUESTS.find((entry) => entry.requestId === id)
+    getRequests().find((entry) => entry.requestId === id || entry.id === id)
+
+export const REQUESTS_STORAGE_KEY = 'schoolerp-hk-requests-v1'
+export function getRequests() {
+    return ensureCampusSeed('schoolerp-hk-requests-v1', DEFAULT_REQUESTS)
+}
+export function saveRequests(rows) {
+    return saveCampusJson('schoolerp-hk-requests-v1', rows)
+}
+export function hydrateRequestsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-hk-requests-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-hk-requests-v1', DEFAULT_REQUESTS)
+}
+export function getRequestsLoadState() {
+    return getCampusLoadState(REQUESTS_STORAGE_KEY)
+}
+export const REQUESTS = DEFAULT_REQUESTS

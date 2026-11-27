@@ -1,4 +1,12 @@
 import { CLASSES, SECTIONS, SUBJECTS } from '../AssignedClass/assignedClassData'
+import {
+    canUseExamsApi,
+    createExamApi,
+    listExamsApi,
+    mapExamFromApi,
+    submitExamApi,
+} from '../../../services/examsApi'
+import { mapExamApiToTimetableRecord } from '../../Principal/ExaminationTimetable/examinationTimetableData'
 
 export const APPROVAL_STATUSES = ['Approved', 'Pending', 'Rejected']
 
@@ -205,6 +213,52 @@ const DEFAULT_EXAM_SCHEDULE_LIST = [
     },
 ].map(withTimetable)
 
+const toIsoDate = (value) => {
+    if (!value) return null
+    if (typeof value === 'string') {
+        // dd-mm-yyyy from teacher form
+        const parts = value.split(/[-/]/)
+        if (parts.length === 3 && parts[0].length <= 2) {
+            const [d, m, y] = parts
+            return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        }
+        return value.slice(0, 10)
+    }
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, '0')
+    const day = String(value.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+const mapCampusExamToSchedule = (exam) => {
+    const mapped = mapExamApiToTimetableRecord(exam)
+    const subjects = Array.isArray(mapped.timelines)
+        ? mapped.timelines.map((row) => ({
+            subject: row.subject || '',
+            examDate: row.examDate || '',
+            startTime: row.startTime || '',
+            endTime: row.endTime || '',
+            day: row.day || '',
+            duration: '',
+        }))
+        : []
+    return withTimetable({
+        id: mapped.id,
+        examId: mapped.id,
+        examName: mapped.examName,
+        className: mapped.className,
+        section: mapped.section,
+        classLabel: mapped.section ? `${mapped.className} - ${mapped.section}` : mapped.className,
+        startDate: mapped.startDate,
+        endDate: mapped.endDate,
+        teacherName: mapped.teacherName || '—',
+        submittedDate: '',
+        approvalStatus: mapped.approvalStatus,
+        subjects,
+        source: 'api',
+    })
+}
+
 export const saveExamSchedules = (schedules) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules))
 }
@@ -221,20 +275,26 @@ export const getExamSchedules = () => {
     } catch {
         /* ignore */
     }
-    const seeded = DEFAULT_EXAM_SCHEDULE_LIST
-    saveExamSchedules(seeded)
-    return seeded
+    return []
 }
 
-export const addExamSchedule = (payload) => {
-    const list = getExamSchedules()
-    const maxId = list.reduce((max, item) => {
-        const num = parseInt(String(item.examId).replace('EXM-', ''), 10)
-        return Number.isNaN(num) ? max : Math.max(max, num)
-    }, 1000)
-    const id = `EXM-${maxId + 1}`
+/** Prefer campus GET /exams; offline keeps empty (no demo seed when API mode exists). */
+export async function hydrateExamSchedulesFromApi() {
+    if (!canUseExamsApi()) return getExamSchedules()
+    const rows = await listExamsApi()
+    const mapped = (Array.isArray(rows) ? rows : []).map((row) => mapCampusExamToSchedule({
+        ...mapExamFromApi(row),
+        ...row,
+        timelines: row.timelines || [],
+        section: row.section || '',
+        teacherName: row.teacherName || '',
+    }))
+    saveExamSchedules(mapped)
+    return mapped
+}
 
-    const subjects = payload.subjects.map(({ subject, examDate, startTime, endTime, day, duration }) => ({
+export const addExamSchedule = async (payload) => {
+    const subjects = (payload.subjects || []).map(({ subject, examDate, startTime, endTime, day, duration }) => ({
         subject,
         examDate,
         startTime,
@@ -242,7 +302,72 @@ export const addExamSchedule = (payload) => {
         day,
         duration,
     }))
+    const timelines = subjects
+        .filter((row) => row.day && row.subject && row.startTime && row.endTime)
+        .map((row) => ({
+            day: row.day,
+            subject: row.subject,
+            examDate: toIsoDate(row.examDate) || '',
+            startTime: row.startTime,
+            endTime: row.endTime,
+        }))
 
+    if (canUseExamsApi()) {
+        // Official exam create/submit requires exams.write (Principal/Coordinator). Teachers
+        // keep a read-only schedule view; do not pretend a local draft is campus-approved.
+        let created
+        try {
+            created = await createExamApi({
+                name: payload.examName,
+                examType: 'MIDTERM',
+                className: String(payload.className || '').startsWith('Grade')
+                    ? payload.className
+                    : `Grade ${payload.className}`,
+                section: payload.section || '',
+                teacherName: payload.teacherName || '',
+                startDate: toIsoDate(payload.examDate),
+                endDate: toIsoDate(payload.endDate),
+                timelines,
+            })
+        } catch (err) {
+            const message = String(err?.message || '')
+            if (/403|forbidden|permission|not allowed/i.test(message)) {
+                throw new Error(
+                    'Teachers cannot create the official examination timetable. Ask the Principal or Coordinator (exams.write).',
+                )
+            }
+            throw err
+        }
+        if (created?.id) {
+            try {
+                await submitExamApi(created.id)
+            } catch (err) {
+                const message = String(err?.message || '')
+                if (/403|forbidden|permission|not allowed/i.test(message)) {
+                    throw new Error(
+                        'Exam was created but could not be submitted for Director approval. A Principal or Coordinator must submit it.',
+                    )
+                }
+                /* create succeeded; leave draft for staff with exams.write */
+            }
+        }
+        const record = mapCampusExamToSchedule({
+            ...created,
+            timelines,
+            section: payload.section || '',
+            teacherName: payload.teacherName || '',
+        })
+        const next = [...getExamSchedules().filter((item) => item.id !== record.id), record]
+        saveExamSchedules(next)
+        return record
+    }
+
+    const list = getExamSchedules()
+    const maxId = list.reduce((max, item) => {
+        const num = parseInt(String(item.examId).replace('EXM-', ''), 10)
+        return Number.isNaN(num) ? max : Math.max(max, num)
+    }, 1000)
+    const id = `EXM-${maxId + 1}`
     const record = withTimetable({
         id,
         examId: id,
@@ -257,9 +382,7 @@ export const addExamSchedule = (payload) => {
         approvalStatus: 'Pending',
         subjects,
     })
-
-    const next = [...list, record]
-    saveExamSchedules(next)
+    saveExamSchedules([...list, record])
     return record
 }
 

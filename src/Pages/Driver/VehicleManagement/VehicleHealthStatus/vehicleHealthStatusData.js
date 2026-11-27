@@ -1,3 +1,7 @@
+import { ensureCampusSeed, hydrateCampusKey, saveCampusJson, usesCampusApiForKey } from '../../../../services/campusJsonStore'
+
+const STORAGE_KEY = 'schoolerp-transport-vehicle-health-v1'
+
 export const VEHICLE_NUMBERS = [
     'TN 33 AB 1234',
     'TN 55 AB 1909',
@@ -46,8 +50,22 @@ export const HEALTH_STATUS_RECORDS = [
     },
 ]
 
+export function getHealthRecords() {
+    const seed = usesCampusApiForKey(STORAGE_KEY) ? [] : HEALTH_STATUS_RECORDS
+    return ensureCampusSeed(STORAGE_KEY, seed)
+}
+
+export function saveHealthRecords(rows) {
+    return saveCampusJson(STORAGE_KEY, rows)
+}
+
+export function hydrateHealthRecords() {
+    if (!usesCampusApiForKey(STORAGE_KEY)) return Promise.resolve(false)
+    return hydrateCampusKey(STORAGE_KEY, [])
+}
+
 export const getHealthStatusById = (id) =>
-    HEALTH_STATUS_RECORDS.find((record) => record.id === id)
+    getHealthRecords().find((record) => record.id === id) || null
 
 export const conditionBadgeColor = {
     Excellent: 'bg-[#4CAF501A] text-[#4CAF50]',
@@ -62,6 +80,8 @@ const parseServiceDate = (value) => {
     return new Date(year, month - 1, day)
 }
 
+const plateKey = (value) => String(value || '').replace(/[\s-]/g, '').toUpperCase()
+
 export const filterHealthStatusRecords = ({
     records,
     search = '',
@@ -70,16 +90,16 @@ export const filterHealthStatusRecords = ({
     tyreCondition = '',
     fromDate = null,
     toDate = null,
-}) => records.filter((record) => {
+}) => (Array.isArray(records) ? records : []).filter((record) => {
     const query = search.trim().toLowerCase()
     const matchesSearch = !query || [
         record.vehicleNumber,
         record.remarks,
         record.odometerReading,
         record.fuelLevel,
-    ].some((field) => field.toLowerCase().includes(query))
+    ].some((field) => String(field || '').toLowerCase().includes(query))
 
-    const matchesVehicle = !vehicleNumber || record.vehicleNumber === vehicleNumber
+    const matchesVehicle = !vehicleNumber || plateKey(record.vehicleNumber) === plateKey(vehicleNumber)
     const matchesEngine = !engineStatus || record.engineStatus === engineStatus
     const matchesTyre = !tyreCondition || record.tyreCondition === tyreCondition
 

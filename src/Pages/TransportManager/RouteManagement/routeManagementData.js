@@ -1,20 +1,57 @@
-import { DRIVERS, getDriverDisplayName } from '../DriverManagement/driverManagementData'
-import { VEHICLES } from '../VehicleManagement/vehicleManagementData'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+import { getDriverOptions } from '../DriverManagement/driverManagementData'
+import { getVehicles } from '../VehicleManagement/vehicleManagementData'
+import { getTransportRows, hydrateTransportRows, saveTransportRows, nextPrefixedId } from '../transportCampus'
 
-export const DRIVER_OPTIONS = DRIVERS.map((driver) => ({
-    id: driver.id,
-    label: getDriverDisplayName(driver),
-    contact: driver.mobileNumber,
-}))
+/** @deprecated Use getRouteDriverOptions() — kept for any static imports */
+export const DRIVER_OPTIONS = []
 
-export const VEHICLE_OPTIONS = VEHICLES.map((vehicle) => ({
-    id: vehicle.id,
-    vehicleNumber: vehicle.vehicleNumber,
-    driverName: vehicle.driverName,
-    driverContact: vehicle.driverContact,
-}))
+/** @deprecated Use getRouteVehicleOptions() */
+export const VEHICLE_OPTIONS = []
 
-export const ROUTES = [
+export function getRouteDriverOptions() {
+    return getDriverOptions().map((driver) => ({
+        id: driver.id,
+        label: driver.label,
+        contact: driver.contact,
+    }))
+}
+
+export function getRouteVehicleOptions() {
+    return getVehicles().map((vehicle) => ({
+        id: vehicle.id,
+        vehicleNumber: vehicle.vehicleNumber,
+        driverName: vehicle.driverName,
+        driverContact: vehicle.driverContact,
+        gpsImei: vehicle.gpsImei || vehicle.imei || '',
+        imei: vehicle.gpsImei || vehicle.imei || '',
+    }))
+}
+
+const DEFAULT_ROUTES = [
+    {
+        id: 'RT-ROUTE1',
+        routeName: 'Route 1',
+        startLocation: 'Pickup',
+        endLocation: 'Queen Mira International School',
+        vehicleId: 'VEH-ROUTE1',
+        vehicleNumber: 'TN58BB3769',
+        gpsImei: '355710090439063',
+        imei: '355710090439063',
+        driverName: '',
+        driverContact: '',
+        pickUpTime: '',
+        dropTime: '',
+        yearlyFees: '',
+        halfYearlyFees: '',
+        quarterlyFees: '',
+        monthlyFees: '',
+        supportStaff: '',
+        totalStops: 0,
+        distance: '',
+        estimatedTime: '',
+        stops: [],
+    },
     {
         id: 'RT-1001',
         routeName: 'Route 5 — North Campus',
@@ -165,4 +202,41 @@ export const ROUTES = [
     },
 ]
 
-export const getRouteById = (id) => ROUTES.find((route) => route.id === id) ?? null
+export const getRouteById = (id) => getRoutes().find((route) => route.id === id) ?? null
+
+export const ROUTES_STORAGE_KEY = 'schoolerp-transport-routes-v1'
+
+export function getRoutes() {
+    return getTransportRows(ROUTES_STORAGE_KEY, DEFAULT_ROUTES)
+}
+
+export function saveRoutes(rows) {
+    return saveTransportRows(ROUTES_STORAGE_KEY, rows)
+}
+
+export function hydrateRoutesFromApi() {
+    return hydrateTransportRows(ROUTES_STORAGE_KEY)
+}
+
+export async function upsertRoute(route) {
+    const rows = getRoutes()
+    const nextId = route.id || nextPrefixedId(rows, 'RT-')
+    const record = { stops: [], ...route, id: nextId }
+    const idx = rows.findIndex((row) => row.id === nextId)
+    const next = idx >= 0 ? rows.map((row, i) => (i === idx ? { ...row, ...record } : row)) : [...rows, record]
+    const result = await saveRoutes(next)
+    return { ...result, record }
+}
+
+export async function deleteRoute(id) {
+    const rows = getRoutes()
+    const next = rows.filter((row) => row.id !== id)
+    if (next.length === rows.length) {
+        return { success: false, message: 'Route not found.' }
+    }
+    return saveRoutes(next)
+}
+
+/** Prefer getRoutes() after hydrate — empty in API mode via getTransportRows. */
+export const ROUTES = liveArray(getRoutes)
+

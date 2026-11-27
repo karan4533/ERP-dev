@@ -1,9 +1,28 @@
-import { NavLink } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, ClipboardCheck, ClipboardList, Clock, MapPin, Users } from 'lucide-react'
-import { DataTable, IntegrationNotice, StatusBadge } from '../../../Common/ui'
-import { SUMMARY_CARDS, RECENT_TASKS, LOW_STOCK_ITEMS, PENDING_REQUESTS, RECENT_ANNOUNCEMENTS } from './dashboardData'
+import React, { useEffect, useState } from 'react'
+import {
+    ClipboardList,
+    CheckCircle2,
+    Clock,
+    AlertTriangle,
+    Users,
+    ClipboardCheck,
+    MapPin,
+    Sparkles,
+    Ticket,
+    CalendarDays,
+} from 'lucide-react'
+import {
+    buildHousekeepingDashboard,
+    hydrateHousekeepingDashboardFromApi,
+    taskStatusBadgeColor,
+    requestStatusBadgeColor,
+} from './dashboardData'
 
 const CARD_ICONS = {
+    'Open Tickets': Ticket,
+    'Checklist Pending': ClipboardCheck,
+    'Open Duties': ClipboardList,
+    'Active Schedules': CalendarDays,
     'Active Tasks Today': ClipboardList,
     'Tasks Completed': CheckCircle2,
     'Pending Tasks': Clock,
@@ -12,68 +31,171 @@ const CARD_ICONS = {
     'Pending Requests': ClipboardCheck,
     'Zones Inspected': MapPin,
 }
-const taskColumns = [
-    { key: 'taskId', label: 'Task', required: true },
-    { key: 'title', label: 'Work item', required: true },
-    { key: 'assignedTo', label: 'Assigned to', required: true },
-    { key: 'status', label: 'Workflow state', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
-const stockColumns = [
-    { key: 'item', label: 'Supply', required: true },
-    { key: 'availableQty', label: 'Available', required: true },
-    { key: 'reorderLevel', label: 'Reorder at', required: true },
-]
-const requestColumns = [
-    { key: 'requestId', label: 'Request', required: true },
-    { key: 'type', label: 'Requirement', required: true },
-    { key: 'status', label: 'Decision', required: true, render: (row) => <StatusBadge status={row.status} /> },
-]
-const announcementColumns = [
-    { key: 'title', label: 'Announcement', required: true },
-    { key: 'date', label: 'Published', required: true },
-]
 
-const QueuePanel = ({ title, description, action, children }) => (
-    <article className='overflow-hidden rounded-2xl bg-white shadow-md'>
-        <div className='flex flex-col gap-3 border-b border-[var(--erp-line)] p-4 sm:flex-row sm:items-start sm:justify-between'>
-            <div><h3 className='font-semibold text-[var(--erp-ink)]'>{title}</h3><p className='mt-0.5 text-xs text-[var(--erp-muted)]'>{description}</p></div>
-            {action}
-        </div>
-        {children}
-    </article>
+const Widget = ({ title, children }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4 h-full'>
+        <h3 className='text-lg font-semibold text-black mb-4'>{title}</h3>
+        <div className="relative overflow-x-auto">{children}</div>
+    </div>
 )
 
-const Dashboard = () => (
-    <section className='space-y-5'>
-        <div className='rounded-2xl bg-white p-4 shadow-md sm:p-5'>
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <div><h2 className='text-xl font-semibold text-[var(--erp-ink)]'>Housekeeping operations</h2><p className='mt-1 max-w-3xl text-sm text-[var(--erp-slate)]'>Review delegated work, zone readiness, supply risk and approvals before opening the owning workflow.</p></div>
-                <StatusBadge status='Reference dashboard' />
+const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
+const tdClass = 'px-2 py-3 text-[#667085] text-sm'
+
+const Dashboard = () => {
+    const [data, setData] = useState(() => buildHousekeepingDashboard())
+
+    useEffect(() => {
+        let active = true
+        hydrateHousekeepingDashboardFromApi().then((next) => {
+            if (active) setData(next)
+        })
+        return () => { active = false }
+    }, [])
+
+    const { summaryCards, recentTasks, lowStockItems, pendingRequests, recentAnnouncements } = data
+
+    return (
+        <section className='space-y-6'>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex items-center gap-3'>
+                    <div className='p-2.5 rounded-xl bg-[#515DEF]/10 text-[#515DEF]'>
+                        <Sparkles size={22} />
+                    </div>
+                    <div>
+                        <h2 className='text-xl font-semibold text-black'>Housekeeping Manager Dashboard</h2>
+                        <p className='text-sm text-[#667085] mt-0.5'>Open tickets, checklist completion, duties, schedules, supplies, and store requests from persisted data.</p>
+                    </div>
+                </div>
             </div>
-            <IntegrationNotice state='demo' className='mt-4' title='Reference dashboard' description='KPIs and queues are frontend samples. Production totals must come from task evidence, duty rosters, inspected zones, immutable supply movements and approval events at a declared reporting cutoff.' />
-        </div>
 
-        <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-            {SUMMARY_CARDS.map((card) => {
-                const Icon = CARD_ICONS[card.label] ?? ClipboardList
-                return <article key={card.label} className='rounded-2xl bg-white p-4 shadow-md'><div className='flex items-start justify-between gap-3'><div className='min-w-0'><p className='text-xs text-[var(--erp-muted)]'>{card.label}</p><p className='mt-1 text-xl font-semibold text-[var(--erp-ink)]'>{card.value}</p><p className='mt-1 text-xs text-[var(--erp-slate)]'>{card.sub} · sample</p></div><span className='rounded-xl bg-[var(--erp-indigo-soft)] p-2 text-[var(--erp-indigo)]'><Icon aria-hidden='true' size={18} /></span></div></article>
-            })}
-        </div>
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
+                {summaryCards.map((card) => {
+                    const Icon = CARD_ICONS[card.label] ?? ClipboardList
+                    return (
+                        <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
+                            <div className='flex items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='text-xs text-[#808080]'>{card.label}</p>
+                                    <p className='text-xl font-semibold text-[#1E1E1E] mt-1'>{card.value}</p>
+                                    <p className='text-xs text-[#667085] mt-1'>{card.sub}</p>
+                                </div>
+                                <div className='p-2 rounded-xl bg-[#515DEF]/10 text-[#515DEF] shrink-0'>
+                                    <Icon size={18} />
+                                </div>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
 
-        <div className='grid grid-cols-1 gap-5 xl:grid-cols-2'>
-            <QueuePanel title='Recent task queue' description='Reference assignments; live status updates remain in My tasks.' action={<NavLink to='/housekeeping-manager/task-management/my-tasks' className='text-sm font-semibold text-[var(--erp-indigo)]'>Open my tasks</NavLink>}><DataTable caption='Recent task queue' rows={RECENT_TASKS} columns={taskColumns} rowKey='taskId' /></QueuePanel>
-            <QueuePanel title='Low-stock supply watchlist' description='Supplies below their sample reorder threshold.' action={<NavLink to='/housekeeping-manager/requests-approvals/add-request' className='text-sm font-semibold text-[var(--erp-indigo)]'>Create request</NavLink>}><DataTable caption='Low-stock supply watchlist' rows={LOW_STOCK_ITEMS} columns={stockColumns} rowKey='item' /></QueuePanel>
-            <QueuePanel title='Pending request queue' description='Requests awaiting a governed decision.' action={<NavLink to='/housekeeping-manager/requests-approvals' className='text-sm font-semibold text-[var(--erp-indigo)]'>Open requests</NavLink>}><DataTable caption='Pending request queue' rows={PENDING_REQUESTS} columns={requestColumns} rowKey='requestId' /></QueuePanel>
-            <QueuePanel title='Recent housekeeping announcements' description='Reference communications for the operating team.' action={<NavLink to='/housekeeping-manager/broadcast' className='text-sm font-semibold text-[var(--erp-indigo)]'>Open announcements</NavLink>}><DataTable caption='Recent housekeeping announcements' rows={RECENT_ANNOUNCEMENTS} columns={announcementColumns} rowKey='title' /></QueuePanel>
-        </div>
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                <Widget title="Recent Tasks">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Task ID</th>
+                                <th className={thClass}>Title</th>
+                                <th className={thClass}>Assigned To</th>
+                                <th className={`${thClass} rounded-e-lg`}>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentTasks.length === 0 && (
+                                <tr><td colSpan={4} className={`${tdClass} text-center`}>No tasks recorded yet.</td></tr>
+                            )}
+                            {recentTasks.map((row) => (
+                                <tr key={row.taskId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.taskId}</td>
+                                    <td className={`${tdClass} max-w-[180px] truncate`} title={row.title}>{row.title}</td>
+                                    <td className={tdClass}>{row.assignedTo}</td>
+                                    <td className={tdClass}>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${taskStatusBadgeColor[row.status]}`}>
+                                            {row.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
 
-        <nav aria-label='Housekeeping quick actions' className='flex flex-wrap gap-2 rounded-2xl bg-white p-4 shadow-md'>
-            <NavLink to='/housekeeping-manager/task-management/my-tasks' className='inline-flex min-h-10 items-center rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-indigo)]'>Update my tasks</NavLink>
-            <NavLink to='/housekeeping-manager/inventory' className='inline-flex min-h-10 items-center rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-indigo)]'>Review supplies</NavLink>
-            <NavLink to='/housekeeping-manager/duty-allotment' className='inline-flex min-h-10 items-center rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-indigo)]'>Open duty allotment</NavLink>
-            <NavLink to='/housekeeping-manager/reports' className='inline-flex min-h-10 items-center rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-indigo)]'>Open reports</NavLink>
-        </nav>
-    </section>
-)
+                <Widget title="Low Stock Supplies">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Item</th>
+                                <th className={thClass}>Available Qty</th>
+                                <th className={`${thClass} rounded-e-lg`}>Reorder Level</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lowStockItems.length === 0 && (
+                                <tr><td colSpan={3} className={`${tdClass} text-center`}>No low-stock supplies.</td></tr>
+                            )}
+                            {lowStockItems.map((row) => (
+                                <tr key={row.item} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.item}</td>
+                                    <td className={`${tdClass} text-[#FF5722] font-medium`}>{row.availableQty}</td>
+                                    <td className={tdClass}>{row.reorderLevel}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
+
+                <Widget title="Pending Requests">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Request ID</th>
+                                <th className={thClass}>Type</th>
+                                <th className={`${thClass} rounded-e-lg`}>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pendingRequests.length === 0 && (
+                                <tr><td colSpan={3} className={`${tdClass} text-center`}>No pending requests.</td></tr>
+                            )}
+                            {pendingRequests.map((row) => (
+                                <tr key={row.requestId} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.requestId}</td>
+                                    <td className={tdClass}>{row.type}</td>
+                                    <td className={tdClass}>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${requestStatusBadgeColor[row.status]}`}>
+                                            {row.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
+
+                <Widget title="Recent Announcements">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg">
+                            <tr>
+                                <th className={`${thClass} rounded-s-lg`}>Title</th>
+                                <th className={`${thClass} rounded-e-lg`}>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentAnnouncements.length === 0 && (
+                                <tr><td colSpan={2} className={`${tdClass} text-center`}>No announcements yet.</td></tr>
+                            )}
+                            {recentAnnouncements.map((row) => (
+                                <tr key={row.title} className="border-b border-[#f2f4f7] hover:bg-[#f2f4f7]">
+                                    <td className={`${tdClass} font-medium text-[#1E1E1E] max-w-[220px] truncate`} title={row.title}>{row.title}</td>
+                                    <td className={tdClass}>{row.date}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Widget>
+            </div>
+        </section>
+    )
+}
 
 export default Dashboard

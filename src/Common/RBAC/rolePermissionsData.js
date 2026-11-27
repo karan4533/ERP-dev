@@ -1,4 +1,4 @@
-import { ROLES } from '../../constants/roles.js'
+import { ROLES } from '../../context/AuthContext'
 
 const STORAGE_KEY = 'schoolerp-role-permissions'
 
@@ -71,9 +71,6 @@ const loadAll = () => {
 
 const saveAll = (map) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
-    if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('schoolerp_rbac_permissions_updated'))
-    }
 }
 
 export const getPermissionsForRole = (role) => {
@@ -83,9 +80,6 @@ export const getPermissionsForRole = (role) => {
         ...(all[role] || {}),
     }
 }
-
-export const hasPermissionConfigurationForRole = (role) =>
-    Object.prototype.hasOwnProperty.call(loadAll(), role)
 
 export const setPermissionsForRole = (role, permissions) => {
     const all = loadAll()
@@ -113,18 +107,24 @@ export const getAllRolesForManagement = () =>
         label: ROLE_LABELS[role] || role,
     }))
 
-/** Teacher sidebar id → permission module key. Unmapped ids stay visible when filtering. */
+/**
+ * Teacher/Coordinator sidebar id → permission module key.
+ * Must match sidebarLinks.js ids. Unmapped ids stay visible when filtering.
+ * Student group (id 7) stays unmapped so Students List remains available when mark-entry is off.
+ */
 export const TEACHER_SIDEBAR_PERMISSION_MAP = {
-    4: 'lessonPlans',
+    2: 'attendance',
+    3: 'lessonPlans',
     5: 'taskManagement',
-    6: 'unitTests',
-    7: 'markEntry',
-    8: 'deliverables',
 }
 
 export const getFilteredTeacherSidebarLinks = (teacherSidebarLinks) => {
     const permissions = getPermissionsForRole(ROLES.TEACHER)
-    if (!hasPermissionConfigurationForRole(ROLES.TEACHER)) return teacherSidebarLinks
+    const anyEnabled = ROLE_PERMISSION_MODULES
+        .filter((module) => !module.alwaysOn)
+        .some((module) => permissions[module.key])
+
+    if (!anyEnabled) return teacherSidebarLinks
 
     return teacherSidebarLinks.filter((link) => {
         if (link.id === 1) return true
@@ -136,7 +136,11 @@ export const getFilteredTeacherSidebarLinks = (teacherSidebarLinks) => {
 
 export const getFilteredCoordinatorSidebarLinks = (coordinatorSidebarLinks) => {
     const permissions = getPermissionsForRole(ROLES.COORDINATOR)
-    if (!hasPermissionConfigurationForRole(ROLES.COORDINATOR)) return coordinatorSidebarLinks
+    const anyEnabled = ROLE_PERMISSION_MODULES
+        .filter((module) => !module.alwaysOn)
+        .some((module) => permissions[module.key])
+
+    if (!anyEnabled) return coordinatorSidebarLinks
 
     return coordinatorSidebarLinks.filter((link) => {
         if (link.id === 1) return true

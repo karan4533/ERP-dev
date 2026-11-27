@@ -1,33 +1,33 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import React, { useMemo, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, EllipsisIcon, Plus, Download } from 'lucide-react'
+import { Calendar, EllipsisIcon, Plus, Download } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import ListPagination, { PageSizeSelect } from '../../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../../Common/useListPagination'
+import { emptyListMessage } from '../../../../Common/listPagination'
+import { filterListRows } from '../../../../Common/listFiltering'
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal'
 import {
     documentStatusColor,
     getDocumentCellValue,
-    getStudentDocumentRecords,
     recordStatusBadgeColor,
     RECORD_STATUS_OPTIONS,
     STUDENT_DOCUMENT_TYPES,
 } from './studentDocumentsData'
+import useDocumentRecords from '../useDocumentRecords'
+import { ADMIN_STUDENT_DOCUMENT_PATHS } from '../documentRoutePaths'
 
-const StudentDocuments = () => {
-    const location = useLocation()
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+const StudentDocuments = ({ paths = ADMIN_STUDENT_DOCUMENT_PATHS } = {}) => {
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [records, setRecords] = useState(() => getStudentDocumentRecords())
+    const { records, status: loadStatus, error: loadError } = useDocumentRecords('students')
     const [exportModal, setExportModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
-
-    useEffect(() => {
-        setRecords(getStudentDocumentRecords())
-    }, [location.key])
 
     const filteredRecords = useMemo(() => {
         const query = search.trim().toLowerCase()
@@ -38,6 +38,13 @@ const StudentDocuments = () => {
             return haystack.includes(query)
         })
     }, [records, search, statusFilter])
+    const dateFilteredRecords = useMemo(
+        () => filterListRows(filteredRecords, { fromDate, toDate, dateKeys: ['submittedDate'] }),
+        [filteredRecords, fromDate, toDate],
+    )
+    const pagination = useListPagination(dateFilteredRecords, {
+        resetKey: [search, statusFilter, fromDate?.getTime(), toDate?.getTime()].join('|'),
+    })
 
     return (
         <section>
@@ -48,14 +55,13 @@ const StudentDocuments = () => {
                         onClick={() => {
                             setSearch('')
                             setStatusFilter('')
+                            setFromDate(null)
+                            setToDate(null)
                         }}
                         className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
                     >
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
@@ -131,7 +137,7 @@ const StudentDocuments = () => {
                     <h2 className='text-xl font-medium text-black'>Student Document List</h2>
                     <div className='flex gap-x-2'>
                         <NavLink
-                            to='/admin/documents/add-student-documents'
+                            to={paths.add}
                             className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
                         >
                             <Plus size={16} />
@@ -147,16 +153,7 @@ const StudentDocuments = () => {
                         </button>
                     </div>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                        <option value='40'>40</option>
-                        <option value='50'>50</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
+                <PageSizeSelect pagination={pagination} className='my-2' />
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -177,17 +174,21 @@ const StudentDocuments = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRecords.length === 0 ? (
+                            {dateFilteredRecords.length === 0 ? (
                                 <tr>
                                     <td
                                         colSpan={STUDENT_DOCUMENT_TYPES.length + 6}
                                         className='px-2 py-10 text-center text-[#667085]'
                                     >
-                                        No student documents found.
+                                        {loadStatus === 'loading'
+                                            ? 'Loading student documents…'
+                                            : loadStatus === 'error'
+                                              ? loadError
+                                              : emptyListMessage(records.length)}
                                     </td>
                                 </tr>
                             ) : (
-                                filteredRecords.map((record) => (
+                                pagination.rows.map((record) => (
                                     <tr
                                         key={record.id}
                                         className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'
@@ -226,13 +227,13 @@ const StudentDocuments = () => {
                                                 buttonContent={<EllipsisIcon size={16} className='text-black' />}
                                             >
                                                 <NavLink
-                                                    to={`/admin/documents/view-student-documents/${record.id}`}
+                                                    to={paths.view(record.id)}
                                                     className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                 >
                                                     View
                                                 </NavLink>
                                                 <NavLink
-                                                    to={`/admin/documents/edit-student-documents/${record.id}`}
+                                                    to={paths.edit(record.id)}
                                                     className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                 >
                                                     Edit
@@ -254,33 +255,15 @@ const StudentDocuments = () => {
                 </div>
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {filteredRecords.length} of {filteredRecords.length} entries
-                </p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button
-                        type='button'
-                        className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'
-                    >
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button
-                        type='button'
-                        className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'
-                    >
-                        1
-                    </button>
-                    <button
-                        type='button'
-                        className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'
-                    >
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            <ListPagination pagination={pagination} />
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='student-documents'
+                rows={dateFilteredRecords}
+                exportDescription={<>You are exporting {dateFilteredRecords.length} record(s).</>}
+            />
             <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
         </section>
     )

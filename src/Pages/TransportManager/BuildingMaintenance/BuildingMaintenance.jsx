@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Download, Plus } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { StatusBadge } from '../../../Common/demoDomain/statusBadge.jsx'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 import {
     BUILDING_MAINTENANCE_CATEGORIES,
     BUILDING_MAINTENANCE_STATUSES,
@@ -23,6 +25,8 @@ const EMPTY_DRAFT = {
 }
 
 const BuildingMaintenance = () => {
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const [rows, setRows] = useState(() => getBuildingMaintenanceRows())
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('')
@@ -116,6 +120,7 @@ const BuildingMaintenance = () => {
     }
 
     const handleDelete = async (id) => {
+        if (!showDelete) return
         const result = await deleteBuildingMaintenance(id)
         if (result?.success === false) {
             toast.error(result.message || 'Could not delete record.')
@@ -239,9 +244,11 @@ const BuildingMaintenance = () => {
                                             <button type='button' onClick={() => openEdit(item)} className='text-[#515DEF] text-xs font-medium cursor-pointer'>
                                                 Edit
                                             </button>
-                                            <button type='button' onClick={() => handleDelete(item.id)} className='text-[#FF5722] text-xs font-medium cursor-pointer'>
-                                                Delete
-                                            </button>
+                                            {showDelete ? (
+                                                <button type='button' onClick={() => handleDelete(item.id)} className='text-[#FF5722] text-xs font-medium cursor-pointer'>
+                                                    Delete
+                                                </button>
+                                            ) : null}
                                         </div>
                                     </td>
                                 </tr>

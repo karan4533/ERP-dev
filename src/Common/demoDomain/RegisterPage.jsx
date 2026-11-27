@@ -1,19 +1,24 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { Download, Plus } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Download, Pencil, Plus } from 'lucide-react'
 import { toast } from 'react-toastify'
-import { useSearchParams } from 'react-router-dom'
-import { ensureSeed, nextSerial, saveJson } from './storage'
+import { ensureSeed, nextSerial } from './storage'
+import {
+    getCampusLoadState,
+    hydrateCampusKey,
+    persistCampusJson,
+    persistCampusJsonItem,
+    usesCampusApiForKey,
+} from '../../services/campusJsonStore'
+import { useAuth } from '../../context/AuthContext'
 import { logActivity } from './activityLog'
 import { StatusBadge } from './statusBadge.jsx'
-import Dialog from '../ui/Dialog'
-import FormField from '../ui/FormField'
-import ColumnChooser from '../ui/ColumnChooser'
-import DataTable from '../ui/DataTable'
-import DataToolbar from '../ui/DataToolbar'
-import Pagination from '../ui/Pagination'
-import { paginateRows, parseTableState, serializeTableState } from '../ui/dataTableState'
 
 const inputClass = 'text-sm text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-2 w-full bg-white'
+
+const nowTimeValue = () => {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
 
 export default function RegisterPage({
     title,
@@ -29,20 +34,46 @@ export default function RegisterPage({
     readOnly = false,
     extra,
 }) {
-    const [urlParams, setUrlParams] = useSearchParams()
-    const [initialTableState] = useState(() => parseTableState(urlParams))
     const [items, setItems] = useState(() => ensureSeed(storageKey, seed))
-    const [search, setSearch] = useState(initialTableState.query)
-    const [status, setStatus] = useState(initialTableState.filters.status || '')
-    const [fromDate, setFromDate] = useState(initialTableState.filters.fromDate || '')
-    const [toDate, setToDate] = useState(initialTableState.filters.toDate || '')
-    const [page, setPage] = useState(initialTableState.page)
-    const [pageSize, setPageSize] = useState(initialTableState.pageSize)
-    const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key))
+    const [search, setSearch] = useState('')
+    const [status, setStatus] = useState('')
+    const [fromDate, setFromDate] = useState('')
+    const [toDate, setToDate] = useState('')
+    const [pageSize, setPageSize] = useState(10)
     const [open, setOpen] = useState(false)
     const [draft, setDraft] = useState({})
-    const generatedId = useId().replace(/:/g, '')
-    const formId = `register-form-${generatedId}`
+    const [editingId, setEditingId] = useState(null)
+    const [saving, setSaving] = useState(false)
+    const [loadState, setLoadState] = useState(() => getCampusLoadState(storageKey))
+    const { email: sessionEmail } = useAuth() || {}
+
+    const fieldKeys = useMemo(() => new Set(fields.map((field) => field.key)), [fields])
+    const apiMode = usesCampusApiForKey(storageKey)
+    const loading = loadState.api && (loadState.status === 'idle' || loadState.status === 'loading')
+    const loadFailed = loadState.api && loadState.status === 'failed'
+    // Creating before the server list loads would reuse IDs and hide existing records.
+    const writesLocked = loading || loadFailed
+    const canMarkExit = Boolean(
+        statusKey
+        && fieldKeys.has(statusKey)
+        && fields.some((field) => field.key === statusKey && Array.isArray(field.options) && field.options.includes('Exited')),
+    )
+
+    useEffect(() => {
+        if (!usesCampusApiForKey(storageKey)) return undefined
+        let active = true
+        setLoadState(getCampusLoadState(storageKey))
+        hydrateCampusKey(storageKey, seed).then(() => {
+            if (!active) return
+            setItems(ensureSeed(storageKey, seed))
+            setLoadState(getCampusLoadState(storageKey))
+        })
+        return () => {
+            active = false
+        }
+        // seed is stable per route; storageKey drives re-hydrate
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [storageKey])
 
     const statuses = useMemo(() => {
         if (!statusKey) return []
@@ -60,39 +91,74 @@ export default function RegisterPage({
         return keys.some((key) => String(item[key] ?? '').toLowerCase().includes(query))
     })
 
-    const tableColumns = useMemo(() => columns.map((column, index) => ({
-        ...column,
-        required: column.required || index === 0,
-        render: column.key === statusKey
-            ? (row) => <StatusBadge status={row[column.key]} />
-            : column.render,
-    })), [columns, statusKey])
-    const pagination = paginateRows(filtered, { page, pageSize })
-
-    useEffect(() => {
-        setUrlParams(serializeTableState({
-            query: search,
-            page: pagination.page,
-            pageSize,
-            filters: { status, fromDate, toDate },
-        }), { replace: true })
-    }, [fromDate, pageSize, pagination.page, search, setUrlParams, status, toDate])
+    const visible = filtered.slice(0, Number(pageSize))
 
     const clearFilters = () => {
         setSearch('')
         setStatus('')
         setFromDate('')
         setToDate('')
-        setPage(1)
     }
 
-    const persist = (next, action, recordId, details) => {
-        setItems(next)
-        saveJson(storageKey, next)
-        logActivity({ action, module: title, recordId, details })
+    const closeForm = () => {
+        setOpen(false)
+        setDraft({})
+        setEditingId(null)
     }
 
-    const submit = (event) => {
+    const persistRecord = async (record, action, details) => {
+        setSaving(true)
+        try {
+            if (apiMode) {
+                if (writesLocked) {
+                    toast.error('Records have not loaded from the server yet. Refresh and try again.')
+                    return false
+                }
+                const result = await persistCampusJsonItem(storageKey, record)
+                if (result?.success === false) {
+                    // Nothing is written to the browser: the form stays open so the user can retry.
+                    toast.error(result.message || 'Could not save. Check your connection and try again.')
+                    return false
+                }
+                const saved = result.record || record
+                const id = saved[idField]
+                setItems((prev) => [saved, ...prev.filter((row) => row[idField] !== id)])
+                logActivity({ action, module: title, recordId: id, details })
+                return true
+            }
+            const next = action === 'CREATE'
+                ? [record, ...items]
+                : items.map((row) => (row[idField] === record[idField] ? record : row))
+            const result = await persistCampusJson(storageKey, next)
+            if (result?.success === false) {
+                toast.error(result.message || 'Could not save. Check your connection and try again.')
+                return false
+            }
+            setItems(next)
+            logActivity({ action, module: title, recordId: record[idField], details })
+            return true
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const openCreate = () => {
+        setEditingId(null)
+        setDraft({})
+        setOpen(true)
+    }
+
+    const openEdit = (item) => {
+        const nextDraft = {}
+        fields.forEach((field) => {
+            nextDraft[field.key] = item[field.key] ?? ''
+        })
+        setEditingId(item[idField])
+        setDraft(nextDraft)
+        setOpen(true)
+    }
+
+    const submit = async (event) => {
         event.preventDefault()
         for (const field of fields) {
             if (field.required && !String(draft[field.key] ?? '').trim()) {
@@ -100,16 +166,49 @@ export default function RegisterPage({
                 return
             }
         }
+
+        if (editingId) {
+            const current = items.find((item) => item[idField] === editingId) || {}
+            const record = {
+                ...current,
+                ...draft,
+                [idField]: editingId,
+                updatedAt: new Date().toISOString(),
+            }
+            const ok = await persistRecord(record, 'UPDATE', title)
+            if (!ok) return
+            toast.success(`${title} updated.`)
+            closeForm()
+            return
+        }
+
         const id = nextSerial(idPrefix, items, idField)
         const record = {
             [idField]: id,
             ...draft,
             createdAt: new Date().toISOString(),
         }
-        persist([record, ...items], 'CREATE', id, title)
+        const ok = await persistRecord(record, 'CREATE', title)
+        if (!ok) return
         toast.success(`${title} saved.`)
-        setOpen(false)
-        setDraft({})
+        closeForm()
+    }
+
+    const markExited = async (item) => {
+        if (!canMarkExit || String(item[statusKey] || '') === 'Exited') return
+        const patch = {
+            ...item,
+            [statusKey]: 'Exited',
+            updatedAt: new Date().toISOString(),
+            exitedAt: new Date().toISOString(),
+            exitedByEmail: sessionEmail || '',
+        }
+        if (fieldKeys.has('outTime') && !String(item.outTime || '').trim()) {
+            patch.outTime = nowTimeValue()
+        }
+        const ok = await persistRecord(patch, 'UPDATE', 'Marked Exited')
+        if (!ok) return
+        toast.success('Marked as Exited.')
     }
 
     const exportCsv = () => {
@@ -128,86 +227,141 @@ export default function RegisterPage({
 
     return (
         <section className='space-y-6'>
-            <div className='rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white p-4'>
-                <h2 className='text-xl font-semibold text-[var(--erp-ink)]'>{title}</h2>
-                {description && <p className='mt-1 text-sm text-[var(--erp-slate)]'>{description}</p>}
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex justify-between md:items-center flex-col md:flex-row gap-3'>
+                    <div>
+                        <h2 className='text-xl font-semibold text-black'>{title}</h2>
+                        {description && <p className='text-sm text-[#667085] mt-1'>{description}</p>}
+                    </div>
+                    <button type='button' onClick={clearFilters} className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 rounded-lg cursor-pointer'>Clear Filters</button>
+                </div>
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6'>
+                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>
+                        Search
+                        <input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            className={inputClass}
+                            placeholder='Search records'
+                        />
+                    </label>
+                    {statusKey && (
+                        <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>
+                            Status
+                            <select value={status} onChange={(event) => setStatus(event.target.value)} className={inputClass}>
+                                <option value=''>All</option>
+                                {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </select>
+                        </label>
+                    )}
+                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>
+                        From Date
+                        <input type='date' value={fromDate} onChange={(event) => setFromDate(event.target.value)} className={inputClass} />
+                    </label>
+                    <label className='flex flex-col gap-y-2 text-sm text-[#808080]'>
+                        To Date
+                        <input type='date' value={toDate} onChange={(event) => setToDate(event.target.value)} className={inputClass} />
+                    </label>
+                </div>
             </div>
 
             {extra}
 
-            <div className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white'>
-                <DataToolbar
-                    query={search}
-                    onQueryChange={(value) => { setSearch(value); setPage(1) }}
-                    searchPlaceholder='Search records'
-                    resultCount={filtered.length}
-                    onReset={clearFilters}
-                    filters={(
-                        <>
-                            {statusKey && (
-                                <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Status
-                                    <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
-                                        <option value=''>All statuses</option>
-                                        {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
-                                    </select>
-                                </label>
-                            )}
-                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>From date
-                                <input type='date' value={fromDate} onChange={(event) => { setFromDate(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-3 text-sm' />
-                            </label>
-                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>To date
-                                <input type='date' value={toDate} onChange={(event) => { setToDate(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-3 text-sm' />
-                            </label>
-                        </>
-                    )}
-                    actions={(
-                        <>
-                            {!readOnly && (
-                                <button type='button' onClick={() => setOpen(true)} className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>
-                                    <Plus aria-hidden='true' size={16} /> Add entry
-                                </button>
-                            )}
-                            <button type='button' onClick={exportCsv} className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-ink)]'>
-                                <Download aria-hidden='true' size={16} /> Export CSV
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex justify-between items-center flex-col sm:flex-row gap-3 mb-4'>
+                    <p className='text-sm text-[#515DEF]'>Total Records: {filtered.length}</p>
+                    <div className='flex gap-2'>
+                        {!readOnly && (
+                            <button type='button' onClick={openCreate} disabled={writesLocked} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md cursor-pointer inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed'>
+                                <Plus size={16} /> Add Entry
                             </button>
-                            <ColumnChooser columns={tableColumns} visibleKeys={visibleColumnKeys} onChange={setVisibleColumnKeys} />
-                        </>
-                    )}
-                />
-                <DataTable
-                    caption={title}
-                    rows={pagination.rows}
-                    columns={tableColumns}
-                    visibleColumnKeys={visibleColumnKeys}
-                    rowKey={(row, index) => row[idField] || index}
-                />
-                <Pagination
-                    {...pagination}
-                    onPageChange={setPage}
-                    onPageSizeChange={(value) => { setPageSize(value); setPage(1) }}
-                    pageSizeOptions={[10, 25, 50, 100]}
-                />
+                        )}
+                        <button type='button' onClick={exportCsv} className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md cursor-pointer inline-flex items-center gap-2'>
+                            <Download size={16} /> Export
+                        </button>
+                    </div>
+                </div>
+                <div className='flex gap-x-2 items-center my-2'>
+                    <select value={pageSize} onChange={(event) => setPageSize(event.target.value)} className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
+                        {[10, 20, 30].map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                    <span className='text-sm text-[#515DEF]'>Entries Per Page · showing {visible.length}</span>
+                </div>
+                <div className='relative overflow-x-auto'>
+                    <table className='w-full text-sm text-left'>
+                        <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap'>
+                            <tr>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>S.No</th>
+                                {columns.map((column) => (
+                                    <th key={column.key} className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>{column.label}</th>
+                                ))}
+                                {!readOnly && (
+                                    <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Actions</th>
+                                )}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading && (
+                                <tr><td colSpan={columns.length + (readOnly ? 1 : 2)} className='px-2 py-8 text-center text-[#667085]'>Loading records…</td></tr>
+                            )}
+                            {loadFailed && (
+                                <tr><td colSpan={columns.length + (readOnly ? 1 : 2)} className='px-2 py-8 text-center text-[#B42318]'>
+                                    Could not load records from the server{loadState.error ? `: ${loadState.error}` : ''}. Refresh to try again.
+                                </td></tr>
+                            )}
+                            {!loading && !loadFailed && visible.length === 0 && (
+                                <tr><td colSpan={columns.length + (readOnly ? 1 : 2)} className='px-2 py-8 text-center text-[#667085]'>
+                                    {items.length === 0 ? 'No records yet.' : 'No records match the filters.'}
+                                </td></tr>
+                            )}
+                            {visible.map((item, index) => (
+                                <tr key={item[idField] || index} className='border-b border-[#f2f4f7] text-[#667085]'>
+                                    <td className='px-2 py-4'>{index + 1}</td>
+                                    {columns.map((column) => (
+                                        <td key={column.key} className='px-2 py-4'>
+                                            {column.key === statusKey ? <StatusBadge status={item[column.key]} /> : (item[column.key] ?? '—')}
+                                        </td>
+                                    ))}
+                                    {!readOnly && (
+                                        <td className='px-2 py-4'>
+                                            <div className='flex flex-wrap gap-2'>
+                                                <button
+                                                    type='button'
+                                                    disabled={saving}
+                                                    onClick={() => openEdit(item)}
+                                                    className='inline-flex items-center gap-1 text-xs border border-[#515DEF] text-[#515DEF] rounded px-2 py-1 cursor-pointer disabled:opacity-50'
+                                                >
+                                                    <Pencil size={12} /> Edit
+                                                </button>
+                                                {canMarkExit && String(item[statusKey] || '') !== 'Exited' && (
+                                                    <button
+                                                        type='button'
+                                                        disabled={saving}
+                                                        onClick={() => markExited(item)}
+                                                        className='text-xs border border-[#4CAF50] text-[#4CAF50] rounded px-2 py-1 cursor-pointer disabled:opacity-50'
+                                                    >
+                                                        Mark Exited
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <Dialog
-                open={open}
-                onClose={() => setOpen(false)}
-                title={`Add ${title}`}
-                description='Complete the required fields before saving this browser-demo record.'
-                size='lg'
-                footer={(
-                    <>
-                        <button type='button' onClick={() => setOpen(false)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold'>Cancel</button>
-                        <button type='submit' form={formId} className='min-h-10 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>Save entry</button>
-                    </>
-                )}
-            >
-                    <form id={formId} onSubmit={submit}>
+            {open && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+                    <button type='button' className='absolute inset-0 bg-black/40' onClick={closeForm} aria-label='Close' />
+                    <form onSubmit={submit} className='relative z-10 w-full max-w-2xl bg-white rounded-2xl shadow-lg p-5 max-h-[85vh] overflow-y-auto'>
+                        <h3 className='text-lg font-semibold text-black mb-4'>{editingId ? `Edit ${title}` : `Add ${title}`}</h3>
                         <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                            {fields.map((field) => {
-                                const controlId = `${formId}-${field.key}`
-                                return (
-                                <FormField key={field.key} id={controlId} label={field.label} required={field.required} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}>
+                            {fields.map((field) => (
+                                <label key={field.key} className={`flex flex-col gap-y-2 text-sm text-[#1E1E1E] ${field.type === 'textarea' ? 'sm:col-span-2' : ''}`}>
+                                    {field.label}{field.required ? ' *' : ''}
                                     {field.type === 'select' ? (
                                         <select value={draft[field.key] || ''} onChange={(event) => setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))} className={inputClass}>
                                             <option value=''>Select</option>
@@ -215,15 +369,36 @@ export default function RegisterPage({
                                         </select>
                                     ) : field.type === 'textarea' ? (
                                         <textarea rows={3} value={draft[field.key] || ''} onChange={(event) => setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))} className={inputClass} />
+                                    ) : field.type === 'file' ? (
+                                        <>
+                                            <input
+                                                type='file'
+                                                accept={field.accept || 'image/png,image/jpeg,image/*,.png,.jpg,.jpeg,.pdf,application/pdf'}
+                                                onChange={(event) => {
+                                                    const file = event.target.files?.[0]
+                                                    setDraft((prev) => ({ ...prev, [field.key]: file?.name || '' }))
+                                                }}
+                                                className={inputClass}
+                                            />
+                                            {draft[field.key] ? (
+                                                <span className='text-xs text-[#667085]'>Selected: {draft[field.key]}</span>
+                                            ) : null}
+                                        </>
                                     ) : (
                                         <input type={field.type || 'text'} value={draft[field.key] || ''} onChange={(event) => setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))} className={inputClass} />
                                     )}
-                                </FormField>
-                                )
-                            })}
+                                </label>
+                            ))}
+                        </div>
+                        <div className='flex justify-end gap-3 mt-6'>
+                            <button type='button' onClick={closeForm} className='border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md text-sm cursor-pointer'>Cancel</button>
+                            <button type='submit' disabled={saving} className='bg-[#515DEF] text-white px-4 py-2 rounded-md text-sm cursor-pointer disabled:opacity-50'>
+                                {saving ? 'Saving…' : 'Save'}
+                            </button>
                         </div>
                     </form>
-            </Dialog>
+                </div>
+            )}
         </section>
     )
 }

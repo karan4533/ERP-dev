@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, Moon, Sun } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
-    ATTENDANCE_HISTORY,
     MARKED_STATUSES,
     filterAttendanceHistory,
+    getAttendanceHistory,
+    hydrateAttendanceHistoryFromApi,
     markedStatusBadgeColor,
 } from './attendanceHistoryData'
 import { ATTENDANCE_PERIODS, ATTENDANCE_PHASES, SCHOOL_NAME } from './studentAttendanceData'
@@ -15,6 +16,7 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const AttendanceHistory = () => {
+    const [history, setHistory] = useState(() => getAttendanceHistory())
     const [period, setPeriod] = useState('Morning')
     const [phase, setPhase] = useState('pickup')
     const [search, setSearch] = useState('')
@@ -24,18 +26,23 @@ const AttendanceHistory = () => {
     const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
 
+    useEffect(() => {
+        hydrateAttendanceHistoryFromApi().finally(() => setHistory(getAttendanceHistory()))
+    }, [])
+
     const phaseOptions = ATTENDANCE_PHASES[period]
     const activePhase = phaseOptions.find((item) => item.key === phase)
 
     const filteredRecords = useMemo(() => filterAttendanceHistory({
-        records: ATTENDANCE_HISTORY,
+        records: history,
         search,
         period,
         phase: phase.charAt(0).toUpperCase() + phase.slice(1),
         status,
         fromDate,
         toDate,
-    }), [search, period, phase, status, fromDate, toDate])
+        timeframe,
+    }), [history, search, period, phase, status, fromDate, toDate, timeframe])
 
     const handlePeriodChange = (nextPeriod) => {
         setPeriod(nextPeriod)
@@ -277,7 +284,14 @@ const AttendanceHistory = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='attendancehistory'
+                title='AttendanceHistory'
+                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRecords) ? filteredRecords.length : 0} record(s).</>}
+            />
         </section>
     )
 }

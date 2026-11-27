@@ -1,10 +1,11 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const CATEGORIES = ['Cleaning Chemical', 'Equipment', 'Consumable']
 
 export const UNITS = ['Bottle', 'Packet', 'Box']
 
 export const STATUS_OPTIONS = ['Available', 'Low Stock', 'Out of Stock']
 
-export const INVENTORY_ITEMS = [
+const DEFAULT_INVENTORY_ITEMS = [
     {
         productId: 'HK-PRD-0088',
         productName: 'Floor Cleaner — Lemon (5L)',
@@ -104,4 +105,18 @@ export const statusBadgeColor = {
 }
 
 export const getInventoryItemById = (id) =>
-    INVENTORY_ITEMS.find((entry) => entry.productId === id)
+    getInventoryItems().find((entry) => entry.productId === id)
+
+export const INVENTORY_ITEMS_STORAGE_KEY = 'schoolerp-hk-inventory-v1'
+export function getInventoryItems() {
+    return ensureCampusSeed('schoolerp-hk-inventory-v1', DEFAULT_INVENTORY_ITEMS)
+}
+export function saveInventoryItems(rows) {
+    return saveCampusJson('schoolerp-hk-inventory-v1', rows)
+}
+export function hydrateInventoryItemsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-hk-inventory-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-hk-inventory-v1', DEFAULT_INVENTORY_ITEMS)
+}
+export const INVENTORY_ITEMS = DEFAULT_INVENTORY_ITEMS
+

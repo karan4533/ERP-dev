@@ -22,54 +22,7 @@ export const SOM_SEED = [
 ]
 
 export const RO_SEED = [
-    {
-        id: 'RO-2026-0001',
-        date: '2026-09-20',
-        location: 'Academic Block A Central Cooler',
-        test: 'Complete Physico-Chemical & Microbiological Test',
-        tdsInflow: '640 ppm',
-        tdsOutflow: '82 ppm',
-        phLevel: '7.2',
-        turbidity: '0.3 NTU',
-        result: 'Potable / Clear (IS 10500 Compliant)',
-        status: 'Compliant',
-        certificateRef: 'LAB-CERT-NABL-2026-441.pdf',
-        filterDueDate: '2026-12-15',
-        remarks: 'Taste, clarity and mineral balance optimal. UV lamp checked.',
-        recordedBy: 'Muthukumar (Senior Sanitarian)'
-    },
-    {
-        id: 'RO-2026-0002',
-        date: '2026-09-22',
-        location: 'Cafeteria & Dining Hall RO Plant',
-        test: 'Weekly TDS and Membrane Integrity Inspection',
-        tdsInflow: '680 ppm',
-        tdsOutflow: '90 ppm',
-        phLevel: '7.1',
-        turbidity: '0.4 NTU',
-        result: 'Potable / Clear',
-        status: 'Compliant',
-        certificateRef: 'LAB-CERT-NABL-2026-448.pdf',
-        filterDueDate: '2026-11-30',
-        remarks: 'Carbon pre-filter replaced. Pressure levels normal.',
-        recordedBy: 'Arthi (Housekeeping Supervisor)'
-    },
-    {
-        id: 'RO-2026-0003',
-        date: '2026-09-25',
-        location: 'Science Block B 2nd Floor Dispenser',
-        test: 'Routine Spot Quality Check',
-        tdsInflow: '620 ppm',
-        tdsOutflow: '88 ppm',
-        phLevel: '7.3',
-        turbidity: '0.3 NTU',
-        result: 'Potable / Clear',
-        status: 'Compliant',
-        certificateRef: 'LAB-CERT-NABL-2026-455.pdf',
-        filterDueDate: '2027-01-10',
-        remarks: 'Sanitization of storage tanks completed.',
-        recordedBy: 'Muthukumar (Senior Sanitarian)'
-    }
+    { id: 'RO-2026-0001', date: '2026-09-20', location: 'Block A RO unit', test: 'Taste and clarity check', result: 'Clear', status: 'Recorded', remarks: 'No odour', recordedBy: 'Housekeeping Supervisor' },
 ]
 
 export const LOST_SEED = [

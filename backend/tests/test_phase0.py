@@ -8,10 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import reset_sqlite_memory_schema
 
 
 @pytest.fixture()
 def client():
+    # Shared StaticPool :memory: can retain masters (e.g. Grade 2) from earlier modules.
+    reset_sqlite_memory_schema()
     with TestClient(app) as test_client:
         yield test_client
 

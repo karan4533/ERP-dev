@@ -1,16 +1,60 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Bus, Clock, MapPin, Phone, Route, UserRound } from 'lucide-react'
-import { BUS_ROUTE_ROWS } from './BusRouteTable'
+import { useActiveStudent } from '../../../../context/ActiveStudentContext'
+import { hydrateStudentBusAssignment } from '../studentBusAssignment'
 
 const DetailItem = ({ label, value }) => (
     <div className='flex flex-col gap-y-1'>
         <span className='text-base font-medium text-[#808080]'>{label}</span>
-        <span className='text-sm text-[#1E1E1E] whitespace-pre-wrap wrap-break-word'>{value}</span>
+        <span className='text-sm text-[#1E1E1E] whitespace-pre-wrap wrap-break-word'>{value || '—'}</span>
     </div>
 )
 
 const BusRouteCard = ({ title = 'Bus Route Details' }) => {
-    const route = BUS_ROUTE_ROWS[0]
+    const { activeStudent } = useActiveStudent()
+    const [route, setRoute] = useState(null)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        let cancelled = false
+        setLoading(true)
+        hydrateStudentBusAssignment(activeStudent)
+            .then((view) => {
+                if (!cancelled) setRoute(view)
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+        return () => { cancelled = true }
+    }, [activeStudent])
+
+    if (loading) {
+        return (
+            <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
+                Loading bus assignment…
+            </div>
+        )
+    }
+
+    if (!route) {
+        return (
+            <div className='bg-white rounded-2xl shadow-md p-8 text-center space-y-2'>
+                <h2 className='text-xl font-semibold text-black'>{title}</h2>
+                <p className='text-sm text-[#667085]'>
+                    {activeStudent?.name
+                        ? `No transport route is assigned for ${activeStudent.name} yet.`
+                        : 'No transport route is assigned yet.'}
+                </p>
+                <p className='text-xs text-[#667085]'>
+                    Once Transport Manager enrolls this student on a route, details appear here automatically.
+                </p>
+            </div>
+        )
+    }
+
+    const telHref = route.driverContact
+        ? `tel:${String(route.driverContact).replace(/[^\d+]/g, '')}`
+        : null
 
     return (
         <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -36,7 +80,7 @@ const BusRouteCard = ({ title = 'Bus Route Details' }) => {
 
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
                     <DetailItem label='Driver Name' value={route.driverName} />
-                    <DetailItem label='Driver Contact' value={route.driverContact} />
+                    <DetailItem label='Driver Contact' value={route.driverContact || '—'} />
                     <DetailItem label='Pickup Location' value={route.pickupLocation} />
                     <DetailItem label='Pickup Time' value={route.pickupTime} />
                     <DetailItem label='Drop Location' value={route.dropLocation} />
@@ -79,10 +123,17 @@ const BusRouteCard = ({ title = 'Bus Route Details' }) => {
                             <strong>Driver:</strong> {route.driverName}
                         </span>
                     </div>
-                    <div className='flex gap-x-2 items-center text-sm text-[#0A5DFE] font-medium'>
-                        <Phone size={16} />
-                        {route.driverContact}
-                    </div>
+                    {telHref ? (
+                        <a href={telHref} className='flex gap-x-2 items-center text-sm text-[#0A5DFE] font-medium'>
+                            <Phone size={16} />
+                            {route.driverContact}
+                        </a>
+                    ) : (
+                        <span className='flex gap-x-2 items-center text-sm text-[#667085] font-medium'>
+                            <Phone size={16} />
+                            —
+                        </span>
+                    )}
                 </div>
             </div>
         </div>

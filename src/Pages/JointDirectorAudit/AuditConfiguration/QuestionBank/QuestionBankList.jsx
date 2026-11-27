@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -10,11 +10,13 @@ import {
 } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import { filterListRows } from '../../../../Common/listFiltering'
 import QuestionFormModal from './QuestionFormModal'
 import {
     DEPARTMENT_OPTIONS,
     MANDATORY_FILTER_OPTIONS,
-    QUESTION_BANK,
+    getAuditQuestions,
+    hydrateAuditQuestionsFromApi,
     QUESTION_STATUS_OPTIONS,
     SECTION_OPTIONS,
     createQuestionId,
@@ -29,7 +31,10 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const QuestionBankList = () => {
-    const [questions, setQuestions] = useState(QUESTION_BANK)
+    const [questions, setQuestions] = useState(() => getAuditQuestions())
+    useEffect(() => {
+        hydrateAuditQuestionsFromApi().finally(() => setQuestions(getAuditQuestions()))
+    }, [])
     const [search, setSearch] = useState('')
     const [department, setDepartment] = useState('')
     const [sectionId, setSectionId] = useState('')
@@ -44,35 +49,30 @@ const QuestionBankList = () => {
         []
     )
 
-    const filteredQuestions = useMemo(() => questions
-        .filter((question) => {
-            const searchValue = search.trim().toLowerCase()
-            const matchesSearch = !searchValue
-                || question.id.toLowerCase().includes(searchValue)
-                || question.question.toLowerCase().includes(searchValue)
-            const matchesDepartment = !department || question.department === department
-            const matchesSection = !sectionId || question.sectionId === sectionId
-            const matchesResponseType = !responseType || question.responseType === responseType
-            const matchesMandatory = !mandatoryFilter
-                || mandatoryFilter === 'All'
-                || (mandatoryFilter === 'Mandatory' && question.mandatory)
-                || (mandatoryFilter === 'Optional' && !question.mandatory)
-            const questionStatus = getQuestionStatus(question.active)
-            const matchesStatus = !statusFilter || questionStatus === statusFilter
-
-            return matchesSearch
-                && matchesDepartment
-                && matchesSection
-                && matchesResponseType
-                && matchesMandatory
-                && matchesStatus
+    const filteredQuestions = useMemo(() => {
+        const rows = questions.map((question) => ({
+            ...question,
+            statusLabel: getQuestionStatus(question.active),
+            mandatoryLabel: question.mandatory ? 'Mandatory' : 'Optional',
+        }))
+        const filtered = filterListRows(rows, {
+            search,
+            searchKeys: ['id', 'question'],
+            equals: {
+                department,
+                sectionId,
+                responseType,
+                mandatoryLabel: !mandatoryFilter || mandatoryFilter === 'All' ? '' : mandatoryFilter,
+                statusLabel: statusFilter,
+            },
         })
-        .sort((a, b) => {
+        return [...filtered].sort((a, b) => {
             if (a.sectionName !== b.sectionName) {
                 return a.sectionName.localeCompare(b.sectionName)
             }
             return a.order - b.order
-        }), [questions, search, department, sectionId, responseType, mandatoryFilter, statusFilter])
+        })
+    }, [questions, search, department, sectionId, responseType, mandatoryFilter, statusFilter])
 
     const sectionFilterOptions = useMemo(() => {
         if (!department) return SECTION_OPTIONS
@@ -434,7 +434,14 @@ const QuestionBankList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='questionbanklist'
+                title='QuestionBankList'
+                rows={Array.isArray(filteredQuestions) ? filteredQuestions : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredQuestions) ? filteredQuestions.length : 0} record(s).</>}
+            />
             <QuestionFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

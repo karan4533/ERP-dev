@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 import { RESPONSE_TYPES_LIST } from '../ResponseTypes/responseTypesData'
 
 export const SCORING_RULE_STATUS_OPTIONS = ['Active', 'Inactive']
@@ -46,7 +47,7 @@ export const getResponseTypeLabel = (responseTypeId) => (
     RESPONSE_TYPES_LIST.find((item) => item.id === responseTypeId)?.type ?? ''
 )
 
-export const SCORING_RULES = [
+const DEFAULT_SCORING_RULES = [
     {
         id: 'SR-001',
         responseTypeId: 'RT-001',
@@ -153,3 +154,15 @@ export const getTableNoValue = (rule) => {
 }
 
 export const getTableNaValue = (rule) => formatNaScore(rule.naScore, rule.rule)
+export const SCORING_RULES_STORAGE_KEY = 'schoolerp-jd-audit-scoring-rules-v1'
+export function getAuditScoringRules() {
+    return ensureCampusSeed('schoolerp-jd-audit-scoring-rules-v1', DEFAULT_SCORING_RULES)
+}
+export function saveAuditScoringRules(rows) {
+    return saveCampusJson('schoolerp-jd-audit-scoring-rules-v1', rows)
+}
+export function hydrateAuditScoringRulesFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-scoring-rules-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-scoring-rules-v1', DEFAULT_SCORING_RULES)
+}
+export const SCORING_RULES = DEFAULT_SCORING_RULES

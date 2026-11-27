@@ -51,7 +51,7 @@ const ChangePassword = () => {
                     Current password
                     <div className="relative mt-1">
                         <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A0AEC0]" />
-                        <input className={fieldClass} type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+                        <input className={fieldClass} type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required autoComplete="current-password" />
                     </div>
                 </label>
                 <label className="mt-4 block text-sm text-[#5C6B82]">

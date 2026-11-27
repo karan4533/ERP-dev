@@ -9,6 +9,10 @@ import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 import DeleteRequestModal from '../../../../Common/CommonComponents/DeleteRequestModal';
 
+const EXPORT_ROWS = [
+    {class: 'Class 12', section: 'A', teacher: 'Sandy Selva', subject: 'English', created_by: 'Admin User', created_date: '02/04/2026', scheduled_date: '10/04/2026', start_time: '6:30 PM', end_time: '7:30 PM', link: 'https://meet.google.com/abc-defg-hij'},
+]
+
 const OnlineClass = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -179,7 +183,14 @@ const OnlineClass = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='online-class'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
 

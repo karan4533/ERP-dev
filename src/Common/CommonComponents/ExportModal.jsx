@@ -1,206 +1,191 @@
-import React, { useId, useState } from 'react'
-import { Calendar, Download, FileSpreadsheet, FileText } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { Calendar, X } from 'lucide-react'
 import { toast } from 'react-toastify'
-import Dialog from '../ui/Dialog'
+import { runTableExport } from '../exportDownload'
+import { filterListRows, formatListDate } from '../listFiltering'
 
-/**
- * Standardized Enterprise Export Modal
- * - Formats: Excel (.xlsx) and PDF (.pdf) ONLY (CSV removed per institutional mandate).
- * - Date Range: Fully custom date range selection (From Date & To Date), eliminating 7-day limits.
- * - Download: Automatically triggers real browser file download for the chosen format.
- */
 const ExportModal = ({
     exportModal,
     setExportModal,
     onExport,
-    title = 'Export Data',
-    exportDescription = 'Select your required custom date range and file format for data export.',
-    recordCount = null,
+    rows,
+    columns,
+    filename = 'export',
+    title,
+    exportDescription = (
+        <>
+            Export the currently filtered records. Optionally narrow further by date range before download.
+        </>
+    ),
+    enableDateRange = false,
+    dateKeys = ['createdDate', 'date', 'requestDate', 'issueDate'],
+    // Set when the page has no live dataset (sample-only screens): export is disabled with this message.
+    unavailableReason = '',
 }) => {
-    const today = new Date().toISOString().split('T')[0]
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const [format, setFormat] = useState('excel')
+    const [exporting, setExporting] = useState(false)
+    // Date range starts empty — never hard-code a 7-day (or today) window.
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
 
-    const [format, setFormat] = useState('excel') // 'excel' | 'pdf'
-    const [fromDate, setFromDate] = useState(thirtyDaysAgo)
-    const [toDate, setToDate] = useState(today)
-    const [isExporting, setIsExporting] = useState(false)
-    const groupId = useId().replace(/:/g, '')
+    useEffect(() => {
+        if (!exportModal) return
+        setFormat('excel')
+        setFromDate(null)
+        setToDate(null)
+        setExporting(false)
+    }, [exportModal])
 
-    const close = () => {
-        setIsExporting(false)
-        setExportModal(false)
-    }
-
-    const triggerFileDownload = (fileFormat, startDate, endDate) => {
-        try {
-            const fileName = `export-${startDate}-to-${endDate}.${fileFormat === 'excel' ? 'xlsx' : 'pdf'}`
-            const mimeType = fileFormat === 'excel'
-                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                : 'application/pdf'
-            
-            // Build export payload with metadata
-            const content = fileFormat === 'excel'
-                ? `Export Date: ${new Date().toLocaleString()}\nDate Range: ${startDate} to ${endDate}\nFormat: Microsoft Excel (.xlsx)\nStatus: Verified Complete`
-                : `%PDF-1.4\n% School ERP Export Report\nDate Range: ${startDate} to ${endDate}\nGenerated: ${new Date().toISOString()}`
-            
-            const blob = new Blob([content], { type: mimeType })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = fileName
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-        } catch {
-            /* ignore browser blob errors in test environment */
-        }
-    }
-
-    const submit = (e) => {
-        e?.preventDefault?.()
-        setIsExporting(true)
-
-        if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
-            toast.error('From Date cannot be later than To Date.')
-            setIsExporting(false)
-            return
-        }
-
-        // Trigger real file download
-        triggerFileDownload(format, fromDate, toDate)
-
-        // Invoke custom callback if provided
-        onExport?.({
-            format,
+    const sourceRows = Array.isArray(rows) ? rows : []
+    const exportRows = useMemo(() => {
+        if (!enableDateRange || (!fromDate && !toDate)) return sourceRows
+        return filterListRows(sourceRows, {
             fromDate,
             toDate,
+            dateKeys,
         })
+    }, [sourceRows, enableDateRange, fromDate, toDate, dateKeys])
 
-        toast.success(`Exported ${format === 'excel' ? 'Excel (.xlsx)' : 'PDF (.pdf)'} report successfully for selected date range.`)
-        close()
+    const handleExport = async () => {
+        if (exporting || unavailableReason) return
+        setExporting(true)
+        try {
+            const exportFormat = format === 'pdf' ? 'pdf' : 'excel'
+            if (typeof onExport === 'function') {
+                onExport(exportFormat, {
+                    fromDate,
+                    toDate,
+                    rows: exportRows,
+                })
+                setExportModal(false)
+                return
+            }
+            const rangeLabel = [
+                fromDate ? formatListDate(fromDate) : null,
+                toDate ? formatListDate(toDate) : null,
+            ].filter(Boolean).join(' to ')
+            const result = await runTableExport(exportFormat, {
+                filename,
+                rows: exportRows,
+                columns,
+                title: rangeLabel ? `${title || filename} (${rangeLabel})` : (title || filename),
+            })
+            if (!result.ok) {
+                const message = result.reason === 'empty'
+                    ? 'No records to export for the selected range.'
+                    : result.reason === 'pdf'
+                        ? 'The PDF window was blocked. Allow pop-ups for this site and try again.'
+                        : 'Export failed.'
+                toast.error(message)
+                return
+            }
+            toast.success(
+                exportFormat === 'pdf'
+                    ? `PDF preview opened (${exportRows.length} record(s)). Use Print to save the file.`
+                    : `Exported ${exportRows.length} record(s) as Excel.`,
+            )
+            setExportModal(false)
+        } catch (error) {
+            toast.error(error?.message || 'Export failed.')
+        } finally {
+            setExporting(false)
+        }
     }
 
     return (
-        <Dialog
-            open={exportModal}
-            onClose={close}
-            title={title}
-            description={exportDescription}
-            size='sm'
-            footer={(
-                <>
-                    <button
-                        type='button'
-                        onClick={close}
-                        className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold hover:bg-slate-50 transition cursor-pointer'
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type='button'
-                        onClick={submit}
-                        disabled={isExporting}
-                        className='min-h-10 inline-flex items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-5 text-sm font-semibold text-white hover:opacity-90 transition cursor-pointer disabled:opacity-50'
-                    >
-                        <Download size={16} />
-                        <span>Export {format === 'excel' ? 'Excel (XLSX)' : 'PDF'}</span>
-                    </button>
-                </>
+        <div>
+            {exportModal && (
+                <div className='fixed inset-0 z-500 flex items-center justify-center'>
+                    <div
+                        className="absolute inset-0 bg-black/40"
+                        onClick={() => setExportModal(false)}
+                    />
+
+                    <div className="relative z-10 w-full max-w-lg rounded-xl bg-white shadow-lg p-5 py-4">
+                        <div className='flex justify-between items-center'>
+                            <h2 className='text-xl font-semibold text-black'>Export List</h2>
+                            <button type='button' onClick={() => setExportModal(false)} className='hover:text-red-500 cursor-pointer'>
+                                <X />
+                            </button>
+                        </div>
+                        <div className='pt-4'>
+                            {unavailableReason ? (
+                                <p className='text-sm text-[#B42318] bg-[#FEF3F2] border border-[#FDA29B] rounded-md px-3 py-2'>{unavailableReason}</p>
+                            ) : (
+                                <>
+                                    <p className='text-sm font-normal'>{exportDescription}</p>
+                                    <p className='text-xs text-[#667085] mt-2'>
+                                        {exportRows.length} record(s) ready to export
+                                        {sourceRows.length !== exportRows.length ? ` (from ${sourceRows.length} filtered rows)` : ''}.
+                                    </p>
+                                </>
+                            )}
+
+                            {enableDateRange ? (
+                                <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4'>
+                                    <div className='flex flex-col gap-y-2'>
+                                        <label className='text-sm font-medium text-[#1E1E1E]'>From date</label>
+                                        <div className='relative w-full'>
+                                            <DatePicker
+                                                selected={fromDate}
+                                                onChange={setFromDate}
+                                                isClearable
+                                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                                            />
+                                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                                        </div>
+                                    </div>
+                                    <div className='flex flex-col gap-y-2'>
+                                        <label className='text-sm font-medium text-[#1E1E1E]'>To date</label>
+                                        <div className='relative w-full'>
+                                            <DatePicker
+                                                selected={toDate}
+                                                onChange={setToDate}
+                                                isClearable
+                                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                                            />
+                                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
+
+                            <div className='flex flex-col gap-x-2'>
+                                <label htmlFor="" className='text-base font-medium text-[#1E1E1E] my-4'>Choose Format</label>
+                                <div className='flex w-full items-center gap-x-6'>
+                                    <div className='flex items-center gap-x-2'>
+                                        <input type="radio" name="format" id="excel" checked={format === 'excel'} onChange={() => setFormat('excel')} className='w-4 h-4 cursor-pointer border-[#515DEF] text-[#515DEF]' />
+                                        <label htmlFor="excel">Excel (XLSX)</label>
+                                    </div>
+                                    <div className='flex items-center gap-x-2'>
+                                        <input type="radio" name="format" id="pdf" checked={format === 'pdf'} onChange={() => setFormat('pdf')} className='w-4 h-4 cursor-pointer border-[#515DEF] text-[#515DEF]' />
+                                        <label htmlFor="pdf">PDF</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className='flex gap-x-4 mt-10'>
+                                <button type='button' onClick={() => setExportModal(false)} className='bg-white text-[#77767A] text-sm text-center px-4 py-2.5 rounded-md border border-[#77767A] hover:bg-[#515DEF] hover:text-white hover:border-[#515DEF] transition-all duration-200 cursor-pointer w-full'>
+                                    Cancel
+                                </button>
+                                <button
+                                    type='button'
+                                    disabled={exporting || Boolean(unavailableReason)}
+                                    onClick={handleExport}
+                                    className='bg-[#515DEF] text-white text-sm text-center px-4 py-2.5 rounded-md border border-[#515DEF] hover:opacity-90 transition-all duration-200 cursor-pointer w-full disabled:opacity-60'
+                                >
+                                    {exporting ? 'Exporting…' : 'Export'}
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
             )}
-        >
-            <div className='space-y-4 text-xs pt-1'>
-                {recordCount != null && (
-                    <p className='text-slate-600 font-medium'>
-                        You are exporting <span className='text-[var(--erp-indigo)] font-bold'>{recordCount} records</span> across your selected period.
-                    </p>
-                )}
 
-                {/* Custom Date Range Selection */}
-                <fieldset className='space-y-1.5'>
-                    <legend className='text-xs font-semibold text-slate-800 flex items-center gap-1.5'>
-                        <Calendar size={14} className='text-[var(--erp-indigo)]' />
-                        <span>Custom Date Range (No 7-day limits)</span>
-                    </legend>
-                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1'>
-                        <div>
-                            <label htmlFor={`${groupId}-from`} className='block text-[11px] font-medium text-slate-500 mb-1'>From Date</label>
-                            <input
-                                id={`${groupId}-from`}
-                                type='date'
-                                value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
-                                className='w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 focus:border-[var(--erp-indigo)] focus:outline-none'
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor={`${groupId}-to`} className='block text-[11px] font-medium text-slate-500 mb-1'>To Date</label>
-                            <input
-                                id={`${groupId}-to`}
-                                type='date'
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                className='w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 focus:border-[var(--erp-indigo)] focus:outline-none'
-                            />
-                        </div>
-                    </div>
-                </fieldset>
-
-                {/* Standardized Format Options (PDF & Excel Only) */}
-                <fieldset className='pt-1'>
-                    <legend className='mb-2 text-xs font-semibold text-slate-800'>Standardized File Format</legend>
-                    <div className='grid grid-cols-2 gap-3'>
-                        <label
-                            htmlFor={`${groupId}-excel`}
-                            className={`flex min-h-12 cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition ${
-                                format === 'excel'
-                                    ? 'border-[var(--erp-indigo)] bg-[#F1F2FF] text-[var(--erp-indigo)] font-bold'
-                                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                            }`}
-                        >
-                            <input
-                                id={`${groupId}-excel`}
-                                type='radio'
-                                name={`export-format-${groupId}`}
-                                value='excel'
-                                checked={format === 'excel'}
-                                onChange={() => setFormat('excel')}
-                                className='accent-[var(--erp-indigo)]'
-                            />
-                            <FileSpreadsheet size={18} className='shrink-0' />
-                            <div className='leading-tight'>
-                                <span className='block text-xs font-semibold'>Excel (.xlsx)</span>
-                                <span className='text-[10px] opacity-75 font-normal'>Spreadsheet</span>
-                            </div>
-                        </label>
-
-                        <label
-                            htmlFor={`${groupId}-pdf`}
-                            className={`flex min-h-12 cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition ${
-                                format === 'pdf'
-                                    ? 'border-[var(--erp-indigo)] bg-[#F1F2FF] text-[var(--erp-indigo)] font-bold'
-                                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                            }`}
-                        >
-                            <input
-                                id={`${groupId}-pdf`}
-                                type='radio'
-                                name={`export-format-${groupId}`}
-                                value='pdf'
-                                checked={format === 'pdf'}
-                                onChange={() => setFormat('pdf')}
-                                className='accent-[var(--erp-indigo)]'
-                            />
-                            <FileText size={18} className='shrink-0' />
-                            <div className='leading-tight'>
-                                <span className='block text-xs font-semibold'>PDF (.pdf)</span>
-                                <span className='text-[10px] opacity-75 font-normal'>Document</span>
-                            </div>
-                        </label>
-                    </div>
-                </fieldset>
-            </div>
-        </Dialog>
+        </div>
     )
 }
 

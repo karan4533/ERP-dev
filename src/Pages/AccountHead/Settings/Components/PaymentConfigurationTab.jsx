@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { IntegrationNotice } from '../../../../Common/ui'
 import {
     GST_APPLICABILITY_OPTIONS,
     LATE_FEE_SETTINGS,
@@ -38,7 +37,6 @@ const PaymentConfigurationTab = () => {
 
     return (
         <div className='space-y-6'>
-            <IntegrationNotice state='demo' title='Local configuration preview' description='Changing these controls updates this tab only. Payment methods, tax rules and reminders require validated server configuration before they can affect collections.' />
             <SettingsPanel title='Accepted payment modes'>
                 {paymentModes.map((item) => (
                     <SettingRow

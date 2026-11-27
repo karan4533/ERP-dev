@@ -8,13 +8,13 @@ const AddAsset = () => {
     const navigate = useNavigate()
     const [assetModal, setAssetModal] = useState(false)
 
-    const handleSave = (event) => {
+    const handleSave = async (event) => {
         event.preventDefault()
         const data = new FormData(event.currentTarget)
         const assetName = String(data.get('assetName') || '').trim()
         const category = String(data.get('category') || '')
         if (!assetName || !category) return
-        addAsset({
+        await addAsset({
             assetName,
             category,
             brand: String(data.get('brand') || ''),

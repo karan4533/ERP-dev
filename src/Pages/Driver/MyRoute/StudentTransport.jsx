@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
-    STUDENT_TRANSPORTS,
+    getDriverStudentTransports,
+    hydrateDriverStudentTransportsFromApi,
     TRANSPORT_STATUSES,
     filterStudentTransports,
 } from './studentTransportData'
@@ -19,14 +20,19 @@ const StudentTransport = () => {
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
+    const [records, setRecords] = useState(() => getDriverStudentTransports())
+
+    useEffect(() => {
+        hydrateDriverStudentTransportsFromApi().finally(() => setRecords(getDriverStudentTransports()))
+    }, [])
 
     const filteredRecords = useMemo(() => filterStudentTransports({
-        records: STUDENT_TRANSPORTS,
+        records,
         search,
         status,
         fromDate,
         toDate,
-    }), [search, status, fromDate, toDate])
+    }), [records, search, status, fromDate, toDate])
 
     const clearFilters = () => {
         setSearch('')
@@ -202,7 +208,14 @@ const StudentTransport = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='studenttransport'
+                title='StudentTransport'
+                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRecords) ? filteredRecords.length : 0} record(s).</>}
+            />
         </section>
     )
 }

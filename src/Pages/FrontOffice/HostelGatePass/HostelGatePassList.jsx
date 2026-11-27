@@ -1,14 +1,16 @@
-import React, { useMemo, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus } from 'lucide-react'
+import { Calendar, Download, EllipsisIcon, Plus } from 'lucide-react'
 import mo_user from '../../../assets/images/no-profile.png'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { useAuth } from '../../../Context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
+import ListPagination, { PageSizeSelect } from '../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../Common/useListPagination'
+import { emptyListMessage } from '../../../Common/listPagination'
+import { filterListRows } from '../../../Common/listFiltering'
 import {
     FINAL_STATUSES,
     approvalStatusColor,
@@ -17,27 +19,57 @@ import {
     finalStatusBadgeColor,
     formatOutTimeForDisplay,
     getHostelGatePasses,
+    getHostelPrincipalApproval,
+    hydrateHostelGatePassesFromApi,
 } from './hostelGatePassData'
+import { frontOfficeApiOn } from '../frontOfficeStore'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 
 const HostelGatePassList = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
+    const location = useLocation()
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('')
-    const [entriesPerPage, setEntriesPerPage] = useState(10)
     const [exportModal, setExportModal] = useState(false)
-    const [records, setRecords] = useState(() => getHostelGatePasses())
+    const [records, setRecords] = useState(() => (frontOfficeApiOn() ? [] : getHostelGatePasses()))
+
+    useEffect(() => {
+        if (!frontOfficeApiOn()) {
+            setRecords(getHostelGatePasses())
+            return undefined
+        }
+        let active = true
+        hydrateHostelGatePassesFromApi()
+            .then((rows) => {
+                if (active) setRecords(rows)
+            })
+            .catch(() => {
+                if (active) setRecords([])
+            })
+        return () => {
+            active = false
+        }
+    }, [location.key])
 
     const refresh = () => setRecords(getHostelGatePasses())
 
     const filteredRecords = useMemo(
-        () => filterHostelGatePasses(records, { search, status }),
-        [records, search, status],
+        () => filterListRows(filterHostelGatePasses(records, { search, status }), {
+            fromDate,
+            toDate,
+            dateKeys: ['outDate', 'returnDate'],
+        }),
+        [records, search, status, fromDate, toDate],
     )
 
-    const visibleRecords = filteredRecords.slice(0, entriesPerPage)
+    const pagination = useListPagination(filteredRecords, {
+        resetKey: [search, status, fromDate?.getTime(), toDate?.getTime()].join('|'),
+    })
+    const visibleRecords = pagination.rows
 
     const clearFilters = () => {
         setSearch('')
@@ -46,10 +78,15 @@ const HostelGatePassList = () => {
         setToDate(null)
     }
 
-    const handleDelete = (id) => {
-        deleteHostelGatePass(id)
-        refresh()
-        toast.success('Hostel gate pass deleted.')
+    const handleDelete = async (id) => {
+        if (!showDelete) return
+        try {
+            await deleteHostelGatePass(id)
+            refresh()
+            toast.success('Hostel gate pass deleted.')
+        } catch (error) {
+            toast.error(error?.message || 'Could not delete hostel gate pass.')
+        }
     }
 
     return (
@@ -63,9 +100,6 @@ const HostelGatePassList = () => {
                     >
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
@@ -145,20 +179,7 @@ const HostelGatePassList = () => {
                         </button>
                     </div>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select
-                        value={entriesPerPage}
-                        onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-                        className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'
-                    >
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={30}>30</option>
-                        <option value={40}>40</option>
-                        <option value={50}>50</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
+                <PageSizeSelect pagination={pagination} className='my-2' />
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -182,7 +203,7 @@ const HostelGatePassList = () => {
                             {visibleRecords.length === 0 ? (
                                 <tr>
                                     <td colSpan={13} className='px-2 py-8 text-center text-[#667085]'>
-                                        No hostel gate passes found.
+                                        {emptyListMessage(records.length)}
                                     </td>
                                 </tr>
                             ) : (
@@ -209,8 +230,8 @@ const HostelGatePassList = () => {
                                             </span>
                                         </td>
                                         <td className='px-2 py-4'>
-                                            <span className={`font-medium whitespace-nowrap ${approvalStatusColor[record.principalApproval ?? 'Approved'] ?? ''}`}>
-                                                {record.principalApproval ?? 'Approved'}
+                                            <span className={`font-medium whitespace-nowrap ${approvalStatusColor[getHostelPrincipalApproval(record)] ?? ''}`}>
+                                                {getHostelPrincipalApproval(record)}
                                             </span>
                                         </td>
                                         <td className='px-2 py-4'>
@@ -232,7 +253,7 @@ const HostelGatePassList = () => {
                                                 >
                                                     Edit
                                                 </NavLink>
-                                                {canDelete && (
+                                                {showDelete ? (
                                                     <button
                                                         type='button'
                                                         onClick={() => handleDelete(record.id)}
@@ -240,7 +261,7 @@ const HostelGatePassList = () => {
                                                     >
                                                         Delete
                                                     </button>
-                                                )}
+                                                ) : null}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -251,26 +272,22 @@ const HostelGatePassList = () => {
                 </div>
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    {filteredRecords.length === 0
-                        ? 'Showing 0 entries'
-                        : `Showing 1 to ${visibleRecords.length} of ${filteredRecords.length} entries`}
-                </p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            <ListPagination pagination={pagination} />
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='hostel-gate-passes'
+                rows={filteredRecords.map((r) => ({
+                    id: r.id || r.publicId,
+                    studentName: r.studentName,
+                    classSection: r.classSection,
+                    hostel: r.hostel,
+                    outDate: r.outDate,
+                    status: r.status,
+                }))}
+                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'}.</>}
+            />
         </section>
     )
 }

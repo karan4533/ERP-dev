@@ -69,10 +69,15 @@ export const normalizeRoleKey = (role) => {
     if (clean === 'coordinator') return ROLES.COORDINATOR
     if (clean === 'principal') return ROLES.PRINCIPAL
     if (clean === 'director') return ROLES.DIRECTOR
+    if (clean === 'managingdirector' || clean === 'md') return ROLES.MANAGING_DIRECTOR
     if (clean === 'gatekeeper') return ROLES.GATEKEEPER
     if (clean === 'gatekeepermanager') return ROLES.GATEKEEPER_MANAGER
     if (clean === 'hr') return ROLES.HR
     if (clean === 'accounthead' || clean === 'accounts') return ROLES.ACCOUNT_HEAD
+    if (clean === 'financemanager') return ROLES.FINANCE_MANAGER
+    if (clean === 'accountassistant') return ROLES.ACCOUNT_ASSISTANT
+    if (clean === 'financeassistant') return ROLES.FINANCE_ASSISTANT
+    if (clean === 'hostelwarden') return ROLES.HOSTEL_WARDEN
     if (clean === 'librarian') return ROLES.LIBRARIAN
     if (clean === 'driver' || clean === 'vandriver') return ROLES.DRIVER
     if (clean === 'student') return ROLES.STUDENT
@@ -125,6 +130,11 @@ export const ROLE_TO_BASE_PATH = Object.freeze({
     [ROLES.PRO]: '/pro',
     [ROLES.FILE_ROOM]: '/file-room',
     [ROLES.CCTV]: '/cctv',
+    [ROLES.HOSTEL_WARDEN]: '/hostel-warden',
+    [ROLES.MANAGING_DIRECTOR]: '/director',
+    [ROLES.FINANCE_MANAGER]: '/account-head',
+    [ROLES.ACCOUNT_ASSISTANT]: '/account-head',
+    [ROLES.FINANCE_ASSISTANT]: '/account-head',
 })
 
 /**
@@ -205,6 +215,13 @@ const ROLE_NAVIGATION_PROVIDERS = {
     [ROLES.PRO]: () => proSidebarLinks,
     [ROLES.FILE_ROOM]: () => fileRoomSidebarLinks,
     [ROLES.CCTV]: () => cctvSidebarLinks,
+    [ROLES.MANAGING_DIRECTOR]: () => directorSidebarLinks,
+    [ROLES.FINANCE_MANAGER]: () => accountHeadSidebarLinks,
+    [ROLES.ACCOUNT_ASSISTANT]: () => accountHeadSidebarLinks,
+    [ROLES.FINANCE_ASSISTANT]: () => accountHeadSidebarLinks,
+    [ROLES.HOSTEL_WARDEN]: () => [
+        { id: 1, title: 'Hostel Management', to: '/hostel-warden/dashboard', icon: ShieldCheck, group: 'department', role: ROLES.HOSTEL_WARDEN },
+    ],
 }
 
 /**

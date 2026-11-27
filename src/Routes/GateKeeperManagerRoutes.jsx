@@ -1,6 +1,5 @@
-import AttendanceAndLeaveWorkspace from '../Common/AttendanceAndLeave/AttendanceAndLeaveWorkspace'
-import { EnterpriseOperationsRoutes } from './EnterpriseOperationsRoutes'
 import React from 'react'
+import AssignedAuditObservations from '../Common/auditDomain/AssignedAuditObservations'
 import { Navigate, Route, Routes as ReactRoutes, useParams } from 'react-router-dom'
 import Dashboard from '../Pages/GateKeeperManager/Dashboard/Dashboard'
 import AssignDutyList from '../Pages/GateKeeperManager/AssignDuty/AssignDutyList'
@@ -23,6 +22,7 @@ import AcademicCalendar from '../Pages/GateKeeperManager/AcademicCalendar/Academ
 import MyAttendance from '../Pages/GateKeeperManager/Attendance/MyAttendance'
 import GatekeepersAttendance from '../Pages/GateKeeperManager/Attendance/GatekeepersAttendance'
 import Notifications from '../Pages/GateKeeperManager/Notifications/Notifications'
+import CameraRegister from '../Pages/Admin/CameraManagement/CameraRegister'
 import { TaskManagementRoutes } from '../Common/TaskManagement/TaskManagementRoutes'
 
 const LegacyLeaveApprovalViewRedirect = () => {
@@ -37,10 +37,10 @@ const GateKeeperManagerRoutes = () => {
             <Route path="/gatekeeper-manager/assign-duty-list" element={<AssignDutyList />} />
             <Route path="/gatekeeper-manager/assign-duty" element={<AssignDuty />} />
             <Route path="/gatekeeper-manager/leave-request" element={<Navigate to="/gatekeeper-manager/leave-request/my-requests" replace />} />
-            <Route path="/gatekeeper-manager/leave-request/my-requests" element={<AttendanceAndLeaveWorkspace defaultTab="my-leaves" />} />
+            <Route path="/gatekeeper-manager/leave-request/my-requests" element={<MyLeaveRequests />} />
             <Route path="/gatekeeper-manager/leave-request/my-requests/add" element={<AddLeaveRequest />} />
             <Route path="/gatekeeper-manager/leave-request/my-requests/view/:id" element={<ViewMyLeaveRequest />} />
-            <Route path="/gatekeeper-manager/leave-request/received" element={<AttendanceAndLeaveWorkspace defaultTab="received-leaves" />} />
+            <Route path="/gatekeeper-manager/leave-request/received" element={<ReceivedLeaveRequests />} />
             <Route path="/gatekeeper-manager/leave-request/received/view/:id" element={<ViewReceivedLeaveRequest />} />
             <Route path="/gatekeeper-manager/leave-approval-list" element={<Navigate to="/gatekeeper-manager/leave-request/received" replace />} />
             <Route path="/gatekeeper-manager/leave-approval-list/view/:id" element={<LegacyLeaveApprovalViewRedirect />} />
@@ -49,11 +49,11 @@ const GateKeeperManagerRoutes = () => {
             <Route path="/gatekeeper-manager/add-gatekeeper-broadcast" element={<AddGatekeeperAnnouncement />} />
             <Route path="/gatekeeper-manager/gatekeeper-broadcast-list/view/:id" element={<ViewGatekeeperAnnouncement />} />
             <Route path="/gatekeeper-manager/attendance" element={<Navigate to="/gatekeeper-manager/attendance/my-attendance" replace />} />
-            <Route path="/gatekeeper-manager/attendance-and-leave" element={<AttendanceAndLeaveWorkspace defaultTab="overview" />} />
-            <Route path="/gatekeeper-manager/attendance/my-attendance" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
-            <Route path="/gatekeeper-manager/attendance/gatekeepers-attendance" element={<AttendanceAndLeaveWorkspace defaultTab="records" />} />
+            <Route path="/gatekeeper-manager/attendance/my-attendance" element={<MyAttendance />} />
+            <Route path="/gatekeeper-manager/attendance/gatekeepers-attendance" element={<GatekeepersAttendance />} />
             <Route path="/gatekeeper-manager/academic-calendar" element={<AcademicCalendar />} />
             <Route path="/gatekeeper-manager/notifications" element={<Notifications />} />
+            <Route path="/gatekeeper-manager/camera-management" element={<CameraRegister />} />
             {TaskManagementRoutes({ basePath: '/gatekeeper-manager' })}
             <Route path="/gatekeeper-manager/communication" element={<Navigate to="/gatekeeper-manager/communication/inbox" replace />} />
             <Route path="/gatekeeper-manager/communication/inbox" element={<CommunicationInbox />} />
@@ -63,10 +63,8 @@ const GateKeeperManagerRoutes = () => {
             <Route path="/gatekeeper-manager/escalation-management" element={<EscalationList />} />
             <Route path="/gatekeeper-manager/escalation-management/add-escalation" element={<AddEscalation />} />
             <Route path="/gatekeeper-manager/escalation-management/view/:id" element={<ViewEscalation />} />
-            {/* Enterprise Functional Operations (Stores, Gate Pass, File Room, Ticketing, Monitoring, Lost & Found) */}
-            {EnterpriseOperationsRoutes({ basePath: '/gatekeeper-manager', role: 'gatekeeper-manager' })}
-
             <Route path="*" element={<Navigate to="/gatekeeper-manager/dashboard" replace />} />
+            <Route path="/gatekeeper-manager/audit-observations" element={<AssignedAuditObservations />} />
         </ReactRoutes>
     )
 }

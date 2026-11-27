@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, Upload } from 'lucide-react'
+import FileUploadField from '../../../../../Common/CommonComponents/FileUploadField'
+import { useAssignedClassSectionSubject } from '../../../../../Common/Teacher/useAssignedClassSectionSubject'
+import { canUseAcademicFileUploads } from '../../../../../services/academicAttachments'
 import { CLASSES, SECTIONS, SUBJECTS } from '../../../AssignedClass/assignedClassData'
 
 const inputClass =
@@ -22,10 +25,39 @@ const formatDate = (date) => {
 }
 
 const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
+    const apiMode = canUseAcademicFileUploads()
     const [assessmentType, setAssessmentType] = useState('')
+    const [className, setClassName] = useState('')
+    const [section, setSection] = useState('')
+    const [subject, setSubject] = useState('')
     const [assignedDate, setAssignedDate] = useState(new Date())
     const [dueDate, setDueDate] = useState(new Date())
     const [attachmentName, setAttachmentName] = useState('')
+    const [pendingFiles, setPendingFiles] = useState([])
+
+    const {
+        assignments,
+        classOptions,
+        sectionOptions,
+        subjectOptions,
+        applyClassChange,
+        applySectionChange,
+    } = useAssignedClassSectionSubject({
+        className,
+        section,
+        fallbackClasses: CLASSES,
+        fallbackSections: SECTIONS,
+        fallbackSubjects: SUBJECTS,
+    })
+
+    useEffect(() => {
+        if (!assignments.ready || !assessmentType) return
+        if (className || !classOptions[0]) return
+        const next = applyClassChange(classOptions[0], { section, subject })
+        setClassName(next.className)
+        setSection(next.section)
+        setSubject(next.subject)
+    }, [assignments.ready, assessmentType, classOptions, className, section, subject, applyClassChange])
 
     const isHomework = assessmentType === 'Homework'
     const isAssignment = assessmentType === 'Assignment'
@@ -37,15 +69,18 @@ const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
 
         onSubmit({
             assessmentType: formData.get('assessmentType'),
-            className: formData.get('className'),
-            section: formData.get('section'),
-            subject: formData.get('subject'),
+            className,
+            section,
+            subject,
             assignmentTitle: formData.get('title'),
             assignmentDescription: formData.get('description'),
             totalMarks: isAssignment ? formData.get('totalMarks') : undefined,
             assignedDate: formatDate(assignedDate),
             dueDate: formatDate(dueDate),
-            attachment: attachmentName || '—',
+            attachment: apiMode
+                ? (pendingFiles[0]?.name || '—')
+                : (attachmentName || '—'),
+            pendingFiles: apiMode ? pendingFiles : [],
         })
     }
 
@@ -70,30 +105,69 @@ const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
 
                 {assessmentType && (
                     <>
+                        {!assignments.ready ? (
+                            <p className='text-sm text-[#667085] sm:col-span-2 lg:col-span-3'>Loading your assigned classes…</p>
+                        ) : null}
+                        {assignments.emptyReason && assignments.ready ? (
+                            <p className='text-sm text-[#E65100] sm:col-span-2 lg:col-span-3'>{assignments.emptyReason}</p>
+                        ) : null}
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor='class-name' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
-                            <select id='class-name' name='className' required className={selectClass}>
-                                <option value=''>--Select--</option>
-                                {CLASSES.map((item) => (
+                            <select
+                                id='class-name'
+                                name='className'
+                                required
+                                value={className}
+                                disabled={!classOptions.length}
+                                onChange={(event) => {
+                                    const next = applyClassChange(event.target.value, { section, subject })
+                                    setClassName(next.className)
+                                    setSection(next.section)
+                                    setSubject(next.subject)
+                                }}
+                                className={selectClass}
+                            >
+                                <option value=''>{classOptions.length ? '--Select--' : 'No assigned classes'}</option>
+                                {classOptions.map((item) => (
                                     <option key={item} value={item}>{item}</option>
                                 ))}
                             </select>
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor='section' className='text-base font-medium text-[#1E1E1E]'>Section:</label>
-                            <select id='section' name='section' required className={selectClass}>
-                                <option value=''>--Select--</option>
-                                {SECTIONS.map((item) => (
+                            <select
+                                id='section'
+                                name='section'
+                                required
+                                value={section}
+                                disabled={!sectionOptions.length}
+                                onChange={(event) => {
+                                    const next = applySectionChange(event.target.value, { className, subject })
+                                    setSection(next.section)
+                                    setSubject(next.subject)
+                                }}
+                                className={selectClass}
+                            >
+                                <option value=''>{sectionOptions.length ? '--Select--' : 'Select class first'}</option>
+                                {sectionOptions.map((item) => (
                                     <option key={item} value={item}>{item}</option>
                                 ))}
                             </select>
                         </div>
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor='subject' className='text-base font-medium text-[#1E1E1E]'>Subject:</label>
-                            <select id='subject' name='subject' required className={selectClass}>
-                                <option value=''>--Select--</option>
-                                {SUBJECTS.map((subject) => (
-                                    <option key={subject} value={subject}>{subject}</option>
+                            <select
+                                id='subject'
+                                name='subject'
+                                required
+                                value={subject}
+                                disabled={!subjectOptions.length}
+                                onChange={(event) => setSubject(event.target.value)}
+                                className={selectClass}
+                            >
+                                <option value=''>{subjectOptions.length ? '--Select--' : 'No assigned subjects'}</option>
+                                {subjectOptions.map((item) => (
+                                    <option key={item} value={item}>{item}</option>
                                 ))}
                             </select>
                         </div>
@@ -167,23 +241,37 @@ const HomeFunForm = ({ onSubmit, formId = 'home-fun-form' }) => {
                             </div>
                         </div>
                         <div className='flex flex-col gap-y-2 sm:col-span-2 lg:col-span-3'>
-                            <label htmlFor='upload-document' className='text-base font-medium text-[#1E1E1E]'>Upload Document:</label>
-                            <label
-                                htmlFor='upload-document'
-                                className='flex items-center justify-center gap-2 border border-dashed border-[#D9D9D9] rounded-md px-4 py-6 cursor-pointer hover:border-[#515DEF] transition-colors'
-                            >
-                                <Upload size={20} className='text-[#808080]' />
-                                <span className='text-sm text-[#808080]'>
-                                    {attachmentName || 'Choose file (PDF, DOC, PPT, images)'}
-                                </span>
-                                <input
-                                    type='file'
-                                    id='upload-document'
-                                    className='hidden'
-                                    accept='.pdf,.doc,.docx,.ppt,.pptx,image/*'
-                                    onChange={(event) => setAttachmentName(event.target.files?.[0]?.name ?? '')}
+                            {apiMode ? (
+                                <FileUploadField
+                                    label='Upload Document'
+                                    deferred
+                                    pendingFiles={pendingFiles}
+                                    onPendingChange={setPendingFiles}
+                                    multiple={false}
+                                    maxFiles={1}
+                                    hint='PDF, PNG, JPG, Word or Excel · up to 10 MB · uploads when saved'
                                 />
-                            </label>
+                            ) : (
+                                <>
+                                    <label htmlFor='upload-document' className='text-base font-medium text-[#1E1E1E]'>Upload Document:</label>
+                                    <label
+                                        htmlFor='upload-document'
+                                        className='flex items-center justify-center gap-2 border border-dashed border-[#D9D9D9] rounded-md px-4 py-6 cursor-pointer hover:border-[#515DEF] transition-colors'
+                                    >
+                                        <Upload size={20} className='text-[#808080]' />
+                                        <span className='text-sm text-[#808080]'>
+                                            {attachmentName || 'Choose file (PDF, DOC, PPT, images)'}
+                                        </span>
+                                        <input
+                                            type='file'
+                                            id='upload-document'
+                                            className='hidden'
+                                            accept='.pdf,.doc,.docx,.ppt,.pptx,image/*'
+                                            onChange={(event) => setAttachmentName(event.target.files?.[0]?.name ?? '')}
+                                        />
+                                    </label>
+                                </>
+                            )}
                         </div>
                     </>
                 )}

@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, EllipsisIcon, Plus } from 'lucide-react'
+import { EllipsisIcon, Plus } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
+import ListPagination from '../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../Common/useListPagination'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 import {
     deleteServiceCenter,
     getServiceCenterRows,
@@ -17,6 +21,8 @@ const statusBadgeColor = {
 }
 
 const ServiceCenters = () => {
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const [rows, setRows] = useState(() => getServiceCenterRows())
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
@@ -42,14 +48,16 @@ const ServiceCenters = () => {
             return haystack.includes(q)
         })
     }, [rows, search, statusFilter])
+    const pagination = useListPagination(filtered, { resetKey: `${search}|${statusFilter}` })
 
     const openDelete = (id) => {
+        if (!showDelete) return
         setPendingDeleteId(id)
         setDeleteModal(true)
     }
 
     const handleConfirmDelete = async () => {
-        if (!pendingDeleteId || deleting) return
+        if (!showDelete || !pendingDeleteId || deleting) return
         setDeleting(true)
         const result = await deleteServiceCenter(pendingDeleteId)
         setDeleting(false)
@@ -139,11 +147,13 @@ const ServiceCenters = () => {
                             {filtered.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className='px-2 py-8 text-center text-[#808080]'>
-                                        No service centers yet. Add one to use it on Vehicle Maintenance.
+                                        {rows.length
+                                            ? 'No records match the filters.'
+                                            : 'No service centers yet. Add one to use it on Vehicle Maintenance.'}
                                     </td>
                                 </tr>
                             ) : (
-                                filtered.map((center) => (
+                                pagination.rows.map((center) => (
                                     <tr key={center.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                         <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{center.id}</td>
                                         <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{center.name}</td>
@@ -163,13 +173,15 @@ const ServiceCenters = () => {
                                                 >
                                                     Edit
                                                 </NavLink>
-                                                <button
-                                                    type='button'
-                                                    onClick={() => openDelete(center.id)}
-                                                    className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                >
-                                                    Delete
-                                                </button>
+                                                {showDelete ? (
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => openDelete(center.id)}
+                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                ) : null}
                                             </Dropdown>
                                         </td>
                                     </tr>
@@ -180,22 +192,7 @@ const ServiceCenters = () => {
                 </div>
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {filtered.length} of {filtered.length} entries
-                </p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] rounded-full'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] rounded-full'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            <ListPagination pagination={pagination} showPageSize />
 
             <DeleteRequestModal
                 deleteRequestModal={deleteModal}

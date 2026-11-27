@@ -1,12 +1,20 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
+import { toast } from 'react-toastify'
+import TcNocHistory from '../../../Common/TcRequest/TcNocHistory'
+import TcNocOverridePanel from '../../../Common/TcRequest/TcNocOverridePanel'
+import TcRequestHistory from '../../../Common/TcRequest/TcRequestHistory'
+import { useAuth } from '../../../context/AuthContext'
 import {
     approveTcRequest,
+    decideTcRequestViaApi,
     getTcRequestById,
+    hydrateTcRequestFromApi,
     rejectTcRequest,
     statusBadgeColor,
 } from '../../../Common/TcRequest/tcRequestData'
+import { canUseTcApi } from '../../../services/tcApi'
 
 const Section = ({ title, children }) => (
     <div className='bg-white rounded-2xl shadow-md p-4'>
@@ -22,25 +30,82 @@ const Field = ({ label, value }) => (
     </div>
 )
 
-const ViewTcRequestApproval = () => {
+const ViewTcRequestApproval = ({ listPath = '/admin/tc-request-approval' }) => {
     const { id } = useParams()
     const navigate = useNavigate()
+    const { role } = useAuth()
     const [request, setRequest] = useState(() => getTcRequestById(id))
     const [superAdminRemarks, setSuperAdminRemarks] = useState(request?.superAdminRemarks ?? '')
+    const [busy, setBusy] = useState(false)
 
-    const handleApprove = () => {
+    useEffect(() => {
+        if (!canUseTcApi()) return undefined
+        let active = true
+        hydrateTcRequestFromApi(id)
+            .then((row) => {
+                if (!active) return
+                setRequest(row)
+                setSuperAdminRemarks(row.superAdminRemarks || '')
+            })
+            .catch(() => {
+                if (active) setRequest(null)
+            })
+        return () => {
+            active = false
+        }
+    }, [id])
+
+    const handleApprove = async () => {
+        if (canUseTcApi()) {
+            if (busy) return
+            setBusy(true)
+            try {
+                const updated = await decideTcRequestViaApi(id, 'approve', superAdminRemarks)
+                setRequest(updated)
+                toast.success('Transfer certificate approved and issued.')
+            } catch (error) {
+                toast.error(error?.message || 'The request could not be approved.')
+            } finally {
+                setBusy(false)
+            }
+            return
+        }
         const updated = approveTcRequest(id, superAdminRemarks)
-        if (updated) setRequest(updated)
+        if (updated) {
+            setRequest(updated)
+            toast.success('Transfer certificate approved and issued.')
+        } else {
+            toast.error('The request could not be approved.')
+        }
     }
 
-    const handleReject = () => {
+    const handleReject = async () => {
+        if (canUseTcApi()) {
+            if (busy) return
+            setBusy(true)
+            try {
+                const updated = await decideTcRequestViaApi(id, 'reject', superAdminRemarks)
+                setRequest(updated)
+                toast.success('Transfer certificate request rejected.')
+            } catch (error) {
+                toast.error(error?.message || 'The request could not be rejected.')
+            } finally {
+                setBusy(false)
+            }
+            return
+        }
         const updated = rejectTcRequest(id, superAdminRemarks, 'admin')
-        if (updated) setRequest(updated)
+        if (updated) {
+            setRequest(updated)
+            toast.success('Transfer certificate request rejected.')
+        } else {
+            toast.error('The request could not be rejected.')
+        }
     }
 
     return (
         <section className='space-y-6'>
-            <button type='button' onClick={() => navigate('/admin/tc-request-approval')} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
+            <button type='button' onClick={() => navigate(listPath)} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
                 <ArrowLeft size={18} />
                 Back to list
             </button>
@@ -74,47 +139,23 @@ const ViewTcRequestApproval = () => {
                         </div>
                     </Section>
 
-                    <Section title='Manager-Level NOC Clearance (Mandatory Departmental Sign-offs)'>
-                        <div className='overflow-x-auto'>
-                            <table className='w-full text-left text-xs'>
-                                <thead>
-                                    <tr className='border-b border-slate-100 bg-[#EDEEF5] text-[#0C1E5B] font-semibold uppercase'>
-                                        <th className='py-3 px-4 rounded-s-lg'>Department</th>
-                                        <th className='py-3 px-4'>Approving Manager</th>
-                                        <th className='py-3 px-4'>Clearance Status</th>
-                                        <th className='py-3 px-4'>Remarks & Audit Notes</th>
-                                        <th className='py-3 px-4 rounded-e-lg'>Date Cleared</th>
-                                    </tr>
-                                </thead>
-                                <tbody className='divide-y divide-slate-100'>
-                                    {(request.nocClearances || []).map((noc) => (
-                                        <tr key={noc.departmentKey} className='hover:bg-slate-50/70 transition-colors'>
-                                            <td className='py-3 px-4 font-bold text-slate-900'>{noc.department}</td>
-                                            <td className='py-3 px-4 font-medium text-slate-700'>{noc.manager}</td>
-                                            <td className='py-3 px-4'>
-                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                                                    noc.status === 'Cleared'
-                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                        : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                                }`}>
-                                                    <CheckCircle2 size={12} />
-                                                    {noc.status}
-                                                </span>
-                                            </td>
-                                            <td className='py-3 px-4 text-slate-600 max-w-xs'>{noc.remarks}</td>
-                                            <td className='py-3 px-4 font-mono text-slate-500'>{noc.date}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </Section>
+                    <TcNocHistory nocs={request.nocs} title='Manager NOC approval history' />
+
+                    <TcNocOverridePanel request={request} role={role} onUpdated={setRequest} />
+
+                    {request.status === 'Pending Manager NOCs' ? (
+                        <Section title='Awaiting manager NOCs'>
+                            <p className='text-sm text-[#667085]'>
+                                {request.pendingNocCount || 0} mandatory manager clearance(s) still pending. Final approval unlocks after every NOC is cleared and PRM forwards the request.
+                            </p>
+                        </Section>
+                    ) : null}
 
                     {request.status === 'Pending Super Admin Approval' ? (
-                        <Section title='Super Admin Decision'>
+                        <Section title='MD / Super Admin final decision'>
                             <div className='space-y-4'>
                                 <div className='flex flex-col gap-y-2'>
-                                    <label htmlFor='admin-remarks' className='text-base font-medium text-[#808080]'>Super Admin Remarks</label>
+                                    <label htmlFor='admin-remarks' className='text-base font-medium text-[#808080]'>Final remarks</label>
                                     <textarea
                                         id='admin-remarks'
                                         rows={3}
@@ -125,14 +166,14 @@ const ViewTcRequestApproval = () => {
                                     />
                                 </div>
                                 <p className='text-sm text-[#667085]'>
-                                    On approval, the Transfer Certificate will be issued and sent to the student/parent portal.
+                                    TC number is generated only after this final approval. Review the manager NOC history above before deciding.
                                 </p>
                                 <div className='flex sm:justify-end justify-center gap-x-4'>
-                                    <button type='button' onClick={handleReject} className='bg-white text-[#FF0000] text-sm px-8 py-2 rounded-md border border-[#FF0000] hover:bg-[#FF0000] hover:text-white transition-all duration-200 cursor-pointer md:w-auto w-full'>
+                                    <button type='button' disabled={busy} onClick={handleReject} className='bg-white text-[#FF0000] text-sm px-8 py-2 rounded-md border border-[#FF0000] hover:bg-[#FF0000] hover:text-white transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'>
                                         Reject
                                     </button>
-                                    <button type='button' onClick={handleApprove} className='bg-[#4CAF50] text-white text-sm px-8 py-2 rounded-md border border-[#4CAF50] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full'>
-                                        Approve & Issue TC
+                                    <button type='button' disabled={busy} onClick={handleApprove} className='bg-[#4CAF50] text-white text-sm px-8 py-2 rounded-md border border-[#4CAF50] hover:opacity-90 transition-all duration-200 cursor-pointer md:w-auto w-full disabled:opacity-60'>
+                                        {busy ? 'Saving…' : 'Approve & Issue TC'}
                                     </button>
                                 </div>
                             </div>
@@ -158,6 +199,8 @@ const ViewTcRequestApproval = () => {
                             <Field label='Remarks' value={request.superAdminRemarks} />
                         </Section>
                     ) : null}
+
+                    <TcRequestHistory history={request.history} />
                 </>
             )}
         </section>

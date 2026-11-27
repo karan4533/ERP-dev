@@ -127,7 +127,8 @@ def ensure_defaults(db: Session, campus_id) -> None:
 
 
 def list_events(db: Session, actor: User) -> list[dict]:
-    ensure_defaults(db, actor.campus_id)
+    # Do not auto-seed demo holidays into live campuses on every list.
+    # Seed scripts / explicit create remain available via ensure_defaults.
     rows = db.scalars(
         select(CalendarEvent)
         .where(CalendarEvent.campus_id == actor.campus_id)

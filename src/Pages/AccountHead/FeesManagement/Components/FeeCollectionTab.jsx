@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
-import { History, Link2, Wallet } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { History, Link2, Smartphone, Wallet } from 'lucide-react'
 import { toast } from 'react-toastify'
-import { DEFAULT_ACADEMIC_YEAR, FEE_INSTALLMENT_STATUSES, paymentModeLabel } from '../../financeDomain/financeConstants'
-import { formatCurrency, formatDisplayDate, groupInstallmentsByMonth } from '../../financeDomain/financeHelpers'
+import { DEFAULT_ACADEMIC_YEAR, FEE_INSTALLMENT_STATUSES } from '../../financeDomain/financeConstants'
+import { formatCurrency, groupInstallmentsByMonth } from '../../financeDomain/financeHelpers'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import StudentSearch from './StudentSearch'
 import StudentFeeProfile from './StudentFeeProfile'
@@ -11,17 +11,23 @@ import FeeInstallmentCard from './FeeInstallmentCard'
 import FeePaymentModal from './FeePaymentModal'
 import SiblingFeesDrawer from './SiblingFeesDrawer'
 import PaymentHistoryDrawer from './PaymentHistoryDrawer'
+import PaymentLinkModal from './PaymentLinkModal'
 import ReceiptDetailsDrawer from './ReceiptDetailsDrawer'
+import RazorpayCheckoutModal from './RazorpayCheckoutModal'
 import EntryClosureGate from '../../../../Common/demoDomain/EntryClosureGate'
 import { entryBlocked } from '../../../../Common/demoDomain/governance'
-import { openPrintDocument } from '../../../../Common/printDocument'
 
-const escapeHtml = (value) => String(value ?? '—')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
+const PAID_STATUSES = [FEE_INSTALLMENT_STATUSES.PAID, FEE_INSTALLMENT_STATUSES.WAIVED]
+const UNPAID_STATUSES = [
+    FEE_INSTALLMENT_STATUSES.UNPAID,
+    FEE_INSTALLMENT_STATUSES.PARTIALLY_PAID,
+    FEE_INSTALLMENT_STATUSES.OVERDUE,
+]
+const RECORD_VIEWS = [
+    { id: 'unpaid', label: 'Unpaid / due', statuses: UNPAID_STATUSES },
+    { id: 'paid', label: 'Paid', statuses: PAID_STATUSES },
+    { id: 'all', label: 'All', statuses: null },
+]
 
 const FeeCollectionTab = () => {
     const {
@@ -31,24 +37,57 @@ const FeeCollectionTab = () => {
         getSiblings,
         getStudentSummary,
         collectFeePayment,
+        generatePaymentLink,
+        confirmGatewayPayment,
         receipts,
         reprintReceipt,
+        sendReceipt,
+        sendPaymentLink,
         bankAccounts,
         posTerminals,
         waiveFine,
+        refreshFinanceStudentRoster,
     } = useFinance()
 
     const [academicYear, setAcademicYear] = useState(DEFAULT_ACADEMIC_YEAR)
     const [student, setStudent] = useState(null)
+
+    // Keep class/section/roll in sync after Principal/Coordinator Section Assignment.
+    useEffect(() => {
+        if (typeof refreshFinanceStudentRoster !== 'function') return undefined
+        let cancelled = false
+        refreshFinanceStudentRoster().then(() => {
+            if (cancelled) return
+        }).catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [refreshFinanceStudentRoster])
+
+    useEffect(() => {
+        if (!student?.id) return
+        const latest = getStudentById(student.id)
+        if (latest && (
+            latest.className !== student.className
+            || latest.section !== student.section
+            || latest.rollNo !== student.rollNo
+        )) {
+            setStudent(latest)
+        }
+    }, [students, student, getStudentById])
     const [selectedIds, setSelectedIds] = useState([])
     const [partials, setPartials] = useState({})
     const [paymentOpen, setPaymentOpen] = useState(false)
+    const [checkoutOpen, setCheckoutOpen] = useState(false)
     const [siblingsOpen, setSiblingsOpen] = useState(false)
     const [historyOpen, setHistoryOpen] = useState(false)
+    const [link, setLink] = useState(null)
     const [receipt, setReceipt] = useState(null)
     const [siblingSelection, setSiblingSelection] = useState([])
     const [activeStudentId, setActiveStudentId] = useState(null)
     const [waiverReason, setWaiverReason] = useState('')
+    const [recordView, setRecordView] = useState('unpaid')
+    const [linkLoading, setLinkLoading] = useState(false)
 
     const activeStudent = student || getStudentById(activeStudentId)
     const installments = activeStudent
@@ -56,7 +95,15 @@ const FeeCollectionTab = () => {
         : []
     const summary = activeStudent ? getStudentSummary(activeStudent.id, academicYear) : null
     const siblings = activeStudent ? getSiblings(activeStudent.id) : []
-    const grouped = groupInstallmentsByMonth(installments)
+    const viewCounts = Object.fromEntries(RECORD_VIEWS.map((view) => [
+        view.id,
+        view.statuses ? installments.filter((row) => view.statuses.includes(row.status)).length : installments.length,
+    ]))
+    const activeView = RECORD_VIEWS.find((view) => view.id === recordView) || RECORD_VIEWS[0]
+    const visibleInstallments = activeView.statuses
+        ? installments.filter((row) => activeView.statuses.includes(row.status))
+        : installments
+    const grouped = groupInstallmentsByMonth(visibleInstallments)
 
     const siblingSummaries = {}
     siblings.forEach((item) => {
@@ -103,8 +150,8 @@ const FeeCollectionTab = () => {
         })
     }
 
-    const handleCollectResult = (payload) => {
-        const result = confirmPayment(payload)
+    const handleCollectResult = async (payload) => {
+        const result = await confirmPayment(payload)
         if (result?.success) {
             setSelectedIds([])
             setPartials({})
@@ -121,24 +168,6 @@ const FeeCollectionTab = () => {
             toast.success('Fine waived.')
             setWaiverReason('')
         }
-    }
-
-    const printReceipt = (selectedReceipt) => {
-        const fields = [
-            ['Receipt', selectedReceipt.receiptNo],
-            ['Student', activeStudent?.name || selectedReceipt.admissionNo],
-            ['Admission no.', activeStudent?.admissionNo || selectedReceipt.admissionNo],
-            ['Payment date', formatDisplayDate(selectedReceipt.paymentDate)],
-            ['Fee heads', (selectedReceipt.feeHeads || []).join(', ')],
-            ['Amount paid', formatCurrency(selectedReceipt.amountPaid)],
-            ['Payment mode', paymentModeLabel(selectedReceipt.paymentMode)],
-            ['Transaction reference', selectedReceipt.transactionReference],
-            ['Collected by', selectedReceipt.collectedBy],
-        ]
-        openPrintDocument({
-            title: `Receipt ${selectedReceipt.receiptNo}`,
-            body: `<h1 style="margin-bottom:16px">Fee receipt</h1><table><tbody>${fields.map(([label, value]) => `<tr><th style="text-align:left">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</tbody></table><p style="margin-top:16px;font-size:11px;color:#667085">Browser-stored demonstration receipt. Verify against the production ledger before external use.</p>`,
-        })
     }
 
     return (
@@ -171,10 +200,72 @@ const FeeCollectionTab = () => {
                         <button type='button' onClick={() => setHistoryOpen(true)} className='inline-flex items-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md cursor-pointer'>
                             <History size={16} /> Payment History
                         </button>
-                        <button type='button' disabled title='Payment links require a connected payment gateway.' className='inline-flex items-center gap-2 rounded-md border border-[var(--erp-line-strong)] px-4 py-2 text-sm text-[var(--erp-muted)] opacity-60'>
-                            <Link2 size={16} /> Payment link unavailable
+                        <button
+                            type='button'
+                            disabled={linkLoading}
+                            onClick={async () => {
+                                if (!totalAmount) {
+                                    toast.error('Select payable instalments before generating a link.')
+                                    return
+                                }
+                                setLinkLoading(true)
+                                try {
+                                    const created = await generatePaymentLink({
+                                        studentId: activeStudent.id,
+                                        amount: totalAmount,
+                                        installmentIds: selectedIds,
+                                    })
+                                    if (created?.providerOrderId || created?.url) setLink(created)
+                                    else toast.error('Could not generate a payment link.')
+                                } catch (error) {
+                                    toast.error(error?.message || 'Could not generate a payment link.')
+                                } finally {
+                                    setLinkLoading(false)
+                                }
+                            }}
+                            className='inline-flex items-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md cursor-pointer disabled:opacity-50'
+                        >
+                            <Link2 size={16} /> {linkLoading ? 'Generating…' : 'Generate Payment Link'}
+                        </button>
+                        <button
+                            type='button'
+                            onClick={() => {
+                                if (!totalAmount) {
+                                    toast.error('Select payable instalments first.')
+                                    return
+                                }
+                                setCheckoutOpen(true)
+                            }}
+                            className='inline-flex items-center gap-2 text-sm border border-[#515DEF] text-[#515DEF] px-4 py-2 rounded-md cursor-pointer'
+                        >
+                            <Smartphone size={16} /> Pay with Razorpay
                         </button>
                     </div>
+
+                    <div className='flex flex-wrap items-center gap-2' role='tablist' aria-label='Fee records'>
+                        {RECORD_VIEWS.map((view) => (
+                            <button
+                                key={view.id}
+                                type='button'
+                                role='tab'
+                                aria-selected={recordView === view.id}
+                                onClick={() => setRecordView(view.id)}
+                                className={`text-sm px-4 py-1.5 rounded-full border cursor-pointer ${recordView === view.id ? 'bg-[#515DEF] text-white border-[#515DEF]' : 'bg-white text-[#515DEF] border-[#515DEF]'}`}
+                            >
+                                {view.label} ({viewCounts[view.id]})
+                            </button>
+                        ))}
+                    </div>
+
+                    {grouped.length === 0 && (
+                        <div className='bg-white rounded-2xl shadow-md p-6 text-center text-sm text-[#667085]'>
+                            {recordView === 'paid'
+                                ? 'No paid instalments for this academic year yet.'
+                                : recordView === 'unpaid'
+                                    ? 'No unpaid instalments. Everything for this academic year is settled.'
+                                    : 'No fee instalments for this academic year.'}
+                        </div>
+                    )}
 
                     {grouped.map((group) => (
                         <div key={group.label} className='space-y-3'>
@@ -238,6 +329,28 @@ const FeeCollectionTab = () => {
                 posTerminals={posTerminals}
             />
             )}
+            <RazorpayCheckoutModal
+                isOpen={checkoutOpen}
+                onClose={() => setCheckoutOpen(false)}
+                amount={totalAmount}
+                student={activeStudent}
+                createIntent={async () => {
+                    if (entryBlocked('Finance', 'Account Head')) {
+                        throw new Error('Finance entry is blocked.')
+                    }
+                    return generatePaymentLink({
+                        studentId: activeStudent.id,
+                        amount: totalAmount,
+                        installmentIds: selectedIds,
+                    })
+                }}
+                confirmPayment={(payload) => confirmGatewayPayment(payload)}
+                onPaid={(result) => {
+                    setSelectedIds([])
+                    setPartials({})
+                    if (result?.receipt) setReceipt(result.receipt)
+                }}
+            />
             <SiblingFeesDrawer
                 isOpen={siblingsOpen}
                 onClose={() => setSiblingsOpen(false)}
@@ -265,6 +378,13 @@ const FeeCollectionTab = () => {
                 onClose={() => setHistoryOpen(false)}
                 receipts={studentReceipts}
                 onViewReceipt={(row) => { setReceipt(row); setHistoryOpen(false) }}
+                onSendWhatsApp={sendReceipt}
+            />
+            <PaymentLinkModal
+                isOpen={Boolean(link)}
+                onClose={() => setLink(null)}
+                link={link}
+                onSend={sendPaymentLink}
             />
             <ReceiptDetailsDrawer
                 isOpen={Boolean(receipt)}
@@ -272,7 +392,8 @@ const FeeCollectionTab = () => {
                 receipt={receipt}
                 student={activeStudent}
                 onReprint={reprintReceipt}
-                onPrint={printReceipt}
+                onSend={sendReceipt}
+                onPrint={() => window.print()}
             />
         </div>
     )

@@ -1,26 +1,68 @@
-import { Building2, FileSpreadsheet, Fingerprint, Mail, MessageCircle, QrCode } from 'lucide-react'
-import { DataTable, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
-import { INTEGRATIONS } from '../settingsData'
-import { SettingsPanel } from './SettingsShared'
+import React from 'react'
+import {
+    Building2,
+    FileSpreadsheet,
+    Fingerprint,
+    Mail,
+    MessageCircle,
+    QrCode,
+} from 'lucide-react'
+import { INTEGRATIONS, integrationStatusBadgeColor } from '../settingsData'
+import { SettingsPanel, tdClass, thClass } from './SettingsShared'
 
-const INTEGRATION_ICONS = { bank: Building2, qr: QrCode, whatsapp: MessageCircle, mail: Mail, fingerprint: Fingerprint, spreadsheet: FileSpreadsheet }
-const IntegrationName = ({ row }) => {
-    const Icon = INTEGRATION_ICONS[row.icon] ?? Building2
-    return <span className='inline-flex items-center gap-2 font-semibold text-[var(--erp-ink)]'><Icon aria-hidden='true' size={16} /> {row.service}</span>
+const INTEGRATION_ICONS = {
+    bank: Building2,
+    qr: QrCode,
+    whatsapp: MessageCircle,
+    mail: Mail,
+    fingerprint: Fingerprint,
+    spreadsheet: FileSpreadsheet,
 }
-const columns = [
-    { key: 'service', label: 'Service', required: true, render: (row) => <IntegrationName row={row} /> },
-    { key: 'purpose', label: 'Purpose', required: true },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-]
 
 const IntegrationsTab = () => (
-    <div className='space-y-5'>
-        <IntegrationNotice state='unavailable' title='Integration administration disconnected' description='Statuses are sample reference values. Credentials, OAuth consent, secrets, health checks and webhooks must be managed by secure backend integration services.' />
-        <SettingsPanel title='Connected services reference'>
-            <DataTable caption='Finance integration register' rows={INTEGRATIONS} columns={columns} rowKey='id' emptyTitle='No integrations listed' emptyDescription='Connect the integration service to load configured providers.' renderActions={() => <button type='button' disabled title='Integration configuration requires the secure backend service.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Configuration unavailable</button>} />
-        </SettingsPanel>
-    </div>
+    <SettingsPanel title='Connected services'>
+        <div className='relative overflow-x-auto'>
+            <table className='w-full text-sm text-left min-w-[640px]'>
+                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                    <tr>
+                        <th className={`${thClass} rounded-s-lg`}>Service</th>
+                        <th className={thClass}>Purpose</th>
+                        <th className={thClass}>Status</th>
+                        <th className={`${thClass} rounded-e-lg`}>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {INTEGRATIONS.map((row) => {
+                        const Icon = INTEGRATION_ICONS[row.icon] ?? Building2
+                        return (
+                            <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                <td className={`${tdClass} rounded-s-lg`}>
+                                    <div className='flex items-center gap-2 text-[#1E1E1E]'>
+                                        <Icon size={16} className='text-[#667085] shrink-0' />
+                                        {row.service}
+                                    </div>
+                                </td>
+                                <td className={tdClass}>{row.purpose}</td>
+                                <td className={tdClass}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${integrationStatusBadgeColor[row.status]}`}>
+                                        {row.status}
+                                    </span>
+                                </td>
+                                <td className={`${tdClass} rounded-e-lg`}>
+                                    <button
+                                        type='button'
+                                        className='text-sm font-medium text-[#515DEF] hover:opacity-80 cursor-pointer'
+                                    >
+                                        {row.action}
+                                    </button>
+                                </td>
+                            </tr>
+                        )
+                    })}
+                </tbody>
+            </table>
+        </div>
+    </SettingsPanel>
 )
 
 export default IntegrationsTab

@@ -1,8 +1,13 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, Plus, Trash2 } from 'lucide-react'
 import { CLASSES, SECTIONS, SUBJECTS, DAYS, formatDate } from '../createExamScheduleData'
+import {
+    canUseClassDetailsApi,
+    listSubjects,
+    loadClassDirectory,
+} from '../../../../services/classDetailsApi'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
@@ -24,6 +29,31 @@ const ExamScheduleForm = ({ onSubmit }) => {
     const [examDate, setExamDate] = useState(new Date())
     const [endDate, setEndDate] = useState(new Date())
     const [subjects, setSubjects] = useState([createSubjectRow()])
+    const [classOptions, setClassOptions] = useState(CLASSES)
+    const [sectionOptions, setSectionOptions] = useState(SECTIONS)
+    const [subjectOptions, setSubjectOptions] = useState(SUBJECTS)
+
+    useEffect(() => {
+        if (!canUseClassDetailsApi()) return undefined
+        let cancelled = false
+        Promise.all([loadClassDirectory(), listSubjects()])
+            .then(([directory, subjectRows]) => {
+                if (cancelled) return
+                const records = Array.isArray(directory?.records) ? directory.records : []
+                const classNames = records.map((row) => row.className).filter(Boolean)
+                if (classNames.length) setClassOptions(classNames)
+                const sections = [...new Set(
+                    records.flatMap((row) => (row.sections || []).map((s) => s.name).filter(Boolean)),
+                )].sort()
+                if (sections.length) setSectionOptions(sections)
+                const names = (Array.isArray(subjectRows) ? subjectRows : []).map((row) => row.name).filter(Boolean)
+                if (names.length) setSubjectOptions(names)
+            })
+            .catch(() => {
+                /* keep catalog fallbacks */
+            })
+        return () => { cancelled = true }
+    }, [])
 
     const updateSubject = (key, field, value) => {
         setSubjects((prev) =>
@@ -73,7 +103,7 @@ const ExamScheduleForm = ({ onSubmit }) => {
                     <label htmlFor='class-name' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
                     <select id='class-name' name='className' required className={selectClass}>
                         <option value=''>--Select--</option>
-                        {CLASSES.map((item) => (
+                        {classOptions.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
@@ -82,7 +112,7 @@ const ExamScheduleForm = ({ onSubmit }) => {
                     <label htmlFor='section' className='text-base font-medium text-[#1E1E1E]'>Section:</label>
                     <select id='section' name='section' required className={selectClass}>
                         <option value=''>--Select--</option>
-                        {SECTIONS.map((item) => (
+                        {sectionOptions.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
@@ -158,7 +188,7 @@ const ExamScheduleForm = ({ onSubmit }) => {
                                         className={selectClass}
                                     >
                                         <option value=''>--Select--</option>
-                                        {SUBJECTS.map((subject) => (
+                                        {subjectOptions.map((subject) => (
                                             <option key={subject} value={subject}>{subject}</option>
                                         ))}
                                     </select>

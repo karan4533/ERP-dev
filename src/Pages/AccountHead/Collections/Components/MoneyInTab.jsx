@@ -1,26 +1,21 @@
-import { useMemo, useState } from 'react'
-import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
-import { paymentModeLabel, TRANSACTION_STATUSES } from '../../financeDomain/financeConstants'
+import React, { useMemo } from 'react'
+import { Download } from 'lucide-react'
+import { INCOME_REGISTER, incomeStatusBadgeColor } from '../collectionsData'
 import { useFinance } from '../../financeDomain/FinanceContext'
 import { formatCurrency, formatDisplayDate } from '../../financeDomain/financeHelpers'
-import { INCOME_REGISTER, MONEY_IN_SUMMARY } from '../collectionsData'
-import { SummaryCards } from './CollectionsShared'
-
-const SOURCE_FILTERS = ['All Sources', 'Student Fees', 'Transport Fees', 'Canteen', 'Donations', 'Other']
-
-const columns = [
-    { key: 'date', label: 'Date' },
-    { key: 'source', label: 'Source', required: true, render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{row.source}</span> },
-    { key: 'reference', label: 'Reference', render: (row) => <span className='font-mono text-xs'>{row.reference}</span> },
-    { key: 'mode', label: 'Mode' },
-    { key: 'amount', label: 'Amount', render: (row) => <span className='font-semibold text-[var(--erp-green)]'>{row.amount}</span> },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-]
+import { paymentModeLabel, TRANSACTION_STATUSES } from '../../financeDomain/financeConstants'
+import {
+    SummaryCards,
+    TableCard,
+    TablePagination,
+    tdClass,
+    thClass,
+} from './CollectionsShared'
 
 const MoneyInTab = () => {
-    const { postedInflow, students } = useFinance()
-    const [query, setQuery] = useState('')
-    const [source, setSource] = useState(SOURCE_FILTERS[0])
+    const { postedInflow, students, financePersistence } = useFinance()
+    const apiLive = Boolean(financePersistence?.apiEnabled)
+
     const liveRows = useMemo(() => postedInflow.map((item) => ({
         id: item.id,
         date: formatDisplayDate(item.transactionDate),
@@ -28,36 +23,104 @@ const MoneyInTab = () => {
         reference: item.receiptNo || item.transactionNo,
         mode: paymentModeLabel(item.paymentMode),
         amount: `+${formatCurrency(item.amount)}`,
+        amountNum: Number(item.amount) || 0,
         status: item.status === TRANSACTION_STATUSES.POSTED ? 'Cleared' : item.status,
         student: students.find((row) => row.id === item.studentId)?.name,
     })), [postedInflow, students])
-    const filteredRows = useMemo(() => liveRows.filter((row) => {
-        if (source !== SOURCE_FILTERS[0] && row.source !== source) return false
-        const normalizedQuery = query.trim().toLowerCase()
-        if (!normalizedQuery) return true
-        return [row.date, row.source, row.reference, row.mode, row.amount, row.status, row.student].join(' ').toLowerCase().includes(normalizedQuery)
-    }), [liveRows, query, source])
+
+    const rows = apiLive ? liveRows : [...liveRows, ...INCOME_REGISTER]
+    const totalIn = liveRows.reduce((sum, row) => sum + row.amountNum, 0)
+    const summaryCards = [
+        {
+            label: 'Posted inflows (snapshot)',
+            value: formatCurrency(totalIn),
+            sub: `${liveRows.length} transaction(s)`,
+            iconTone: 'success',
+        },
+        {
+            label: 'Cleared',
+            value: String(liveRows.filter((row) => row.status === 'Cleared').length),
+            sub: 'Posted status',
+            iconTone: 'success',
+        },
+        {
+            label: 'Pending clearance',
+            value: String(liveRows.filter((row) => row.status !== 'Cleared').length),
+            sub: 'Cheques / holds',
+            iconTone: 'warning',
+        },
+        {
+            label: 'Source',
+            value: apiLive ? 'API' : 'Demo',
+            sub: apiLive ? 'No seed income register merged' : 'Includes offline demo register',
+            iconTone: 'success',
+        },
+    ]
 
     return (
-        <div className='space-y-5'>
-            <IntegrationNotice state='demo' title='Sample income summary' description='The summary cards are reference analytics, not totals calculated from the browser-stored register below.' />
-            <SummaryCards cards={MONEY_IN_SUMMARY} />
+    <div className='space-y-6'>
+        <SummaryCards cards={summaryCards} />
 
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='live-inflow-title'>
-                <div className='px-4 pt-4 sm:px-5'><h3 id='live-inflow-title' className='text-base font-semibold text-[var(--erp-ink)]'>Browser-stored inflows</h3><p className='mt-1 text-xs text-[var(--erp-muted)]'>Created from fee and other local finance workflows in this browser.</p></div>
-                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search browser-stored inflows' searchPlaceholder='Reference, source, student or amount…' resultCount={filteredRows.length} onReset={() => { setQuery(''); setSource(SOURCE_FILTERS[0]) }} filters={(
-                    <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Source
-                        <select value={source} onChange={(event) => setSource(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{SOURCE_FILTERS.map((item) => <option key={item}>{item}</option>)}</select>
-                    </label>
-                )} />
-                <DataTable caption='Browser-stored inflows' rows={filteredRows} columns={columns} rowKey='id' emptyTitle='No browser-stored inflows' emptyDescription='Record a confirmed local collection to populate this register.' />
-            </section>
-
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='sample-income-title'>
-                <div className='px-4 py-4 sm:px-5'><h3 id='sample-income-title' className='text-base font-semibold text-[var(--erp-ink)]'>Sample income reference</h3><p className='mt-1 text-xs text-[var(--erp-muted)]'>Static design fixture · never included in browser-stored totals.</p></div>
-                <DataTable caption='Sample income reference' rows={INCOME_REGISTER} columns={columns} rowKey='id' />
-            </section>
-        </div>
+        <TableCard
+            title='Income source register'
+            filters={(
+                <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
+                    <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[130px]'>
+                        <option>All Sources</option>
+                        <option>Student Fees</option>
+                        <option>Transport Fees</option>
+                        <option>Canteen</option>
+                        <option>Donations</option>
+                        <option>Other</option>
+                    </select>
+                    <input type='date' className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[140px]' />
+                    <button
+                        type='button'
+                        className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                    >
+                        <Download size={16} />
+                        Export
+                    </button>
+                </div>
+            )}
+            footer={<TablePagination summary={`${rows.length} income entr${rows.length === 1 ? 'y' : 'ies'}`} />}
+        >
+            <table className='w-full text-sm text-left mt-4'>
+                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                    <tr>
+                        <th className={`${thClass} rounded-s-lg`}>Date</th>
+                        <th className={thClass}>Source</th>
+                        <th className={thClass}>Reference</th>
+                        <th className={thClass}>Mode</th>
+                        <th className={thClass}>Amount</th>
+                        <th className={`${thClass} rounded-e-lg`}>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.length === 0 ? (
+                        <tr>
+                            <td colSpan={6} className={`${tdClass} text-[#667085]`}>
+                                No posted inflows on the campus finance snapshot yet.
+                            </td>
+                        </tr>
+                    ) : rows.map((row) => (
+                        <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                            <td className={`${tdClass} rounded-s-lg`}>{row.date}</td>
+                            <td className={`${tdClass} font-medium text-[#1E1E1E]`}>{row.source}</td>
+                            <td className={`${tdClass} font-mono text-xs`}>{row.reference}</td>
+                            <td className={tdClass}>{row.mode}</td>
+                            <td className={`${tdClass} font-semibold text-[#4CAF50]`}>{row.amount}</td>
+                            <td className={`${tdClass} rounded-e-lg`}>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${incomeStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
+                                    {row.status}
+                                </span>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </TableCard>
+    </div>
     )
 }
 

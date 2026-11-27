@@ -79,8 +79,44 @@ export const loadClassDirectory = async ({ academicYearId = '', includeInactive 
     return { years: yearList, records, filtered }
 }
 
+let hydratePromise = null
+let catalogHydrated = false
+
 /** Best-effort: keep the dropdowns on other screens in step after a save. Never throws. */
-export const refreshClassCatalog = () => loadClassDirectory().catch(() => null)
+export const refreshClassCatalog = () => {
+    catalogHydrated = false
+    hydratePromise = null
+    return loadClassDirectory()
+        .then((result) => {
+            catalogHydrated = Boolean(result)
+            return result
+        })
+        .catch(() => null)
+}
+
+/**
+ * Loads Class Details once and mirrors them into the browser catalog so Principal /
+ * Coordinator / Teacher / FO dropdowns match Admin. Safe to call from Auth and forms.
+ */
+export const ensureClassCatalogHydrated = () => {
+    if (!canUseClassDetailsApi()) return Promise.resolve(null)
+    if (catalogHydrated) return Promise.resolve(true)
+    if (!hydratePromise) {
+        hydratePromise = loadClassDirectory()
+            .then((result) => {
+                catalogHydrated = Boolean(result)
+                return result
+            })
+            .catch(() => {
+                catalogHydrated = false
+                return null
+            })
+            .finally(() => {
+                hydratePromise = null
+            })
+    }
+    return hydratePromise
+}
 
 /** List academic years (normalized for admin / star-ratings / fee campus pickers). */
 export const listAcademicYears = async () => {
@@ -278,4 +314,28 @@ export const deleteClass = async (classId) => {
     const deleted = await apiRequest(`/masters/classes/${classId}`, { method: 'DELETE' })
     await refreshClassCatalog()
     return deleted
+}
+
+const normalizeSubject = (row) => ({
+    id: String(row.id),
+    code: row.code || '',
+    name: row.name || '',
+})
+
+/** Campus subject masters (GET /masters/subjects). */
+export const listSubjects = async () => {
+    const rows = await apiRequest('/masters/subjects')
+    return (Array.isArray(rows) ? rows : []).map(normalizeSubject)
+}
+
+/** Create a campus subject (POST /masters/subjects). */
+export const createSubject = async ({ code, name }) => {
+    const saved = await apiRequest('/masters/subjects', {
+        method: 'POST',
+        body: {
+            code: String(code || '').trim().toUpperCase(),
+            name: String(name || '').trim(),
+        },
+    })
+    return normalizeSubject(saved)
 }

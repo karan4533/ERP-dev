@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -14,7 +14,7 @@ import WorkflowBuilder from './WorkflowBuilder'
 import WorkflowRuleFormModal from './WorkflowRuleFormModal'
 import {
     WORKFLOW_DEPARTMENTS,
-    WORKFLOW_RULES,
+    getAuditWorkflowRules, hydrateAuditWorkflowRulesFromApi, saveAuditWorkflowRules,
     WORKFLOW_STATUS_OPTIONS,
     buildWorkflowPayload,
     createWorkflowId,
@@ -29,11 +29,21 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const WorkflowRulesList = () => {
-    const [workflows, setWorkflows] = useState(WORKFLOW_RULES)
+    const [workflows, setWorkflowsState] = useState(() => getAuditWorkflowRules())
+    useEffect(() => {
+        hydrateAuditWorkflowRulesFromApi().finally(() => setWorkflowsState(getAuditWorkflowRules()))
+    }, [])
+    const setWorkflows = (updater) => {
+        setWorkflowsState((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater
+            saveAuditWorkflowRules(next)
+            return next
+        })
+    }
     const [search, setSearch] = useState('')
     const [departmentFilter, setDepartmentFilter] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [selectedWorkflowId, setSelectedWorkflowId] = useState(WORKFLOW_RULES[0]?.id ?? '')
+    const [selectedWorkflowId, setSelectedWorkflowId] = useState(() => getAuditWorkflowRules()[0]?.id ?? '')
     const [exportModal, setExportModal] = useState(false)
     const [formModal, setFormModal] = useState({ open: false, mode: 'create', workflow: null, workflowId: null })
 
@@ -317,7 +327,14 @@ const WorkflowRulesList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='workflowruleslist'
+                title='WorkflowRulesList'
+                rows={Array.isArray(filteredWorkflows) ? filteredWorkflows : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredWorkflows) ? filteredWorkflows.length : 0} record(s).</>}
+            />
             <WorkflowRuleFormModal
                 isOpen={formModal.open}
                 mode={formModal.mode}

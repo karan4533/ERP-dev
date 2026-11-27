@@ -1,12 +1,16 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, EllipsisIcon, Plus, Download } from 'lucide-react'
+import { Calendar, EllipsisIcon, Plus, Download } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import ListPagination, { PageSizeSelect } from '../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../Common/useListPagination'
+import { emptyListMessage } from '../../../Common/listPagination'
+import { filterListRows } from '../../../Common/listFiltering'
 import {
-    AUDIT_PLANS,
+    getAuditPlans, hydrateAuditPlansFromApi,
     AUDIT_TYPES,
     DEPARTMENTS,
     STATUS_OPTIONS,
@@ -16,9 +20,48 @@ import {
 } from './auditPlanningData'
 
 const AuditPlanningList = () => {
-    const [fromDate, setFromDate] = useState(new Date())
-    const [toDate, setToDate] = useState(new Date())
+    const [auditPlans, setAuditPlans] = useState(() => getAuditPlans())
+    const [search, setSearch] = useState('')
+    const [auditType, setAuditType] = useState('')
+    const [department, setDepartment] = useState('')
+    const [status, setStatus] = useState('')
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
+
+    useEffect(() => {
+        hydrateAuditPlansFromApi().finally(() => setAuditPlans(getAuditPlans()))
+    }, [])
+
+    const filteredPlans = useMemo(
+        () => filterListRows(auditPlans, {
+            search,
+            searchKeys: ['id', 'title', 'assignedAuditor', 'auditTeam', 'checklistReference', 'auditScope'],
+            equals: {
+                auditType,
+                department,
+                status,
+            },
+            fromDate,
+            toDate,
+            dateKeys: ['scheduledDate', 'plannedDate', 'expectedCompletionDate'],
+        }),
+        [auditPlans, search, auditType, department, status, fromDate, toDate],
+    )
+
+    const pagination = useListPagination(filteredPlans, {
+        resetKey: [search, auditType, department, status, fromDate?.getTime(), toDate?.getTime()].join('|'),
+    })
+    const visiblePlans = pagination.rows
+
+    const clearFilters = () => {
+        setSearch('')
+        setAuditType('')
+        setDepartment('')
+        setStatus('')
+        setFromDate(null)
+        setToDate(null)
+    }
 
     return (
         <section>
@@ -27,21 +70,34 @@ const AuditPlanningList = () => {
                     Create and schedule audits across departments. Track planned, in-progress, and completed audit cycles.
                 </p>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
+                    <button
+                        type='button'
+                        onClick={clearFilters}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
+                    >
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
-                        <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
-                        <input type='text' id='search' placeholder='Audit ID, title...' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
+                        <label htmlFor='audit-plan-search' className='text-base font-medium text-[#808080]'>Search</label>
+                        <input
+                            type='text'
+                            id='audit-plan-search'
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder='Audit ID, title...'
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='audit-type' className='text-base font-medium text-[#808080]'>Audit Type</label>
-                        <select id='audit-type' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                        <select
+                            id='audit-type'
+                            value={auditType}
+                            onChange={(event) => setAuditType(event.target.value)}
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
                             <option value=''>All</option>
                             {AUDIT_TYPES.map((type) => (
                                 <option key={type} value={type}>{type}</option>
@@ -50,7 +106,12 @@ const AuditPlanningList = () => {
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='department' className='text-base font-medium text-[#808080]'>Department</label>
-                        <select id='department' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                        <select
+                            id='department'
+                            value={department}
+                            onChange={(event) => setDepartment(event.target.value)}
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
                             <option value=''>All</option>
                             {DEPARTMENTS.map((dept) => (
                                 <option key={dept} value={dept}>{dept}</option>
@@ -59,10 +120,15 @@ const AuditPlanningList = () => {
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label htmlFor='status' className='text-base font-medium text-[#808080]'>Status</label>
-                        <select id='status' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
+                        <select
+                            id='status'
+                            value={status}
+                            onChange={(event) => setStatus(event.target.value)}
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
                             <option value=''>All</option>
-                            {STATUS_OPTIONS.map((status) => (
-                                <option key={status} value={status}>{status}</option>
+                            {STATUS_OPTIONS.map((option) => (
+                                <option key={option} value={option}>{option}</option>
                             ))}
                         </select>
                     </div>
@@ -118,14 +184,7 @@ const AuditPlanningList = () => {
                         </button>
                     </div>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
+                <PageSizeSelect pagination={pagination} className='my-2' />
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -142,7 +201,14 @@ const AuditPlanningList = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {AUDIT_PLANS.map((plan) => (
+                            {visiblePlans.length === 0 && (
+                                <tr>
+                                    <td colSpan={9} className='px-2 py-8 text-center text-[#667085]'>
+                                        {emptyListMessage(auditPlans.length)}
+                                    </td>
+                                </tr>
+                            )}
+                            {visiblePlans.map((plan) => (
                                 <tr key={plan.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{plan.id}</td>
                                     <td className='px-2 py-4 max-w-[180px] truncate' title={plan.title}>{plan.title}</td>
@@ -187,22 +253,16 @@ const AuditPlanningList = () => {
                 </div>
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {AUDIT_PLANS.length} of {AUDIT_PLANS.length} entries</p>
-                <div className='flex justify-center gap-x-2 flex-wrap'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            <ListPagination pagination={pagination} />
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='auditplanninglist'
+                title='AuditPlanningList'
+                rows={Array.isArray(filteredPlans) ? filteredPlans : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredPlans) ? filteredPlans.length : 0} record(s).</>}
+            />
         </section>
     )
 }

@@ -1,5 +1,6 @@
 import React from 'react'
 import EmployeeListPage from '../Components/EmployeeListPage'
+import { SEED } from '../../../HR/domain/hrSeed'
 
 const columns = [
     { key: 'profile', label: 'Profile', isProfile: true },
@@ -14,30 +15,19 @@ const columns = [
     { key: 'state', label: 'State' },
 ]
 
-const rows = [
-    {
-        name: 'Sandy Selva',
-        employeeId: 'LIB-1001',
-        email: 'san@gmail.com',
-        gender: 'Male',
-        mobile: '9944076993',
-        qualification: 'M.Lib.Sc, B.Ed.',
-        experience: '8 Years',
-        city: 'Pudukkottai',
-        state: 'Tamil Nadu',
-    },
-    {
-        name: 'Meena Devi',
-        employeeId: 'LIB-1002',
-        email: 'meena.devi@school.com',
-        gender: 'Female',
-        mobile: '9876543211',
-        qualification: 'B.Lib.Sc',
-        experience: '4 Years',
+const rows = SEED.employees
+    .filter((row) => row.role === 'librarian' || /librarian/i.test(row.designation || ''))
+    .map((row) => ({
+        name: row.name,
+        employeeId: row.id,
+        email: row.email,
+        gender: row.gender || '—',
+        mobile: row.contact,
+        qualification: row.qualification || '—',
+        experience: row.experience || '—',
         city: 'Madurai',
         state: 'Tamil Nadu',
-    },
-]
+    }))
 
 const LibrariansList = () => (
     <EmployeeListPage

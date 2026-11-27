@@ -144,7 +144,7 @@ const RequestInfo = () => {
             <div>
                 <h3 className='text-base font-semibold text-[#1E1E1E] mb-4'>Attachments</h3>
                 <div className='grid grid-cols-1 sm:grid-cols-3 gap-6'>
-                    {['Comparative Comparative Comparative Quotation Upload', 'Supporting Documents'].map((label) => (
+                    {['Comparative Quotation Upload', 'Supporting Documents'].map((label) => (
                         <div key={label} className='flex flex-col gap-y-2'>
                             <span className='text-base font-medium text-[#1E1E1E]'>{label}</span>
                             <label className='flex flex-col items-center justify-center gap-2 border border-dashed border-[#D9D9D9] rounded-md px-4 py-6 cursor-pointer hover:border-[#515DEF] transition-colors'>

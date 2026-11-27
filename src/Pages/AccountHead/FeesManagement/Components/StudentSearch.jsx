@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import Select from 'react-select'
 import { FINANCE_ACADEMIC_YEARS } from '../../financeDomain/financeMasters'
 import { searchStudents } from '../../financeDomain/financeHelpers'
@@ -29,13 +29,47 @@ const formatOptionLabel = (option) => (
     </div>
 )
 
+const sortLabels = (values) => [...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+
 const StudentSearch = ({ students, academicYear, onAcademicYearChange, selectedStudent, onSelectStudent }) => {
-    const options = useMemo(() => students.map((student) => ({
-        value: student.id,
-        label: `${student.name} · ${student.className}-${student.section}`,
-        subLabel: `${student.admissionNo} · Roll ${student.rollNo} · ${student.phone}`,
-        student,
-    })), [students])
+    const [classFilter, setClassFilter] = useState('')
+    const [sectionFilter, setSectionFilter] = useState('')
+
+    const classOptions = useMemo(
+        () => sortLabels(new Set(students.map((s) => String(s.className || '').trim()).filter(Boolean))),
+        [students],
+    )
+    const sectionOptions = useMemo(
+        () => sortLabels(new Set(students
+            .filter((s) => !classFilter || String(s.className || '').trim() === classFilter)
+            .map((s) => String(s.section || '').trim())
+            .filter(Boolean))),
+        [students, classFilter],
+    )
+    const visibleStudents = useMemo(() => students.filter((s) => (
+        (!classFilter || String(s.className || '').trim() === classFilter)
+        && (!sectionFilter || String(s.section || '').trim() === sectionFilter)
+    )), [students, classFilter, sectionFilter])
+
+    const options = useMemo(() => visibleStudents.map((student) => {
+        const className = String(student.className || '').trim() || '—'
+        const section = String(student.section || '').trim()
+        const classLabel = section ? `${className}-${section}` : `${className} (section unassigned)`
+        return {
+            value: student.id,
+            label: `${student.name} · ${classLabel}`,
+            subLabel: `${student.admissionNo} · Roll ${student.rollNo || '—'} · ${student.phone || '—'}`,
+            student,
+        }
+    }), [visibleStudents])
+
+    const selectedOption = selectedStudent
+        ? options.find((item) => item.value === selectedStudent.id) ?? {
+            value: selectedStudent.id,
+            label: selectedStudent.name,
+            student: selectedStudent,
+        }
+        : null
 
     const filterOption = (option, input) => {
         if (!input) return true
@@ -44,10 +78,11 @@ const StudentSearch = ({ students, academicYear, onAcademicYearChange, selectedS
 
     return (
         <div className='bg-white rounded-2xl shadow-md p-4'>
-            <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+            <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4'>
                 <div>
-                    <label className='block text-xs text-[#667085] mb-1.5'>Academic Year</label>
+                    <label htmlFor='fee-academic-year' className='block text-xs text-[#667085] mb-1.5'>Academic Year</label>
                     <select
+                        id='fee-academic-year'
                         value={academicYear}
                         onChange={(event) => onAcademicYearChange(event.target.value)}
                         className='w-full text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 bg-white focus:outline-none focus:border-[#515DEF]'
@@ -57,14 +92,46 @@ const StudentSearch = ({ students, academicYear, onAcademicYearChange, selectedS
                         ))}
                     </select>
                 </div>
-                <div className='lg:col-span-2'>
-                    <label className='block text-xs text-[#667085] mb-1.5'>
-                        Student Search
+                <div>
+                    <label htmlFor='fee-class-filter' className='block text-xs text-[#667085] mb-1.5'>Class</label>
+                    <select
+                        id='fee-class-filter'
+                        value={classFilter}
+                        onChange={(event) => {
+                            setClassFilter(event.target.value)
+                            setSectionFilter('')
+                        }}
+                        className='w-full text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 bg-white focus:outline-none focus:border-[#515DEF]'
+                    >
+                        <option value=''>All classes</option>
+                        {classOptions.map((value) => (
+                            <option key={value} value={value}>{value}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor='fee-section-filter' className='block text-xs text-[#667085] mb-1.5'>Section</label>
+                    <select
+                        id='fee-section-filter'
+                        value={sectionFilter}
+                        onChange={(event) => setSectionFilter(event.target.value)}
+                        className='w-full text-sm border border-[#D9D9D9] rounded-md px-3 py-2.5 bg-white focus:outline-none focus:border-[#515DEF]'
+                    >
+                        <option value=''>All sections</option>
+                        {sectionOptions.map((value) => (
+                            <option key={value} value={value}>{value}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className='md:col-span-3 lg:col-span-2'>
+                    <label htmlFor='fee-student-search' className='block text-xs text-[#667085] mb-1.5'>
+                        Student Search ({options.length} of {students.length})
                     </label>
                     <Select
+                        inputId='fee-student-search'
                         styles={selectStyles}
                         options={options}
-                        value={options.find((item) => item.value === selectedStudent?.id) ?? null}
+                        value={selectedOption}
                         onChange={(option) => onSelectStudent(option?.student ?? null)}
                         placeholder='Name, admission no., roll no., application no., register no., parent mobile'
                         isClearable

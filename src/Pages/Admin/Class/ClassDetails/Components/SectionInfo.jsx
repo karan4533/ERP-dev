@@ -8,12 +8,23 @@ const SectionInfo = ({
     onChangeSection,
     onAddSection,
     onRemoveSection,
+    showCapacity = true,
+    // API mode: the server stores capacity, room and the class teacher (a login) per section.
+    apiMode = false,
+    teacherOptions = [],
+    teacherStatus = 'idle',
+    teacherError = '',
+    onRetryTeachers,
 }) => {
+    const gridColumns = apiMode
+        ? 'lg:grid-cols-[1fr_1fr_1fr_2fr_auto]'
+        : showCapacity ? 'lg:grid-cols-[1fr_1fr_auto]' : 'lg:grid-cols-[1fr_auto]'
+
     return (
         <>
             <div className='space-y-4 lg:mt-8 mt-2'>
                 {sections.map((section, index) => (
-                    <div key={`section-${index}`} className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-6 items-end'>
+                    <div key={`section-${index}`} className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 ${gridColumns} gap-6 items-end`}>
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor={`section-name-${index}`} className='text-base font-medium text-[#1E1E1E]'>Section:</label>
                             <input
@@ -25,17 +36,53 @@ const SectionInfo = ({
                                 className={inputClass}
                             />
                         </div>
+                        {(showCapacity || apiMode) && (
                         <div className='flex flex-col gap-y-2'>
                             <label htmlFor={`section-capacity-${index}`} className='text-base font-medium text-[#1E1E1E]'>Section Capacity:</label>
                             <input
                                 id={`section-capacity-${index}`}
                                 type='text'
+                                inputMode={apiMode ? 'numeric' : undefined}
                                 value={section.capacity}
                                 onChange={(e) => onChangeSection(index, 'capacity', e.target.value)}
                                 placeholder='e.g. 25'
                                 className={inputClass}
                             />
                         </div>
+                        )}
+                        {apiMode && (
+                            <>
+                                <div className='flex flex-col gap-y-2'>
+                                    <label htmlFor={`section-room-${index}`} className='text-base font-medium text-[#1E1E1E]'>Room No.:</label>
+                                    <input
+                                        id={`section-room-${index}`}
+                                        type='text'
+                                        maxLength={20}
+                                        value={section.roomNumber}
+                                        onChange={(e) => onChangeSection(index, 'roomNumber', e.target.value)}
+                                        placeholder='e.g. 102'
+                                        className={inputClass}
+                                    />
+                                </div>
+                                <div className='flex flex-col gap-y-2'>
+                                    <label htmlFor={`section-teacher-${index}`} className='text-base font-medium text-[#1E1E1E]'>Class Teacher:</label>
+                                    <select
+                                        id={`section-teacher-${index}`}
+                                        value={section.classTeacherUserId}
+                                        disabled={teacherStatus === 'loading'}
+                                        onChange={(e) => onChangeSection(index, 'classTeacherUserId', e.target.value)}
+                                        className={inputClass}
+                                    >
+                                        <option value=''>{teacherStatus === 'loading' ? 'Loading teachers…' : 'No class teacher'}</option>
+                                        {teacherOptions.map((teacher) => (
+                                            <option key={teacher.userId} value={teacher.userId}>
+                                                {teacher.name}{teacher.name !== teacher.email ? ` (${teacher.email})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        )}
                         <button
                             type='button'
                             onClick={() => onRemoveSection(index)}
@@ -48,6 +95,21 @@ const SectionInfo = ({
                     </div>
                 ))}
             </div>
+
+            {apiMode && teacherStatus === 'error' && (
+                <p role='alert' className='text-xs text-[#B42318] mt-3'>
+                    Could not load the teacher list: {teacherError}{' '}
+                    {onRetryTeachers && (
+                        <button type='button' onClick={onRetryTeachers} className='underline cursor-pointer'>Retry</button>
+                    )}
+                </p>
+            )}
+            {apiMode && teacherStatus === 'ready' && teacherOptions.length === 0 && (
+                <p className='text-xs text-[#667085] mt-3'>
+                    There are no active teacher or coordinator logins yet, so a class teacher cannot be chosen.
+                    Create one under User Management, then come back.
+                </p>
+            )}
 
             <div className='flex justify-end mt-6'>
                 <button

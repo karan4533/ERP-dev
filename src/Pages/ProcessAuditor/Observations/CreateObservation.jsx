@@ -1,20 +1,49 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { toast } from 'react-toastify'
 import ObservationForm from './Components/ObservationForm'
-import { emptyObservationForm, createObservation } from './observationsData'
+import {
+    emptyObservationForm,
+    createObservationAsync,
+    getObservationsLoadState,
+    hydrateFromApi,
+} from './observationsData'
 import EntryClosureGate from '../../../Common/demoDomain/EntryClosureGate'
 import { entryBlocked } from '../../../Common/demoDomain/governance'
 
 const CreateObservation = () => {
     const navigate = useNavigate()
     const [form, setForm] = useState(() => emptyObservationForm())
+    const [loadState, setLoadState] = useState(() => getObservationsLoadState())
+    const [saving, setSaving] = useState(false)
 
-    const handleSubmit = (e) => {
+    useEffect(() => {
+        let active = true
+        // Numbering and the register save need the real server list first.
+        hydrateFromApi().finally(() => {
+            if (active) setLoadState(getObservationsLoadState())
+        })
+        return () => { active = false }
+    }, [])
+
+    const notReady = loadState.api && loadState.status !== 'loaded'
+
+    const handleSubmit = async (e) => {
         e.preventDefault()
-        if (entryBlocked('Audit', 'Process Auditor')) return
-        const record = createObservation(form)
-        navigate(`/process-auditor/observations/view/${record.id}`)
+        if (saving || entryBlocked('Audit', 'Process Auditor')) return
+        setSaving(true)
+        try {
+            const result = await createObservationAsync(form)
+            if (!result.success) {
+                toast.error(result.message)
+                return
+            }
+            toast.success(`Observation ${result.record.observationId} saved.`)
+            navigate(`/process-auditor/observations/view/${result.record.id}`)
+        } finally {
+            setSaving(false)
+        }
     }
 
     return (
@@ -34,6 +63,11 @@ const CreateObservation = () => {
                     Raise a new observation when an audit process fails or non-compliance is identified.
                 </p>
                 <EntryClosureGate moduleName='Audit' actor='Process Auditor' />
+                {loadState.api && loadState.status === 'failed' ? (
+                    <p className='text-sm text-[#FF0000] mb-4'>
+                        Could not load the observation register{loadState.error ? `: ${loadState.error}` : ''}. Refresh before saving.
+                    </p>
+                ) : null}
                 <form onSubmit={handleSubmit}>
                     <ObservationForm form={form} onChange={setForm} />
                     <div className='flex justify-end gap-3 mt-6 pt-6 border-t border-[#EDEEF5]'>
@@ -46,9 +80,10 @@ const CreateObservation = () => {
                         </button>
                         <button
                             type='submit'
-                            className='bg-[#515DEF] text-white text-sm px-6 py-2.5 rounded-md hover:opacity-90 cursor-pointer'
+                            disabled={saving || notReady}
+                            className='bg-[#515DEF] text-white text-sm px-6 py-2.5 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
                         >
-                            Create Observation
+                            {saving ? 'Saving…' : notReady && loadState.status !== 'failed' ? 'Loading…' : 'Create Observation'}
                         </button>
                     </div>
                 </form>

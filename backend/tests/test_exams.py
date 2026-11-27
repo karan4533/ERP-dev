@@ -34,7 +34,40 @@ def _h(client, who: str, creds=None) -> dict:
     return login_headers(client, email, password)
 
 
-def _enroll(client, admin, name: str, cls: str, parent_email: str) -> str:
+_SECTION_IDS: dict[str, str] = {}
+
+
+def _section_for_class(client, cls: str, section: str = "A") -> str:
+    """Create (once) masters class+section so enrollments can be placed before marks."""
+    key = f"{cls}:{section}"
+    if key in _SECTION_IDS:
+        return _SECTION_IDS[key]
+    admin, principal = _h(client, "admin"), _h(client, "principal")
+    options = client.get("/api/v1/masters/class-teacher-options", headers=admin).json()
+    teacher_id = next(o["user_id"] for o in options if o["email"] == USERS["teacher"][0])
+    created = client.post("/api/v1/masters/classes", json={"name": cls}, headers=admin)
+    if created.status_code == 201:
+        class_id = created.json()["id"]
+    else:
+        classes = client.get("/api/v1/masters/classes", headers=admin).json()
+        class_id = next(c["id"] for c in classes if c["name"] == cls)
+    sec = client.post(
+        "/api/v1/masters/sections",
+        json={"class_id": class_id, "name": section, "class_teacher_user_id": teacher_id},
+        headers=admin,
+    )
+    if sec.status_code == 201:
+        _SECTION_IDS[key] = sec.json()["id"]
+    else:
+        listed = client.get(f"/api/v1/masters/sections?class_id={class_id}", headers=admin)
+        assert listed.status_code == 200, listed.text
+        match = next((s for s in listed.json() if s["name"] == section), None)
+        assert match is not None, listed.text
+        _SECTION_IDS[key] = match["id"]
+    return _SECTION_IDS[key]
+
+
+def _enroll(client, admin, name: str, cls: str, parent_email: str, *, section: str = "A") -> str:
     enquiry = client.post(
         "/api/v1/admissions/enquiries",
         json={"name": name, "mobile_number": "9888800000", "class_name": cls, "email": parent_email},
@@ -56,11 +89,21 @@ def _enroll(client, admin, name: str, cls: str, parent_email: str) -> str:
         headers=admin,
     )
     assert enrolled.status_code == 200, enrolled.text
-    return str(enrolled.json()["student_id"])
+    sid = str(enrolled.json()["student_id"])
+    sec_id = _section_for_class(client, cls, section)
+    placed = client.post(
+        f"/api/v1/students/{sid}/place",
+        json={"sectionId": sec_id},
+        headers=_h(client, "principal"),
+    )
+    assert placed.status_code == 200, placed.text
+    return sid
 
 
 def _approved_exam(client, cls: str, exam_type="MIDTERM", start=FUTURE, end=FUTURE_END) -> str:
     principal, director = _h(client, "principal"), _h(client, "director")
+    # Exams must reference an active Class Details master (create once if missing).
+    _section_for_class(client, cls, "A")
     created = client.post(
         "/api/v1/exams",
         json={"name": f"{exam_type} {cls}", "examType": exam_type, "className": cls, "startDate": start, "endDate": end},
@@ -78,7 +121,20 @@ def _approved_exam(client, cls: str, exam_type="MIDTERM", start=FUTURE, end=FUTU
     return eid
 
 
+def _coordinator_band(client, grade_from=1, grade_to=12) -> None:
+    """Coordinators approve marks only inside their grade band, so give the demo coordinator one."""
+    options = client.get("/api/v1/masters/class-teacher-options", headers=_h(client, "admin")).json()
+    coordinator_id = next(o["user_id"] for o in options if o["email"] == USERS["coordinator"][0])
+    r = client.put(
+        "/api/v1/students/coordinator-grade-bands",
+        json={"userId": coordinator_id, "gradeFrom": grade_from, "gradeTo": grade_to},
+        headers=_h(client, "principal"),
+    )
+    assert r.status_code == 200, r.text
+
+
 def _publish(client, batch: dict) -> None:
+    _coordinator_band(client)
     for who in ("coordinator", "principal", "director"):
         r = client.post(
             f"/api/v1/approvals/{batch['approvalId']}/decide", json={"decision": "approve"}, headers=_h(client, who)
@@ -191,6 +247,7 @@ def test_marks_validation_and_deny_revise(client):
     assert post([{"studentId": s, "marks": 10}]).status_code == 409  # duplicate
 
     sub = client.post(f"/api/v1/marks-batches/{batch['id']}/submit", headers=teacher).json()
+    _coordinator_band(client)
     denied = client.post(
         f"/api/v1/approvals/{sub['approvalId']}/decide",
         json={"decision": "deny", "comment": "Recheck absentee"},
@@ -242,3 +299,90 @@ def test_weightage_rules_and_weighted_final(client):
     _approved_exam(client, "Grade 4", "CA", start=date.today().isoformat(), end=date.today().isoformat())
     locked = client.put(url, params={"className": "Grade 4"}, json=good, headers=director)
     assert locked.status_code == 409
+
+
+def test_exam_rejects_unknown_or_mismatched_class_section(client):
+    """API must not accept free-text class/section outside active Class Details."""
+    principal = _h(client, "principal")
+    admin = _h(client, "admin")
+    _section_for_class(client, "Grade 8", "A")
+
+    unknown_class = client.post(
+        "/api/v1/exams",
+        json={
+            "name": "Ghost class exam",
+            "examType": "MIDTERM",
+            "className": "Grade 99",
+            "startDate": FUTURE,
+            "endDate": FUTURE_END,
+        },
+        headers=principal,
+    )
+    assert unknown_class.status_code == 400, unknown_class.text
+    assert "Unknown or inactive class" in unknown_class.json()["detail"]["message"]
+
+    bad_section = client.post(
+        "/api/v1/exams",
+        json={
+            "name": "Wrong section exam",
+            "examType": "MIDTERM",
+            "className": "Grade 8",
+            "section": "Z",
+            "startDate": FUTURE,
+            "endDate": FUTURE_END,
+        },
+        headers=principal,
+    )
+    assert bad_section.status_code == 400, bad_section.text
+    assert "Unknown or inactive section" in bad_section.json()["detail"]["message"]
+
+    # Inactive section cannot be used for a new exam.
+    classes = client.get("/api/v1/masters/classes", headers=admin).json()
+    class_id = next(c["id"] for c in classes if c["name"] == "Grade 8")
+    sec_b = client.post(
+        "/api/v1/masters/sections",
+        json={"class_id": class_id, "name": "B"},
+        headers=admin,
+    )
+    assert sec_b.status_code == 201, sec_b.text
+    deactivated = client.patch(
+        f"/api/v1/masters/sections/{sec_b.json()['id']}",
+        json={"is_active": False},
+        headers=admin,
+    )
+    assert deactivated.status_code == 200, deactivated.text
+    inactive = client.post(
+        "/api/v1/exams",
+        json={
+            "name": "Inactive section exam",
+            "examType": "CA",
+            "className": "Grade 8",
+            "section": "B",
+            "startDate": FUTURE,
+            "endDate": FUTURE_END,
+        },
+        headers=principal,
+    )
+    assert inactive.status_code == 400, inactive.text
+
+    ok = client.post(
+        "/api/v1/exams",
+        json={
+            "name": "Valid section exam",
+            "examType": "CA",
+            "className": "Grade 8",
+            "section": "A",
+            "startDate": FUTURE,
+            "endDate": FUTURE_END,
+        },
+        headers=principal,
+    )
+    assert ok.status_code == 201, ok.text
+
+    # Teacher cannot create Class Details masters.
+    teacher = _h(client, "teacher")
+    assert client.post(
+        "/api/v1/masters/classes",
+        json={"name": "Grade 77"},
+        headers=teacher,
+    ).status_code == 403

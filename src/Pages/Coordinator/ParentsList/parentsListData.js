@@ -1,61 +1,53 @@
 import noProfile from '../../../assets/images/no-profile.png'
+import {
+    getAllParentAccounts,
+    getParentById as getParentAccountById,
+} from '../../../Common/ParentAccounts/parentAccountsData'
+import { getEnrolledStudentById } from '../../../Common/StudentDatabase/enrolledStudentsData'
 
-export const PARENTS_LIST = [
-    {
-        id: 'PAR-1001',
-        parentProfile: noProfile,
-        parentName: 'Rajesh Sharma',
-        parentEmail: 'rajesh.sharma@email.com',
-        mobileNumber: '+91 98765 43210',
-        studentName: 'Arjun Sharma',
-        admissionNumber: 'ADM-2024-1042',
-    },
-    {
-        id: 'PAR-1002',
-        parentProfile: noProfile,
-        parentName: 'Lakshmi Nair',
-        parentEmail: 'lakshmi.nair@email.com',
-        mobileNumber: '+91 98470 12345',
-        studentName: 'Priya Nair',
-        admissionNumber: 'ADM-2024-1087',
-    },
-    {
-        id: 'PAR-1003',
-        parentProfile: noProfile,
-        parentName: 'Anil Verma',
-        parentEmail: 'anil.verma@email.com',
-        mobileNumber: '+91 91234 56789',
-        studentName: 'Rahul Verma',
-        admissionNumber: 'ADM-2024-1156',
-    },
-    {
-        id: 'PAR-1004',
-        parentProfile: noProfile,
-        parentName: 'Venkatesh Reddy',
-        parentEmail: 'venkatesh.reddy@email.com',
-        mobileNumber: '+91 99887 65432',
-        studentName: 'Sneha Reddy',
-        admissionNumber: 'ADM-2024-1203',
-    },
-    {
-        id: 'PAR-1005',
-        parentProfile: noProfile,
-        parentName: 'Suresh Menon',
-        parentEmail: 'suresh.menon@email.com',
-        mobileNumber: '+91 97654 32109',
-        studentName: 'Karthik Menon',
-        admissionNumber: 'ADM-2024-1318',
-    },
-    {
-        id: 'PAR-1006',
-        parentProfile: noProfile,
-        parentName: 'Meera Krishnan',
-        parentEmail: 'meera.krishnan@email.com',
-        mobileNumber: '+91 96543 21098',
-        studentName: 'Divya Krishnan',
-        admissionNumber: 'ADM-2024-1425',
-    },
-]
+const displayValue = (value, fallback = '—') => {
+    const text = String(value ?? '').trim()
+    return text || fallback
+}
 
-export const getParentById = (id) =>
-    PARENTS_LIST.find((parent) => parent.id === id) ?? null
+const resolveLinkedStudents = (studentIds = []) =>
+    (Array.isArray(studentIds) ? studentIds : [])
+        .map((studentId) => getEnrolledStudentById(studentId))
+        .filter(Boolean)
+
+export const mapParentAccountToListRow = (account) => {
+    const linkedStudents = resolveLinkedStudents(account?.studentIds)
+    const firstStudent = linkedStudents[0]
+    const studentCount = Array.isArray(account?.studentIds) ? account.studentIds.length : 0
+
+    return {
+        id: account.id,
+        parentId: account.id,
+        parentProfile: account.profileImage || noProfile,
+        parentName: displayValue(account.name, 'Parent'),
+        parentEmail: displayValue(account.email),
+        email: displayValue(account.email),
+        mobileNumber: displayValue(account.phone),
+        phone: displayValue(account.phone),
+        studentName: firstStudent
+            ? displayValue(firstStudent.name)
+            : (studentCount > 0 ? `${studentCount} linked student${studentCount === 1 ? '' : 's'}` : '—'),
+        admissionNumber: displayValue(firstStudent?.admissionNumber),
+        className: displayValue(firstStudent?.className, ''),
+        section: displayValue(firstStudent?.section || firstStudent?.admissionSnapshot?.section, ''),
+        studentIds: Array.isArray(account.studentIds) ? [...account.studentIds] : [],
+        studentCount,
+        studentId: firstStudent?.id || '',
+    }
+}
+
+export const getParentsList = () => getAllParentAccounts().map(mapParentAccountToListRow)
+
+/** @deprecated Prefer getParentsList() — demo list removed. */
+export const PARENTS_LIST = []
+
+export const getParentById = (id) => {
+    const account = getParentAccountById(id)
+    if (!account) return null
+    return mapParentAccountToListRow(account)
+}

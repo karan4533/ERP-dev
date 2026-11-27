@@ -1,12 +1,15 @@
-import React, { useState } from 'react'
+import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar } from 'lucide-react'
 import {
-    VEHICLE_OPTIONS,
     SERVICE_TYPES,
-    SERVICE_CENTERS,
+    getExpenseServiceCenters,
+    getExpenseVehicleOptions,
 } from '../transportExpensesData'
+import { hydrateServiceCentersFromApi } from '../../VehicleMaintenance/serviceCentersData'
+import { hydrateVehiclesFromApi } from '../../VehicleManagement/vehicleManagementData'
+import { formatTransportDate, parseTransportDate } from '../../transportCampus'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
@@ -17,31 +20,69 @@ const selectClass =
 const textareaClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full min-h-[100px] resize-y'
 
-const parseDate = (value) => {
-    if (!value) return new Date()
-    const [day, month, year] = value.split('-').map(Number)
-    if (!day || !month || !year) return new Date()
-    return new Date(year, month - 1, day)
-}
+const ServiceExpenseForm = forwardRef(({ expense }, ref) => {
+    const [vehicles, setVehicles] = useState(() => getExpenseVehicleOptions())
+    const [serviceCenters, setServiceCenters] = useState(() => getExpenseServiceCenters())
+    const [loadingVehicles, setLoadingVehicles] = useState(false)
 
-const ServiceExpenseForm = ({ expense }) => {
-    const [serviceDate, setServiceDate] = useState(() => parseDate(expense?.serviceDate))
+    const [serviceDate, setServiceDate] = useState(() => parseTransportDate(expense?.serviceDate))
     const [vehicleNumber, setVehicleNumber] = useState(expense?.vehicleNumber ?? '')
+    const [serviceType, setServiceType] = useState(expense?.serviceType ?? '')
+    const [serviceCenter, setServiceCenter] = useState(expense?.serviceCenter ?? '')
+    const [amount, setAmount] = useState(expense?.amount ?? '')
+    const [invoiceNumber, setInvoiceNumber] = useState(expense?.invoiceNumber ?? '')
+    const [remarks, setRemarks] = useState(expense?.remarks ?? '')
+
+    useEffect(() => {
+        let cancelled = false
+        setLoadingVehicles(true)
+        Promise.all([hydrateVehiclesFromApi(), hydrateServiceCentersFromApi()])
+            .finally(() => {
+                if (!cancelled) {
+                    setVehicles(getExpenseVehicleOptions())
+                    setServiceCenters(getExpenseServiceCenters())
+                    setLoadingVehicles(false)
+                }
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    useImperativeHandle(ref, () => ({
+        getValues: () => ({
+            vehicleNumber,
+            serviceType,
+            serviceDate: formatTransportDate(serviceDate),
+            serviceCenter,
+            amount: String(amount).trim(),
+            invoiceNumber: String(invoiceNumber).trim(),
+            remarks: String(remarks).trim(),
+        }),
+        validate: () => {
+            if (!String(vehicleNumber).trim()) return 'Vehicle is required.'
+            if (!serviceType) return 'Service type is required.'
+            if (!String(amount).trim()) return 'Amount is required.'
+            return null
+        },
+    }))
+
+    const loadingLabel = loadingVehicles ? 'Loading vehicles…' : '--Select--'
 
     return (
         <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 lg:mt-8 mt-2'>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='vehicle-number' className='text-base font-medium text-[#1E1E1E]'>Vehicle Number:</label>
                 <select id='vehicle-number' value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} className={selectClass}>
-                    <option value=''>--Select--</option>
-                    {VEHICLE_OPTIONS.map((vehicle) => (
+                    <option value=''>{loadingLabel}</option>
+                    {vehicles.map((vehicle) => (
                         <option key={vehicle.id} value={vehicle.label}>{vehicle.label}</option>
                     ))}
                 </select>
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='service-type' className='text-base font-medium text-[#1E1E1E]'>Service Type:</label>
-                <select id='service-type' defaultValue={expense?.serviceType ?? ''} className={selectClass}>
+                <select id='service-type' value={serviceType} onChange={(e) => setServiceType(e.target.value)} className={selectClass}>
                     <option value=''>--Select--</option>
                     {SERVICE_TYPES.map((type) => (
                         <option key={type} value={type}>{type}</option>
@@ -63,27 +104,29 @@ const ServiceExpenseForm = ({ expense }) => {
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='service-center' className='text-base font-medium text-[#1E1E1E]'>Service Center:</label>
-                <select id='service-center' defaultValue={expense?.serviceCenter ?? ''} className={selectClass}>
+                <select id='service-center' value={serviceCenter} onChange={(e) => setServiceCenter(e.target.value)} className={selectClass}>
                     <option value=''>--Select--</option>
-                    {SERVICE_CENTERS.map((center) => (
+                    {serviceCenters.map((center) => (
                         <option key={center} value={center}>{center}</option>
                     ))}
                 </select>
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='amount' className='text-base font-medium text-[#1E1E1E]'>Amount:</label>
-                <input type='text' id='amount' defaultValue={expense?.amount ?? ''} placeholder='e.g. ₹12,500' className={inputClass} />
+                <input type='text' id='amount' value={amount} onChange={(e) => setAmount(e.target.value)} placeholder='e.g. ₹12,500' className={inputClass} />
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='invoice-number' className='text-base font-medium text-[#1E1E1E]'>Invoice Number:</label>
-                <input type='text' id='invoice-number' defaultValue={expense?.invoiceNumber ?? ''} placeholder='e.g. INV-SRV-2026-0142' className={inputClass} />
+                <input type='text' id='invoice-number' value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder='e.g. INV-SRV-2026-0142' className={inputClass} />
             </div>
             <div className='flex flex-col gap-y-2 sm:col-span-2 lg:col-span-3'>
                 <label htmlFor='remarks' className='text-base font-medium text-[#1E1E1E]'>Remarks:</label>
-                <textarea id='remarks' defaultValue={expense?.remarks ?? ''} placeholder='Additional notes about the service expense...' className={textareaClass} />
+                <textarea id='remarks' value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder='Additional notes about the service expense...' className={textareaClass} />
             </div>
         </div>
     )
-}
+})
+
+ServiceExpenseForm.displayName = 'ServiceExpenseForm'
 
 export default ServiceExpenseForm

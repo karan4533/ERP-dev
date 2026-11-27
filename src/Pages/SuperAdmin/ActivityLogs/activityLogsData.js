@@ -944,56 +944,15 @@ export const getLogStatusOptions = (records) => {
     return [...new Set(statuses)].sort()
 }
 
-export const parseActivityTimestamp = (value) => {
-    const match = String(value ?? '').trim().match(
-        /^(\d{2})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i,
-    )
-    if (!match) return null
-
-    const [, day, month, year, hourValue, minute, meridiem] = match
-    let hour = Number(hourValue) % 12
-    if (meridiem.toUpperCase() === 'PM') hour += 12
-    const parsed = new Date(Date.UTC(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-        hour,
-        Number(minute),
-    ))
-
-    return Number.isNaN(parsed.getTime()) ? null : parsed
-}
-
-const parseDateBoundary = (value, endOfDay = false) => {
-    if (!value) return null
-    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/)
-    if (!match) return null
-    const [, year, month, day] = match
-    return new Date(Date.UTC(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-        endOfDay ? 23 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 999 : 0,
-    ))
-}
-
 export const filterActivityLogs = (
     records,
-    { search = '', status = '', fromDate = '', toDate = '' } = {},
+    { search = '', status = '' } = {},
 ) => {
     const query = search.trim().toLowerCase()
-    const from = parseDateBoundary(fromDate)
-    const to = parseDateBoundary(toDate, true)
 
     return records.filter((record) => {
         const recordStatus = record.status ?? record.action ?? record.result ?? ''
         if (status && recordStatus !== status) return false
-        const timestamp = parseActivityTimestamp(record.timestamp)
-        if (from && (!timestamp || timestamp < from)) return false
-        if (to && (!timestamp || timestamp > to)) return false
         if (!query) return true
 
         return Object.values(record)
@@ -1106,15 +1065,18 @@ export const getViewFields = (record) => {
             return [
                 ...common,
                 { label: 'Changed by', value: record.user },
+                { label: 'User ID', value: record.userId },
                 { label: 'Email', value: record.userEmail },
                 { label: 'Role', value: record.role },
+                { label: 'Action performed', value: record.action || record.changeType },
                 { label: 'Module', value: record.module },
+                { label: 'Description', value: record.description || record.remarks },
                 { label: 'Record ID', value: record.recordId },
                 { label: 'Record name', value: record.recordName },
                 { label: 'Change type', value: record.changeType },
                 { label: 'Field changed', value: record.fieldChanged },
-                { label: 'Old value', value: record.oldValue },
-                { label: 'New value', value: record.newValue },
+                { label: 'Previous value', value: record.oldValue },
+                { label: 'Updated value', value: record.newValue },
                 { label: 'IP address', value: record.ipAddress },
             ]
         case 'deleted-records':
@@ -1144,14 +1106,17 @@ export const getViewFields = (record) => {
         case 'audit-logs':
             return [
                 ...common,
-                { label: 'Auditor', value: record.user },
+                { label: 'User name', value: record.user },
+                { label: 'User ID', value: record.userId },
                 { label: 'Email', value: record.userEmail },
                 { label: 'Role', value: record.role },
+                { label: 'Action performed', value: record.action || record.auditType },
+                { label: 'Module', value: record.module || record.scope },
+                { label: 'Description', value: record.description || record.findings },
                 { label: 'Audit ID', value: record.auditId },
-                { label: 'Audit type', value: record.auditType },
-                { label: 'Scope', value: record.scope },
                 { label: 'Result', value: record.result, badge: true },
-                { label: 'Findings', value: record.findings },
+                { label: 'Previous value', value: record.oldValue },
+                { label: 'Updated value', value: record.newValue },
                 { label: 'IP address', value: record.ipAddress },
             ]
         case 'failed-logins':

@@ -1,8 +1,22 @@
-export const ATTENDANCE_STATUSES = ['Present', 'Absent']
+import { getClasses, getSections } from '../../../Common/RBAC/academicsCatalogData'
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+
+export const ATTENDANCE_STATUSES = ['Present', 'Absent', 'Half Day', 'Leave', 'OD']
+
+/** Morning (FN) = before noon; Afternoon (AN) = after noon. */
+export const ATTENDANCE_SESSIONS = [
+    { id: 'FN', label: 'Morning (FN)', hint: 'Morning → Afternoon' },
+    { id: 'AN', label: 'Afternoon (AN)', hint: 'Afternoon → Evening' },
+]
 
 export const statusBadgeColor = {
     Present: 'bg-[#4CAF5033] text-[#4CAF50]',
     Absent: 'bg-[#FF000033] text-[#FF0000]',
+    'Half Day': 'bg-[#FF980033] text-[#FF9800]',
+    Leave: 'bg-[#2196F333] text-[#2196F3]',
+    OD: 'bg-[#9C27B033] text-[#9C27B0]',
+    Late: 'bg-[#FF980033] text-[#FF9800]',
 }
 
 export const inOutStatusBadgeColor = {
@@ -10,8 +24,24 @@ export const inOutStatusBadgeColor = {
     Late: 'bg-[#FF980033] text-[#FF9800]',
 }
 
-export const CLASSES = ['9', '10']
-export const SECTIONS = ['A', 'B']
+const DEMO_CLASSES = ['Grade 1', 'Grade 2', 'Grade 3', '9', '10']
+const DEMO_SECTIONS = ['A', 'B']
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+export const getClassOptions = () => {
+    const fromCatalog = getClasses()
+    if (fromCatalog.length) return fromCatalog
+    return apiCatalogMode() ? [] : DEMO_CLASSES
+}
+
+export const getSectionOptions = () => {
+    const fromCatalog = getSections()
+    if (fromCatalog.length) return fromCatalog
+    return apiCatalogMode() ? [] : DEMO_SECTIONS
+}
+
+export const CLASSES = liveArray(getClassOptions)
+export const SECTIONS = liveArray(getSectionOptions)
 
 export const ATTENDANCE_LIST = [
     {

@@ -1,6 +1,5 @@
-import { Navigate } from 'react-router-dom'
-import { getAnnouncementRoutes } from '../../../Common/Announcement/announcementConfigs'
+import AddAnnouncementForm from '../../../Common/Announcement/AddAnnouncementForm'
 
-export default function AddAnnouncement() {
-    return <Navigate to={getAnnouncementRoutes('director').list} replace />
-}
+const AddAnnouncement = () => <AddAnnouncementForm roleKey='director' />
+
+export default AddAnnouncement

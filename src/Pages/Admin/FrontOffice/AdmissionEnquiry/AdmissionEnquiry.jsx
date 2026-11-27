@@ -1,45 +1,63 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, EllipsisIcon, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react'
+import { Calendar, EllipsisIcon, Plus, Download } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
+import ListPagination, { PageSizeSelect } from '../../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../../Common/useListPagination'
+import { filterListRows } from '../../../../Common/listFiltering'
 import ExportModal from './Components/ExportModal'
 import {
     STATUS_OPTIONS,
+    convertEnquiryToAdmission,
     deleteAdmissionEnquiry,
     filterAdmissionEnquiries,
-    getAddAdmissionPath,
     getAllAdmissionEnquiries,
     getEnquiryProfileImage,
     getEnquiryRouteBase,
-    isAdminFrontOfficePath,
     statusBadgeColor,
-    updateAdmissionEnquiryStatus,
 } from './admissionEnquiryData'
+import { getAdmissionEditPath } from '../AdminssionList/admissionListData'
+import { canShowDeleteOption } from '../../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../../context/AuthContext'
 
 const AdmissionEnquiry = () => {
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const navigate = useNavigate()
     const { pathname } = useLocation()
     const routeBase = getEnquiryRouteBase(pathname)
-    const isAdminView = isAdminFrontOfficePath(pathname)
     const [fromDate, setFromDate] = useState(null)
     const [toDate, setToDate] = useState(null)
     const [exportModal, setExportModal] = useState(false)
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('')
-    const [entriesPerPage, setEntriesPerPage] = useState(10)
-    const [records, setRecords] = useState(() => getAllAdmissionEnquiries())
+    const [records, setRecords] = useState([])
 
-    const refresh = () => setRecords(getAllAdmissionEnquiries())
+    const refresh = async () => {
+        const rows = await getAllAdmissionEnquiries()
+        setRecords(rows)
+    }
+
+    useEffect(() => {
+        refresh()
+    }, [])
 
     const filteredRecords = useMemo(
-        () => filterAdmissionEnquiries(records, { search, status }),
-        [records, search, status],
+        () => filterListRows(filterAdmissionEnquiries(records, { search, status }), {
+            fromDate,
+            toDate,
+            dateKeys: ['enquiryDate', 'createdDate'],
+        }),
+        [records, search, status, fromDate, toDate],
     )
 
-    const visibleRecords = filteredRecords.slice(0, entriesPerPage)
+    const pagination = useListPagination(filteredRecords, {
+        resetKey: [search, status, fromDate?.getTime(), toDate?.getTime()].join('|'),
+    })
+    const visibleRecords = pagination.rows
 
     const clearFilters = () => {
         setSearch('')
@@ -48,18 +66,38 @@ const AdmissionEnquiry = () => {
         setToDate(null)
     }
 
-    const handleDelete = (id) => {
-        deleteAdmissionEnquiry(id)
-        refresh()
-        toast.success('Enquiry deleted.')
+    const handleDelete = async (id) => {
+        if (!showDelete) return
+        const result = await deleteAdmissionEnquiry(id)
+        if (!result.success) {
+            toast.error(result.message || 'Could not delete enquiry.')
+            return
+        }
+        await refresh()
+        toast.success('Enquiry closed.')
     }
 
-    const handleConvertToAdmission = (record) => {
-        updateAdmissionEnquiryStatus(record.id, 'Success')
-        refresh()
-        toast.success('Enquiry converted. Continue on the admission form.')
-        navigate(getAddAdmissionPath(pathname), {
-            state: { fromEnquiryId: record.id, enquiry: record },
+    const handleConvertToAdmission = async (record) => {
+        const result = await convertEnquiryToAdmission(record.id)
+        if (!result.success) {
+            toast.error(result.message || 'Convert failed.')
+            return
+        }
+        await refresh()
+        const admissionId = result.admission?.id
+        if (!admissionId) {
+            toast.error('Convert created no admission id. Open Admission List and edit the new row.')
+            return
+        }
+        toast.success('Enquiry converted. Save parent email, then Enroll as Student from Admission List.')
+        // Use edit URL (not add + location.state) so refresh still updates the converted row.
+        navigate(getAdmissionEditPath(pathname, admissionId), {
+            state: {
+                fromEnquiryId: record.id,
+                enquiry: record,
+                admissionId,
+                admission: result.admission,
+            },
         })
     }
 
@@ -74,9 +112,6 @@ const AdmissionEnquiry = () => {
                     >
                         Clear Filters
                     </button>
-                    <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
-                        <option value=''>From Beginning</option>
-                    </select>
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
@@ -135,15 +170,13 @@ const AdmissionEnquiry = () => {
                 <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
                     <h2 className='text-xl font-medium text-black'>Admission Enquiry List</h2>
                     <div className='flex gap-x-2'>
-                        {!isAdminView && (
-                            <NavLink
-                                to={`${routeBase}/add`}
-                                className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
-                            >
-                                <Plus size={16} />
-                                Add Admission Enquiry
-                            </NavLink>
-                        )}
+                        <NavLink
+                            to={`${routeBase}/add`}
+                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                        >
+                            <Plus size={16} />
+                            Add Admission Enquiry
+                        </NavLink>
                         <button
                             type='button'
                             onClick={() => setExportModal(true)}
@@ -156,28 +189,21 @@ const AdmissionEnquiry = () => {
                 </div>
 
                 {filteredRecords.length === 0 ? (
-                    <div className='py-16 text-center'>
-                        <h3 className='text-lg font-semibold text-[#0C1E5B]'>No admission enquiries yet</h3>
-                        <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>
-                            Create an enquiry to start tracking admission leads.
-                        </p>
-                    </div>
+                    records.length ? (
+                        <div className='py-16 text-center'>
+                            <h3 className='text-lg font-semibold text-[#0C1E5B]'>No records match the filters.</h3>
+                        </div>
+                    ) : (
+                        <div className='py-16 text-center'>
+                            <h3 className='text-lg font-semibold text-[#0C1E5B]'>No admission enquiries yet</h3>
+                            <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>
+                                Create an enquiry to start tracking admission leads.
+                            </p>
+                        </div>
+                    )
                 ) : (
                     <>
-                        <div className='flex gap-x-2 items-center my-2'>
-                            <select
-                                value={entriesPerPage}
-                                onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-                                className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'
-                            >
-                                <option value='10'>10</option>
-                                <option value='20'>20</option>
-                                <option value='30'>30</option>
-                                <option value='40'>40</option>
-                                <option value='50'>50</option>
-                            </select>
-                            <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                        </div>
+                        <PageSizeSelect pagination={pagination} className='my-2' />
                         <div className='relative overflow-x-auto'>
                             <table className='w-full text-sm text-left rtl:text-right'>
                                 <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -190,7 +216,6 @@ const AdmissionEnquiry = () => {
                                         <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Enquiry Date</th>
                                         <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Gender</th>
                                         <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Next Follow Up Date</th>
-                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Assigned To</th>
                                         <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
                                         <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>City</th>
                                         <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>State</th>
@@ -210,7 +235,6 @@ const AdmissionEnquiry = () => {
                                             <td className='px-2 py-4'>{record.enquiryDate || '—'}</td>
                                             <td className='px-2 py-4'>{record.gender || '—'}</td>
                                             <td className='px-2 py-4'>{record.nextFollowUpDate || '—'}</td>
-                                            <td className='px-2 py-4'>{record.assignedTo || '—'}</td>
                                             <td className='px-2 py-4'>
                                                 <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.status] || statusBadgeColor.Active}`}>
                                                     {record.status}
@@ -226,30 +250,28 @@ const AdmissionEnquiry = () => {
                                                     >
                                                         View
                                                     </NavLink>
-                                                    {!isAdminView && (
-                                                        <>
-                                                            <NavLink
-                                                                to={`${routeBase}/edit/${record.id}`}
-                                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                            >
-                                                                Edit
-                                                            </NavLink>
-                                                            <button
-                                                                type='button'
-                                                                onClick={() => handleDelete(record.id)}
-                                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                            <button
-                                                                type='button'
-                                                                onClick={() => handleConvertToAdmission(record)}
-                                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
-                                                            >
-                                                                Convert to Admission
-                                                            </button>
-                                                        </>
-                                                    )}
+                                                    <NavLink
+                                                        to={`${routeBase}/edit/${record.id}`}
+                                                        className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Edit
+                                                    </NavLink>
+                                                    {showDelete ? (
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => handleDelete(record.id)}
+                                                            className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    ) : null}
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => handleConvertToAdmission(record)}
+                                                        className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        Convert to Admission
+                                                    </button>
                                                 </Dropdown>
                                             </td>
                                         </tr>
@@ -258,27 +280,18 @@ const AdmissionEnquiry = () => {
                             </table>
                         </div>
 
-                        <div className='flex justify-between items-center px-4 mt-4'>
-                            <p className='text-sm font-medium text-[#515DEF]'>
-                                Showing 1 to {visibleRecords.length} of {filteredRecords.length} entries
-                            </p>
-                            <div className='flex justify-center gap-x-2 flex-wrap'>
-                                <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                                    <ChevronLeft size={16} />
-                                </button>
-                                <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
-                                    1
-                                </button>
-                                <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        </div>
+                        <ListPagination pagination={pagination} />
                     </>
                 )}
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='admission-enquiry'
+                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRecords) ? filteredRecords.length : 0} record(s).</>}
+            />
         </section>
     )
 }

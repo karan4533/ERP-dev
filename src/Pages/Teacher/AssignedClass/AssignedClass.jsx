@@ -147,7 +147,13 @@ const AssignedClass = () => {
                 )}
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='assigned-class'
+                rows={Array.isArray(assignedClasses) ? assignedClasses : []}
+                exportDescription={<>You are exporting {Array.isArray(assignedClasses) ? assignedClasses.length : 0} record(s).</>}
+            />
         </section>
     )
 }

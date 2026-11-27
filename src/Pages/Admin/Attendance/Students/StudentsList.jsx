@@ -1,16 +1,20 @@
 import React, { useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { Calendar, ChevronLeft, ChevronRight, Download, CheckCircle2 } from 'lucide-react'
+import { Calendar, Download } from 'lucide-react'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import ListPagination from '../../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../../Common/useListPagination'
 import {
     CLASS_OPTIONS,
     filterStudentAttendance,
     SECTION_OPTIONS,
     statusBadgeColor,
-    getStoredStudentAttendance,
-    saveStoredStudentAttendance,
+    STUDENT_ATTENDANCE,
 } from './studentAttendanceData'
+import { canUseAdminAttendanceApi, loadStudentAttendance, toIsoDate } from '../../../../services/adminAttendanceApi'
+import { runAttendanceSyncApi } from '../../../../services/attendanceApi'
+import { useAttendanceQuery } from '../useAttendanceQuery'
 
 const emptyFilters = { search: '', className: '', section: '' }
 
@@ -18,67 +22,87 @@ const StudentsList = () => {
     const [filters, setFilters] = useState(emptyFilters)
     const [selectedDate, setSelectedDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [records, setRecords] = useState(() => getStoredStudentAttendance())
+
+    // API mode: marks for the chosen date come from the attendance API (class / section filter on the
+    // server). Local mode: the browser-only demo rows below, filtered exactly as before.
+    const apiMode = canUseAdminAttendanceApi()
+    const query = useAttendanceQuery(apiMode, loadStudentAttendance, {
+        date: toIsoDate(selectedDate || new Date()),
+        className: filters.className,
+        section: filters.section,
+    })
+    const classOptions = apiMode ? (query.options?.classOptions ?? []) : CLASS_OPTIONS
+    const sectionOptions = apiMode ? (query.options?.sectionOptions ?? []) : SECTION_OPTIONS
+    const apiRecords = query.data?.records
 
     const filteredRecords = useMemo(
-        () => filterStudentAttendance(records, filters),
-        [records, filters],
+        () =>
+            apiMode
+                ? filterStudentAttendance(apiRecords ?? [], { search: filters.search })
+                : filterStudentAttendance(STUDENT_ATTENDANCE, filters),
+        [apiMode, apiRecords, filters],
     )
+    const pagination = useListPagination(filteredRecords, {
+        resetKey: [filters.search, filters.className, filters.section, selectedDate?.getTime()].join('|'),
+    })
+    const counts = useMemo(() => {
+        const tally = {}
+        filteredRecords.forEach((record) => {
+            tally[record.status] = (tally[record.status] || 0) + 1
+        })
+        return tally
+    }, [filteredRecords])
 
     const clearFilters = () => {
         setFilters(emptyFilters)
         setSelectedDate(new Date())
     }
 
-    const toggleStudentStatus = (id) => {
-        const updated = records.map((r) => {
-            if (r.id === id) {
-                const nextStatus = r.status === 'Present' ? 'Absent' : 'Present'
-                return {
-                    ...r,
-                    status: nextStatus,
-                    onTime: nextStatus === 'Present' ? '08:15 AM' : '—',
-                    outTime: nextStatus === 'Present' ? '03:30 PM' : '—',
-                }
-            }
-            return r
-        })
-        setRecords(updated)
-        saveStoredStudentAttendance(updated)
-    }
-
-    const markAllPresent = () => {
-        const updated = records.map((r) => ({
-            ...r,
-            status: 'Present',
-            onTime: r.onTime === '—' ? '08:15 AM' : r.onTime,
-            outTime: r.outTime === '—' ? '03:30 PM' : r.outTime,
-        }))
-        setRecords(updated)
-        saveStoredStudentAttendance(updated)
+    const [sync, setSync] = useState({ busy: false, error: '', message: '' })
+    const runSync = async () => {
+        if (sync.busy) return
+        const date = toIsoDate(selectedDate || new Date())
+        setSync({ busy: true, error: '', message: '' })
+        try {
+            const result = await runAttendanceSyncApi({ date })
+            const s = result?.students || {}
+            setSync({
+                busy: false,
+                error: '',
+                message: `Biometric sync for ${date}: ${s.created || 0} new, ${s.updated || 0} updated, `
+                    + `${s.manualKept || 0} manual marks kept, ${result?.skippedCount || 0} punches not matched.`,
+            })
+            query.reload()
+        } catch (err) {
+            setSync({ busy: false, error: err?.message || 'Could not run the biometric sync.', message: '' })
+        }
     }
 
     return (
         <section>
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4 mb-4'>
-                    <div className='flex items-center gap-2'>
-                        <button
-                            type='button'
-                            onClick={clearFilters}
-                            className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
-                        >
-                            Clear Filters
-                        </button>
-                        <button
-                            type='button'
-                            onClick={markAllPresent}
-                            className='flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors cursor-pointer'
-                        >
-                            <CheckCircle2 size={16} />
-                            Mark All Present
-                        </button>
-                    </div>
+                    <button
+                        type='button'
+                        onClick={clearFilters}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
+                    >
+                        Clear Filters
+                    </button>
+                    {apiMode && (
+                        <div className='flex flex-col items-end gap-y-1'>
+                            <button
+                                type='button'
+                                onClick={runSync}
+                                disabled={sync.busy}
+                                className='bg-white text-[#515DEF] text-sm px-4 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'
+                            >
+                                {sync.busy ? 'Syncing…' : 'Run biometric sync for this date'}
+                            </button>
+                            {sync.message && <p role='status' className='text-xs text-[#027A48]'>{sync.message}</p>}
+                            {sync.error && <p role='alert' className='text-xs text-[#B42318]'>{sync.error}</p>}
+                        </div>
+                    )}
                 </div>
                 <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                     <div className='flex flex-col gap-y-2'>
@@ -101,7 +125,7 @@ const StudentsList = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All Classes</option>
-                            {CLASS_OPTIONS.map((className) => (
+                            {classOptions.map((className) => (
                                 <option key={className} value={className}>{className}</option>
                             ))}
                         </select>
@@ -115,7 +139,7 @@ const StudentsList = () => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All Sections</option>
-                            {SECTION_OPTIONS.map((section) => (
+                            {sectionOptions.map((section) => (
                                 <option key={section} value={section}>{section}</option>
                             ))}
                         </select>
@@ -148,6 +172,51 @@ const StudentsList = () => {
                         Export
                     </button>
                 </div>
+                {apiMode && query.status === 'loading' ? (
+                    <div role='status' className='py-16 text-center text-sm text-[#667085]'>Loading attendance…</div>
+                ) : apiMode && query.status === 'error' ? (
+                    <div role='alert' className='py-16 text-center'>
+                        <h3 className='text-lg font-semibold text-[#B42318]'>Could not load attendance</h3>
+                        <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>{query.error}</p>
+                        <button
+                            type='button'
+                            onClick={query.reload}
+                            className='mt-4 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 cursor-pointer'
+                        >
+                            Retry
+                        </button>
+                    </div>
+                ) : (
+                <>
+                {apiMode && (
+                    <div className='mb-3 space-y-1'>
+                        {(query.data?.warnings ?? []).map((warning) => (
+                            <p key={warning} role='status' className='text-xs text-[#B54708]'>{warning}</p>
+                        ))}
+                        <p className='text-xs text-[#667085]'>
+                            Marks saved by teachers, or filled from biometric punches by the sync (In / Out shows
+                            &quot;Biometric&quot;), for the chosen date. A teacher&apos;s mark always wins over the sync.
+                            The table shows when attendance was marked and its In / Out note.
+                            {filters.className && !filters.section
+                                ? ' Students nobody has marked yet are listed as "Not marked".'
+                                : ' Choose a class without a section to also see students who are not marked yet.'}
+                        </p>
+                        <p className='text-xs font-medium text-[#0C1E5B]'>
+                            {Object.keys(counts).length === 0
+                                ? 'No students listed.'
+                                : Object.entries(counts).map(([status, count]) => `${status}: ${count}`).join(' · ')}
+                        </p>
+                    </div>
+                )}
+                {apiMode && filteredRecords.length === 0 ? (
+                    <div className='py-16 text-center'>
+                        <h3 className='text-lg font-semibold text-[#0C1E5B]'>No attendance marked for this date</h3>
+                        <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>
+                            Nothing has been marked for {toIsoDate(selectedDate || new Date())}
+                            {filters.className ? ` in ${filters.className}` : ''}. Try another date or class.
+                        </p>
+                    </div>
+                ) : (
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -156,60 +225,55 @@ const StudentsList = () => {
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Student Name</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
                                 <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Section</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>On Time</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Out Time</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Status</th>
-                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg text-right'>Action</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>{apiMode ? 'Marked At' : 'On Time'}</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>{apiMode ? 'In / Out' : 'Out Time'}</th>
+                                <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredRecords.map((record) => (
+                            {filteredRecords.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className='px-2 py-8 text-center text-[#667085]'>No records match the filters.</td>
+                                </tr>
+                            ) : null}
+                            {pagination.rows.map((record) => (
                                 <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.admissionNo}</td>
                                     <td className='px-2 py-4'>{record.studentName}</td>
                                     <td className='px-2 py-4'>{record.className}</td>
                                     <td className='px-2 py-4'>{record.section}</td>
-                                    <td className='px-2 py-4'>{record.onTime}</td>
-                                    <td className='px-2 py-4'>{record.outTime}</td>
-                                    <td className='px-2 py-4'>
+                                    <td className='px-2 py-4'>{apiMode ? record.markedAt : record.onTime}</td>
+                                    <td className='px-2 py-4'>{apiMode ? record.inOut : record.outTime}</td>
+                                    <td className='px-2 py-4 rounded-e-lg'>
                                         <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.status]}`}>
                                             {record.status}
                                         </span>
-                                    </td>
-                                    <td className='px-2 py-4 text-right rounded-e-lg'>
-                                        <button
-                                            type='button'
-                                            onClick={() => toggleStudentStatus(record.id)}
-                                            className='inline-flex items-center rounded border border-[#515DEF] px-2.5 py-1 text-xs font-semibold text-[#515DEF] hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
-                                        >
-                                            Toggle Status
-                                        </button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
+                )}
+                </>
+                )}
             </div>
 
-            <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {filteredRecords.length} of {filteredRecords.length} entries
-                </p>
-                <div className='flex gap-x-2'>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-[#515DEF] text-white border border-[#515DEF] rounded-full cursor-pointer'>
-                        1
-                    </button>
-                    <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            </div>
+            {apiMode && query.status !== 'ready' ? null : <ListPagination pagination={pagination} showPageSize />}
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='student-attendance'
+                rows={filteredRecords.map((r) => ({
+                    admissionNumber: r.admissionNumber || r.studentId,
+                    studentName: r.studentName || r.name,
+                    className: r.className,
+                    section: r.section,
+                    status: r.status || r.attendanceStatus,
+                }))}
+                exportDescription={<>You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'}.</>}
+            />
         </section>
     )
 }

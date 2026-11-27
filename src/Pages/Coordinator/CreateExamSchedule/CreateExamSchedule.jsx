@@ -7,6 +7,8 @@ import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import EditRequestModal from '../../../Common/CommonComponents/EditRequestModal'
 import DeleteRequestModal from '../../../Common/CommonComponents/DeleteRequestModal'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
 import ExamTimeTableModal from './Components/ExamTimeTableModal'
 import {
     getExamSchedules,
@@ -14,12 +16,11 @@ import {
     approvalBadgeColor,
     CLASSES,
 } from './createExamScheduleData'
-import { useAuth } from '../../../context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
+import { canUseClassDetailsApi, loadClassDirectory } from '../../../services/classDetailsApi'
 
 const CreateExamSchedule = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const location = useLocation()
     const [schedules, setSchedules] = useState(() => getExamSchedules())
     const [fromDate, setFromDate] = useState(new Date())
@@ -28,10 +29,24 @@ const CreateExamSchedule = () => {
     const [editRequestModal, setEditRequestModal] = useState(false)
     const [deleteRequestModal, setDeleteRequestModal] = useState(false)
     const [timeTableModal, setTimeTableModal] = useState(null)
+    const [classOptions, setClassOptions] = useState(CLASSES)
 
     useEffect(() => {
         setSchedules(getExamSchedules())
     }, [location.pathname])
+
+    useEffect(() => {
+        if (!canUseClassDetailsApi()) return undefined
+        let cancelled = false
+        loadClassDirectory()
+            .then((directory) => {
+                if (cancelled) return
+                const names = (directory?.records || []).map((row) => row.className).filter(Boolean)
+                if (names.length) setClassOptions(names)
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [])
 
     return (
         <section>
@@ -53,7 +68,7 @@ const CreateExamSchedule = () => {
                         <label htmlFor='class-filter' className='text-base font-medium text-[#808080]'>Class</label>
                         <select id='class-filter' className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value=''>All</option>
-                            {CLASSES.map((item) => (
+                            {classOptions.map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -177,11 +192,11 @@ const CreateExamSchedule = () => {
                                             <button type='button' onClick={() => setEditRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                 Edit
                                             </button>
-                                            {canDelete && (
+                                            {showDelete ? (
                                                 <button type='button' onClick={() => setDeleteRequestModal(true)} className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                     Delete
                                                 </button>
-                                            )}
+                                            ) : null}
                                         </Dropdown>
                                     </td>
                                 </tr>
@@ -208,9 +223,16 @@ const CreateExamSchedule = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='createexamschedule'
+                title='CreateExamSchedule'
+                rows={Array.isArray(schedules) ? schedules : []}
+                exportDescription={<>You are exporting {Array.isArray(schedules) ? schedules.length : 0} record(s).</>}
+            />
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
-            {canDelete && <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />}
+            <DeleteRequestModal deleteRequestModal={deleteRequestModal} setDeleteRequestModal={setDeleteRequestModal} />
             <ExamTimeTableModal
                 open={Boolean(timeTableModal)}
                 onClose={() => setTimeTableModal(null)}

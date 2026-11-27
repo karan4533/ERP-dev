@@ -131,18 +131,35 @@ def _can_download_orphan_file(db: Session, actor: User, row: FileAsset) -> bool:
     """Generic uploads are not campus-wide; only the uploader or elevated staff may read them."""
     if row.uploaded_by == actor.id:
         return True
+    from app.services.campus_audit_collections import can_download_audit_file, is_audit_resource
+
+    if is_audit_resource(row.resource_type):
+        # Audit evidence follows the audit stream readers (Process and Quality stay separate).
+        return can_download_audit_file(db, actor, row.resource_type)
+    from app.services import attachments
+
+    if attachments.is_linked_resource(row.resource_type):
+        # Task / ticket attachments follow that record's visibility, not campus-wide staff permissions.
+        return attachments.can_download(db, actor, row)
     from app.deps import permission_codes_for
 
+    codes = set(permission_codes_for(db, actor))
     elevated = {
         "hr.write",
         "hr.employees.write",
         "admissions.write",
         "documents.students.read",
         "documents.employees.read",
+        "documents.library.read",
         "audit.read",
         "users.write",
     }
-    return bool(elevated.intersection(permission_codes_for(db, actor)))
+    if elevated.intersection(codes):
+        return True
+    # Star of the Month attachments: any staff with ops/academics read may download.
+    if str(row.resource_type or "").startswith("som-"):
+        return bool(codes.intersection({"ops.read", "ops.write", "academics.read", "academics.write"}))
+    return False
 
 
 def get_file(db: Session, actor: User, file_id: uuid.UUID) -> tuple[FileAsset, Path]:
@@ -163,6 +180,86 @@ def get_file(db: Session, actor: User, file_id: uuid.UUID) -> tuple[FileAsset, P
     if not path.is_file():
         fail(404, "not_found", "File bytes are missing.")
     return row, path
+
+
+# File Management: files uploaded on that screen are tagged with this resource type. Only these
+# can be deleted there; files owned by other modules (documents, announcements, messages, photos,
+# HR/ops JSON records) are listed read-only because their references cannot all be checked here.
+LIBRARY_RESOURCE = "library"
+
+
+def _referenced_by_table(db: Session, row: FileAsset) -> bool:
+    from sqlalchemy import or_, select
+
+    from app.models import Admission, AdmissionEnquiry
+
+    if _is_domain_linked_file(db, row):
+        return True
+    for model in (Admission, AdmissionEnquiry):
+        if db.scalar(select(model.id).where(model.profile_image_file_id == row.id).limit(1)):
+            return True
+    return False
+
+
+def list_files(db: Session, actor: User, *, search: str = "", kind: str = "") -> list[dict]:
+    from sqlalchemy import select
+
+    rows = db.scalars(
+        select(FileAsset).where(FileAsset.campus_id == actor.campus_id).order_by(FileAsset.created_at.desc())
+    ).all()
+    uploaders = {
+        user.id: user.email
+        for user in db.scalars(select(User).where(User.id.in_({r.uploaded_by for r in rows if r.uploaded_by}))).all()
+    }
+    query = search.strip().lower()
+    out = []
+    for row in rows:
+        if query and query not in row.original_name.lower():
+            continue
+        if kind == "library" and row.resource_type != LIBRARY_RESOURCE:
+            continue
+        if kind == "module" and row.resource_type == LIBRARY_RESOURCE:
+            continue
+        deletable = row.resource_type == LIBRARY_RESOURCE and not _referenced_by_table(db, row)
+        out.append({
+            **_public(row),
+            "uploaded_by": uploaders.get(row.uploaded_by, ""),
+            "created_at": row.created_at.isoformat(),
+            "deletable": deletable,
+        })
+    return out
+
+
+def upload_library_file(db: Session, actor: User, upload: UploadFile) -> dict:
+    row = store_upload(
+        db, actor, upload, resource_type=LIBRARY_RESOURCE, allowed_signatures=DOCUMENT_SIGNATURES,
+    )
+    db.commit()
+    db.refresh(row)
+    return {**_public(row), "deletable": True}
+
+
+def delete_library_file(db: Session, actor: User, file_id: uuid.UUID) -> dict:
+    row = db.get(FileAsset, file_id)
+    if row is None or row.campus_id != actor.campus_id:
+        fail(404, "not_found", "File was not found.")
+    if row.resource_type != LIBRARY_RESOURCE:
+        fail(409, "file_in_use", "This file belongs to another module; remove it there instead.")
+    if _referenced_by_table(db, row):
+        fail(409, "file_in_use", "This file is still attached to a record and cannot be deleted.")
+    write_audit(
+        db,
+        action="FILE_DELETED",
+        entity_type="file_asset",
+        entity_id=str(row.id),
+        actor_id=actor.id,
+        campus_id=actor.campus_id,
+        details=row.original_name,
+    )
+    db.delete(row)
+    db.commit()
+    discard_stored_bytes(row)
+    return {"deleted": True, "id": str(file_id)}
 
 
 def _public(row: FileAsset) -> dict:

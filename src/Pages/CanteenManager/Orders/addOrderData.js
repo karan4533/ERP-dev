@@ -1,5 +1,3 @@
-import { MENU_ITEMS } from '../MenuManagement/menuData'
-
 export const RFID_CUSTOMERS = [
     {
         rfidCardNo: 'RFID-1001',
@@ -24,25 +22,72 @@ export const RFID_CUSTOMERS = [
     },
 ]
 
-export const MENU_OPTIONS = MENU_ITEMS.filter((item) => item.status === 'Active' && item.availability === 'Available').map((item) => ({
-    id: item.menuId,
-    name: item.itemName,
-    price: Number.parseInt(item.price.replace(/[^\d]/g, ''), 10) || 0,
-}))
+export const menuOptionsFromItems = (items) =>
+    (Array.isArray(items) ? items : [])
+        .filter((item) => item.status === 'Active' && item.availability === 'Available')
+        .map((item) => ({
+            id: item.menuId || item.id,
+            name: item.itemName || item.name || item.item || '',
+            price: Number.parseInt(String(item.price ?? '').replace(/[^\d]/g, ''), 10) || 0,
+        }))
+        .filter((item) => item.id && item.name)
 
 export const lookupCustomerByRfid = (rfidCardNo) =>
-    RFID_CUSTOMERS.find((customer) => customer.rfidCardNo === rfidCardNo.trim()) ?? null
+    RFID_CUSTOMERS.find((customer) => customer.rfidCardNo === String(rfidCardNo || '').trim()) ?? null
 
-export const calculateTotalAmount = (selectedMenuIds, quantity) => {
+export const calculateTotalAmount = (selectedMenuIds, quantity, menuOptions = []) => {
     const qty = Math.max(Number(quantity) || 0, 0)
-    if (!qty || selectedMenuIds.length === 0) return 0
+    if (!qty || !selectedMenuIds?.length) return 0
 
     const itemTotal = selectedMenuIds.reduce((sum, menuId) => {
-        const menuItem = MENU_OPTIONS.find((item) => item.id === menuId)
+        const menuItem = menuOptions.find((item) => item.id === menuId)
         return sum + (menuItem?.price ?? 0)
     }, 0)
 
     return itemTotal * qty
 }
 
-export const formatCurrency = (amount) => `₹${amount.toLocaleString('en-IN')}`
+export const formatCurrency = (amount) => `₹${Number(amount || 0).toLocaleString('en-IN')}`
+
+export const EMPTY_ORDER_DRAFT = {
+    rfidCardNo: '',
+    customer: null,
+    selectedMenuIds: [],
+    quantity: 1,
+    specialInstructions: '',
+    orderType: 'Counter',
+    paymentMethod: 'Cash',
+    paymentStatus: 'Paid',
+    orderStatus: 'Preparing',
+    expectedReadyTime: null,
+    totalAmount: 0,
+}
+
+export const buildOrderRecord = (draft, menuOptions = []) => {
+    const qty = Math.max(Number(draft.quantity) || 0, 0)
+    const items = (draft.selectedMenuIds || [])
+        .map((id) => menuOptions.find((item) => item.id === id)?.name)
+        .filter(Boolean)
+    const total = calculateTotalAmount(draft.selectedMenuIds, qty, menuOptions)
+    const when = new Date()
+    const orderId = `ORD-${when.getTime().toString().slice(-8)}`
+    return {
+        id: orderId,
+        orderId,
+        customerName: draft.customer?.name || '',
+        customerType: draft.customer?.customerType || '',
+        customerId: draft.customer?.customerId || '',
+        classOrDepartment: draft.customer?.classOrDepartment || '',
+        rfidCardNo: String(draft.rfidCardNo || '').trim(),
+        itemsCount: items.length * Math.max(qty, 1),
+        totalAmount: formatCurrency(total),
+        paymentMethod: draft.paymentMethod || 'Cash',
+        paymentStatus: draft.paymentStatus || 'Pending',
+        orderStatus: draft.orderStatus || 'Preparing',
+        orderType: draft.orderType || 'Counter',
+        specialInstructions: draft.specialInstructions || '',
+        orderDateTime: when.toLocaleString('en-IN'),
+        items,
+        quantity: qty,
+    }
+}

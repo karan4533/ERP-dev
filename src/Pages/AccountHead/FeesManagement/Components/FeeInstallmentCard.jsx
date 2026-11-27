@@ -18,10 +18,16 @@ const FeeInstallmentCard = ({
     onPartialAmountChange,
     allowPartial,
 }) => {
+    const balance = Number(installment.balanceAmount) || 0
     const isPaid = installment.status === FEE_INSTALLMENT_STATUSES.PAID
         || installment.status === FEE_INSTALLMENT_STATUSES.WAIVED
         || installment.status === FEE_INSTALLMENT_STATUSES.CANCELLED
-    const disabled = isPaid || !installment.payable
+        || balance <= 0
+    const displayStatus = isPaid && installment.status !== FEE_INSTALLMENT_STATUSES.WAIVED
+        && installment.status !== FEE_INSTALLMENT_STATUSES.CANCELLED
+        ? FEE_INSTALLMENT_STATUSES.PAID
+        : installment.status
+    const disabled = isPaid || !installment.payable || balance <= 0
 
     return (
         <div className={`rounded-2xl border p-4 transition-colors ${
@@ -32,23 +38,33 @@ const FeeInstallmentCard = ({
                     : 'border-[#EDEEF5] bg-white'
         }`}>
             <div className='flex items-start justify-between gap-3 mb-3'>
-                <label className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
+                <label className={`inline-flex items-start gap-2 ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
                     <input
                         type='checkbox'
                         checked={isPaid ? true : selected}
                         disabled={disabled}
                         onChange={() => onToggle(installment)}
-                        className='size-4 accent-[#515DEF]'
+                        className='size-4 accent-[#515DEF] mt-0.5'
                     />
-                    <span className='font-semibold text-[#1E1E1E]'>{installment.feeHead}</span>
+                    <span>
+                        <span className='font-semibold text-[#1E1E1E] block'>
+                            {installment.installmentLabel || installment.feeHead}
+                        </span>
+                        {installment.installmentLabel && installment.feeHead && (
+                            <span className='text-xs text-[#808080]'>{installment.feeHead}</span>
+                        )}
+                    </span>
                 </label>
-                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${installmentStatusBadgeColor[installment.status]}`}>
-                    {installment.status.replaceAll('_', ' ')}
+                <span className={`px-2 py-1 rounded-lg text-xs font-semibold shrink-0 ${installmentStatusBadgeColor[displayStatus] || installmentStatusBadgeColor[installment.status]}`}>
+                    {String(displayStatus).replaceAll('_', ' ')}
                 </span>
             </div>
 
             {isPaid ? (
                 <div className='space-y-1'>
+                    {installment.dueDate && (
+                        <Row label='Paid for due date' value={installment.dueDate} muted />
+                    )}
                     <Row label='Concession' value={formatCurrency(installment.concessionAmount)} />
                     <Row label='Fee Amount' value={formatCurrency(installment.feeAmount)} />
                     <Row label='Net Amount (After concession)' value={formatCurrency(installment.netAmount)} />
@@ -58,6 +74,12 @@ const FeeInstallmentCard = ({
                 </div>
             ) : (
                 <div className='space-y-1'>
+                    {installment.dueDate && (
+                        <Row label='Pay by' value={installment.dueDate} />
+                    )}
+                    {installment.frequency && (
+                        <Row label='Billing' value={String(installment.frequency).replaceAll('_', ' ')} muted />
+                    )}
                     <Row label='Concession' value={formatCurrency(installment.concessionAmount)} />
                     <Row label='Fee Amount' value={formatCurrency(installment.feeAmount)} />
                     <Row label='Net Amount' value={formatCurrency(installment.netAmount)} />

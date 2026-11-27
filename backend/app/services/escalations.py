@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.deps import role_code_for
 from app.models import Escalation, Role, Task, TaskEvent, User
 from app.services.approvals import _notify
+from app.services.attachments import task_attachments
 from app.services.audit import write_audit
 from app.services.errors import fail
 
@@ -34,6 +35,7 @@ ESCALATES_TO = {
     "gatekeeper": "gatekeepermanager",
     "gatekeepermanager": "prm",
     "prm": "director",
+    "pro": "director",
     "student": "teacher",
     "teacher": "coordinator",
     "coordinator": "principal",
@@ -52,10 +54,18 @@ NON_STAFF = {"student", "parent"}
 TASK_HIERARCHY = {
     "superadmin": ("admin",),
     "admin": ("director",),
-    "director": ("principal", "prm"),
+    "director": ("principal", "prm", "pro"),
     "principal": ("coordinator", "teacher", "librarian"),
     "prm": ("gatekeepermanager",),
+    "pro": ("gatekeepermanager",),
     "gatekeepermanager": ("gatekeeper",),
+    # Ops / audit managers with Task Management create/assign (#51)
+    "housekeepingmanager": ("gatekeeper",),
+    "maintenancemanager": ("gatekeeper",),
+    "transportmanager": ("driver",),
+    "stationerystoremanager": ("prm",),
+    "processauditor": ("teacher",),
+    "qualityauditor": ("teacher",),
 }
 TASK_PRIORITIES = ["High", "Medium", "Low"]
 TASK_STATUSES = ["Incomplete", "In Progress", "Completed"]
@@ -411,13 +421,21 @@ def _out_event(db: Session, ev: TaskEvent) -> dict:
 
 
 def _out_task(
-    db: Session, row: Task, *, today: date | None = None, events: list[TaskEvent] | None = None, detail: bool = False
+    db: Session,
+    row: Task,
+    *,
+    today: date | None = None,
+    events: list[TaskEvent] | None = None,
+    attachments: list[dict] | None = None,
+    detail: bool = False,
 ) -> dict:
     today = today or date.today()
     by = db.get(User, row.assigned_by_id)
     to = db.get(User, row.assignee_id)
     if events is None:
         events = _task_events(db, [row.id]).get(row.id, [])
+    if attachments is None:
+        attachments = task_attachments(db, row.campus_id, [row.id]).get(str(row.id), [])
     last_remark = next((e.remark for e in reversed(events) if e.remark), "")
     data = {
         "id": str(row.id),
@@ -436,6 +454,7 @@ def _out_task(
         "assignedAt": _aware(row.created_at).isoformat(),
         "completedAt": _aware(row.completed_at).isoformat() if row.completed_at else None,
         "remark": last_remark or "",
+        "attachments": attachments,
     }
     if detail:
         data["history"] = [_out_event(db, e) for e in events]
@@ -563,7 +582,8 @@ def list_tasks(db: Session, actor: User, *, box: str, status: str | None) -> lis
     else:
         fail(400, "validation_error", "box must be mine, assigned or all.")
     events = _task_events(db, [r.id for r in rows])
-    out = [_out_task(db, r, events=events.get(r.id, [])) for r in rows]
+    files = task_attachments(db, actor.campus_id, [r.id for r in rows])
+    out = [_out_task(db, r, events=events.get(r.id, []), attachments=files.get(str(r.id), [])) for r in rows]
     return [o for o in out if o["status"] == status] if status else out
 
 

@@ -51,9 +51,13 @@ const TABS = [
 
 const MyProfilePage = () => {
     const navigate = useNavigate()
-    const { role, name: authName, email } = useAuth()
+    const { role, name: authName, email, employeeId: authEmployeeId, department: authDepartment, completePasswordChange } = useAuth()
     const roleLabel = getProfileLabel(role)
     const displayName = authName || (roleLabel ?? 'Staff User')
+    const [currentPwd, setCurrentPwd] = useState('')
+    const [newPwd, setNewPwd] = useState('')
+    const [pwdStatus, setPwdStatus] = useState({ type: '', message: '' })
+    const [updatingPwd, setUpdatingPwd] = useState(false)
 
     const isStudentOrParent = role === 'student' || role === 'parent'
     const roleTabs = useMemo(() => {
@@ -217,13 +221,11 @@ const MyProfilePage = () => {
                                 </span>
                             </div>
                             <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500'>
-                                <span>Employee ID: <strong className='text-slate-700'>EMP-2026-042</strong></span>
+                                <span>Employee ID: <strong className='text-slate-700'>{authEmployeeId || employeeId}</strong></span>
                                 <span>·</span>
-                                <span>Dept: <strong className='text-slate-700'>Academic Administration</strong></span>
+                                <span>Dept: <strong className='text-slate-700'>{authDepartment || currentEmployee?.department || 'Academic Administration'}</strong></span>
                                 <span>·</span>
-                                <span>Manager: <strong className='text-slate-700'>Director of Academics</strong></span>
-                                <span>·</span>
-                                <span>Joined: <strong className='text-slate-700'>01 Jun 2021</strong></span>
+                                <span>Email: <strong className='text-slate-700'>{email || '—'}</strong></span>
                             </div>
                         </div>
                     </div>
@@ -617,10 +619,17 @@ const MyProfilePage = () => {
 
                         <div className='space-y-3 pt-2'>
                             <p className='font-bold text-slate-900'>Change Workspace Password</p>
+                            {pwdStatus.message && (
+                                <div className={`rounded-xl px-3 py-2 text-xs font-medium ${pwdStatus.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                                    {pwdStatus.message}
+                                </div>
+                            )}
                             <div>
                                 <label className='block font-medium text-slate-700 mb-1'>Current Password</label>
                                 <input
                                     type='password'
+                                    value={currentPwd}
+                                    onChange={(e) => setCurrentPwd(e.target.value)}
                                     placeholder='••••••••••••'
                                     className='w-full rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:border-blue-500 focus:outline-none'
                                 />
@@ -629,16 +638,37 @@ const MyProfilePage = () => {
                                 <label className='block font-medium text-slate-700 mb-1'>New Password</label>
                                 <input
                                     type='password'
-                                    placeholder='••••••••••••'
+                                    value={newPwd}
+                                    onChange={(e) => setNewPwd(e.target.value)}
+                                    placeholder='Minimum 10 characters with letter & number'
                                     className='w-full rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:border-blue-500 focus:outline-none'
                                 />
                             </div>
                             <button
                                 type='button'
-                                onClick={handleSave}
-                                className='rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-black transition-colors cursor-pointer'
+                                disabled={updatingPwd}
+                                onClick={async () => {
+                                    setPwdStatus({ type: '', message: '' })
+                                    if (!currentPwd || !newPwd) {
+                                        setPwdStatus({ type: 'error', message: 'Enter both your current and new password.' })
+                                        return
+                                    }
+                                    setUpdatingPwd(true)
+                                    try {
+                                        await completePasswordChange(currentPwd, newPwd)
+                                        setCurrentPwd('')
+                                        setNewPwd('')
+                                        setPwdStatus({ type: 'success', message: 'Password updated on server.' })
+                                        toast.success('Password updated successfully!')
+                                    } catch (err) {
+                                        setPwdStatus({ type: 'error', message: err?.message || 'Unable to update password.' })
+                                    } finally {
+                                        setUpdatingPwd(false)
+                                    }
+                                }}
+                                className='rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-black transition-colors cursor-pointer disabled:opacity-60'
                             >
-                                Update Password
+                                {updatingPwd ? 'Updating...' : 'Update Password'}
                             </button>
                         </div>
                     </div>

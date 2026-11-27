@@ -1,9 +1,16 @@
-import React from 'react'
-import AdminExpensesWorkspace from '../AdminExpensesWorkspace'
+import React, { useCallback } from 'react'
+import AdminLiveDataList from '../../Components/AdminLiveDataList'
+import { EXPENSE_COLUMNS, loadFinanceExpensesByKeyword } from '../liveExpenseLoader'
 
-/**
- * @deprecated Per Document 7 compliance, Admin other expense list has been integrated with centralized Finance (Account Head).
- */
 export default function OtherExpensesList() {
-    return <AdminExpensesWorkspace view='approvals' />
+    const loadRows = useCallback(() => loadFinanceExpensesByKeyword([]), [])
+    return (
+        <AdminLiveDataList
+            title='Other Expenses'
+            description='All live finance OUT transactions.'
+            columns={EXPENSE_COLUMNS}
+            loadRows={loadRows}
+            searchKeys={['narration', 'category', 'voucherNo']}
+        />
+    )
 }

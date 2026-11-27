@@ -14,6 +14,8 @@ import {
     getHomeFunItems,
     getRecordAssessmentType,
     formatTotalSubmissions,
+    hydrateHomeFunFromApi,
+    HOME_FUN_UPDATED_EVENT,
     SUBJECTS,
     CLASSES,
     SECTIONS,
@@ -22,8 +24,12 @@ import {
 } from './homeFunData'
 import {
     getStudentSubmissionStatus,
+    HOME_FUN_SUBMISSIONS_UPDATED_EVENT,
 } from '../../../Student/StudentDeliverables/studentHomeFunSubmissions'
 import { useActiveStudent } from '../../../../context/ActiveStudentContext'
+import { useTeacherAssignments } from '../../../../Common/Teacher/useTeacherAssignments'
+import { hydrateEnrolledStudentsFromApi } from '../../../../Common/StudentDatabase/enrolledStudentsData'
+import { matchesStudentClass } from '../../../Student/Class/studentClassMatch'
 
 const studentStatusBadgeColor = {
     Submitted: 'bg-[#4CAF5033] text-[#4CAF50]',
@@ -73,11 +79,37 @@ const HomeFunEmpty = ({ routeBase, viewMode }) => {
 
 const HomeFunList = ({ items, routeBase, viewMode }) => {
     const isStudent = viewMode === 'student'
-    const { activeStudentId } = useActiveStudent()
+    const { activeStudentId, activeStudent } = useActiveStudent()
+    const assignments = useTeacherAssignments()
     const [filters, setFilters] = useState(emptyFilters)
     const [exportModal, setExportModal] = useState(false)
 
-    const filteredItems = useMemo(() => filterHomeFunItems(items, filters), [items, filters])
+    const scopedItems = useMemo(() => {
+        if (!isStudent || !activeStudent) return items
+        return items.filter((row) => matchesStudentClass(row, activeStudent))
+    }, [items, isStudent, activeStudent])
+
+    const filterOptions = useMemo(() => {
+        const subjects = [...new Set(scopedItems.map((r) => r.subject).filter(Boolean))]
+        const classes = [...new Set(scopedItems.map((r) => r.className).filter(Boolean))]
+        const sections = [...new Set(scopedItems.map((r) => r.section).filter(Boolean))]
+        return { subjects, classes, sections }
+    }, [scopedItems])
+
+    const staffFilterOptions = useMemo(() => ({
+        subjects: assignments.subjects?.length ? assignments.subjects : SUBJECTS,
+        classes: assignments.classes?.length ? assignments.classes : CLASSES,
+        sections: filters.className
+            ? (assignments.sectionsFor?.(filters.className) || [])
+            : (assignments.assignments?.length
+                ? [...new Set(assignments.assignments.map((row) => row.section).filter(Boolean))]
+                : SECTIONS),
+    }), [assignments, filters.className])
+
+    const filteredItems = useMemo(
+        () => filterHomeFunItems(scopedItems, filters),
+        [scopedItems, filters],
+    )
     const showTotalMarks = filters.type !== 'Homework'
     const tableColumnCount = showTotalMarks
         ? (isStudent ? 13 : 13)
@@ -139,7 +171,7 @@ const HomeFunList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {SUBJECTS.map((subject) => (
+                            {(isStudent ? filterOptions.subjects : staffFilterOptions.subjects).map((subject) => (
                                 <option key={subject} value={subject}>{subject}</option>
                             ))}
                         </select>
@@ -149,11 +181,15 @@ const HomeFunList = ({ items, routeBase, viewMode }) => {
                         <select
                             id='class-filter'
                             value={filters.className}
-                            onChange={(event) => updateFilter('className', event.target.value)}
+                            onChange={(event) => setFilters((current) => ({
+                                ...current,
+                                className: event.target.value,
+                                section: '',
+                            }))}
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {CLASSES.map((item) => (
+                            {(isStudent ? filterOptions.classes : staffFilterOptions.classes).map((item) => (
                                 <option key={item} value={item}>Class {item}</option>
                             ))}
                         </select>
@@ -167,7 +203,7 @@ const HomeFunList = ({ items, routeBase, viewMode }) => {
                             className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
                         >
                             <option value=''>All</option>
-                            {SECTIONS.map((item) => (
+                            {(isStudent ? filterOptions.sections : staffFilterOptions.sections).map((item) => (
                                 <option key={item} value={item}>Section {item}</option>
                             ))}
                         </select>
@@ -327,7 +363,7 @@ const HomeFunList = ({ items, routeBase, viewMode }) => {
                                         <td className='px-2 py-4 text-center rounded-e-lg'>
                                             <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
                                                 <NavLink
-                                                    to={`${routeBase}/view/${record.id}`}
+                                                    to={`${routeBase}/view/${encodeURIComponent(record.id || record.assignmentId)}`}
                                                     className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
                                                 >
                                                     View
@@ -360,22 +396,48 @@ const HomeFunList = ({ items, routeBase, viewMode }) => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='home-fun'
+                rows={Array.isArray(filteredItems) ? filteredItems : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredItems) ? filteredItems.length : 0} record(s).</>}
+            />
         </>
     )
 }
 
 const HomeFun = ({ routeBase = DEFAULT_ROUTE_BASE, viewMode = 'teacher' }) => {
     const location = useLocation()
+    const { activeStudent } = useActiveStudent()
     const [items, setItems] = useState(() => getHomeFunItems())
 
     useEffect(() => {
-        setItems(getHomeFunItems())
+        let cancelled = false
+        Promise.all([
+            hydrateHomeFunFromApi().catch(() => {}),
+            hydrateEnrolledStudentsFromApi().catch(() => {}),
+        ]).finally(() => {
+            if (!cancelled) setItems(getHomeFunItems())
+        })
+        const onUpdate = () => setItems(getHomeFunItems())
+        window.addEventListener(HOME_FUN_UPDATED_EVENT, onUpdate)
+        window.addEventListener(HOME_FUN_SUBMISSIONS_UPDATED_EVENT, onUpdate)
+        return () => {
+            cancelled = true
+            window.removeEventListener(HOME_FUN_UPDATED_EVENT, onUpdate)
+            window.removeEventListener(HOME_FUN_SUBMISSIONS_UPDATED_EVENT, onUpdate)
+        }
     }, [location.pathname])
+
+    const visibleCount = useMemo(() => {
+        if (viewMode !== 'student' || !activeStudent) return items.length
+        return items.filter((row) => matchesStudentClass(row, activeStudent)).length
+    }, [items, viewMode, activeStudent])
 
     return (
         <section>
-            {items.length === 0 ? (
+            {visibleCount === 0 ? (
                 <HomeFunEmpty routeBase={routeBase} viewMode={viewMode} />
             ) : (
                 <HomeFunList items={items} routeBase={routeBase} viewMode={viewMode} />

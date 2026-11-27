@@ -1,4 +1,4 @@
-import { ROLES } from '../../constants/roles.js'
+import { ROLES } from '../../constants/roles'
 
 export const LEAVE_ROUTE_CONFIG = {
     admin: {
@@ -65,103 +65,50 @@ export const LEAVE_ROUTE_CONFIG = {
         myView: '/driver/leave-request/view',
     },
     transportmanager: {
-        myList: '/transport-manager/leave-request/my-requests',
-        add: '/transport-manager/leave-request/my-requests/add',
-        myView: '/transport-manager/leave-request/my-requests/view',
         receivedList: '/transport-manager/leave-request',
         receivedView: '/transport-manager/leave-request/view',
     },
-    librarian: {
-        myList: '/librarian/leave-request/my-requests',
-        add: '/librarian/leave-request/my-requests/add',
-        myView: '/librarian/leave-request/my-requests/view',
-        receivedList: '/librarian/leave-request/received',
-        receivedView: '/librarian/leave-request/received/view',
-    },
-    canteenmanager: {
-        myList: '/canteen-manager/leave-request/my-requests',
-        add: '/canteen-manager/leave-request/my-requests/add',
-        myView: '/canteen-manager/leave-request/my-requests/view',
-        receivedList: '/canteen-manager/leave-request/received',
-        receivedView: '/canteen-manager/leave-request/received/view',
-    },
-    itsupportmanager: {
-        myList: '/it-support-manager/leave-request/my-requests',
-        add: '/it-support-manager/leave-request/my-requests/add',
-        myView: '/it-support-manager/leave-request/my-requests/view',
-        receivedList: '/it-support-manager/leave-request/received',
-        receivedView: '/it-support-manager/leave-request/received/view',
-    },
-    stationerystoremanager: {
-        myList: '/stationery-store-manager/leave-request/my-requests',
-        add: '/stationery-store-manager/leave-request/my-requests/add',
-        myView: '/stationery-store-manager/leave-request/my-requests/view',
-        receivedList: '/stationery-store-manager/leave-request/received',
-        receivedView: '/stationery-store-manager/leave-request/received/view',
-    },
-    housekeepingmanager: {
-        myList: '/housekeeping-manager/leave-request/my-requests',
-        add: '/housekeeping-manager/leave-request/my-requests/add',
-        myView: '/housekeeping-manager/leave-request/my-requests/view',
-        receivedList: '/housekeeping-manager/leave-request/received',
-        receivedView: '/housekeeping-manager/leave-request/received/view',
-    },
-    maintenancemanager: {
-        myList: '/maintenance-manager/leave-request/my-requests',
-        add: '/maintenance-manager/leave-request/my-requests/add',
-        myView: '/maintenance-manager/leave-request/my-requests/view',
-        receivedList: '/maintenance-manager/leave-request/received',
-        receivedView: '/maintenance-manager/leave-request/received/view',
-    },
-    jointdirector: {
-        myList: '/joint-director/leave-request/my-requests',
-        add: '/joint-director/leave-request/my-requests/add',
-        myView: '/joint-director/leave-request/my-requests/view',
-        receivedList: '/joint-director/leave-request/received',
-        receivedView: '/joint-director/leave-request/received/view',
-    },
-    jointdirectorassistant: {
-        myList: '/joint-director-assistant/leave-request/my-requests',
-        add: '/joint-director-assistant/leave-request/my-requests/add',
-        myView: '/joint-director-assistant/leave-request/my-requests/view',
-        receivedList: '/joint-director-assistant/leave-request/received',
-        receivedView: '/joint-director-assistant/leave-request/received/view',
-    },
-    jointdirectoraudit: {
-        myList: '/joint-director-audit/leave-request/my-requests',
-        add: '/joint-director-audit/leave-request/my-requests/add',
-        myView: '/joint-director-audit/leave-request/my-requests/view',
-        receivedList: '/joint-director-audit/leave-request/received',
-        receivedView: '/joint-director-audit/leave-request/received/view',
-    },
+    // HR is the final step of every staff leave chain (Academics doc 4.9)
     hr: {
-        myList: '/hr/leave-request/my-requests',
-        add: '/hr/leave-request/my-requests/add',
-        myView: '/hr/leave-request/my-requests/view',
         receivedList: '/hr/leave-request/received',
         receivedView: '/hr/leave-request/received/view',
     },
-    accounthead: {
-        myList: '/account-head/leave-request/my-requests',
-        add: '/account-head/leave-request/my-requests/add',
-        myView: '/account-head/leave-request/my-requests/view',
-        receivedList: '/account-head/leave-request/received',
-        receivedView: '/account-head/leave-request/received/view',
-    },
-    processauditor: {
-        myList: '/process-auditor/leave-request/my-requests',
-        add: '/process-auditor/leave-request/my-requests/add',
-        myView: '/process-auditor/leave-request/my-requests/view',
-        receivedList: '/process-auditor/leave-request/received',
-        receivedView: '/process-auditor/leave-request/received/view',
-    },
-    qualityauditor: {
-        myList: '/quality-auditor/leave-request/my-requests',
-        add: '/quality-auditor/leave-request/my-requests/add',
-        myView: '/quality-auditor/leave-request/my-requests/view',
-        receivedList: '/quality-auditor/leave-request/received',
-        receivedView: '/quality-auditor/leave-request/received/view',
-    },
+}
+
+// Staff portals that file leave through the shared pages mounted by src/Common/staffCommonRoutes.jsx.
+export const STAFF_LEAVE_PORTALS = {
+    canteenmanager: '/canteen-manager',
+    itsupportmanager: '/it-support-manager',
+    stationerystoremanager: '/stationery-store-manager',
+    housekeepingmanager: '/housekeeping-manager',
+    maintenancemanager: '/maintenance-manager',
+    transportmanager: '/transport-manager',
+    jointdirector: '/joint-director',
+    jointdirectorassistant: '/joint-director-assistant',
+    jointdirectoraudit: '/joint-director-audit',
+    processauditor: '/process-auditor',
+    qualityauditor: '/quality-auditor',
+    hr: '/hr',
+    accounthead: '/account-head',
+    fileroom: '/file-room',
+    cctv: '/cctv-room',
+    pro: '/pro',
+    librarian: '/librarian',
+}
+Object.entries(STAFF_LEAVE_PORTALS).forEach(([role, base]) => {
+    LEAVE_ROUTE_CONFIG[role] = {
+        ...LEAVE_ROUTE_CONFIG[role],
+        myList: `${base}/leave-request/my-requests`,
+        add: `${base}/leave-request/my-requests/add`,
+        myView: `${base}/leave-request/my-requests/view`,
+    }
+})
+
+// Backend leave.chain_for sends roles without a named department head to the Director, then HR.
+const STAFF_DEFAULT_APPROVER = {
+    approverRole: ROLES.DIRECTOR,
+    requestedToLabel: 'Director',
+    submitHint: 'This request will be sent to the Director, then HR, for approval.',
 }
 
 export const LEAVE_APPROVER_CONFIG = {
@@ -277,21 +224,16 @@ export const APPROVER_DECISION_TITLES = {
     [ROLES.TEACHER]: 'Teacher Decision',
     [ROLES.DIRECTOR]: 'Director Decision',
     [ROLES.TRANSPORT_MANAGER]: 'Transport Manager Decision',
-    [ROLES.COORDINATOR]: 'Coordinator Decision',
     [ROLES.HR]: 'HR Decision',
-    [ROLES.ACCOUNT_HEAD]: 'Account Head Decision',
-    [ROLES.JOINT_DIRECTOR]: 'Joint Director Decision',
-    [ROLES.JOINT_DIRECTOR_ASSISTANT]: 'Joint Director Assistant Decision',
-    [ROLES.JOINT_DIRECTOR_AUDIT]: 'Joint Director Audit Decision',
-    [ROLES.CANTEEN_MANAGER]: 'Canteen Manager Decision',
-    [ROLES.IT_SUPPORT_MANAGER]: 'IT Support Manager Decision',
-    [ROLES.STATIONERY_STORE_MANAGER]: 'Stationery Store Manager Decision',
-    [ROLES.HOUSEKEEPING_MANAGER]: 'Housekeeping Manager Decision',
 }
 
 export const resolveRoleKey = (roleKey) => {
     if (!roleKey) return null
     if (roleKey === 'vandriver') return ROLES.DRIVER
+    // Normalize camelCase / spaced labels used in a few page props.
+    if (roleKey === 'superAdmin' || roleKey === 'Super Admin') return ROLES.SUPER_ADMIN
+    if (roleKey === 'gateKeeperManager' || roleKey === 'Gate Keeper Manager') return ROLES.GATEKEEPER_MANAGER
+    if (roleKey === 'transportManager' || roleKey === 'Transport Manager') return ROLES.TRANSPORT_MANAGER
     return roleKey
 }
 
@@ -308,7 +250,8 @@ export const getLeaveReceivedViewPath = (roleKey, id) =>
 
 export const getLeaveApproverConfig = (submitterRole) => {
     const resolvedRole = resolveRoleKey(submitterRole)
-    return LEAVE_APPROVER_CONFIG[resolvedRole] || LEAVE_APPROVER_CONFIG[ROLES.TEACHER]
+    if (LEAVE_APPROVER_CONFIG[resolvedRole]) return LEAVE_APPROVER_CONFIG[resolvedRole]
+    return STAFF_LEAVE_PORTALS[resolvedRole] ? STAFF_DEFAULT_APPROVER : LEAVE_APPROVER_CONFIG[ROLES.TEACHER]
 }
 
 export const getSubmitterProfile = (submitterRole, authUser = {}) => {

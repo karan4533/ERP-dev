@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
 export const DEPARTMENTS = [
     'Canteen',
     'Stationery Store',
@@ -9,7 +10,7 @@ export const DEPARTMENTS = [
 
 export const ESCALATION_STATUSES = ['Open', 'In Review', 'Escalated to Admin', 'Resolved', 'Closed']
 
-export const ESCALATIONS = [
+const DEFAULT_ESCALATIONS = [
     {
         id: 'ESC-2026-018',
         escalatedBy: 'Karthik Rajan',
@@ -157,62 +158,15 @@ export const sourceTypeLabel = {
     'department-manager': 'From Department Manager',
     'jd-assistant': 'From JD Assistant',
 }
-
-const STORAGE_KEY = 'schoolerp_joint_director_escalations'
-let _memoryEscalations = null
-
-export const getEscalations = () => {
-    if (_memoryEscalations && Array.isArray(_memoryEscalations) && _memoryEscalations.length > 0) {
-        return _memoryEscalations
-    }
-    try {
-        if (typeof localStorage !== 'undefined') {
-            const stored = localStorage.getItem(STORAGE_KEY)
-            if (stored) {
-                _memoryEscalations = JSON.parse(stored)
-                return _memoryEscalations
-            }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(ESCALATIONS))
-        }
-    } catch {
-        /* ignore */
-    }
-    _memoryEscalations = ESCALATIONS.map((e) => ({ ...e }))
-    return _memoryEscalations
+export const ESCALATIONS_STORAGE_KEY = 'schoolerp-jd-escalations-v1'
+export function getJdEscalations() {
+    return ensureCampusSeed('schoolerp-jd-escalations-v1', DEFAULT_ESCALATIONS)
 }
-
-export const saveEscalations = (records) => {
-    _memoryEscalations = records
-    try {
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
-        }
-    } catch {
-        /* ignore */
-    }
+export function saveJdEscalations(rows) {
+    return saveCampusJson('schoolerp-jd-escalations-v1', rows)
 }
-
-export const updateEscalationStatus = (id, newStatus, options = {}) => {
-    const list = getEscalations()
-    const index = list.findIndex((e) => e.id === id)
-    if (index === -1) return null
-
-    const todayStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
-    const updatedItem = {
-        ...list[index],
-        status: newStatus,
-    }
-
-    if (newStatus === 'Escalated to Admin') {
-        updatedItem.escalatedToAdmin = true
-        updatedItem.adminEscalationDate = todayStr
-        updatedItem.adminEscalationNote = options.adminEscalationNote || 'Forwarded to Admin by Joint Director for administrative resolution.'
-    } else if (newStatus === 'Resolved') {
-        updatedItem.remarks = options.remarks || `Resolved by Joint Director on ${todayStr}.`
-    }
-
-    list[index] = updatedItem
-    saveEscalations(list)
-    return updatedItem
+export function hydrateJdEscalationsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-escalations-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-escalations-v1', DEFAULT_ESCALATIONS)
 }
-
+export const ESCALATIONS = DEFAULT_ESCALATIONS

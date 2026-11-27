@@ -1,6 +1,5 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import ExamScheduleForm from './Components/ExamScheduleForm'
 import { addExamSchedule } from './createExamScheduleData'
 
@@ -8,13 +7,8 @@ const AddExamSchedule = () => {
     const navigate = useNavigate()
 
     const handleSave = (values) => {
-        try {
-            addExamSchedule(values)
-            toast.success('Exam schedule created successfully!')
-            navigate('/coordinator/examination/create-schedule')
-        } catch (err) {
-            toast.error('Failed to create exam schedule: ' + err.message)
-        }
+        addExamSchedule(values)
+        navigate('/coordinator/examination/create-schedule')
     }
 
     return (

@@ -1,8 +1,67 @@
+import React, { useState, useEffect } from 'react'
+import CommonHeader from '../Common/CommonHeader/CommonHeader'
+import CommonSidebar from '../Common/CommonSidebar/CommonSidebar'
+import CommonBreadcrumb from '../Common/CommonBreadcrumb/CommonBreadcrumb'
 import AdminRoutes from '../Routes/AdminRoutes'
-import createPortalLayout from './createPortalLayout'
+import { canUseClassDetailsApi, refreshClassCatalog } from '../services/classDetailsApi'
 
-export default createPortalLayout({
-    roleKey: 'admin',
-    RoutesComponent: AdminRoutes,
-})
+const AdminLayout = () => {
 
+    const [sidebarHidden, setSidebarHidden] = useState(() => {
+        return window.innerWidth < 1024;
+    });
+
+    const toggleSidebar = () => {
+        setSidebarHidden(prevState => !prevState);
+    };
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 1024) {
+                setSidebarHidden(true);
+            } else {
+                setSidebarHidden(false);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Keep Teacher Allocation / Mark Entry class dropdowns aligned with Class Details.
+    useEffect(() => {
+        if (!canUseClassDetailsApi()) return undefined
+        refreshClassCatalog()
+        return undefined
+    }, []);
+
+    return (
+        <div className='bg-white min-h-screen font-sans'>
+            {/* Sidebar (Fixed z-20) */}
+            <CommonSidebar toggleSidebar={toggleSidebar} sidebarHidden={sidebarHidden} />
+
+            {/* Header (Fixed z-20) */}
+            <CommonHeader toggleSidebar={toggleSidebar} sidebarHidden={sidebarHidden} />
+
+            {/* Overlay Backdrop - visible on mobile always */}
+            {!sidebarHidden && (
+                <div
+                    className={`fixed inset-0 bg-black/50 z-10 transition-all ease-in-out duration-200 lg:hidden`}
+                    onClick={() => setSidebarHidden(true)}
+                />
+            )}
+
+            {/* Main Content */}
+            <main
+                className={`transition-all ease-in-out duration-200 bg-[#f9f9f9] min-h-screen pt-18 ml-0 ${sidebarHidden ? "lg:ml-[90px]" : "lg:ml-[280px]"}`}
+            >
+                <div className="p-3 font-inter">
+                    <CommonBreadcrumb />
+                    <AdminRoutes />
+                </div>
+            </main>
+        </div>
+    )
+}
+
+export default AdminLayout

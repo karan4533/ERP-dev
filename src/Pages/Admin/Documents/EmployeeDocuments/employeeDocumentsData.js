@@ -1,3 +1,13 @@
+import {
+    canUseDocumentsApi,
+    deleteDocumentItemApi,
+    dmyToIso,
+    isoToDmy,
+    listDocumentRecordsApi,
+    patchDocumentRecordApi,
+    putDocumentItemApi,
+} from '../../../../services/documentsApi'
+
 const STORAGE_KEY = 'schoolErpAdminEmployeeDocuments'
 const TYPES_STORAGE_KEY = 'schoolErpAdminEmployeeDocumentTypes'
 
@@ -37,13 +47,102 @@ const writeJson = (key, value) => {
     localStorage.setItem(key, JSON.stringify(value))
 }
 
-export const getDocumentTypes = () => readJson(TYPES_STORAGE_KEY, defaultDocumentTypes)
+// With a real backend session the documents (and their files) live on the server. What it returned is
+// held in memory only, never written to the browser's storage.
+let apiRecords = []
+
+const mapApiRecord = (row) => ({
+    id: row.subject_ref,
+    employeeId: row.subject_ref,
+    employeeName: row.name,
+    submittedDate: isoToDmy(row.submitted_date),
+    status: row.status,
+    documents: Object.fromEntries(
+        row.items.map((item) => [
+            item.key,
+            {
+                label: item.label,
+                fileName: item.file_name,
+                status: item.status,
+                itemId: item.id,
+                fileId: item.file_id,
+                downloadUrl: item.download_url,
+            },
+        ]),
+    ),
+    fromApi: true,
+})
+
+/** Load the signed-in user's view of employee documents from the server. */
+export const hydrateEmployeeDocumentsFromApi = async () => {
+    const rows = await listDocumentRecordsApi('employees')
+    apiRecords = rows.map(mapApiRecord)
+    return apiRecords
+}
+
+/** Drop the in-memory copy (call on sign-out). */
+export const clearEmployeeDocumentsMemory = () => {
+    apiRecords = []
+}
+
+/** Columns for the list: the labels that exist on the server, in the order they first appeared. */
+const apiDocumentTypes = () => {
+    const types = []
+    const seen = new Set()
+    ;[...apiRecords].reverse().forEach((record) => {
+        Object.entries(record.documents).forEach(([key, doc]) => {
+            if (seen.has(key)) return
+            seen.add(key)
+            types.push({ id: key, label: doc.label })
+        })
+    })
+    return types
+}
+
+export const getDocumentTypes = () =>
+    canUseDocumentsApi() ? apiDocumentTypes() : readJson(TYPES_STORAGE_KEY, defaultDocumentTypes)
 
 export const saveDocumentTypes = (types) => {
     writeJson(TYPES_STORAGE_KEY, types)
 }
 
-export const getEmployeeDocumentRecords = () => readJson(STORAGE_KEY, [])
+export const getEmployeeDocumentRecords = () => (canUseDocumentsApi() ? apiRecords : readJson(STORAGE_KEY, []))
+
+const normalizeLabel = (label) => String(label || '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * Save through the API: upload each newly chosen file, change the status of a document that kept its
+ * file, remove a document whose file was taken off, then set the record's date and status. Safe to retry.
+ * The employee is found by the employee ID; an unknown ID is refused by the server.
+ */
+export const saveEmployeeDocumentsViaApi = async ({ employeeId, submittedDate, status, documentSlots }) => {
+    const code = employeeId.trim()
+    const existing = apiRecords.find((record) => record.id === code)
+    const iso = dmyToIso(submittedDate)
+    const labelsKept = new Set(
+        documentSlots.filter((slot) => slot.fileName?.trim()).map((slot) => normalizeLabel(slot.label)),
+    )
+    for (const slot of documentSlots) {
+        const label = slot.label.trim()
+        if (!label) continue
+        const had = existing?.documents?.[normalizeLabel(label)]
+        if (slot.file) {
+            await putDocumentItemApi('employees', code, { label, file: slot.file, status: slot.status, submittedDate: iso })
+        } else if (had && slot.fileName?.trim() && had.status !== slot.status) {
+            await putDocumentItemApi('employees', code, { label, status: slot.status, submittedDate: iso })
+        }
+    }
+    for (const [key, doc] of Object.entries(existing?.documents ?? {})) {
+        if (!labelsKept.has(key)) await deleteDocumentItemApi('employees', code, doc.itemId)
+    }
+    let records = await hydrateEmployeeDocumentsFromApi()
+    const saved = records.find((record) => record.id === code)
+    if (saved && (status !== saved.status || (iso && submittedDate !== saved.submittedDate))) {
+        await patchDocumentRecordApi('employees', code, { submittedDate: iso, status })
+        records = await hydrateEmployeeDocumentsFromApi()
+    }
+    return records.find((record) => record.id === code) ?? null
+}
 
 export const saveEmployeeDocumentRecords = (records) => {
     writeJson(STORAGE_KEY, records)
@@ -175,6 +274,8 @@ export const recordToDocumentSlots = (record) => {
             label: type.label,
             fileName: record.documents[type.id]?.fileName || '',
             status: record.documents[type.id]?.status || 'Pending',
+            fileId: record.documents[type.id]?.fileId || '',
+            downloadUrl: record.documents[type.id]?.downloadUrl || '',
         }))
 
     const extraSlots = Object.entries(record.documents || {})

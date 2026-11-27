@@ -9,6 +9,25 @@ import {
 import UserAvatar from './UserAvatar'
 import { formatConversationTime, isRecentConversation } from '../utils'
 
+const displayFor = (conv) => {
+    if (conv.isGroup) {
+        const members = Array.isArray(conv.participants) ? conv.participants : []
+        return {
+            name: conv.title || 'Group conversation',
+            subtitle: `Group · ${members.length} members`,
+            detail: members.map((person) => person?.name).filter(Boolean).join(', '),
+            avatarColor: '#0C1E5B',
+        }
+    }
+    const person = conv.participant || {}
+    return {
+        name: person.name || conv.title || 'Unknown participant',
+        subtitle: [person.employeeId, person.role].filter(Boolean).join(' · '),
+        detail: person.department || '',
+        avatarColor: person.avatarColor,
+    }
+}
+
 const FILTERS = [
     { key: 'all', label: 'All' },
     { key: 'unread', label: 'Unread' },
@@ -23,6 +42,7 @@ const InboxPanel = ({
     filter,
     onFilterChange,
     loading,
+    error,
     onRefresh,
     onNewMessage,
     onOpenConversation,
@@ -30,6 +50,10 @@ const InboxPanel = ({
 }) => {
     const [menuOpenId, setMenuOpenId] = useState(null)
     const listRef = useRef(null)
+
+    useEffect(() => {
+        setMenuOpenId(null)
+    }, [selectedId])
 
     useEffect(() => {
         if (!menuOpenId) return undefined
@@ -48,13 +72,15 @@ const InboxPanel = ({
         if (conv.deleted || conv.archived) return false
         const q = search.trim().toLowerCase()
         if (q) {
+            const shown = displayFor(conv)
             const haystack = [
-                conv.participant.name,
-                conv.participant.employeeId,
-                conv.participant.role,
-                conv.participant.department,
+                shown.name,
+                shown.subtitle,
+                shown.detail,
+                conv.participant?.name,
                 conv.lastMessage,
             ]
+                .filter(Boolean)
                 .join(' ')
                 .toLowerCase()
             if (!haystack.includes(q)) return false
@@ -134,6 +160,18 @@ const InboxPanel = ({
                             </div>
                         ))}
                     </div>
+                ) : error && conversations.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center px-6 py-16 text-center">
+                        <p className="font-medium text-[#101828]">Unable to load conversations</p>
+                        <p className="mt-1 text-sm text-[#667085]">{error}</p>
+                        <button
+                            type="button"
+                            onClick={onRefresh}
+                            className="mt-4 rounded-md border border-[#D0D5DD] px-4 py-2 text-sm font-medium text-[#344054] hover:bg-[#F9FAFB]"
+                        >
+                            Try again
+                        </button>
+                    </div>
                 ) : filtered.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center px-6 py-16 text-center">
                         <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#EDEDF5] text-[#515DEF]">
@@ -153,6 +191,7 @@ const InboxPanel = ({
                     <ul className="divide-y divide-[#F2F4F7]">
                         {filtered.map((conv) => {
                             const active = selectedId === conv.id
+                            const shown = displayFor(conv)
                             return (
                                 <li key={conv.id} className="relative">
                                     <button
@@ -165,18 +204,15 @@ const InboxPanel = ({
                                             active ? 'bg-[#F0F1FF]' : 'hover:bg-[#F9FAFB]'
                                         }`}
                                     >
-                                        <UserAvatar
-                                            name={conv.participant.name}
-                                            color={conv.participant.avatarColor}
-                                        />
+                                        <UserAvatar name={shown.name} color={shown.avatarColor} />
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0">
                                                     <p className="truncate font-semibold text-[#101828]">
-                                                        {conv.participant.name}
+                                                        {shown.name}
                                                     </p>
                                                     <p className="truncate text-xs text-[#667085]">
-                                                        {conv.participant.employeeId} · {conv.participant.role}
+                                                        {shown.subtitle}
                                                     </p>
                                                 </div>
                                                 <span className="shrink-0 text-[11px] text-[#98A2B3]">
@@ -184,7 +220,7 @@ const InboxPanel = ({
                                                 </span>
                                             </div>
                                             <p className="mt-0.5 truncate text-xs text-[#98A2B3]">
-                                                {conv.participant.department}
+                                                {shown.detail}
                                             </p>
                                             <div className="mt-1 flex items-center justify-between gap-2">
                                                 <p

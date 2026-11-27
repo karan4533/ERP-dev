@@ -1,23 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Download, Eye, GraduationCap, Pencil, Plus, Save, Trash2 } from 'lucide-react'
-import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { filterAdmissionRecords } from '../../../../Common/Admissions/admissionFilters'
-import { getAdmissionDraftKey, loadAdmissionDraft } from '../../../../Common/Admissions/admissionDraft'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { Calendar, Download, EllipsisIcon, Plus } from 'lucide-react'
+import Dropdown from '../../../../Common/CommonComponents/Dropdown'
+import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import ListPagination, { PageSizeSelect } from '../../../../Common/CommonComponents/ListPagination'
+import { useListPagination } from '../../../../Common/useListPagination'
+import { filterListRows } from '../../../../Common/listFiltering'
+import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal'
 import {
-    ConfirmAction,
-    DataTable,
-    DataToolbar,
-    IntegrationNotice,
-    PageHeader,
-    Pagination,
-    StatusBadge,
-} from '../../../../Common/ui'
-import { paginateRows, parseTableState, serializeTableState } from '../../../../Common/ui/dataTableState'
-import {
-    ADMISSION_STATUS_OPTIONS,
+    admissionFinanceBlockReason,
     deleteAdmission,
     enrollAdmissionAsStudent,
+    filterAdmissions,
     getAdmissionEditPath,
     getAdmissionProfileImage,
     getAdmissionViewPath,
@@ -25,211 +22,312 @@ import {
     getStudentDisplayName,
 } from './admissionListData'
 import { getAddAdmissionPath, isAdminFrontOfficePath } from '../AdmissionEnquiry/admissionEnquiryData'
+import { canShowDeleteOption } from '../../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../../context/AuthContext'
 
 const AdminssionList = () => {
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
     const { pathname } = useLocation()
     const isAdminView = isAdminFrontOfficePath(pathname)
     const addAdmissionPath = getAddAdmissionPath(pathname)
-    const draftKey = getAdmissionDraftKey(pathname, 'new')
-    const [urlParams, setUrlParams] = useSearchParams()
-    const initialTableState = parseTableState(urlParams)
-    const [records, setRecords] = useState(() => getAllAdmissions())
-    const [search, setSearch] = useState(initialTableState.query)
-    const [status, setStatus] = useState(initialTableState.filters.status || '')
-    const [fromDate, setFromDate] = useState(initialTableState.filters.fromDate || '')
-    const [toDate, setToDate] = useState(initialTableState.filters.toDate || '')
-    const [page, setPage] = useState(initialTableState.page)
-    const [pageSize, setPageSize] = useState(initialTableState.pageSize)
-    const [pendingAction, setPendingAction] = useState(null)
-    const [hasDraft] = useState(() => Boolean(loadAdmissionDraft(draftKey)))
+    const [fromDate, setFromDate] = useState(null)
+    const [toDate, setToDate] = useState(null)
+    const [exportModal, setExportModal] = useState(false)
+    const [editRequestModal, setEditRequestModal] = useState(false)
+    const [search, setSearch] = useState('')
+    const [status, setStatus] = useState('')
+    const [records, setRecords] = useState([])
 
-    const filteredRecords = useMemo(
-        () => filterAdmissionRecords(records, { search, status, fromDate, toDate }),
-        [records, search, status, fromDate, toDate],
-    )
-    const pagination = paginateRows(filteredRecords, { page, pageSize })
+    const refresh = async () => {
+        const rows = await getAllAdmissions()
+        setRecords(rows)
+    }
 
     useEffect(() => {
-        setUrlParams(serializeTableState({
-            query: search,
-            page: pagination.page,
-            pageSize,
-            filters: { status, fromDate, toDate },
-        }), { replace: true })
-    }, [fromDate, pageSize, pagination.page, search, setUrlParams, status, toDate])
+        refresh()
+    }, [])
 
-    const resetFilters = () => {
+    const statusOptions = useMemo(
+        () => [...new Set(records.map((record) => record.status).filter(Boolean))].sort(),
+        [records],
+    )
+
+    const filteredRecords = useMemo(
+        () => filterListRows(filterAdmissions(records, { search }), {
+            equals: { status },
+            fromDate,
+            toDate,
+            dateKeys: ['createdDate', 'admissionDate'],
+        }),
+        [records, search, status, fromDate, toDate],
+    )
+
+    const pagination = useListPagination(filteredRecords, {
+        resetKey: [search, status, fromDate?.getTime(), toDate?.getTime()].join('|'),
+    })
+    const visibleRecords = pagination.rows
+
+    const clearFilters = () => {
         setSearch('')
         setStatus('')
-        setFromDate('')
-        setToDate('')
-        setPage(1)
+        setFromDate(null)
+        setToDate(null)
     }
 
-    const refresh = () => setRecords(getAllAdmissions())
+    const handleDelete = async (id) => {
+        if (!showDelete) return
+        const result = await deleteAdmission(id)
+        if (!result.success) {
+            toast.error(result.message || 'Delete failed.')
+            return
+        }
+        await refresh()
+        toast.success('Admission removed.')
+    }
 
-    const confirmPendingAction = () => {
-        if (!pendingAction) return
-        const { type, record } = pendingAction
-
-        if (type === 'delete') {
-            deleteAdmission(record.id)
-            refresh()
-            setPendingAction(null)
-            toast.success('Admission removed from this browser.')
+    const handleEnroll = async (record) => {
+        const financeBlock = admissionFinanceBlockReason(record)
+        if (financeBlock) {
+            toast.error(financeBlock)
+            return
+        }
+        const email = record.parentAccountEmail || ''
+        if (!email) {
+            toast.error('Set Parent Username / Email on the admission before enrolling.')
+            return
+        }
+        const entered = window.prompt(
+            `Create parent login for ${email}.\nEnter a temporary parent password (min 10 characters, with a letter and a number). The parent must change it at first login:`,
+            '',
+        )
+        if (entered == null) return
+        const password = String(entered).trim()
+        if (password.length < 10 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+            toast.error('Parent password must be at least 10 characters and contain a letter and a number.')
             return
         }
 
-        const result = enrollAdmissionAsStudent(record.id)
+        const result = await enrollAdmissionAsStudent(record.id, {
+            parentAccountEmail: email,
+            parentAccountPassword: password,
+        })
         if (!result.success) {
             toast.error(result.message)
-            setPendingAction(null)
             return
         }
-        refresh()
-        setPendingAction(null)
-        if (result.parentCreated) toast.success(`${getStudentDisplayName(record)} enrolled. Parent account created.`)
-        else if (result.parentMapped) toast.success(`${getStudentDisplayName(record)} enrolled and linked to an existing parent.`)
-        else toast.success(`${getStudentDisplayName(record)} enrolled as a student.`)
+        await refresh()
+        if (result.parentCreated) {
+            toast.success(`${getStudentDisplayName(record)} enrolled. Parent: ${email}`)
+        } else if (result.parentMapped) {
+            toast.success(`${getStudentDisplayName(record)} enrolled and linked to existing parent account.`)
+        } else {
+            toast.success(`${getStudentDisplayName(record)} enrolled as student.`)
+        }
     }
 
-    const columns = [
-        {
-            key: 'student',
-            label: 'Student',
-            required: true,
-            render: (record) => (
-                <span className='flex items-center gap-3'>
-                    <img src={getAdmissionProfileImage(record)} alt='' className='size-9 rounded-full object-cover' />
-                    <span>
-                        <span className='block font-semibold text-[var(--erp-ink)]'>{getStudentDisplayName(record)}</span>
-                        <span className='block text-xs text-[var(--erp-muted)]'>{record.admissionNumber || record.id}</span>
-                    </span>
-                </span>
-            ),
-        },
-        { key: 'className', label: 'Class', render: (record) => record.className || 'Not assigned' },
-        { key: 'rollNumber', label: 'Roll number', render: (record) => record.rollNumber || 'Pending' },
-        { key: 'status', label: 'Status', render: (record) => <StatusBadge status={record.status} /> },
-        { key: 'mobileNumber', label: 'Contact', render: (record) => record.mobileNumber || '—' },
-        { key: 'createdDate', label: 'Created' },
-        { key: 'location', label: 'Location', render: (record) => [record.city, record.country].filter(Boolean).join(', ') || '—' },
-    ]
-
     return (
-        <section className='space-y-5'>
-            <PageHeader
-                title='Admissions'
-                description={isAdminView ? 'Monitor admission status and review submitted student records.' : 'Create, resume, verify and enrol student admissions.'}
-                context={`${records.length} total · ${filteredRecords.length} matching`}
-                actions={!isAdminView ? (
-                    <NavLink to={addAdmissionPath} className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'>
-                        {hasDraft ? <Save aria-hidden='true' size={16} /> : <Plus aria-hidden='true' size={16} />}
-                        {hasDraft ? 'Resume draft' : 'New admission'}
-                    </NavLink>
-                ) : null}
-            />
-
-            <IntegrationNotice
-                state='demo'
-                title='Browser-stored admission records'
-                description='Records, enrolment and parent mapping are local demo workflows. Production submission, document verification, payment and identity checks require backend APIs.'
-            />
-
-            <div className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white'>
-                <DataToolbar
-                    query={search}
-                    onQueryChange={(value) => { setSearch(value); setPage(1) }}
-                    searchPlaceholder='Search student, admission, class or contact'
-                    resultCount={filteredRecords.length}
-                    onReset={resetFilters}
-                    filters={(
-                        <>
-                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Status
-                                <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>
-                                    <option value=''>All statuses</option>
-                                    {ADMISSION_STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-                                </select>
-                            </label>
-                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Created from
-                                <input type='date' value={fromDate} onChange={(event) => { setFromDate(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-3 text-sm' />
-                            </label>
-                            <label className='grid gap-1 text-xs font-medium text-[var(--erp-slate)]'>Created to
-                                <input type='date' value={toDate} onChange={(event) => { setToDate(event.target.value); setPage(1) }} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] px-3 text-sm' />
-                            </label>
-                        </>
-                    )}
-                    actions={(
-                        <button type='button' disabled title='Export service is not connected' className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] px-4 text-sm font-semibold text-[var(--erp-muted)] opacity-65'>
-                            <Download aria-hidden='true' size={16} /> Export unavailable
-                        </button>
-                    )}
-                />
-                <DataTable
-                    caption='Admissions'
-                    rows={pagination.rows}
-                    columns={columns}
-                    rowKey='id'
-                    emptyTitle='No admissions found'
-                    emptyDescription='No records match the current filters. Reset the filters or create a new admission.'
-                    renderActions={(record) => (
-                        <>
-                            <NavLink to={getAdmissionViewPath(pathname, record.id)} className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--erp-line-strong)] px-3 text-xs font-semibold text-[var(--erp-ink)]'>
-                                <Eye aria-hidden='true' size={14} /> View
-                            </NavLink>
-                            {!isAdminView && (
-                                <>
-                                    <NavLink to={getAdmissionEditPath(pathname, record.id)} className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--erp-line-strong)] px-3 text-xs font-semibold text-[var(--erp-ink)]'>
-                                        <Pencil aria-hidden='true' size={14} /> Edit
-                                    </NavLink>
-                                    {record.status === 'Enrolled' ? (
-                                        <span className='inline-flex min-h-9 items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 text-xs font-semibold text-emerald-700'>
-                                            <GraduationCap aria-hidden='true' size={14} /> Enrolled
-                                        </span>
-                                    ) : record.status === 'Pending Finance Approval' ? (
-                                        <button
-                                            type='button'
-                                            onClick={() => toast.info('Awaiting fee payment and clearance from Finance before final enrollment.')}
-                                            className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-amber-300 bg-amber-50/80 px-2.5 text-xs font-semibold text-amber-800'
-                                            title='Student details submitted. Awaiting Finance approval and admission bill payment.'
-                                        >
-                                            <GraduationCap aria-hidden='true' size={14} /> Awaiting Finance
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type='button'
-                                            onClick={() => setPendingAction({ type: 'enrol', record })}
-                                            className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--erp-line-strong)] px-3 text-xs font-semibold text-[var(--erp-indigo)]'
-                                        >
-                                            <GraduationCap aria-hidden='true' size={14} /> Enrol
-                                        </button>
-                                    )}
-                                    <button type='button' onClick={() => setPendingAction({ type: 'delete', record })} className='inline-flex min-h-9 items-center gap-1 rounded-lg border border-[#F4433655] px-3 text-xs font-semibold text-[#B42318]'>
-                                        <Trash2 aria-hidden='true' size={14} /> Delete
-                                    </button>
-                                </>
-                            )}
-                        </>
-                    )}
-                />
-                <Pagination {...pagination} onPageChange={setPage} onPageSizeChange={(value) => { setPageSize(value); setPage(1) }} />
+        <section>
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
+                    <button
+                        type='button'
+                        onClick={clearFilters}
+                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
+                    >
+                        Clear Filters
+                    </button>
+                </div>
+                <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='search' className='text-base font-medium text-[#808080]'>Search</label>
+                        <input
+                            id='search'
+                            type='text'
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder='Name, admission no., class...'
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        />
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label htmlFor='status' className='text-base font-medium text-[#808080]'>Status</label>
+                        <select
+                            id='status'
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                        >
+                            <option value=''>All</option>
+                            {statusOptions.map((item) => (
+                                <option key={item} value={item}>{item}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>From</label>
+                        <div className='relative w-full'>
+                            <DatePicker
+                                selected={fromDate}
+                                onChange={(date) => setFromDate(date)}
+                                isClearable
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                    <div className='flex flex-col gap-y-2'>
+                        <label className='text-base font-medium text-[#808080]'>To</label>
+                        <div className='relative'>
+                            <DatePicker
+                                selected={toDate}
+                                onChange={(date) => setToDate(date)}
+                                isClearable
+                                className='w-full text-sm text-[#808080] border border-[#D9D9D9] rounded-md px-3 py-2 pr-10 focus:outline-none'
+                            />
+                            <Calendar size={16} className='absolute right-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none' />
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <ConfirmAction
-                open={Boolean(pendingAction)}
-                onClose={() => setPendingAction(null)}
-                onConfirm={confirmPendingAction}
-                title={pendingAction?.type === 'delete' ? 'Delete this admission?' : 'Enrol this student?'}
-                description={pendingAction?.type === 'delete' ? 'The local admission record will be removed.' : 'A student record and guardian mapping will be created from this admission.'}
-                confirmLabel={pendingAction?.type === 'delete' ? 'Delete admission' : 'Enrol student'}
-                tone={pendingAction?.type === 'delete' ? 'danger' : 'primary'}
-            >
-                <p>
-                    {pendingAction?.type === 'delete'
-                        ? 'This cannot be undone in the current browser dataset.'
-                        : 'Confirm that identity, guardian, fee and document checks are complete before enrolment.'}
-                </p>
-            </ConfirmAction>
+            <div className='bg-white rounded-2xl shadow-md p-4 mt-8'>
+                <div className='flex justify-between items-center sm:flex-row flex-col gap-y-2 mb-4'>
+                    <h2 className='text-xl font-medium text-black'>Admissions</h2>
+                    <div className='flex gap-x-2'>
+                        {!isAdminView && (
+                            <NavLink
+                                to={addAdmissionPath}
+                                className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                            >
+                                <Plus size={16} />
+                                Add Admission
+                            </NavLink>
+                        )}
+                        <button
+                            type='button'
+                            onClick={() => setExportModal(true)}
+                            className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
+                        >
+                            <Download size={16} />
+                            Export
+                        </button>
+                    </div>
+                </div>
+
+                {filteredRecords.length === 0 ? (
+                    records.length ? (
+                        <div className='py-16 text-center'>
+                            <h3 className='text-lg font-semibold text-[#0C1E5B]'>No records match the filters.</h3>
+                        </div>
+                    ) : (
+                        <div className='py-16 text-center'>
+                            <h3 className='text-lg font-semibold text-[#0C1E5B]'>No admissions yet</h3>
+                            <p className='text-sm text-[#667085] mt-2 max-w-md mx-auto'>
+                                Create an admission to see records here.
+                            </p>
+                        </div>
+                    )
+                ) : (
+                    <>
+                        <PageSizeSelect pagination={pagination} className='my-2' />
+                        <div className='relative overflow-x-auto'>
+                            <table className='w-full text-sm text-left rtl:text-right'>
+                                <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                                    <tr className='rounded-lg'>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-s-lg'>Profile</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Student</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Roll No</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Class</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Admission Number</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Gender</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Mobile Number</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Created Date</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>Country</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'>City</th>
+                                        <th className='px-2 py-3.5 text-[#0C1E5B] font-medium uppercase rounded-e-lg'>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleRecords.map((record) => (
+                                        <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
+                                            <td className='px-2 py-4 object-cover flex justify-center rounded-s-lg'>
+                                                <img
+                                                    src={getAdmissionProfileImage(record)}
+                                                    alt={getStudentDisplayName(record)}
+                                                    className='w-9 h-9 rounded-full object-cover'
+                                                />
+                                            </td>
+                                            <td className='px-2 py-4'>{getStudentDisplayName(record)}</td>
+                                            <td className='px-2 py-4'>{record.rollNumber || '—'}</td>
+                                            <td className='px-2 py-4'>{record.className || '—'}</td>
+                                            <td className='px-2 py-4'>{record.admissionNumber || '—'}</td>
+                                            <td className='px-2 py-4'>{record.gender || '—'}</td>
+                                            <td className='px-2 py-4'>{record.mobileNumber || '—'}</td>
+                                            <td className='px-2 py-4'>{record.createdDate || '—'}</td>
+                                            <td className='px-2 py-4'>{record.country || '—'}</td>
+                                            <td className='px-2 py-4'>{record.city || '—'}</td>
+                                            <td className='px-2 py-4 text-center rounded-e-lg'>
+                                                {/* Once enrolled, the record lives in the Student Database; the admission is closed. */}
+                                                {record.status === 'Enrolled' ? (
+                                                    <span className='text-xs font-medium text-[#027A48] whitespace-nowrap' title='Managed in the Student Database'>
+                                                        Enrolled
+                                                    </span>
+                                                ) : (
+                                                <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
+                                                    <NavLink
+                                                        to={getAdmissionViewPath(pathname, record.id)}
+                                                        className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                    >
+                                                        View
+                                                    </NavLink>
+                                                    {!isAdminView && (
+                                                        <>
+                                                            <NavLink
+                                                                to={getAdmissionEditPath(pathname, record.id)}
+                                                                className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Edit
+                                                            </NavLink>
+                                                            {showDelete ? (
+                                                                <button
+                                                                    type='button'
+                                                                    onClick={() => handleDelete(record.id)}
+                                                                    className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            ) : null}
+                                                            <button
+                                                                type='button'
+                                                                onClick={() => handleEnroll(record)}
+                                                                className='w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'
+                                                            >
+                                                                Enroll as Student
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </Dropdown>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <ListPagination pagination={pagination} />
+                    </>
+                )}
+            </div>
+
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='adminssion-list'
+                rows={Array.isArray(filteredRecords) ? filteredRecords : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredRecords) ? filteredRecords.length : 0} record(s).</>}
+            />
+            <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
         </section>
     )
 }

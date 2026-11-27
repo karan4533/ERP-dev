@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import {
     LayoutDashboard,
@@ -20,6 +20,7 @@ import {
     AUDIT_TRENDS,
     CHART_COLORS,
 } from './dashboardData'
+import { emptyAuditDashboardView, loadLiveAuditDashboard } from './liveDashboardLoader'
 
 const KPI_ICONS = {
     'Total Audits Scheduled': ClipboardList,
@@ -49,7 +50,29 @@ const Widget = ({ title, children }) => (
 const thClass = 'px-2 py-3 text-[#0C1E5B] font-medium uppercase text-xs'
 const tdClass = 'px-2 py-3 text-[#667085] text-sm'
 
+const EmptyTableRow = ({ cols, label = 'No records' }) => (
+    <tr>
+        <td colSpan={cols} className={`${tdClass} text-center py-6 text-[#98A2B3]`}>{label}</td>
+    </tr>
+)
+
 const Dashboard = () => {
+    const [view, setView] = useState(() => emptyAuditDashboardView())
+
+    useEffect(() => {
+        let active = true
+        loadLiveAuditDashboard().then((next) => {
+            if (active) setView(next)
+        })
+        return () => { active = false }
+    }, [])
+
+    const kpiCards = view.kpiCards?.length ? view.kpiCards : KPI_CARDS
+    const upcomingAudits = view.upcomingAudits ?? UPCOMING_AUDITS
+    const criticalFindings = view.criticalFindings ?? CRITICAL_FINDINGS
+    const complianceSummary = view.complianceSummary?.length ? view.complianceSummary : COMPLIANCE_SUMMARY
+    const auditTrends = view.auditTrends ?? AUDIT_TRENDS
+
     const auditTrendsOption = useMemo(() => ({
         tooltip: { trigger: 'axis' },
         legend: {
@@ -60,7 +83,7 @@ const Dashboard = () => {
         grid: { left: 48, right: 24, top: 24, bottom: 48 },
         xAxis: {
             type: 'category',
-            data: AUDIT_TRENDS.labels,
+            data: auditTrends.labels,
             axisLine: { lineStyle: { color: '#E0E0E0' } },
             axisLabel: { color: '#667085', fontSize: 11 },
         },
@@ -74,7 +97,7 @@ const Dashboard = () => {
                 name: 'Monthly Audits Conducted',
                 type: 'line',
                 smooth: true,
-                data: AUDIT_TRENDS.auditsConducted,
+                data: auditTrends.auditsConducted,
                 areaStyle: { color: 'rgba(81, 93, 239, 0.1)' },
                 lineStyle: { color: CHART_COLORS.primary, width: 2 },
                 itemStyle: { color: CHART_COLORS.primary },
@@ -85,7 +108,7 @@ const Dashboard = () => {
                 name: 'Findings Raised',
                 type: 'line',
                 smooth: true,
-                data: AUDIT_TRENDS.findingsRaised,
+                data: auditTrends.findingsRaised,
                 lineStyle: { color: CHART_COLORS.warning, width: 2 },
                 itemStyle: { color: CHART_COLORS.warning },
                 symbol: 'circle',
@@ -95,14 +118,14 @@ const Dashboard = () => {
                 name: 'Findings Closed',
                 type: 'line',
                 smooth: true,
-                data: AUDIT_TRENDS.findingsClosed,
+                data: auditTrends.findingsClosed,
                 lineStyle: { color: CHART_COLORS.success, width: 2 },
                 itemStyle: { color: CHART_COLORS.success },
                 symbol: 'circle',
                 symbolSize: 6,
             },
         ],
-    }), [])
+    }), [auditTrends])
 
     const complianceBarOption = useMemo(() => ({
         tooltip: {
@@ -113,7 +136,7 @@ const Dashboard = () => {
         grid: { left: 48, right: 24, top: 16, bottom: 32 },
         xAxis: {
             type: 'category',
-            data: COMPLIANCE_SUMMARY.map((item) => item.department),
+            data: complianceSummary.map((item) => item.department),
             axisLabel: { color: '#667085', fontSize: 11 },
             axisLine: { lineStyle: { color: '#E0E0E0' } },
         },
@@ -125,7 +148,7 @@ const Dashboard = () => {
         },
         series: [{
             type: 'bar',
-            data: COMPLIANCE_SUMMARY.map((item) => item.compliance),
+            data: complianceSummary.map((item) => item.compliance),
             barWidth: 36,
             itemStyle: {
                 color: CHART_COLORS.primary,
@@ -139,7 +162,7 @@ const Dashboard = () => {
                 fontSize: 11,
             },
         }],
-    }), [])
+    }), [complianceSummary])
 
     return (
         <section className='space-y-6'>
@@ -156,7 +179,7 @@ const Dashboard = () => {
             </div>
 
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-                {KPI_CARDS.map((card) => {
+                {kpiCards.map((card) => {
                     const Icon = KPI_ICONS[card.label] ?? ClipboardList
                     return (
                         <div key={card.label} className='bg-white rounded-2xl shadow-md p-4'>
@@ -196,7 +219,9 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {UPCOMING_AUDITS.map((row) => (
+                            {upcomingAudits.length === 0 ? (
+                                <EmptyTableRow cols={4} />
+                            ) : upcomingAudits.map((row) => (
                                 <tr key={row.auditId} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className={`${tdClass} font-medium text-[#1E1E1E] rounded-s-lg`}>{row.auditId}</td>
                                     <td className={tdClass}>{row.auditType}</td>
@@ -218,12 +243,14 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {CRITICAL_FINDINGS.map((row) => (
+                            {criticalFindings.length === 0 ? (
+                                <EmptyTableRow cols={3} />
+                            ) : criticalFindings.map((row) => (
                                 <tr key={row.findingId} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                     <td className={`${tdClass} font-medium text-[#1E1E1E] rounded-s-lg`}>{row.findingId}</td>
                                     <td className={tdClass}>{row.department}</td>
                                     <td className={`${tdClass} rounded-e-lg`}>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${severityBadgeColor[row.severity]}`}>
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${severityBadgeColor[row.severity] || severityBadgeColor.Medium}`}>
                                             {row.severity}
                                         </span>
                                     </td>
@@ -243,7 +270,9 @@ const Dashboard = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {COMPLIANCE_SUMMARY.map((row) => (
+                        {complianceSummary.length === 0 ? (
+                            <EmptyTableRow cols={2} />
+                        ) : complianceSummary.map((row) => (
                             <tr key={row.department} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
                                 <td className={`${tdClass} font-medium text-[#1E1E1E] rounded-s-lg`}>{row.department}</td>
                                 <td className={`${tdClass} rounded-e-lg`}>

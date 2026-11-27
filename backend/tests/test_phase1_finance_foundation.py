@@ -41,6 +41,10 @@ def test_finance_head_and_assistant_permissions(client):
     assert "finance.write" not in asst_me["permissions"]
     assert "finance.approve" not in asst_me["permissions"]
 
+    # Assistant may read the campus ledger (collect) but not mutate masters or approve.
+    asst_state = client.get("/api/v1/finance/state", headers=assistant)
+    assert asst_state.status_code == 200, asst_state.text
+
     denied = client.put("/api/v1/finance/state", headers=assistant, json={"data": {"meta": {"seeded": True}}})
     assert denied.status_code == 403
 

@@ -1,71 +1,130 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
-import ApprovalHistoryTimeline from '../../approvals/ApprovalHistoryTimeline'
-import { ConfirmAction, IntegrationNotice, PageHeader } from '../../ui'
-import { useAuth } from '../../../context/AuthContext'
 import AttachmentChip from './AttachmentChip'
 import LessonPlanTemplateView from './LessonPlanTemplateView'
 import MarkAsDoneConfirmModal from './MarkAsDoneConfirmModal'
 import StatusBadge from './StatusBadge'
 import {
     getApprovedLessonPlansBySubmitter,
-    getLessonPlanApprovalHistory,
     getLessonPlans,
     getLessonPlansBySubmitter,
+    hydrateLessonPlansFromApi,
     markLessonPlanAsDone,
-    TEACHER_NAME,
+    submitDraftLessonPlan,
     updateLessonPlanStatus,
 } from '../lessonPlanApprovalData'
+import { canUseLessonPlansApi } from '../../../services/lessonPlansApi'
+import { useAuth } from '../../../context/AuthContext'
+import ApprovalHistory from '../../Approvals/ApprovalHistory.jsx'
+import { approverRoleForPath, stepAction } from '../../Approvals/approvalStep'
 
 const getRoutePrefix = (pathname) => {
     if (pathname.startsWith('/coordinator')) return '/coordinator'
+    if (pathname.startsWith('/principal')) return '/principal'
     if (pathname.startsWith('/director')) return '/director'
     return '/teacher'
 }
 
+// Approver review screens: Coordinator review queue, Principal and Director approval.
+const APPROVAL_GROUP_PATHS = [
+    '/coordinator/lesson-plan-review/group',
+    '/principal/lesson-plan-approval/group',
+    '/director/lesson-plan-approval/group',
+]
+
 const getVariant = (pathname) => {
     if (pathname.includes('/my-lesson-plan/group')) return 'mark-as-done'
-    if (pathname.startsWith('/director')) return 'director-approval'
+    if (APPROVAL_GROUP_PATHS.some((prefix) => pathname.startsWith(prefix))) return 'approval'
     return 'submissions'
 }
 
 const LessonPlanGroupDetail = () => {
     const { teacherName, subject } = useParams()
     const location = useLocation()
-    const { name, email } = useAuth()
+    const { email, role } = useAuth()
     const routePrefix = getRoutePrefix(location.pathname)
     const variant = getVariant(location.pathname)
+    const approverRole = approverRoleForPath(location.pathname) || role
 
     const decodedTeacher = decodeURIComponent(teacherName ?? '')
     const decodedSubject = decodeURIComponent(subject ?? '')
 
-    const selectScopedPlans = (sourcePlans) => sourcePlans.filter(
-        (plan) => plan.submitterName === decodedTeacher && plan.subject === decodedSubject
-    )
-    const loadScopedPlans = () => {
-        if (variant === 'mark-as-done') return selectScopedPlans(getApprovedLessonPlansBySubmitter(decodedTeacher))
-        if (variant === 'director-approval') return selectScopedPlans(getLessonPlans())
-        return selectScopedPlans(getLessonPlansBySubmitter(TEACHER_NAME))
-    }
-
-    const [plans, setPlans] = useState(loadScopedPlans)
+    const [plans, setPlans] = useState([])
     const [expandedPlanId, setExpandedPlanId] = useState(null)
     const [confirmPlan, setConfirmPlan] = useState(null)
-    const [decision, setDecision] = useState(null)
-    const [decisionRemarks, setDecisionRemarks] = useState('')
+    const [busyPlanId, setBusyPlanId] = useState(null)
 
     const listBackPath =
         variant === 'mark-as-done'
             ? `${routePrefix}/lesson-plan/my-lesson-plan`
-            : `${routePrefix}/lesson-plan-approval`
+            : variant === 'approval' && routePrefix === '/coordinator'
+              ? `${routePrefix}/lesson-plan-review`
+              : `${routePrefix}/lesson-plan-approval`
 
     const pageTitle =
         variant === 'mark-as-done'
             ? 'My Lesson Plan'
-            : variant === 'director-approval'
+            : variant === 'approval'
               ? 'Lesson Plan Review'
               : 'Lesson Plans'
+
+    const applyPlans = (sourcePlans) => {
+        const teacherKey = String(decodedTeacher || '').trim().toLowerCase()
+        const subjectKey = String(decodedSubject || '').trim().toLowerCase()
+        setPlans(
+            sourcePlans.filter((plan) => {
+                const planTeacher = String(plan.submitterName || '').trim().toLowerCase()
+                const planSubject = String(plan.subject || '').trim().toLowerCase()
+                return planTeacher === teacherKey && planSubject === subjectKey
+            }),
+        )
+    }
+
+    const loadPlans = () => {
+        let sourcePlans = []
+        if (variant === 'mark-as-done') {
+            sourcePlans = getApprovedLessonPlansBySubmitter(decodedTeacher)
+        } else if (variant === 'approval') {
+            sourcePlans = getLessonPlans()
+        } else {
+            sourcePlans = canUseLessonPlansApi()
+                ? getLessonPlans()
+                : getLessonPlansBySubmitter(decodedTeacher)
+        }
+        applyPlans(sourcePlans)
+    }
+
+    useEffect(() => {
+        let cancelled = false
+        const refresh = () => {
+            if (canUseLessonPlansApi()) {
+                // Approver screens need campus-wide plans; teachers use "mine".
+                const mine = variant !== 'approval'
+                hydrateLessonPlansFromApi({ mine })
+                    .then((rows) => {
+                        if (cancelled) return
+                        const source = variant === 'mark-as-done'
+                            ? rows.filter((item) => item.approvalStatus === 'Approved')
+                            : rows
+                        applyPlans(source)
+                    })
+                    .catch(() => {
+                        if (!cancelled) loadPlans()
+                    })
+                return
+            }
+            queueMicrotask(() => {
+                if (!cancelled) loadPlans()
+            })
+        }
+        refresh()
+        return () => {
+            cancelled = true
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [decodedTeacher, decodedSubject, location.key, variant])
 
     const sortedPlans = useMemo(
         () =>
@@ -76,26 +135,59 @@ const LessonPlanGroupDetail = () => {
         [plans]
     )
 
-    const openDecision = (plan, type) => {
-        setDecision({ plan, type })
-        setDecisionRemarks('')
+    const actionFor = (plan) => stepAction(plan, approverRole, email)
+
+    const reloadAfterDecision = async () => {
+        if (canUseLessonPlansApi()) {
+            const rows = await hydrateLessonPlansFromApi({ mine: variant !== 'approval' })
+            applyPlans(rows)
+        } else {
+            loadPlans()
+        }
     }
 
-    const closeDecision = () => {
-        setDecision(null)
-        setDecisionRemarks('')
+    const handleApprove = async (id) => {
+        setBusyPlanId(id)
+        try {
+            await updateLessonPlanStatus(id, 'Approved')
+            toast.success(approverRole === 'director' ? 'Lesson plan approved.' : 'Approved and sent to the next approver.')
+            await reloadAfterDecision()
+        } catch (error) {
+            toast.error(error?.message || 'Could not approve lesson plan.')
+        } finally {
+            setBusyPlanId(null)
+        }
     }
 
-    const handleDecision = () => {
-        if (!decision) return
-        if (decision.type === 'reject' && !decisionRemarks.trim()) return
-        const updated = updateLessonPlanStatus(decision.plan.id, decision.type === 'approve' ? 'Approved' : 'Rejected', {
-            actor: name || email || 'Director',
-            actorRole: 'Director',
-            remarks: decisionRemarks.trim(),
-        })
-        setPlans(selectScopedPlans(updated))
-        closeDecision()
+    const handleReject = async (id) => {
+        const reason = window.prompt('Rejection reason (required):')
+        if (reason == null) return
+        if (!String(reason).trim()) {
+            toast.error('A rejection reason is required.')
+            return
+        }
+        setBusyPlanId(id)
+        try {
+            await updateLessonPlanStatus(id, 'Rejected', String(reason).trim())
+            toast.success('Lesson plan rejected.')
+            await reloadAfterDecision()
+        } catch (error) {
+            toast.error(error?.message || 'Could not reject lesson plan.')
+        } finally {
+            setBusyPlanId(null)
+        }
+    }
+
+    const handleSubmitDraft = async (id) => {
+        setBusyPlanId(id)
+        try {
+            applyPlans(await submitDraftLessonPlan(id))
+            toast.success('Lesson plan submitted for approval.')
+        } catch (error) {
+            toast.error(error?.message || 'Could not submit the lesson plan.')
+        } finally {
+            setBusyPlanId(null)
+        }
     }
 
     const handleMarkAsDoneClick = (plan) => {
@@ -103,11 +195,21 @@ const LessonPlanGroupDetail = () => {
         setConfirmPlan(plan)
     }
 
-    const handleConfirmMarkAsDone = (remarks) => {
+    const handleConfirmMarkAsDone = async (remarks) => {
         if (!confirmPlan) return
-        const updated = markLessonPlanAsDone(confirmPlan.id, remarks)
-        setPlans(selectScopedPlans(updated))
-        setConfirmPlan(null)
+        const planId = confirmPlan.id
+        setBusyPlanId(planId)
+        try {
+            const rows = await markLessonPlanAsDone(planId, remarks)
+            setConfirmPlan(null)
+            toast.success('Lesson plan marked as done.')
+            if (canUseLessonPlansApi()) applyPlans(rows.filter((item) => item.approvalStatus === 'Approved'))
+            else loadPlans()
+        } catch (error) {
+            toast.error(error?.message || 'Could not mark lesson plan as done.')
+        } finally {
+            setBusyPlanId(null)
+        }
     }
 
     const togglePlanDetails = (planId) => {
@@ -135,19 +237,15 @@ const LessonPlanGroupDetail = () => {
                 Back
             </NavLink>
 
-            <PageHeader
-                title={pageTitle}
-                description={`${decodedTeacher} · ${decodedSubject}`}
-                context={`${sortedPlans.length} lesson plan${sortedPlans.length === 1 ? '' : 's'} in this group`}
-            />
-
-            {variant === 'director-approval' ? (
-                <IntegrationNotice
-                    state='demo'
-                    title='Local lesson-plan approval queue'
-                    description='Decision history is stored in this browser. Production requires immutable academic API events, reviewer permissions, notifications and versioned lesson-plan content.'
-                />
-            ) : null}
+            <div className='bg-white rounded-2xl shadow-md p-5'>
+                <p className='text-sm font-semibold uppercase tracking-wide text-[#515DEF]'>{pageTitle}</p>
+                <h1 className='text-2xl font-semibold text-[#313131] mt-2'>
+                    {decodedTeacher} · {decodedSubject}
+                </h1>
+                <p className='text-base text-[#667085] mt-2'>
+                    {sortedPlans.length} lesson plan{sortedPlans.length === 1 ? '' : 's'} in this group
+                </p>
+            </div>
 
             <div className='bg-white rounded-2xl shadow-md p-4 space-y-4'>
                 <h2 className='text-xl font-medium text-black'>Lesson Plans</h2>
@@ -177,7 +275,7 @@ const LessonPlanGroupDetail = () => {
                                         </p>
                                         <div className='flex flex-wrap items-center gap-2'>
                                             <StatusBadge status={plan.approvalStatus} type='approval' />
-                                            {(variant === 'director-approval' || variant === 'mark-as-done') ? (
+                                            {variant === 'mark-as-done' ? (
                                                 <StatusBadge status={plan.trackStatus} type='track' />
                                             ) : null}
                                             {variant === 'mark-as-done' && plan.markAsDone ? (
@@ -190,23 +288,39 @@ const LessonPlanGroupDetail = () => {
                                     </div>
 
                                     <div className='flex flex-wrap items-center gap-3 shrink-0'>
-                                        {variant === 'director-approval' && plan.approvalStatus === 'Pending' ? (
+                                        {variant === 'approval' && !actionFor(plan).canAct && actionFor(plan).note ? (
+                                            <span className='text-sm text-[#667085]'>{actionFor(plan).note}</span>
+                                        ) : null}
+                                        {variant === 'approval' && actionFor(plan).canAct ? (
                                             <>
                                                 <button
                                                     type='button'
-                                                    onClick={() => openDecision(plan, 'approve')}
-                                                    className='bg-[#4CAF50] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
+                                                    onClick={() => handleApprove(plan.id)}
+                                                    disabled={busyPlanId === plan.id}
+                                                    className='bg-[#4CAF50] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer disabled:opacity-50'
                                                 >
                                                     Approve
                                                 </button>
                                                 <button
                                                     type='button'
-                                                    onClick={() => openDecision(plan, 'reject')}
-                                                    className='bg-white text-[#FF0000] text-sm px-4 py-2 rounded-md border border-[#FF0000] hover:bg-[#FF0000] hover:text-white transition-all cursor-pointer'
+                                                    onClick={() => handleReject(plan.id)}
+                                                    disabled={busyPlanId === plan.id}
+                                                    className='bg-white text-[#FF0000] text-sm px-4 py-2 rounded-md border border-[#FF0000] hover:bg-[#FF0000] hover:text-white transition-all cursor-pointer disabled:opacity-50'
                                                 >
                                                     Reject
                                                 </button>
                                             </>
+                                        ) : null}
+
+                                        {variant === 'submissions' && plan.isDraft ? (
+                                            <button
+                                                type='button'
+                                                onClick={() => handleSubmitDraft(plan.id)}
+                                                disabled={busyPlanId === plan.id}
+                                                className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer disabled:opacity-50'
+                                            >
+                                                {busyPlanId === plan.id ? 'Submitting…' : 'Submit for approval'}
+                                            </button>
                                         ) : null}
 
                                         <button
@@ -248,7 +362,12 @@ const LessonPlanGroupDetail = () => {
                                             ) : null}
                                         </div>
                                         <LessonPlanTemplateView plan={plan} />
-                                        {variant === 'director-approval' ? <ApprovalHistoryTimeline history={getLessonPlanApprovalHistory(plan)} /> : null}
+                                        {canUseLessonPlansApi() && plan.approvalId ? (
+                                            <div className='rounded-xl border border-[#EEF0F6] bg-[#FAFBFD] p-3'>
+                                                <p className='text-sm font-semibold text-[#0C1E5B] mb-2'>Approval History</p>
+                                                <ApprovalHistory approvalId={plan.approvalId} />
+                                            </div>
+                                        ) : null}
                                     </div>
                                 ) : null}
                             </div>
@@ -263,31 +382,6 @@ const LessonPlanGroupDetail = () => {
                 onCancel={() => setConfirmPlan(null)}
                 onConfirm={handleConfirmMarkAsDone}
             />
-
-            <ConfirmAction
-                open={Boolean(decision)}
-                onClose={closeDecision}
-                onConfirm={handleDecision}
-                title={decision?.type === 'approve' ? 'Approve this lesson plan?' : 'Reject this lesson plan?'}
-                description={decision?.type === 'approve' ? 'The plan will move into the approved teaching workflow.' : 'The plan will return to the author for revision.'}
-                confirmLabel={decision?.type === 'approve' ? 'Approve plan' : 'Confirm rejection'}
-                tone={decision?.type === 'reject' ? 'danger' : 'primary'}
-                confirmDisabled={decision?.type === 'reject' && !decisionRemarks.trim()}
-            >
-                <label htmlFor='lesson-decision-remarks' className='block font-semibold text-[var(--erp-ink)]'>
-                    {decision?.type === 'reject' ? 'Rejection rationale (required)' : 'Decision remarks (optional)'}
-                </label>
-                <textarea
-                    id='lesson-decision-remarks'
-                    value={decisionRemarks}
-                    onChange={(event) => setDecisionRemarks(event.target.value)}
-                    rows={3}
-                    required={decision?.type === 'reject'}
-                    placeholder={decision?.type === 'reject' ? 'Explain what the author must revise…' : 'Add an optional review note…'}
-                    className='mt-2 w-full rounded-lg border border-[var(--erp-line-strong)] px-3 py-2 text-sm text-[var(--erp-ink)]'
-                />
-                {decision?.type === 'reject' && !decisionRemarks.trim() ? <p className='mt-1 text-xs text-[var(--erp-red)]'>A rejection rationale is required.</p> : null}
-            </ConfirmAction>
         </section>
     )
 }

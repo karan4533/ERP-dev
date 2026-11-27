@@ -1,38 +1,169 @@
-import { useMemo, useState } from 'react'
-import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
-import { EXPENSE_CLAIMS, FUEL_SUMMARY } from '../transportFinanceData'
-import { StaffAvatar, SummaryCards } from './TransportShared'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Download, Search } from 'lucide-react'
+import {
+    claimStatusBadgeColor,
+    claimTypeBadgeColor,
+} from '../transportFinanceData'
+import {
+    StaffAvatar,
+    SummaryCards,
+    TableCard,
+    TablePagination,
+    tdClass,
+    thClass,
+} from './TransportShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import { formatCurrency, parseRupeeAmount } from '../../financeDomain/financeHelpers'
+import {
+    getFuelRequests,
+    getMaintenanceRequests,
+    hydrateTransportApprovalRequestsFromApi,
+} from '../../../TransportManager/RequestApprovals/requestApprovalsData'
+import { mapApprovalsToFinanceClaims } from '../../../TransportManager/RequestApprovals/transportApprovalFinanceBridge'
 
-const TYPE_FILTERS = ['All types', 'Fuel', 'Service', 'Toll', 'Misc']
-const STATUS_FILTERS = ['All statuses', 'Pending', 'Approved', 'Rejected']
+const FuelExpenseClaimsTab = () => {
+    const { approvals, financePersistence, syncTransportOpsIntoFinance } = useFinance()
+    const apiLive = Boolean(financePersistence?.apiEnabled)
+    const [opsClaims, setOpsClaims] = useState(() =>
+        mapApprovalsToFinanceClaims([...getMaintenanceRequests(), ...getFuelRequests()])
+    )
 
-const FuelExpenseClaimsTab = ({ expenseClaims = EXPENSE_CLAIMS }) => {
-    const [query, setQuery] = useState('')
-    const [type, setType] = useState(TYPE_FILTERS[0])
-    const [status, setStatus] = useState(STATUS_FILTERS[0])
-    const rows = useMemo(() => expenseClaims.filter((row) => {
-        if (type !== TYPE_FILTERS[0] && row.type !== type) return false
-        if (status !== STATUS_FILTERS[0] && row.status !== status) return false
-        const normalizedQuery = query.trim().toLowerCase()
-        return !normalizedQuery || [row.id, row.claimant, row.vehicle, row.type, row.amount, row.status].join(' ').toLowerCase().includes(normalizedQuery)
-    }), [expenseClaims, query, status, type])
-    const columns = [
-        { key: 'claimant', label: 'Claimant', required: true, render: (row) => <StaffAvatar initials={row.initials} name={row.claimant} /> },
-        { key: 'vehicle', label: 'Vehicle', render: (row) => <span className='font-mono text-xs'>{row.vehicle}</span> },
-        { key: 'type', label: 'Type' },
-        { key: 'date', label: 'Date' },
-        { key: 'amount', label: 'Amount', required: true, render: (row) => <span className='font-semibold text-[var(--erp-ink)]'>{row.amount}</span> },
-        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    ]
+    useEffect(() => {
+        hydrateTransportApprovalRequestsFromApi().finally(() => {
+            setOpsClaims(mapApprovalsToFinanceClaims([...getMaintenanceRequests(), ...getFuelRequests()]))
+        })
+        syncTransportOpsIntoFinance?.().catch(() => {})
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount sync
+    }, [])
+
+    const rows = useMemo(() => {
+        const fromApprovals = (approvals || [])
+            .filter((row) => String(row.department || '').toLowerCase() === 'transport')
+            .map((row) => ({
+                id: row.linkedRequestId || row.id,
+                claimant: row.raisedBy || 'Staff',
+                initials: row.initials || 'TR',
+                vehicle: row.vehicle || row.detail?.vehicle || '—',
+                type: /fuel/i.test(row.type || '') ? 'Fuel' : (row.type || 'Expense'),
+                date: row.raisedOn || (row.decidedAt || '').slice(0, 10) || '—',
+                amount: row.amount,
+                amountNum: parseRupeeAmount(row.amount),
+                status: row.status || 'Pending',
+            }))
+        const byId = new Map()
+        ;[...opsClaims, ...fromApprovals].forEach((row) => {
+            const key = String(row.id || '').trim()
+            if (!key) return
+            const prev = byId.get(key) || {}
+            byId.set(key, {
+                ...prev,
+                ...row,
+                amountNum: row.amountNum ?? parseRupeeAmount(row.amount),
+            })
+        })
+        return [...byId.values()]
+    }, [approvals, opsClaims])
+
+    const summary = useMemo(() => {
+        const total = rows.reduce((sum, row) => sum + (row.amountNum || 0), 0)
+        const pending = rows.filter((row) => /pending/i.test(row.status || '')).length
+        const approved = rows.filter((row) => /approved|completed/i.test(row.status || '')).length
+        const fuel = rows.filter((row) => /fuel/i.test(row.type || '')).length
+        return [
+            { label: 'Claims (live)', value: String(rows.length), sub: apiLive ? 'Ops + finance snapshot' : 'Local merge', iconTone: 'info' },
+            { label: 'Total value', value: formatCurrency(total), sub: 'Sum of listed claims', iconTone: 'success' },
+            { label: 'Pending', value: String(pending), sub: 'Awaiting finance decision', iconTone: 'warning' },
+            { label: 'Fuel / approved', value: `${fuel} / ${approved}`, sub: 'Fuel rows · approved count', iconTone: 'success' },
+        ]
+    }, [apiLive, rows])
+
     return (
-        <div className='space-y-5'>
-            <IntegrationNotice state='demo' title='Sample transport claims' description='Claims are reference data only. Review, rejection rationale, approval, disbursement and audit history require the connected expense workflow.' />
-            <SummaryCards cards={FUEL_SUMMARY} />
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='transport-claims-title'>
-                <div className='px-4 pt-4 sm:px-5'><h3 id='transport-claims-title' className='text-base font-semibold text-[var(--erp-ink)]'>Fuel & expense claims</h3></div>
-                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search transport claims' searchPlaceholder='Claimant, vehicle or amount…' resultCount={rows.length} onReset={() => { setQuery(''); setType(TYPE_FILTERS[0]); setStatus(STATUS_FILTERS[0]) }} filters={<><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Type<select value={type} onChange={(event) => setType(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{TYPE_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label><label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status<select value={status} onChange={(event) => setStatus(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{STATUS_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label></>} />
-                <DataTable caption='Transport fuel and expense claims' rows={rows} columns={columns} rowKey='id' emptyTitle='No claims found' emptyDescription='Reset the filters to review available sample claims.' renderActions={(row) => <button type='button' disabled title='Claim review requires the connected approval API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>{row.status === 'Pending' ? 'Review unavailable' : 'Details unavailable'}</button>} />
-            </section>
+        <div className='space-y-6'>
+            <SummaryCards cards={summary} />
+
+            <TableCard
+                title='Expense claims by transport manager / drivers'
+                filters={(
+                    <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
+                        <div className='relative min-w-[160px]'>
+                            <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
+                            <input
+                                type='text'
+                                placeholder='Search claimant...'
+                                className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
+                            />
+                        </div>
+                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'>
+                            <option>All Types</option>
+                            <option>Fuel</option>
+                            <option>Service</option>
+                            <option>Toll / Parking</option>
+                            <option>Misc.</option>
+                        </select>
+                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[120px]'>
+                            <option>All Status</option>
+                            <option>Pending</option>
+                            <option>Approved</option>
+                            <option>Rejected</option>
+                        </select>
+                        <button
+                            type='button'
+                            className='inline-flex items-center gap-2 text-sm font-medium text-[#515DEF] border border-[#515DEF] px-4 py-2 rounded-md hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                        >
+                            <Download size={16} />
+                            Export
+                        </button>
+                    </div>
+                )}
+                footer={<TablePagination summary={`${rows.length} claims`} />}
+            >
+                <table className='w-full text-sm text-left mt-4'>
+                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                        <tr>
+                            <th className={`${thClass} rounded-s-lg`}>Claimant</th>
+                            <th className={thClass}>Vehicle</th>
+                            <th className={thClass}>Type</th>
+                            <th className={thClass}>Date</th>
+                            <th className={thClass}>Amount</th>
+                            <th className={thClass}>Status</th>
+                            <th className={`${thClass} rounded-e-lg`}>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.length === 0 ? (
+                            <tr>
+                                <td colSpan={7} className={`${tdClass} text-center py-8 text-[#667085]`}>
+                                    No transport claims yet. Approve fuel/maintenance via TM → Principal to populate this list.
+                                </td>
+                            </tr>
+                        ) : rows.map((row) => (
+                            <tr key={row.id} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                <td className={`${tdClass} rounded-s-lg`}>
+                                    <StaffAvatar initials={row.initials} name={row.claimant} />
+                                </td>
+                                <td className={`${tdClass} font-mono text-xs`}>{row.vehicle}</td>
+                                <td className={tdClass}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${claimTypeBadgeColor[row.type] || 'bg-[#EDEEF5] text-[#667085]'}`}>
+                                        {row.type}
+                                    </span>
+                                </td>
+                                <td className={tdClass}>{row.date}</td>
+                                <td className={`${tdClass} font-semibold text-[#1E1E1E]`}>{row.amount}</td>
+                                <td className={tdClass}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${claimStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
+                                        {row.status}
+                                    </span>
+                                </td>
+                                <td className={`${tdClass} rounded-e-lg`}>
+                                    <button type='button' className='text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'>
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </TableCard>
         </div>
     )
 }

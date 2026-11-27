@@ -1,14 +1,12 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, EllipsisIcon, Download } from 'lucide-react'
-import { toast } from 'react-toastify'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
-    getEscalations,
-    updateEscalationStatus,
+    getJdEscalations, hydrateJdEscalationsFromApi,
     DEPARTMENTS,
     ESCALATION_STATUSES,
     statusBadgeColor,
@@ -16,50 +14,14 @@ import {
 } from './escalationData'
 
 const Escalations = () => {
+    const [escalations, setEscalations] = useState(() => getJdEscalations())
+    useEffect(() => {
+        hydrateJdEscalationsFromApi().finally(() => setEscalations(getJdEscalations()))
+    }, [])
+
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
-    const [escalations, setEscalations] = useState(getEscalations)
-    const [search, setSearch] = useState('')
-    const [departmentFilter, setDepartmentFilter] = useState('')
-    const [statusFilter, setStatusFilter] = useState('')
-
-    const handleClearFilters = () => {
-        setSearch('')
-        setDepartmentFilter('')
-        setStatusFilter('')
-        setFromDate(new Date())
-        setToDate(new Date())
-    }
-
-    const handleEscalate = (id) => {
-        const updated = updateEscalationStatus(id, 'Escalated to Admin')
-        if (updated) {
-            setEscalations(getEscalations())
-            toast.success(`Escalation ${id} escalated to Admin.`)
-        }
-    }
-
-    const handleResolve = (id) => {
-        const updated = updateEscalationStatus(id, 'Resolved')
-        if (updated) {
-            setEscalations(getEscalations())
-            toast.success(`Escalation ${id} marked as resolved.`)
-        }
-    }
-
-    const filteredEscalations = escalations.filter((esc) => {
-        const query = search.trim().toLowerCase()
-        const matchesQuery =
-            !query ||
-            esc.id.toLowerCase().includes(query) ||
-            esc.escalatedBy.toLowerCase().includes(query) ||
-            esc.description.toLowerCase().includes(query) ||
-            esc.escalatedDepartment.toLowerCase().includes(query)
-        const matchesDept = !departmentFilter || esc.escalatedDepartment === departmentFilter
-        const matchesStatus = !statusFilter || esc.status === statusFilter
-        return matchesQuery && matchesDept && matchesStatus
-    })
 
     return (
         <section>
@@ -68,11 +30,7 @@ const Escalations = () => {
                     Receive escalations from department managers and forward unresolved items to Admin.
                 </p>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
-                    <button
-                        type='button'
-                        onClick={handleClearFilters}
-                        className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'
-                    >
+                    <button className='bg-[#515DEF] text-white uppercase text-sm px-6 py-2 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
                         Clear Filters
                     </button>
                     <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full md:max-w-xs sm:max-w-full'>
@@ -82,21 +40,11 @@ const Escalations = () => {
                 <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:mt-8 mt-2'>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Search</label>
-                        <input
-                            type="text"
-                            placeholder="Escalation ID, name..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        />
+                        <input type="text" placeholder="Escalation ID, name..." className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full' />
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Department</label>
-                        <select
-                            value={departmentFilter}
-                            onChange={(e) => setDepartmentFilter(e.target.value)}
-                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
+                        <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value="">All</option>
                             {DEPARTMENTS.map((dept) => (
                                 <option key={dept} value={dept}>{dept}</option>
@@ -105,11 +53,7 @@ const Escalations = () => {
                     </div>
                     <div className='flex flex-col gap-y-2'>
                         <label className='text-base font-medium text-[#808080]'>Status</label>
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
-                        >
+                        <select className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'>
                             <option value="">All</option>
                             {ESCALATION_STATUSES.map((status) => (
                                 <option key={status} value={status}>{status}</option>
@@ -182,7 +126,7 @@ const Escalations = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredEscalations.map((escalation) => (
+                            {escalations.map((escalation) => (
                                 <tr
                                     key={escalation.id}
                                     className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7]"
@@ -216,20 +160,12 @@ const Escalations = () => {
                                                 View Details
                                             </NavLink>
                                             {!escalation.escalatedToAdmin && escalation.status !== 'Resolved' && escalation.status !== 'Closed' && (
-                                                <button
-                                                    type='button'
-                                                    onClick={() => handleEscalate(escalation.id)}
-                                                    className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer"
-                                                >
+                                                <button type='button' className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                                     Escalate to Admin
                                                 </button>
                                             )}
                                             {(escalation.status === 'Open' || escalation.status === 'In Review') && (
-                                                <button
-                                                    type='button'
-                                                    onClick={() => handleResolve(escalation.id)}
-                                                    className="w-full text-left p-2 hover:bg-[#4CAF50] hover:text-white rounded cursor-pointer"
-                                                >
+                                                <button type='button' className="w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer">
                                                     Mark Resolved
                                                 </button>
                                             )}
@@ -243,7 +179,7 @@ const Escalations = () => {
             </div>
 
             <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {filteredEscalations.length} of {filteredEscalations.length} entries</p>
+                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to {escalations.length} of {escalations.length} entries</p>
                 <div className="flex justify-center gap-x-2 flex-wrap">
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
                         <ChevronLeft size={16} />
@@ -257,7 +193,14 @@ const Escalations = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='escalations'
+                title='Escalations'
+                rows={Array.isArray(escalations) ? escalations : []}
+                exportDescription={<>You are exporting {Array.isArray(escalations) ? escalations.length : 0} record(s).</>}
+            />
         </section>
     )
 }

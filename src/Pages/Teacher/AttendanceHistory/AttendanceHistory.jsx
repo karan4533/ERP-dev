@@ -144,7 +144,14 @@ const AttendanceHistory = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='attendance-history'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {Array.isArray(ATTENDANCE_HISTORY) ? ATTENDANCE_HISTORY.length : 0} record(s).</>}
+            />
         </section>
     )
 }

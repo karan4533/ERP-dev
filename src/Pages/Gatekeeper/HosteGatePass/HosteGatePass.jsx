@@ -1,42 +1,87 @@
-import React, { useState } from 'react'
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { Calendar, ChevronLeft, ChevronRight, Download } from "lucide-react";
-import no_profile from "../../../assets/images/no-profile.png"
-import ExportModal from '../../../Common/CommonComponents/ExportModal';
+import React, { useEffect, useState } from 'react'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { toast } from 'react-toastify'
+import no_profile from '../../../assets/images/no-profile.png'
+import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { listFrontOfficeRecordsApi, updateFrontOfficeRecordApi } from '../../../services/frontOfficeApi'
+
+const bagdeColor = {
+    Returned: 'bg-[#4CAF5033] text-[#4CAF50]',
+    'Checked Out': 'bg-[#FF980033] text-[#FF9800]',
+    Pending: 'bg-[#FF980033] text-[#FF9800]',
+    Cancelled: 'bg-[#FF000033] text-[#FF0000]',
+}
+
+const statusColor = {
+    Approved: 'text-[#4CAF50]',
+    Pending: 'text-[#FF0000]',
+    Rejected: 'text-[#FF0000]',
+    'On Processing': 'text-[#FF9800]',
+}
+
+const gateKeeperStatusColor = {
+    Verified: 'text-[#4CAF50] border-[#4CAF5033]',
+    Pending: 'text-[#FF0000] border-[#FF000033]',
+    'On Processing': 'text-[#FF9800] border-[#FF980033]',
+}
+
+const gateKeeperStatusOptions = [
+    { value: 'Pending', label: 'Pending' },
+    { value: 'On Processing', label: 'On Processing' },
+    { value: 'Verified', label: 'Verified' },
+]
+
+const formatDateTime = (date, time) => {
+    const day = date || ''
+    const clock = time || ''
+    return [day, clock].filter(Boolean).join(' ') || '—'
+}
 
 const HosteGatePass = () => {
+    const [fromDate, setFromDate] = useState(new Date())
+    const [toDate, setToDate] = useState(new Date())
+    const [exportModal, setExportModal] = useState(false)
+    const [passes, setPasses] = useState([])
+    const [loadError, setLoadError] = useState('')
+    const [savingId, setSavingId] = useState('')
 
-    const [fromDate, setFromDate] = useState(new Date());
-    const [toDate, setToDate] = useState(new Date());
-    const [gateKeeperStatus, setGateKeeperStatus] = useState("Pending");
-    const [exportModal, setExportModal] = useState(false);
+    useEffect(() => {
+        let active = true
+        listFrontOfficeRecordsApi('hostel-gate-passes')
+            .then((rows) => {
+                if (!active) return
+                setPasses(Array.isArray(rows) ? rows : [])
+                setLoadError('')
+            })
+            .catch(() => {
+                if (!active) return
+                setPasses([])
+                setLoadError('Hostel gate passes could not be loaded.')
+            })
+        return () => { active = false }
+    }, [])
 
-    const bagdeColor = {
-        "Returned": "bg-[#4CAF5033] text-[#4CAF50]",
-        "Checked Out": "bg-[#FF980033] text-[#FF9800]",
-    }
-
-    const statusColor = {
-        "Approved": "text-[#4CAF50]",
-        "Pending": "text-[#FF0000]",
-        "On Processing": "text-[#FF9800]",
-    }
-
-    const gateKeeperStatusColor = {
-        "Verified": "text-[#4CAF50] border-[#4CAF5033]",
-        "Pending": "text-[#FF0000] border-[#FF000033]",
-        "On Processing": "text-[#FF9800] border-[#FF980033]",
-    }
-
-    const gateKeeperStatusOptions = [
-        { value: "Pending", label: "Pending" },
-        { value: "On Processing", label: "On Processing" },
-        { value: "Verified", label: "Verified" },
-    ]
-
-    const handleGateKeeperStatusChange = (e) => {
-        setGateKeeperStatus(e.target.value);
+    const handleGateKeeperStatusChange = async (pass, gateKeeperStatus) => {
+        const id = pass.id || pass.gatePassId
+        if (!id) return
+        setSavingId(id)
+        try {
+            // Verification-only patch — gate roles cannot rewrite the full FO record.
+            const updated = await updateFrontOfficeRecordApi('hostel-gate-passes', id, {
+                gateKeeperStatus,
+            })
+            setPasses((prev) => prev.map((row) => {
+                const rowId = row.id || row.gatePassId
+                return rowId === id ? { ...row, ...updated, gateKeeperStatus } : row
+            }))
+            toast.success('Gate keeper status updated.')
+        } catch {
+            toast.error('Could not update gate keeper status.')
+        } finally {
+            setSavingId('')
+        }
     }
 
     return (
@@ -143,58 +188,76 @@ const HosteGatePass = () => {
                         </thead>
 
                         <tbody>
-                            <tr className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
-                                <td className="px-2 py-4 object-cover flex justify-center rounded-s-lg">
-                                    <img src={no_profile} alt="no-profile-image" className='w-9 h-9' />
-                                </td>
-                                <td className="px-2 py-4">GP001</td>
-                                <td className="px-2 py-4">Arun Kumar</td>
-                                <td className="px-2 py-4">Class 10 A</td>
-                                <td className="px-2 py-4">QMIS Hostel</td>
-                                <td className="px-2 py-4">Home Visit</td>
-                                <td className="px-2 py-4">15-08-2025 09:00 AM</td>
-                                <td className="px-2 py-4">16-08-2025 06:00 PM</td>
-                                <td className="px-2 py-4">
-                                    <span className={`font-medium whitespace-nowrap ${statusColor["Approved"]}`}>
-                                        Approved
-                                    </span>
-                                </td>
-                                <td className="px-2 py-4">
-                                    <span className={`font-medium whitespace-nowrap ${statusColor["Approved"]}`}>
-                                        Approved
-                                    </span>
-                                </td>
-                                <td className="px-2 py-4">
-                                    <select
-                                        value={gateKeeperStatus}
-                                        onChange={handleGateKeeperStatusChange}
-                                        className={`text-sm font-medium border rounded-md px-2 py-1 w-full ${gateKeeperStatusColor[gateKeeperStatus]}`}
-                                    >
-                                        {gateKeeperStatusOptions.map((option) => (
-                                            <option
-                                                key={option.value}
-                                                value={option.value}
-                                                className={gateKeeperStatusColor[option.value]}
+                            {passes.length === 0 && (
+                                <tr>
+                                    <td colSpan={12} className="px-2 py-6 text-center text-[#667085]">
+                                        {loadError || 'No hostel gate passes have been issued.'}
+                                    </td>
+                                </tr>
+                            )}
+                            {passes.map((pass) => {
+                                const passId = pass.id || pass.gatePassId
+                                const gateKeeperStatus = pass.gateKeeperStatus || 'Pending'
+                                const parentApproval = pass.parentApproval || 'Pending'
+                                const principalApproval = pass.principalApproval || pass.wardenApproval || 'Pending'
+                                const finalStatus = pass.status || 'Pending'
+                                return (
+                                    <tr key={passId} className="border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg">
+                                        <td className="px-2 py-4 object-cover flex justify-center rounded-s-lg">
+                                            <img src={pass.profile || no_profile} alt="" className='w-9 h-9' />
+                                        </td>
+                                        <td className="px-2 py-4">{pass.gatePassId || pass.id}</td>
+                                        <td className="px-2 py-4">{pass.studentName || pass.name || '—'}</td>
+                                        <td className="px-2 py-4">{pass.classSection || pass.class || '—'}</td>
+                                        <td className="px-2 py-4">{pass.hostel || '—'}</td>
+                                        <td className="px-2 py-4">{pass.leaveType || '—'}</td>
+                                        <td className="px-2 py-4">{formatDateTime(pass.outDate, pass.outTime)}</td>
+                                        <td className="px-2 py-4">{formatDateTime(pass.returnDate, pass.returnTime)}</td>
+                                        <td className="px-2 py-4">
+                                            <span className={`font-medium whitespace-nowrap ${statusColor[parentApproval] || ''}`}>
+                                                {parentApproval}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-4">
+                                            <span className={`font-medium whitespace-nowrap ${statusColor[principalApproval] || ''}`}>
+                                                {principalApproval}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-4">
+                                            <select
+                                                value={gateKeeperStatus}
+                                                disabled={savingId === passId}
+                                                onChange={(e) => handleGateKeeperStatusChange(pass, e.target.value)}
+                                                className={`text-sm font-medium border rounded-md px-2 py-1 w-full ${gateKeeperStatusColor[gateKeeperStatus] || ''}`}
                                             >
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </td>
-                                <td className="px-2 py-4 rounded-e-lg">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${bagdeColor["Returned"]}`}>
-                                        Returned
-                                    </span>
-                                </td>
-                            </tr>
+                                                {gateKeeperStatusOptions.map((option) => (
+                                                    <option
+                                                        key={option.value}
+                                                        value={option.value}
+                                                        className={gateKeeperStatusColor[option.value]}
+                                                    >
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td className="px-2 py-4 rounded-e-lg">
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${bagdeColor[finalStatus] || bagdeColor.Pending}`}>
+                                                {finalStatus}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Pagination */}
             <div className='flex justify-between items-center px-4 mt-4'>
-                <p className='text-sm font-medium text-[#515DEF]'>Showing 1 to 10 of 20 entries</p>
+                <p className='text-sm font-medium text-[#515DEF]'>
+                    Showing {passes.length === 0 ? 0 : 1} to {passes.length} of {passes.length} entries
+                </p>
 
                 <div className="flex justify-center gap-x-2 flex-wrap">
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
@@ -205,10 +268,6 @@ const HosteGatePass = () => {
                         1
                     </button>
 
-                    <button className="size-8 flex justify-center items-center p-2 bg-[#EDEDF5] text-[#515DEF] hover:bg-[#515DEF] hover:text-white border border-[#E2E8F0] rounded-full cursor-pointer">
-                        2
-                    </button>
-
                     <button className="size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer">
                         <ChevronRight size={16} />
                     </button>
@@ -216,7 +275,14 @@ const HosteGatePass = () => {
             </div>
 
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='hostegatepass'
+                title='HosteGatePass'
+                rows={Array.isArray(passes) ? passes : []}
+                exportDescription={<>You are exporting {Array.isArray(passes) ? passes.length : 0} record(s).</>}
+            />
 
         </section>
     )

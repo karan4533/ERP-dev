@@ -8,15 +8,29 @@ import CountrySelect from '../../../../../Common/CommonComponents/CountrySelect'
 import { GENDER_OPTIONS } from '../../AdmissionEnquiry/admissionEnquiryData'
 
 const inputClass = 'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
+const invalidClass = 'text-sm font-normal text-[#1E1E1E] border border-[#F44336] rounded-md px-2 py-3 w-full'
 
-const StudentInfo = ({ form, onChange }) => {
+const StudentInfo = ({ form, onChange, missing = new Set() }) => {
     const update = (key, value) => onChange?.(key, value)
+    const firstNameMissing = missing.has('firstName')
+    const mobileMissing = missing.has('mobileNumber')
 
     return (
         <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 lg:mt-8 mt-2'>
             <div className='flex flex-col gap-y-2'>
-                <label htmlFor='firstName' className='text-base font-medium text-[#1E1E1E]'>First Name:</label>
-                <input id='firstName' type='text' value={form.firstName} onChange={(e) => update('firstName', e.target.value)} className={inputClass} />
+                <label htmlFor='firstName' className='text-base font-medium text-[#1E1E1E]'>
+                    First Name: <span className='text-[#F44336]'>*</span>
+                </label>
+                <input
+                    id='firstName'
+                    type='text'
+                    value={form.firstName}
+                    onChange={(e) => update('firstName', e.target.value)}
+                    aria-invalid={firstNameMissing}
+                    aria-describedby={firstNameMissing ? 'firstName-error' : undefined}
+                    className={firstNameMissing ? invalidClass : inputClass}
+                />
+                {firstNameMissing && <p id='firstName-error' className='text-xs text-[#F44336]'>First name is required.</p>}
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='middleName' className='text-base font-medium text-[#1E1E1E]'>Middle Name:</label>
@@ -74,8 +88,19 @@ const StudentInfo = ({ form, onChange }) => {
                 <input id='zipCode' type='text' value={form.zipCode} onChange={(e) => update('zipCode', e.target.value)} className={inputClass} />
             </div>
             <div className='flex flex-col gap-y-2'>
-                <label htmlFor='mobileNumber' className='text-base font-medium text-[#1E1E1E]'>Mobile Number:</label>
-                <input id='mobileNumber' type='text' value={form.mobileNumber} onChange={(e) => update('mobileNumber', e.target.value)} className={inputClass} />
+                <label htmlFor='mobileNumber' className='text-base font-medium text-[#1E1E1E]'>
+                    Mobile Number: <span className='text-[#F44336]'>*</span>
+                </label>
+                <input
+                    id='mobileNumber'
+                    type='text'
+                    value={form.mobileNumber}
+                    onChange={(e) => update('mobileNumber', e.target.value)}
+                    aria-invalid={mobileMissing}
+                    aria-describedby={mobileMissing ? 'mobileNumber-error' : undefined}
+                    className={mobileMissing ? invalidClass : inputClass}
+                />
+                {mobileMissing && <p id='mobileNumber-error' className='text-xs text-[#F44336]'>Mobile number is required.</p>}
             </div>
             <div className='flex flex-col gap-y-2'>
                 <label htmlFor='altMobileNumber' className='text-base font-medium text-[#1E1E1E]'>Alternative Mobile Number:</label>
@@ -115,7 +140,15 @@ const StudentInfo = ({ form, onChange }) => {
             <div className='cols-span-1 md:col-span-3 lg:col-span-3'>
                 <div className='flex flex-col gap-y-2'>
                     <label className='text-base font-medium text-[#1E1E1E]'>Profile Image:</label>
-                    <ProfileUpload value={form.profileImage} onChange={(value) => update('profileImage', value)} />
+                    <ProfileUpload
+                        value={form.profileImage}
+                        resourceType='admission'
+                        serverUpload
+                        onChange={(value, fileId) => {
+                            update('profileImage', value)
+                            update('profileImageFileId', fileId ?? null)
+                        }}
+                    />
                 </div>
             </div>
         </div>

@@ -7,6 +7,10 @@ import mo_user from "../../../../assets/images/no-profile.png"
 import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 
+const EXPORT_ROWS = [
+    {profile: '', co_ordinator_s_id: 'COO-1001', co_ordinator_name: 'Sandy Selva', gender: 'Male', email: 'san@gmail.com', mobile_number: '9944076993', date_of_birth: '20-12-1996', qualification: 'B.SC, B.ED', experience: '8 Years', country: 'India', state: 'Tamil Nadu', city: 'Pudukkottai'},
+]
+
 const CoordinatorsList = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -197,7 +201,14 @@ const CoordinatorsList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='coordinators-list'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
         </section>
     )

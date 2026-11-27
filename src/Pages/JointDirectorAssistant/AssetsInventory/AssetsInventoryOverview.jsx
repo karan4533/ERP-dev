@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -6,7 +6,8 @@ import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon } from 'luc
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
 import {
-    ASSETS_INVENTORY,
+    getJdAssets,
+    hydrateJdAssetsFromApi,
     VIEW_FILTERS,
     DEPARTMENTS,
     ALERT_TYPES,
@@ -19,14 +20,19 @@ const thClass = 'px-2 py-3.5 text-[#0C1E5B] font-medium uppercase'
 const tdClass = 'px-2 py-4 text-[#667085]'
 
 const AssetsInventoryOverview = () => {
+    const [assets, setAssets] = useState(() => getJdAssets())
+    useEffect(() => {
+        hydrateJdAssetsFromApi().finally(() => setAssets(getJdAssets()))
+    }, [])
+
     const [activeView, setActiveView] = useState('all')
     const [fromDate, setFromDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
 
     const filteredItems = useMemo(() => {
-        if (activeView === 'all') return ASSETS_INVENTORY
-        return ASSETS_INVENTORY.filter((item) => item.viewType === activeView)
-    }, [activeView])
+        if (activeView === 'all') return assets
+        return assets.filter((item) => item.viewType === activeView)
+    }, [activeView, assets])
 
     const activeViewMeta = VIEW_FILTERS.find((view) => view.key === activeView)
 
@@ -196,7 +202,14 @@ const AssetsInventoryOverview = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='assetsinventoryoverview'
+                title='AssetsInventoryOverview'
+                rows={Array.isArray(filteredItems) ? filteredItems : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredItems) ? filteredItems.length : 0} record(s).</>}
+            />
         </section>
     )
 }

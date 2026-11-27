@@ -1,21 +1,50 @@
-const noProfile = typeof window !== 'undefined'
-    ? new URL('../../assets/images/no-profile.png', import.meta.url).href
-    : '/src/assets/images/no-profile.png'
-import { ROLES } from '../../constants/roles.js'
-import { updateAssignmentStudentCounts } from './academicsCatalogData.js'
+import noProfile from '../../assets/images/no-profile.png'
+import { ROLES } from '../../constants/roles'
+import { updateAssignmentStudentCounts } from './academicsCatalogData'
+import {
+    canUseAdminUsersApi,
+    createAdminUserApi,
+    getAdminUserApi,
+    listAdminUsersApi,
+    resetAdminUserPasswordApi,
+    updateAdminUserApi,
+} from '../../services/adminUsersApi'
 
 const STORAGE_KEY = 'schoolerp-created-users'
 const ACTIVE_USER_KEY = 'schoolerp_active_created_user'
 
-/** Extend this list to expose more roles in Admin → User Creation. */
+/**
+ * Offline fallback for RBAC → User Creation when the admin-users API is unavailable.
+ * Live mode uses GET /admin/users/creatable-roles (server allow-list is authoritative).
+ * Keep in sync with backend ``admin_users.STAFF_ROLES`` (not Super-Admin-only roles).
+ */
 export const CREATABLE_ROLE_OPTIONS = [
     { role: ROLES.PRINCIPAL, label: 'Principal', idPrefix: 'PRC' },
+    { role: ROLES.DIRECTOR, label: 'Director', idPrefix: 'DIR' },
     { role: ROLES.PRM, label: 'PRM', idPrefix: 'PRM' },
+    { role: ROLES.PRO, label: 'PRO', idPrefix: 'PRO' },
     { role: ROLES.TEACHER, label: 'Teacher', idPrefix: 'TEA' },
     { role: ROLES.COORDINATOR, label: 'Coordinator', idPrefix: 'CRD' },
     { role: ROLES.LIBRARIAN, label: 'Librarian', idPrefix: 'LIB' },
+    { role: ROLES.HR, label: 'HR', idPrefix: 'HRM' },
+    { role: ROLES.ACCOUNT_HEAD, label: 'Account Head', idPrefix: 'ACH' },
+    { role: ROLES.FINANCE_MANAGER, label: 'Finance Manager', idPrefix: 'FNM' },
+    { role: ROLES.ACCOUNT_ASSISTANT, label: 'Account Assistant', idPrefix: 'ACA' },
+    { role: ROLES.FINANCE_ASSISTANT, label: 'Finance Assistant', idPrefix: 'FAS' },
+    { role: ROLES.JOINT_DIRECTOR, label: 'Joint Director', idPrefix: 'JD' },
+    { role: ROLES.JOINT_DIRECTOR_ASSISTANT, label: 'Joint Director Assistant', idPrefix: 'JDA' },
+    { role: ROLES.JOINT_DIRECTOR_AUDIT, label: 'Joint Director Audit', idPrefix: 'JDU' },
+    { role: ROLES.PROCESS_AUDITOR, label: 'Process Auditor', idPrefix: 'PRA' },
+    { role: ROLES.QUALITY_AUDITOR, label: 'Quality Auditor', idPrefix: 'QLA' },
     { role: ROLES.GATEKEEPER_MANAGER, label: 'Gate Keeper Manager', idPrefix: 'GKM' },
     { role: ROLES.GATEKEEPER, label: 'Gate Keeper', idPrefix: 'GKP' },
+    { role: ROLES.TRANSPORT_MANAGER, label: 'Transport Manager', idPrefix: 'TRM' },
+    { role: ROLES.DRIVER, label: 'Driver', idPrefix: 'DRV' },
+    { role: ROLES.CANTEEN_MANAGER, label: 'Canteen Manager', idPrefix: 'CTN' },
+    { role: ROLES.IT_SUPPORT_MANAGER, label: 'IT Support Manager', idPrefix: 'ITM' },
+    { role: ROLES.STATIONERY_STORE_MANAGER, label: 'Stationery Store Manager', idPrefix: 'SSM' },
+    { role: ROLES.HOUSEKEEPING_MANAGER, label: 'Housekeeping Manager', idPrefix: 'HKM' },
+    { role: ROLES.MAINTENANCE_MANAGER, label: 'Maintenance Manager', idPrefix: 'MTM' },
 ]
 
 export const CREATABLE_ROLES = CREATABLE_ROLE_OPTIONS.map((option) => option.role)
@@ -88,6 +117,40 @@ export const formatUserDateOfBirth = (date) => {
     const year = value.getFullYear()
     return `${day}-${month}-${year}`
 }
+
+/** Parse DD-MM-YYYY / ISO / Date into a Date for form date pickers. */
+export const parseUserFormDate = (value) => {
+    if (!value) return null
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value
+    const text = String(value).trim()
+    const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+    if (dmy) {
+        const parsed = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]))
+        return Number.isNaN(parsed.getTime()) ? null : parsed
+    }
+    const parsed = new Date(text)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+export const getCreatedUserByStaffCode = (staffCode) =>
+    getAllCreatedUsers().find((user) => user.id === staffCode || user.userId === staffCode) || null
+
+/** Map a stored / API user into the create/edit form shape. */
+export const userToForm = (user) => ({
+    ...DEFAULT_USER_FORM,
+    ...user,
+    role: user.role || DEFAULT_USER_FORM.role,
+    status: user.status === 'Inactive' ? 'Inactive' : 'Active',
+    firstName: user.firstName || '',
+    middleName: user.middleName || '',
+    lastName: user.lastName || '',
+    email: user.email || '',
+    gender: user.gender || '',
+    mobileNumber: user.mobileNumber || '',
+    password: '',
+    dateOfBirth: parseUserFormDate(user.dateOfBirth),
+    joiningDate: parseUserFormDate(user.joiningDate),
+})
 
 export const validateUserCreationForm = (payload) => {
     const firstName = payload.firstName?.trim()
@@ -241,10 +304,7 @@ export const createUser = (payload) => {
         previousSchool: payload.previousSchool?.trim() || '',
         joiningDate: formatUserDateOfBirth(payload.joiningDate),
         username: payload.username?.trim() || email.split('@')[0],
-        temporaryPassword: payload.password?.trim() || `Welcome@${Math.floor(1000 + Math.random() * 9000)}`,
-        password: payload.password?.trim() || `Welcome@${Math.floor(1000 + Math.random() * 9000)}`,
-        mustChangePassword: true,
-        passwordLastChangedAt: null,
+        password: payload.password?.trim() || '',
         idProofFile: payload.idProofFile?.trim() || '',
         qualificationCertificateFile: payload.qualificationCertificateFile?.trim() || '',
         experienceCertificateFile: payload.experienceCertificateFile?.trim() || '',
@@ -273,6 +333,48 @@ export const updateUserStatus = (id, status) => {
     saveUsers(records)
     updateAssignmentStudentCounts(getStudentCountForClassSection)
     return { success: true, user: records[index] }
+}
+
+/** Offline / local-store edit of a created staff user (full profile). */
+export const updateCreatedUser = (staffCode, payload) => {
+    const validation = validateUserCreationForm(payload)
+    if (!validation.success) return validation
+    if (!CREATABLE_ROLES.includes(payload.role)) {
+        return { success: false, message: 'Selected role cannot be assigned here.' }
+    }
+
+    const records = loadUsers()
+    const index = records.findIndex((user) => user.id === staffCode)
+    if (index < 0) return { success: false, message: 'User not found.' }
+
+    const email = payload.email.trim().toLowerCase()
+    if (records.some((user, idx) => idx !== index && user.email.toLowerCase() === email)) {
+        return { success: false, message: 'A user with this email already exists.' }
+    }
+
+    const previous = records[index]
+    const next = {
+        ...previous,
+        ...payload,
+        id: previous.id,
+        userId: previous.userId,
+        email,
+        role: payload.role,
+        roleLabel: CREATABLE_ROLE_LABELS[payload.role],
+        name: buildUserDisplayName(payload),
+        firstName: payload.firstName.trim(),
+        middleName: payload.middleName?.trim() || '',
+        lastName: payload.lastName.trim(),
+        status: payload.status === 'Inactive' ? 'Inactive' : 'Active',
+        dateOfBirth: formatUserDateOfBirth(payload.dateOfBirth),
+        joiningDate: formatUserDateOfBirth(payload.joiningDate),
+        password: previous.password || '',
+        source: previous.source || 'local',
+    }
+    records[index] = next
+    saveUsers(records)
+    updateAssignmentStudentCounts(getStudentCountForClassSection)
+    return { success: true, user: next }
 }
 
 export const deleteCreatedUser = (id) => {
@@ -307,3 +409,179 @@ export const getActiveCreatedUserSession = () => {
         return null
     }
 }
+
+/* ------------------------------------------------------------------------------------------
+ * API mode (Admin > RBAC > User Creation backed by /api/v1/admin/users).
+ *
+ * The server owns logins, roles, status and passwords. The local store is only a read-through
+ * mirror of the non-sensitive profile fields, kept so the screens that still read created users
+ * synchronously (class teacher picker, PRM assignee picker, Employee Database) keep working.
+ * A password is never written to it.
+ * ---------------------------------------------------------------------------------------- */
+
+const API_DETAIL_FIELDS = [
+    'alternativeMobileNumber', 'street', 'city', 'state', 'country', 'pincode', 'religion', 'caste',
+    'dateOfBirth', 'bloodGroup', 'height', 'weight', 'medicalHistory', 'fatherName', 'motherName',
+    'familyContactNumber', 'qualification', 'yearsOfExperience', 'previousSchool', 'joiningDate',
+    'username', 'className', 'section',
+]
+
+/** True when user creation should go through the server. */
+export const isAdminUsersApiActive = () => canUseAdminUsersApi()
+
+/** Map one /admin/users record to the local created-user shape. Never carries a password. */
+export const fromApiUser = (apiUser) => ({
+    ...Object.fromEntries(API_DETAIL_FIELDS.map((key) => [key, apiUser.details?.[key] || ''])),
+    id: apiUser.staffCode,
+    userId: apiUser.id,
+    name: apiUser.name,
+    firstName: apiUser.firstName,
+    middleName: apiUser.middleName || '',
+    lastName: apiUser.lastName,
+    email: apiUser.email,
+    role: apiUser.role,
+    roleLabel: apiUser.roleLabel,
+    status: apiUser.status,
+    gender: apiUser.gender || '',
+    mobileNumber: apiUser.mobileNumber || '',
+    username: apiUser.details?.username || apiUser.email.split('@')[0],
+    password: '',
+    mustChangePassword: Boolean(apiUser.mustChangePassword),
+    profileImage: '',
+    admissionNumber: apiUser.staffCode,
+    createdAt: apiUser.createdAt || '',
+    source: 'api',
+})
+
+/**
+ * Replace the mirrored staff records with the server's list. Student records (created through
+ * Admission enrollment) are left alone. Returns the mapped users.
+ */
+export const syncCreatedUsersFromApi = async () => {
+    if (!canUseAdminUsersApi()) return null
+    const apiUsers = await listAdminUsersApi()
+    const mapped = apiUsers.map(fromApiUser)
+    const keep = loadUsers().filter((user) => user.role === ROLES.STUDENT)
+    saveUsers([...keep, ...mapped])
+    return mapped
+}
+
+const apiErrorResult = (error) => ({
+    success: false,
+    message: error?.message || 'The request could not be completed.',
+    status: error?.status,
+})
+
+export const createUserViaApi = async (payload) => {
+    const validation = validateUserCreationForm(payload)
+    if (!validation.success) return validation
+    // Role allow-list is enforced by POST /admin/users (actor creatable_roles_for).
+
+    const details = Object.fromEntries(
+        API_DETAIL_FIELDS.map((key) => {
+            const raw = payload[key]
+            const value = key === 'dateOfBirth' || key === 'joiningDate'
+                ? formatUserDateOfBirth(raw)
+                : String(raw ?? '').trim()
+            return [key, value]
+        }),
+    )
+    const password = payload.password?.trim()
+    try {
+        const created = await createAdminUserApi({
+            role: payload.role,
+            firstName: payload.firstName.trim(),
+            middleName: payload.middleName?.trim() || '',
+            lastName: payload.lastName.trim(),
+            email: payload.email.trim(),
+            gender: payload.gender,
+            mobileNumber: payload.mobileNumber?.trim() || '',
+            status: payload.status === 'Inactive' ? 'Inactive' : 'Active',
+            ...(password ? { password } : {}),
+            ...details,
+        })
+        // Best-effort refresh of the mirror; the create itself already succeeded.
+        await syncCreatedUsersFromApi().catch(() => null)
+        return {
+            success: true,
+            user: fromApiUser(created),
+            temporaryPassword: created.temporaryPassword || null,
+        }
+    } catch (error) {
+        return apiErrorResult(error)
+    }
+}
+
+export const updateUserStatusViaApi = async (user, status) => {
+    try {
+        await updateAdminUserApi(user.userId, { status })
+        await syncCreatedUsersFromApi().catch(() => null)
+        return { success: true }
+    } catch (error) {
+        return apiErrorResult(error)
+    }
+}
+
+export const fetchCreatedUserViaApi = async (userIdOrStaffCode) => {
+    if (!canUseAdminUsersApi()) {
+        return getCreatedUserByStaffCode(userIdOrStaffCode)
+    }
+    // Prefer UUID when we already have the mirror row; otherwise list-sync then match staff code.
+    const mirrored = getCreatedUserByStaffCode(userIdOrStaffCode)
+    if (mirrored?.userId) {
+        const apiUser = await getAdminUserApi(mirrored.userId)
+        const mapped = fromApiUser(apiUser)
+        const keep = loadUsers().filter((user) => user.id !== mapped.id && user.role === ROLES.STUDENT)
+        const others = loadUsers().filter((user) => user.id !== mapped.id && user.role !== ROLES.STUDENT)
+        saveUsers([...keep, ...others, mapped])
+        return mapped
+    }
+    await syncCreatedUsersFromApi()
+    return getCreatedUserByStaffCode(userIdOrStaffCode)
+}
+
+export const updateUserViaApi = async (user, payload) => {
+    const validation = validateUserCreationForm(payload)
+    if (!validation.success) return validation
+    // Role allow-list is enforced by PATCH /admin/users/{id}.
+    if (!user?.userId) {
+        return { success: false, message: 'User is missing a server id. Refresh the list and try again.' }
+    }
+
+    const details = Object.fromEntries(
+        API_DETAIL_FIELDS.map((key) => {
+            const raw = payload[key]
+            const value = key === 'dateOfBirth' || key === 'joiningDate'
+                ? formatUserDateOfBirth(raw)
+                : String(raw ?? '').trim()
+            return [key, value]
+        }),
+    )
+    try {
+        const updated = await updateAdminUserApi(user.userId, {
+            role: payload.role,
+            firstName: payload.firstName.trim(),
+            middleName: payload.middleName?.trim() || '',
+            lastName: payload.lastName.trim(),
+            email: payload.email.trim(),
+            gender: payload.gender,
+            mobileNumber: payload.mobileNumber?.trim() || '',
+            status: payload.status === 'Inactive' ? 'Inactive' : 'Active',
+            ...details,
+        })
+        await syncCreatedUsersFromApi().catch(() => null)
+        return { success: true, user: fromApiUser(updated) }
+    } catch (error) {
+        return apiErrorResult(error)
+    }
+}
+
+export const resetUserPasswordViaApi = async (user) => {
+    try {
+        const result = await resetAdminUserPasswordApi(user.userId)
+        return { success: true, temporaryPassword: result.temporaryPassword }
+    } catch (error) {
+        return apiErrorResult(error)
+    }
+}
+

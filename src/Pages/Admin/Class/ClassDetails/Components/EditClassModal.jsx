@@ -41,6 +41,9 @@ const newRow = (key) => ({
 
 const changesOf = (row) => {
     const changes = {}
+    const nextName = String(row.name || '').trim().toUpperCase()
+    const savedName = String(row.saved.name || '').trim().toUpperCase()
+    if (nextName && nextName !== savedName) changes.name = nextName
     if (row.isActive !== row.saved.isActive) changes.isActive = row.isActive
     if (row.capacity.trim() !== row.saved.capacity) changes.capacity = row.capacity
     if (row.roomNumber.trim() !== row.saved.roomNumber) changes.roomNumber = row.roomNumber
@@ -49,10 +52,10 @@ const changesOf = (row) => {
 }
 
 /**
- * API mode only. Edits a class's sections: capacity, room, class teacher (picked from real teacher
- * logins) and active flag, and adds sections. A class is identified by name and academic year, so
- * neither can be changed here. Each section saves on its own, so one failure does not undo or repeat
- * the others, and what the server refused is shown on that row.
+ * API mode only. Edits a class's sections: name (when unused), capacity, room, class teacher (picked
+ * from real teacher logins) and active flag, and adds sections. A class is identified by name and
+ * academic year, so neither can be changed here. Each section saves on its own, so one failure does
+ * not undo or repeat the others, and what the server refused is shown on that row.
  */
 const EditClassModal = ({ record, onClose, onSaved }) => {
     const teachers = useClassTeacherOptions(true)
@@ -94,6 +97,12 @@ const EditClassModal = ({ record, onClose, onSaved }) => {
                         }),
                     })
                 } else {
+                    const nextName = String(row.name || '').trim()
+                    if (!nextName) {
+                        failures += 1
+                        result.push({ ...row, error: 'Section name is required.' })
+                        continue
+                    }
                     const changes = changesOf(row)
                     if (Object.keys(changes).length === 0) {
                         result.push(row)
@@ -141,7 +150,9 @@ const EditClassModal = ({ record, onClose, onSaved }) => {
                         <h3 className='text-xl font-medium text-black'>Edit {record.className}</h3>
                         <p className='text-sm text-[#667085] mt-1'>
                             Academic year {record.academicYear}. The class name and year cannot be changed because
-                            students and attendance refer to them. Leave a field empty to clear it.
+                            students and attendance refer to them. Section names can be updated when unused; if a
+                            section already has students or records, add a new section and deactivate the old one
+                            instead. Leave capacity, room or teacher empty to clear them.
                         </p>
                     </div>
                     <button type='button' onClick={onClose} disabled={saving} aria-label='Close' className='hover:text-red-500 cursor-pointer'>
@@ -167,10 +178,10 @@ const EditClassModal = ({ record, onClose, onSaved }) => {
                                         <input
                                             id={`edit-name-${row.key}`}
                                             value={row.name}
-                                            readOnly={!row.isNew}
+                                            maxLength={20}
                                             onChange={(e) => patchRow(row.key, { name: e.target.value })}
                                             placeholder='e.g. A'
-                                            className={`${inputClass} ${row.isNew ? '' : 'bg-[#F2F4F7] cursor-not-allowed'}`}
+                                            className={inputClass}
                                         />
                                     </div>
                                     <div className='flex flex-col gap-y-1'>

@@ -1,4 +1,15 @@
-import { getActivityCalendarItems } from '../Activities/activitiesData.js'
+import { getActivityCalendarItems, CALENDAR_UPDATED_EVENT } from '../Activities/activitiesData'
+import {
+    canUseCalendarApi,
+    createCalendarApi,
+    listCalendarApi,
+} from '../../services/calendarApi'
+import { isApiCalendarEnabled } from '../../services/apiClient'
+
+/** Roles that hold calendar.write on the backend (admin, principal, director; superadmin has all). */
+export const CALENDAR_WRITE_ROLE_KEYS = new Set(['admin', 'principal', 'director', 'superAdmin', 'superadmin'])
+
+export const canWriteCalendar = (roleKey) => CALENDAR_WRITE_ROLE_KEYS.has(roleKey)
 
 export const ACADEMIC_EVENT_TYPES = {
     holiday: {
@@ -163,89 +174,73 @@ export const ACADEMIC_CALENDAR_ITEMS = [
     },
 ]
 
-const CUSTOM_STORAGE_KEY = 'schoolerp-custom-calendar-items'
+let apiItems = []
 
-const loadCustomItems = () => {
-    try {
-        const stored = sessionStorage.getItem(CUSTOM_STORAGE_KEY)
-        return stored ? JSON.parse(stored) : []
-    } catch {
-        return []
-    }
+export const hydrateCalendarFromApi = async () => {
+    apiItems = await listCalendarApi()
+    return apiItems
 }
 
-export const addCustomCalendarItem = (item) => {
-    const existing = loadCustomItems()
-    const newItem = {
-        id: `custom-evt-${Date.now()}`,
-        ...item,
+/** Create via API when signed in; refreshes in-memory list and notifies listeners. */
+export const createCalendarEventViaApi = async ({ type, title, startDate, endDate, description }) => {
+    if (!canUseCalendarApi()) {
+        throw new Error('Calendar API is not available.')
     }
-    const updated = [newItem, ...existing]
-    try {
-        sessionStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(updated))
-    } catch {}
-    return newItem
+    await createCalendarApi({
+        type,
+        title: title?.trim() || '',
+        startDate,
+        endDate: endDate || undefined,
+        description: description?.trim() || '',
+    })
+    const rows = await hydrateCalendarFromApi()
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(CALENDAR_UPDATED_EVENT))
+    }
+    return rows
 }
 
-/** Static holidays/exams/events plus Cultural, Sports & Competition activities plus custom items. */
-export const getAllCalendarItems = () => [
-    ...ACADEMIC_CALENDAR_ITEMS,
-    ...loadCustomItems(),
-    ...getActivityCalendarItems(),
-]
+export const clearCalendarMemory = () => {
+    apiItems = []
+}
+
+/** Server events when calendar API flag is on; never fall back to ACADEMIC_CALENDAR_ITEMS seed in API mode. */
+export const getAllCalendarItems = () => {
+    if (canUseCalendarApi() || isApiCalendarEnabled()) return [...apiItems]
+    return [...ACADEMIC_CALENDAR_ITEMS, ...getActivityCalendarItems()]
+}
 
 export const ACADEMIC_CALENDAR_ROLE_CONFIG = {
     superAdmin: { roleLabel: 'Super Admin', routeBase: '/super-admin/academic-calendar' },
-    superadmin: { roleLabel: 'Super Admin', routeBase: '/super-admin/academic-calendar' },
     admin: { roleLabel: 'Admin', routeBase: '/admin/academic-calendar' },
     director: { roleLabel: 'Director', routeBase: '/director/academic-calendar', pageTitle: 'Calendar' },
     prm: { roleLabel: 'Front Office', routeBase: '/front-office/academic-calendar', pageTitle: 'Calendar' },
     gateKeeper: { roleLabel: 'Gate Keeper', routeBase: '/gate-keeper/academic-calendar' },
-    gatekeeper: { roleLabel: 'Gate Keeper', routeBase: '/gate-keeper/academic-calendar' },
     gateKeeperManager: { roleLabel: 'Gate Keeper Manager', routeBase: '/gatekeeper-manager/academic-calendar' },
-    gatekeepermanager: { roleLabel: 'Gate Keeper Manager', routeBase: '/gatekeeper-manager/academic-calendar' },
     librarian: { roleLabel: 'Librarian', routeBase: '/librarian/academic-calendar' },
     principal: { roleLabel: 'Principal', routeBase: '/principal/academic-calendar' },
     student: { roleLabel: 'Student', routeBase: '/student/academic-calendar', pageTitle: 'Calendar' },
     parent: { roleLabel: 'Parent', routeBase: '/parent/academic-calendar', pageTitle: 'Calendar' },
     teacher: { roleLabel: 'Teacher', routeBase: '/teacher/academic-calendar', pageTitle: 'Calendar' },
     coordinator: { roleLabel: 'Coordinator', routeBase: '/coordinator/academic-calendar', pageTitle: 'Calendar' },
-    canteenManager: { roleLabel: 'Café Manager', routeBase: '/canteen-manager/academic-calendar', pageTitle: 'Calendar' },
-    canteenmanager: { roleLabel: 'Café Manager', routeBase: '/canteen-manager/academic-calendar', pageTitle: 'Calendar' },
-    itSupportManager: { roleLabel: 'IT Support Team Manager', routeBase: '/it-support-manager/academic-calendar', pageTitle: 'Calendar' },
-    itsupportmanager: { roleLabel: 'IT Support Team Manager', routeBase: '/it-support-manager/academic-calendar', pageTitle: 'Calendar' },
-    stationeryStoreManager: { roleLabel: 'Stores Manager', routeBase: '/stationery-store-manager/academic-calendar', pageTitle: 'Calendar' },
-    stationerystoremanager: { roleLabel: 'Stores Manager', routeBase: '/stationery-store-manager/academic-calendar', pageTitle: 'Calendar' },
+    canteenManager: { roleLabel: 'Canteen Manager', routeBase: '/canteen-manager/academic-calendar', pageTitle: 'Calendar' },
+    itSupportManager: { roleLabel: 'IT Support Manager', routeBase: '/it-support-manager/academic-calendar', pageTitle: 'Calendar' },
+    stationeryStoreManager: { roleLabel: 'Store', routeBase: '/stationery-store-manager/academic-calendar', pageTitle: 'Calendar' },
     housekeepingManager: { roleLabel: 'Housekeeping Manager', routeBase: '/housekeeping-manager/academic-calendar', pageTitle: 'Calendar' },
-    housekeepingmanager: { roleLabel: 'Housekeeping Manager', routeBase: '/housekeeping-manager/academic-calendar', pageTitle: 'Calendar' },
     maintenanceManager: { roleLabel: 'Maintenance Manager', routeBase: '/maintenance-manager/academic-calendar', pageTitle: 'Calendar' },
-    maintenancemanager: { roleLabel: 'Maintenance Manager', routeBase: '/maintenance-manager/academic-calendar', pageTitle: 'Calendar' },
     transportManager: { roleLabel: 'Transport Manager', routeBase: '/transport-manager/academic-calendar', pageTitle: 'Calendar' },
-    transportmanager: { roleLabel: 'Transport Manager', routeBase: '/transport-manager/academic-calendar', pageTitle: 'Calendar' },
-    driver: { roleLabel: 'Driver', routeBase: '/driver/academic-calendar', pageTitle: 'Calendar' },
     jointDirector: { roleLabel: 'Joint Director', routeBase: '/joint-director/academic-calendar', pageTitle: 'Calendar' },
-    jointdirector: { roleLabel: 'Joint Director', routeBase: '/joint-director/academic-calendar', pageTitle: 'Calendar' },
     jointDirectorAssistant: { roleLabel: 'Joint Director Assistant', routeBase: '/joint-director-assistant/academic-calendar', pageTitle: 'Calendar' },
-    jointdirectorassistant: { roleLabel: 'Joint Director Assistant', routeBase: '/joint-director-assistant/academic-calendar', pageTitle: 'Calendar' },
-    jointDirectorAudit: { roleLabel: 'Joint Director - Audit', routeBase: '/joint-director-audit/academic-calendar', pageTitle: 'Calendar' },
-    jointdirectoraudit: { roleLabel: 'Joint Director - Audit', routeBase: '/joint-director-audit/academic-calendar', pageTitle: 'Calendar' },
+    jointDirectorAudit: { roleLabel: 'Joint Director Audit', routeBase: '/joint-director-audit/academic-calendar', pageTitle: 'Calendar' },
     processAuditor: { roleLabel: 'Process Auditor', routeBase: '/process-auditor/academic-calendar', pageTitle: 'Calendar' },
-    processauditor: { roleLabel: 'Process Auditor', routeBase: '/process-auditor/academic-calendar', pageTitle: 'Calendar' },
     qualityAuditor: { roleLabel: 'Quality Auditor', routeBase: '/quality-auditor/academic-calendar', pageTitle: 'Calendar' },
-    qualityauditor: { roleLabel: 'Quality Auditor', routeBase: '/quality-auditor/academic-calendar', pageTitle: 'Calendar' },
-    hr: { roleLabel: 'HR Head', routeBase: '/hr/academic-calendar', pageTitle: 'Calendar' },
-    accountHead: { roleLabel: 'Account Head', routeBase: '/account-head/academic-calendar', pageTitle: 'Calendar' },
-    accounthead: { roleLabel: 'Account Head', routeBase: '/account-head/academic-calendar', pageTitle: 'Calendar' },
-    pro: { roleLabel: 'Public Relations Officer', routeBase: '/pro/academic-calendar', pageTitle: 'Calendar' },
-    fileroom: { roleLabel: 'File Room Custodian', routeBase: '/file-room/academic-calendar', pageTitle: 'Calendar' },
-    'file-room': { roleLabel: 'File Room Custodian', routeBase: '/file-room/academic-calendar', pageTitle: 'Calendar' },
-    cctv: { roleLabel: 'CCTV In-charge', routeBase: '/cctv/academic-calendar', pageTitle: 'Calendar' },
+    hr: { roleLabel: 'HR', routeBase: '/hr/academic-calendar', pageTitle: 'Calendar' },
+    accountHead: { roleLabel: 'Finance', routeBase: '/account-head/academic-calendar', pageTitle: 'Calendar' },
+    fileRoom: { roleLabel: 'File Room', routeBase: '/file-room/academic-calendar', pageTitle: 'Calendar' },
+    cctvRoom: { roleLabel: 'CCTV Room', routeBase: '/cctv-room/academic-calendar', pageTitle: 'Calendar' },
+    driver: { roleLabel: 'Driver', routeBase: '/driver/academic-calendar', pageTitle: 'Calendar' },
+    pro: { roleLabel: 'PRO', routeBase: '/pro/academic-calendar', pageTitle: 'Calendar' },
 }
 
-export const getAcademicCalendarRoleConfig = (roleKey) => {
-    if (!roleKey) return undefined
-    if (Object.prototype.hasOwnProperty.call(ACADEMIC_CALENDAR_ROLE_CONFIG, roleKey)) return ACADEMIC_CALENDAR_ROLE_CONFIG[roleKey]
-    const clean = String(roleKey).toLowerCase().replace(/[-_\s]/g, '')
-    if (Object.prototype.hasOwnProperty.call(ACADEMIC_CALENDAR_ROLE_CONFIG, clean)) return ACADEMIC_CALENDAR_ROLE_CONFIG[clean]
-    return undefined
-}
+export const getAcademicCalendarRoleConfig = (roleKey) =>
+    ACADEMIC_CALENDAR_ROLE_CONFIG[roleKey] || ACADEMIC_CALENDAR_ROLE_CONFIG.student

@@ -176,13 +176,30 @@ def test_unknown_and_password_like_fields_never_reach_the_profile(client):
 # --- privilege rules ------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("role", ["admin", "superadmin", "hr", "accounthead", "student", "parent", "director", "nonsense"])
+@pytest.mark.parametrize(
+    "role",
+    ["admin", "superadmin", "managing_director", "fileroom", "cctv", "student", "parent", "nonsense"],
+)
 def test_admin_cannot_create_privileged_or_unlisted_roles(client, role):
     response = _create(client, _admin(client), email=f"{role}.try@qmis.edu", role=role)
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "role_not_allowed"
     with SessionLocal() as db:
         assert db.scalar(select(User).where(User.email == f"{role}.try@qmis.edu")) is None
+
+
+def test_admin_can_create_hr_director_and_pro(client):
+    headers = _admin(client)
+    for role, email in (
+        ("hr", "new.hr@qmis.edu"),
+        ("director", "new.director@qmis.edu"),
+        ("pro", "new.pro@qmis.edu"),
+        ("accounthead", "new.accounthead@qmis.edu"),
+    ):
+        response = _create(client, headers, email=email, role=role)
+        assert response.status_code == 201, response.text
+        assert response.json()["role"] == role
+
 
 
 def test_superadmin_can_create_an_admin_but_not_a_superadmin(client):
@@ -214,21 +231,29 @@ def test_unauthenticated_requests_are_401(client):
 
 
 def test_admin_cannot_manage_accounts_outside_the_creatable_roles(client):
+    """Campus Admin cannot manage Super-Admin-only roles (e.g. Administrator)."""
+    _ensure_superadmin()
+    sa = _login(client, SUPER_EMAIL, SUPER_PASSWORD)
+    created = _create(client, sa, email="campus.admin.managed@qmis.edu", role="admin")
+    assert created.status_code == 201, created.text
+    admin_id = created.json()["id"]
     headers = _admin(client)
+    assert client.patch(f"{USERS}/{admin_id}", json={"status": "Inactive"}, headers=headers).status_code == 403
+    assert client.post(f"{USERS}/{admin_id}/reset-password", headers=headers).status_code == 403
+    assert client.get(f"{USERS}/{admin_id}", headers=headers).status_code == 403
+    # Seeded HR is now creatable by Campus Admin, so management is allowed.
     with SessionLocal() as db:
         hr_user = db.scalar(select(User).where(User.email == settings.hr_seed_email))
-        db.add(
-            UserProfile(
-                user_id=hr_user.id, campus_id=hr_user.campus_id, staff_code="HRX-0001",
-                first_name="H", last_name="R", extra={},
+        if db.scalar(select(UserProfile).where(UserProfile.user_id == hr_user.id)) is None:
+            db.add(
+                UserProfile(
+                    user_id=hr_user.id, campus_id=hr_user.campus_id, staff_code="HRX-0001",
+                    first_name="H", last_name="R", extra={},
+                )
             )
-        )
-        db.commit()
+            db.commit()
         hr_id = str(hr_user.id)
-    assert client.patch(f"{USERS}/{hr_id}", json={"status": "Inactive"}, headers=headers).status_code == 403
-    assert client.post(f"{USERS}/{hr_id}/reset-password", headers=headers).status_code == 403
-    assert client.get(f"{USERS}/{hr_id}", headers=headers).status_code == 403
-    # and the HR login still works
+    assert client.get(f"{USERS}/{hr_id}", headers=headers).status_code == 200
     _login(client, *HR)
 
 
@@ -377,13 +402,25 @@ def test_roles_list_and_permissions_are_read_only(client):
 
 def test_creatable_roles_for_admin(client):
     options = client.get(f"{USERS}/creatable-roles", headers=_admin(client)).json()
-    assert {o["role"] for o in options} == {
+    codes = {o["role"] for o in options}
+    assert {
         "principal",
+        "director",
         "prm",
+        "pro",
         "teacher",
         "coordinator",
         "librarian",
-        "hostelwarden",
+        "hr",
+        "accounthead",
+        "financemanager",
+        "accountassistant",
+        "finance_assistant",
+        "jointdirector",
+        "jointdirectorassistant",
+        "jointdirectoraudit",
+        "processauditor",
+        "qualityauditor",
         "gatekeepermanager",
         "gatekeeper",
         "transportmanager",
@@ -392,4 +429,133 @@ def test_creatable_roles_for_admin(client):
         "itsupportmanager",
         "stationerystoremanager",
         "housekeepingmanager",
-    }
+        "maintenancemanager",
+    } <= codes
+    assert "admin" not in codes
+    assert "superadmin" not in codes
+    assert "fileroom" not in codes
+    assert "cctv" not in codes
+    assert "student" not in codes
+    assert "parent" not in codes
+
+
+def test_creatable_roles_for_superadmin_include_elevated(client):
+    _ensure_superadmin()
+    options = client.get(
+        f"{USERS}/creatable-roles",
+        headers=_login(client, SUPER_EMAIL, SUPER_PASSWORD),
+    ).json()
+    codes = {o["role"] for o in options}
+    assert "admin" in codes
+    assert "fileroom" in codes
+    assert "cctv" in codes
+    assert "managing_director" in codes
+    assert "hr" in codes
+    assert "superadmin" not in codes
+    assert "student" not in codes
+
+
+
+# --- ASA-02: Super Admin edit / deactivate Administrator accounts -----------------------
+
+
+def test_superadmin_can_deactivate_and_reactivate_an_admin_with_persistence(client):
+    """ASA-02: status changes go through PATCH /admin/users and survive a fresh GET."""
+    _ensure_superadmin()
+    headers = _login(client, SUPER_EMAIL, SUPER_PASSWORD)
+    created = _create(
+        client,
+        headers,
+        email="asa02.admin@qmis.edu",
+        role="admin",
+        firstName="Campus",
+        lastName="Admin",
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    admin_id = body["id"]
+    temp = body["temporaryPassword"]
+    assert body["role"] == "admin"
+    assert client.post("/api/v1/auth/login", json={"email": "asa02.admin@qmis.edu", "password": temp}).status_code == 200
+
+    off = client.patch(f"{USERS}/{admin_id}", json={"status": "Inactive"}, headers=headers)
+    assert off.status_code == 200, off.text
+    assert off.json()["status"] == "Inactive"
+
+    again = client.get(f"{USERS}/{admin_id}", headers=headers)
+    assert again.status_code == 200, again.text
+    assert again.json()["status"] == "Inactive"
+    assert client.post("/api/v1/auth/login", json={"email": "asa02.admin@qmis.edu", "password": temp}).status_code in (
+        400,
+        401,
+        403,
+    )
+
+    on = client.patch(f"{USERS}/{admin_id}", json={"status": "Active"}, headers=headers)
+    assert on.status_code == 200 and on.json()["status"] == "Active"
+    assert client.get(f"{USERS}/{admin_id}", headers=headers).json()["status"] == "Active"
+    assert client.post("/api/v1/auth/login", json={"email": "asa02.admin@qmis.edu", "password": temp}).status_code == 200
+
+
+def test_campus_admin_and_teacher_cannot_deactivate_an_administrator(client):
+    """ASA-02 unauthorized: only Super Admin may manage the admin role via /admin/users."""
+    _ensure_superadmin()
+    super_headers = _login(client, SUPER_EMAIL, SUPER_PASSWORD)
+    created = _create(
+        client,
+        super_headers,
+        email="asa02.protected@qmis.edu",
+        role="admin",
+        firstName="Protected",
+        lastName="Admin",
+    ).json()
+    admin_id = created["id"]
+
+    campus_admin = _admin(client)
+    teacher = _login(client, *TEACHER)
+    for headers in (campus_admin, teacher):
+        denied = client.patch(f"{USERS}/{admin_id}", json={"status": "Inactive"}, headers=headers)
+        assert denied.status_code == 403, denied.text
+    assert client.get(f"{USERS}/{admin_id}", headers=super_headers).json()["status"] == "Active"
+
+
+def test_other_campus_superadmin_cannot_manage_this_campus_admin(client):
+    """ASA-02 campus isolation: foreign campus actor gets 404, not a cross-tenant write."""
+    import uuid
+
+    from app.models import Campus
+
+    _ensure_superadmin()
+    home = _login(client, SUPER_EMAIL, SUPER_PASSWORD)
+    created = _create(
+        client,
+        home,
+        email="asa02.home.admin@qmis.edu",
+        role="admin",
+        firstName="Home",
+        lastName="Admin",
+    ).json()
+    admin_id = created["id"]
+
+    with SessionLocal() as db:
+        tag = uuid.uuid4().hex[:8]
+        other = Campus(code=f"ASA02{tag}"[:32], name=f"Other ASA02 {tag}", city="Elsewhere")
+        db.add(other)
+        db.flush()
+        role = db.scalar(select(Role).where(Role.code == "superadmin"))
+        email = f"asa02.foreign.{tag}@qmis.edu"
+        db.add(
+            User(
+                campus_id=other.id,
+                role_id=role.id,
+                email=email,
+                password_hash=hash_password(SUPER_PASSWORD),
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    foreign = _login(client, email, SUPER_PASSWORD)
+    assert client.get(f"{USERS}/{admin_id}", headers=foreign).status_code == 404
+    assert client.patch(f"{USERS}/{admin_id}", json={"status": "Inactive"}, headers=foreign).status_code == 404
+    assert client.get(f"{USERS}/{admin_id}", headers=home).json()["status"] == "Active"

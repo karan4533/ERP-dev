@@ -8,6 +8,10 @@ import Dropdown from '../../../../Common/CommonComponents/Dropdown';
 import ExportModal from '../../../../Common/CommonComponents/ExportModal';
 import EditRequestModal from '../../../../Common/CommonComponents/EditRequestModal';
 
+const EXPORT_ROWS = [
+    {profile: '', employee_name: 'Sandy Selva', leave_description: 'Fever for 2 Days', applied_date: '24/02/2026', from_date: '09/03/2026', to_date: '12/03/2026', status: 'Approved'},
+]
+
 const LeaveRequest = () => {
 
     const [fromDate, setFromDate] = useState(new Date());
@@ -226,7 +230,14 @@ const LeaveRequest = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='leave-request'
+                rows={[]}
+                unavailableReason='This page shows sample data, not live school records, so it cannot be exported.'
+                exportDescription={<>You are exporting {EXPORT_ROWS.length} record(s).</>}
+            />
 
             <EditRequestModal editRequestModal={editRequestModal} setEditRequestModal={setEditRequestModal} />
         </section>

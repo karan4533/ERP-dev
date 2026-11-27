@@ -1,3 +1,6 @@
+import { getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
+import { liveArray } from '../../../Common/RBAC/liveArray'
+
 export const ATTENDANCE_STATUSES = ['Present', 'Absent', 'Half Day', 'Late', 'On Duty']
 
 export const statusBadgeColor = {
@@ -8,7 +11,7 @@ export const statusBadgeColor = {
     'On Duty': 'bg-[#2196F333] text-[#2196F3]',
 }
 
-export const MY_ATTENDANCE_LIST = [
+const DEMO_MY_ATTENDANCE_LIST = [
     {
         id: 'LIB-ATT-001',
         employeeId: 'LIB-1001',
@@ -64,3 +67,10 @@ export const MY_ATTENDANCE_LIST = [
         date: '19-07-2026',
     },
 ]
+
+const apiCatalogMode = () => isApiAuthEnabled() && Boolean(getAccessToken())
+
+export const getMyAttendanceList = () => (apiCatalogMode() ? [] : DEMO_MY_ATTENDANCE_LIST.map((row) => ({ ...row })))
+
+/** Offline demo only — empty when campus API auth is enabled. */
+export const MY_ATTENDANCE_LIST = liveArray(getMyAttendanceList)

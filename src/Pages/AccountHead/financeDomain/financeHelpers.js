@@ -15,6 +15,25 @@ export const parseRupeeAmount = (value) => {
     return Number(String(value ?? '').replace(/[₹,\s]/g, '')) || 0
 }
 
+/** Normalize `2026-27` and `2026-2027` to the same long form for comparisons. */
+export const normalizeAcademicYear = (value) => {
+    const text = String(value || '').trim()
+    if (!text) return ''
+    const short = text.match(/^(20\d{2})-(\d{2})$/)
+    if (short) {
+        const start = Number(short[1])
+        const endTwo = Number(short[2])
+        const expected = (start + 1) % 100
+        if (endTwo === expected) return `${start}-${start + 1}`
+    }
+    return text
+}
+
+export const sameAcademicYear = (a, b) => {
+    if (!a || !b) return true
+    return normalizeAcademicYear(a) === normalizeAcademicYear(b)
+}
+
 export const formatCurrency = (amount) => `₹${Math.round(Number(amount) || 0).toLocaleString('en-IN')}`
 
 export const toIsoDate = (value) => {
@@ -120,24 +139,54 @@ export const calculateFeeStatus = ({
     return FEE_INSTALLMENT_STATUSES.UNPAID
 }
 
-export const resolveConcessionAmount = (installment, concessions = []) => {
+/**
+ * Share of a flat yearly concession for one instalment: split across the fee's instalments in
+ * proportion to their amounts, in whole rupees, leftover on the earliest instalment.
+ */
+const flatConcessionShare = (amount, installment, group) => {
+    const rows = [...(group?.length ? group : [installment])]
+        .sort((a, b) => (Number(a.scheduleIndex) || 0) - (Number(b.scheduleIndex) || 0)
+            || String(a.dueDate || '').localeCompare(String(b.dueDate || '')))
+    const feeTotal = rows.reduce((sum, row) => sum + (Number(row.feeAmount) || 0), 0)
+    const total = Math.min(Math.max(0, Number(amount) || 0), feeTotal)
+    if (!total || !feeTotal) return 0
+    const shares = rows.map((row) => Math.floor((total * (Number(row.feeAmount) || 0)) / feeTotal))
+    shares[0] += total - shares.reduce((sum, value) => sum + value, 0)
+    const index = rows.findIndex((row) => row.id === installment.id)
+    return Math.min(shares[index === -1 ? 0 : index], Number(installment.feeAmount) || 0)
+}
+
+/**
+ * @param group the student's instalments for the same fee category and academic year; a flat
+ *   concession is a yearly amount and is spread across them.
+ */
+export const resolveConcessionAmount = (installment, concessions = [], group = null) => {
     const match = concessions.find((item) => (
         item.studentId === installment.studentId
         && item.feeCategoryId === installment.feeCategoryId
         && String(item.status || '').toLowerCase() === 'approved'
         && (!item.academicYear || item.academicYear === installment.academicYear)
     ))
-    if (match) return Number(match.amount) || 0
+    if (match) {
+        if (String(match.amountType || '').toUpperCase() === 'PERCENT') {
+            const percent = Math.min(100, Math.max(0, Number(match.amount) || 0))
+            return Math.round((Number(installment.feeAmount) || 0) * percent) / 100
+        }
+        return flatConcessionShare(match.amount, installment, group)
+    }
     return Number(installment.concessionAmount) || 0
 }
 
 export const hydrateInstallment = (installment, { fineRule, asOfDate, paymentDate } = {}) => {
-    const alreadySettled = installment.forcedStatus === FEE_INSTALLMENT_STATUSES.PAID
-        || installment.forcedStatus === FEE_INSTALLMENT_STATUSES.WAIVED
-        || installment.forcedStatus === FEE_INSTALLMENT_STATUSES.CANCELLED
+    const statusHint = String(installment.forcedStatus || installment.status || '').toUpperCase()
+    const alreadySettled = statusHint === FEE_INSTALLMENT_STATUSES.PAID
+        || statusHint === FEE_INSTALLMENT_STATUSES.WAIVED
+        || statusHint === FEE_INSTALLMENT_STATUSES.CANCELLED
+        || (Number(installment.balanceAmount) === 0 && Number(installment.paidAmount) > 0)
 
+    // Settled rows keep stored fine — do not re-accrue late fee against "today".
     const fineAmount = alreadySettled || installment.fineWaived
-        ? 0
+        ? Number(installment.fineAmount) || 0
         : calculateLateFee({
             dueDate: installment.dueDate,
             paymentDate: paymentDate || asOfDate || new Date(),
@@ -146,19 +195,37 @@ export const hydrateInstallment = (installment, { fineRule, asOfDate, paymentDat
             waived: installment.fineWaived,
         })
 
-    const netAmount = calculateNetFee({
-        feeAmount: installment.feeAmount,
-        concessionAmount: installment.concessionAmount,
-        fineAmount,
-    })
-    const paidAmount = Number(installment.paidAmount) || 0
+    const netAmount = alreadySettled
+        ? Math.max(
+            Number(installment.netAmount) || 0,
+            calculateNetFee({
+                feeAmount: installment.feeAmount,
+                concessionAmount: installment.concessionAmount,
+                fineAmount,
+            }),
+        )
+        : calculateNetFee({
+            feeAmount: installment.feeAmount,
+            concessionAmount: installment.concessionAmount,
+            fineAmount,
+        })
+    // Cap display paid at net so double-charges don't inflate summary "Paid".
+    const recordedPaid = Number(installment.paidAmount) || 0
+    const paidAmount = Math.min(recordedPaid, netAmount || recordedPaid)
     const balanceAmount = calculateFeeBalance({ netAmount, paidAmount })
+    // Zero balance always settles — never leave PARTIALLY_PAID with ₹0 due.
+    const settledNow = alreadySettled || balanceAmount <= 0
     const status = calculateFeeStatus({
         paidAmount,
         netAmount,
         dueDate: installment.dueDate,
         asOfDate,
-        forcedStatus: installment.forcedStatus,
+        forcedStatus: settledNow
+            ? (installment.forcedStatus === FEE_INSTALLMENT_STATUSES.WAIVED
+                || installment.forcedStatus === FEE_INSTALLMENT_STATUSES.CANCELLED
+                ? installment.forcedStatus
+                : FEE_INSTALLMENT_STATUSES.PAID)
+            : installment.forcedStatus,
     })
 
     return {
@@ -166,6 +233,8 @@ export const hydrateInstallment = (installment, { fineRule, asOfDate, paymentDat
         fineAmount,
         netAmount,
         paidAmount,
+        recordedPaid,
+        overpaidAmount: Math.max(0, recordedPaid - paidAmount),
         balanceAmount,
         status,
         payable: status !== FEE_INSTALLMENT_STATUSES.PAID
@@ -183,26 +252,46 @@ export const summarizeStudentFees = (installments) => {
     const totalConcession = installments.reduce((sum, row) => sum + (Number(row.concessionAmount) || 0), 0)
     const totalFine = installments.reduce((sum, row) => sum + (Number(row.fineAmount) || 0), 0)
     const netPayable = installments.reduce((sum, row) => sum + (Number(row.netAmount) || 0), 0)
-    const paid = installments.reduce((sum, row) => sum + (Number(row.paidAmount) || 0), 0)
+    // Applied to dues only (capped). Double payments stay visible via overpaid.
+    const paid = installments.reduce((sum, row) => {
+        const net = Number(row.netAmount) || 0
+        const recorded = Number(row.recordedPaid ?? row.paidAmount) || 0
+        return sum + Math.min(recorded, net || recorded)
+    }, 0)
+    const overpaid = installments.reduce((sum, row) => sum + (Number(row.overpaidAmount) || 0), 0)
     const outstanding = Math.max(0, netPayable - paid)
 
-    return { totalFee, totalConcession, totalFine, netPayable, paid, outstanding }
+    return { totalFee, totalConcession, totalFine, netPayable, paid, outstanding, overpaid }
 }
 
 export const groupInstallmentsByMonth = (installments) => {
     const groups = []
     const index = new Map()
 
+    const monthLabel = (monthKey) => {
+        if (!monthKey || monthKey === 'Other') return 'Other'
+        try {
+            const [year, month] = String(monthKey).split('-')
+            if (!year || !month) return monthKey
+            return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('en-IN', {
+                month: 'long',
+                year: 'numeric',
+            })
+        } catch {
+            return monthKey
+        }
+    }
+
     installments.forEach((item) => {
-        const key = item.installmentLabel || item.month || 'Other'
+        const key = item.month || (item.dueDate ? String(item.dueDate).slice(0, 7) : '') || 'Other'
         if (!index.has(key)) {
             index.set(key, groups.length)
-            groups.push({ label: key, month: item.month, items: [] })
+            groups.push({ label: monthLabel(key), month: key, items: [] })
         }
         groups[index.get(key)].items.push(item)
     })
 
-    return groups
+    return groups.sort((a, b) => String(a.month).localeCompare(String(b.month)))
 }
 
 export const isOnlinePaymentMode = (mode) => (
@@ -299,76 +388,125 @@ export const createAccountingPosting = ({
     const displayDate = formatDisplayDate(iso)
     const isCash = transaction.paymentMode === PAYMENT_MODES.CASH
     const isCheque = transaction.paymentMode === PAYMENT_MODES.CHEQUE
-    const debitAccount = isCash ? LEDGER_ACCOUNTS.CASH : LEDGER_ACCOUNTS.BANK
-    const creditAccount = transaction.category?.toLowerCase().includes('transport')
+    const isOut = transaction.direction === TRANSACTION_DIRECTIONS.OUT
+        || String(transaction.entryType || '').toLowerCase() === 'expense'
+    const moneyAccount = isCash ? LEDGER_ACCOUNTS.CASH : LEDGER_ACCOUNTS.BANK
+    const incomeAccount = transaction.category?.toLowerCase().includes('transport')
         ? LEDGER_ACCOUNTS.TRANSPORT_INCOME
         : LEDGER_ACCOUNTS.FEE_INCOME
+    const expenseAccount = transaction.category || 'Operating Expense'
     const amountLabel = formatCurrency(amount)
     const party = student?.name ?? 'Student'
-    const description = narration || `Fee receipt — ${party}`
+    const description = narration || (isOut ? `Payout — ${party}` : `Fee receipt — ${party}`)
+    const sourceModule = transaction.sourceModule || (isOut ? SOURCE_MODULES.MANUAL : SOURCE_MODULES.FEES)
+    const department = isOut
+        ? (String(transaction.category || '').toLowerCase().includes('transport') ? 'Transport' : 'General')
+        : 'Fees'
+    const voucherType = isOut ? 'Payment' : 'Receipt'
 
-    const glLines = [
-        {
-            id: `GL-${transaction.id}-DR`,
-            date: displayDate,
-            dateIso: iso,
-            voucherNo: transaction.voucherNo,
-            ledgerAccount: debitAccount,
-            description,
-            debit: amountLabel,
-            credit: '—',
-            balance: amountLabel,
-            referenceModule: 'Fees Management',
-            sourceModule: SOURCE_MODULES.FEES,
-            sourceTransactionId: transaction.id,
-            referenceNo: transaction.transactionNo,
-            voucherType: 'Receipt',
-            department: 'Fees',
-            financialYear: '2026–27',
-            status: 'Posted',
-        },
-        {
-            id: `GL-${transaction.id}-CR`,
-            date: displayDate,
-            dateIso: iso,
-            voucherNo: transaction.voucherNo,
-            ledgerAccount: creditAccount,
-            description,
-            debit: '—',
-            credit: amountLabel,
-            balance: amountLabel,
-            referenceModule: 'Fees Management',
-            sourceModule: SOURCE_MODULES.FEES,
-            sourceTransactionId: transaction.id,
-            referenceNo: transaction.transactionNo,
-            voucherType: 'Receipt',
-            department: 'Fees',
-            financialYear: '2026–27',
-            status: 'Posted',
-        },
-    ]
+    const glLines = isOut
+        ? [
+            {
+                id: `GL-${transaction.id}-DR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: expenseAccount,
+                description,
+                debit: amountLabel,
+                credit: '—',
+                balance: amountLabel,
+                referenceModule: 'Accounting',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+            {
+                id: `GL-${transaction.id}-CR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: moneyAccount,
+                description,
+                debit: '—',
+                credit: amountLabel,
+                balance: amountLabel,
+                referenceModule: 'Accounting',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+        ]
+        : [
+            {
+                id: `GL-${transaction.id}-DR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: moneyAccount,
+                description,
+                debit: amountLabel,
+                credit: '—',
+                balance: amountLabel,
+                referenceModule: 'Fees Management',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+            {
+                id: `GL-${transaction.id}-CR`,
+                date: displayDate,
+                dateIso: iso,
+                voucherNo: transaction.voucherNo,
+                ledgerAccount: incomeAccount,
+                description,
+                debit: '—',
+                credit: amountLabel,
+                balance: amountLabel,
+                referenceModule: 'Fees Management',
+                sourceModule,
+                sourceTransactionId: transaction.id,
+                referenceNo: transaction.transactionNo,
+                voucherType,
+                department,
+                financialYear: '2026–27',
+                status: 'Posted',
+            },
+        ]
 
-    const dayBookEntry = (isCash || isCheque) ? {
+    const dayBookEntry = (isCash || isCheque || (isOut && transaction.paymentMode === PAYMENT_MODES.BANK_TRANSFER)) ? {
         id: `DB-${transaction.id}`,
         date: displayDate,
         voucherNo: transaction.voucherNo,
-        transactionType: 'Income',
-        ledgerHead: creditAccount,
+        transactionType: isOut ? 'Expense' : 'Income',
+        ledgerHead: isOut ? expenseAccount : incomeAccount,
         description,
         paymentMethod: modeToPaymentMethodLabel(transaction.paymentMode),
-        debit: amountLabel,
-        credit: '—',
+        debit: isOut ? '—' : amountLabel,
+        credit: isOut ? amountLabel : '—',
         balance: amountLabel,
         enteredBy: transaction.createdBy,
-        status: isCheque ? 'Pending Clearance' : 'Posted',
-        department: 'Fees',
+        status: isCheque && !isOut ? 'Pending Clearance' : 'Posted',
+        department,
         sourceTransactionId: transaction.id,
         referenceNo: transaction.transactionNo,
         category: transaction.category,
         cash: isCash ? amountLabel : '—',
-        bank: isCheque ? amountLabel : '—',
+        bank: (!isCash) ? amountLabel : '—',
         narration: description,
-        voucherType: 'Receipt',
+        voucherType,
     } : null
 
     const cashBookEntry = isCash ? {
@@ -377,11 +515,11 @@ export const createAccountingPosting = ({
         dateIso: iso,
         voucher: transaction.voucherNo,
         description,
-        receipt: amountLabel,
-        payment: '—',
+        receipt: isOut ? '—' : amountLabel,
+        payment: isOut ? amountLabel : '—',
         balance: amountLabel,
         cashAccount: LEDGER_ACCOUNTS.CASH,
-        transactionType: 'Receipt',
+        transactionType: voucherType,
         sourceTransactionId: transaction.id,
         referenceNo: transaction.transactionNo,
     } : null
@@ -394,18 +532,18 @@ export const createAccountingPosting = ({
         accountNumber: transaction.bankAccountNumber || '38472910482',
         account: transaction.bankAccountName || LEDGER_ACCOUNTS.BANK.replace('Bank — ', ''),
         voucher: transaction.voucherNo,
-        deposit: amountLabel,
-        withdrawal: '—',
+        deposit: isOut ? '—' : amountLabel,
+        withdrawal: isOut ? amountLabel : '—',
         balance: amountLabel,
         referenceNumber: transaction.reference || transaction.transactionNo,
-        voucherType: 'Receipt',
+        voucherType,
         chequeNo: transaction.chequeDetails?.chequeNo || '—',
         description,
         sourceTransactionId: transaction.id,
         slNo: 1,
     } : null
 
-    const onlineBookEntry = isOnlinePaymentMode(transaction.paymentMode) ? {
+    const onlineBookEntry = (!isOut && isOnlinePaymentMode(transaction.paymentMode)) ? {
         id: `OLT-${transaction.id}`,
         dateTime: formatDisplayDateTime(transaction.transactionDate),
         dateIso: iso,

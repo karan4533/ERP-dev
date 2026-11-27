@@ -1,11 +1,14 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import StarRatingInput from './Components/StarRatingInput'
 import {
     ACADEMIC_YEAR_MONTHS,
+    ACADEMIC_YEARS,
     EMPLOYEE_TYPE_OPTIONS,
     RATING_CATEGORY,
     SOM_ROUTE,
+    addSomRating,
     getEmployeesByType,
 } from './starRatingsData'
 
@@ -32,6 +35,25 @@ const AddRatings = () => {
     }
 
     const handleSave = () => {
+        if (!selectedEmployee) {
+            toast.error('Select an employee.')
+            return
+        }
+        if (!rating) {
+            toast.error('Select a star rating (1–3).')
+            return
+        }
+        addSomRating({
+            month,
+            academicYear: ACADEMIC_YEARS[0],
+            employeeType,
+            employeeId: selectedEmployee.id,
+            employeeName: selectedEmployee.name,
+            department: selectedEmployee.department,
+            rating,
+            description,
+        })
+        toast.success('Star rating saved to shared browser SoT.')
         navigate(SOM_ROUTE)
     }
 

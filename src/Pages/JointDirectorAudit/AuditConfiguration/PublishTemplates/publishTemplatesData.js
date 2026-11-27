@@ -1,3 +1,4 @@
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../../services/campusJsonStore'
 import { AUDIT_TEMPLATES } from '../AuditTemplates/auditTemplatesData'
 
 export const PUBLISH_STATUS_OPTIONS = ['Draft', 'Published', 'Archived']
@@ -8,7 +9,7 @@ export const publishStatusBadgeColor = {
     Archived: 'bg-[#6670851A] text-[#667085]',
 }
 
-export const PUBLISH_TEMPLATES = AUDIT_TEMPLATES.map((template) => ({
+const DEFAULT_PUBLISHED_TEMPLATES = AUDIT_TEMPLATES.map((template) => ({
     id: template.id,
     templateName: template.templateName,
     department: template.department,
@@ -39,3 +40,16 @@ export const bumpVersion = (version) => {
     if (!match) return 'v1.0'
     return `v${match[1]}.${Number(match[2]) + 1}`
 }
+export const PUBLISHED_TEMPLATES_STORAGE_KEY = 'schoolerp-jd-audit-published-templates-v1'
+export function getPublishedAuditTemplates() {
+    return ensureCampusSeed('schoolerp-jd-audit-published-templates-v1', DEFAULT_PUBLISHED_TEMPLATES)
+}
+export function savePublishedAuditTemplates(rows) {
+    return saveCampusJson('schoolerp-jd-audit-published-templates-v1', rows)
+}
+export function hydratePublishedAuditTemplatesFromApi() {
+    if (!usesCampusApiForKey('schoolerp-jd-audit-published-templates-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-jd-audit-published-templates-v1', DEFAULT_PUBLISHED_TEMPLATES)
+}
+export const PUBLISHED_TEMPLATES = DEFAULT_PUBLISHED_TEMPLATES
+export const PUBLISH_TEMPLATES = DEFAULT_PUBLISHED_TEMPLATES

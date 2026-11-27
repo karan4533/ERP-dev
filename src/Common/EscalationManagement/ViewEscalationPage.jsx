@@ -1,62 +1,88 @@
-import { useMemo, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { toast } from 'react-toastify'
-import ConfirmAction from '../ui/ConfirmAction'
-import FeedbackState from '../ui/FeedbackState'
-import FormField from '../ui/FormField'
-import IntegrationNotice from '../ui/IntegrationNotice'
-import PageHeader from '../ui/PageHeader'
-import StatusBadge from '../ui/StatusBadge'
-import Surface from '../ui/Surface'
-import WorkflowContextBar from '../ui/WorkflowContextBar'
-import WorkflowTimeline from '../ui/WorkflowTimeline'
-import { buildWorkflowEvents, getWorkflowState } from '../ui/workflow'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Clock } from 'lucide-react'
 import EscalationForm from './Components/EscalationForm'
+import { toast } from 'react-toastify'
+import { canUseEscalationsApi } from '../../services/escalationApi'
 import {
     formatDateTime,
     getEscalationById,
+    hydrateEscalationFromApi,
+    setEscalationStatusViaApi,
     getResolveByDate,
     isReceivedEscalation,
+    isResolutionOverdue,
+    isSentEscalation,
     RECEIVED_RESOLUTION_STATUSES,
     RESOLUTION_SLA_HOURS,
+    statusBadgeColor,
     updateEscalation,
 } from './escalationData'
 import { getRoleConfig } from './escalationRoleConfig'
 import { formatEscalatedToDisplay } from './escalationUsersData'
 import { useEscalationContext } from './useEscalationContext'
 
+const Section = ({ title, children }) => (
+    <div className='bg-white rounded-2xl shadow-md p-4'>
+        <h2 className='text-xl font-semibold text-black mb-6'>{title}</h2>
+        {children}
+    </div>
+)
+
 const Field = ({ label, value }) => (
-    <div>
-        <dt className='text-xs font-medium text-[var(--erp-muted)]'>{label}</dt>
-        <dd className='mt-1 whitespace-pre-wrap break-words text-sm font-medium text-[var(--erp-ink)]'>{value || '—'}</dd>
+    <div className='flex flex-col gap-y-1'>
+        <span className='text-base font-medium text-[#808080]'>{label}</span>
+        <span className='text-sm text-[#1E1E1E] whitespace-pre-wrap wrap-break-word'>{value || '—'}</span>
     </div>
 )
 
 const ViewEscalationPage = ({ roleKey }) => {
     const navigate = useNavigate()
     const { id } = useParams()
-    const location = useLocation()
-    const pathnameRole = location.pathname.startsWith('/parent') ? 'parent' : (location.pathname.startsWith('/student') ? 'student' : null)
-    const effectiveRoleKey = (roleKey === 'student' && pathnameRole) ? pathnameRole : (roleKey || pathnameRole || 'teacher')
-    const roleConfig = getRoleConfig(effectiveRoleKey)
-    const { currentUser } = useEscalationContext(effectiveRoleKey)
-    const [revision, setRevision] = useState(0)
-    const escalation = useMemo(() => {
-        void revision
-        return getEscalationById(effectiveRoleKey, id)
-    }, [id, revision, effectiveRoleKey])
-    const [resolutionEdit, setResolutionEdit] = useState(() => {
-        const current = getEscalationById(effectiveRoleKey, id)
-        return { recordId: id, status: current?.status || '', remarks: current?.resolutionRemarks || '' }
-    })
-    const [confirmOpen, setConfirmOpen] = useState(false)
-    const resolutionDraft = resolutionEdit.recordId === id ? resolutionEdit.status : (escalation?.status || '')
-    const resolutionRemarks = resolutionEdit.recordId === id ? resolutionEdit.remarks : (escalation?.resolutionRemarks || '')
+    const roleConfig = getRoleConfig(roleKey)
+    const { currentUser } = useEscalationContext(roleKey)
+    const [escalation, setEscalation] = useState(() => getEscalationById(roleKey, id))
+
+    const useApi = canUseEscalationsApi()
+    const [pendingStatus, setPendingStatus] = useState('In Review')
+    const [note, setNote] = useState('')
+    const [busy, setBusy] = useState(false)
+    const [loading, setLoading] = useState(useApi)
+
+    useEffect(() => {
+        let active = true
+        // With a backend session, fetch the latest record (includes the trail and any auto-escalation).
+        // Without one this resolves to null and the locally stored record is used.
+        hydrateEscalationFromApi(id).then((fresh) => {
+            if (!active) return
+            setEscalation(fresh ?? getEscalationById(roleKey, id))
+            setLoading(false)
+        })
+        return () => {
+            active = false
+        }
+    }, [roleKey, id])
+
+    const isSettled = ['Resolved', 'Rejected', 'Closed'].includes(escalation?.status)
+    const isRaiser = escalation ? isSentEscalation(escalation, roleKey, currentUser) : false
+
+    const submitApiStatus = async (status, statusNote) => {
+        setBusy(true)
+        try {
+            const updated = await setEscalationStatusViaApi(id, status, statusNote)
+            if (updated) setEscalation(updated)
+            setNote('')
+            toast.success(`Escalation marked ${status}.`)
+        } catch (error) {
+            toast.error(error?.message || 'Could not update the escalation.')
+        } finally {
+            setBusy(false)
+        }
+    }
 
     const isReceived = useMemo(
-        () => (escalation ? isReceivedEscalation(escalation, effectiveRoleKey, currentUser) : false),
-        [escalation, effectiveRoleKey, currentUser],
+        () => (escalation ? isReceivedEscalation(escalation, roleKey, currentUser) : false),
+        [escalation, roleKey, currentUser],
     )
 
     const resolveByDate = useMemo(
@@ -64,148 +90,221 @@ const ViewEscalationPage = ({ roleKey }) => {
         [escalation],
     )
 
-    const commitResolution = () => {
-        const isTerminal = ['Resolved', 'Rejected'].includes(resolutionDraft)
-        const updated = updateEscalation(effectiveRoleKey, id, {
-            status: resolutionDraft,
-            resolutionRemarks: resolutionRemarks.trim(),
-            resolvedAt: isTerminal ? new Date().toISOString() : null,
-        })
-        if (!updated) {
-            toast.error('The escalation status could not be updated.')
-            return
+    const isOverdue = useMemo(
+        () => (escalation ? isResolutionOverdue(escalation) : false),
+        [escalation],
+    )
+
+    const handleResolutionChange = (event) => {
+        const status = event.target.value
+        const updates = {
+            status,
+            resolvedAt: ['Resolved', 'Rejected'].includes(status) ? new Date().toISOString() : null,
         }
-        setRevision((value) => value + 1)
-        setResolutionEdit({ recordId: id, status: updated.status, remarks: updated.resolutionRemarks || '' })
-        setConfirmOpen(false)
-        toast.success(`Escalation moved to ${resolutionDraft.toLowerCase()}.`)
+        const updated = updateEscalation(roleKey, id, updates)
+        if (updated) setEscalation(updated)
     }
 
     if (!escalation) {
         return (
-            <section className='space-y-5'>
-                <button type='button' onClick={() => navigate(roleConfig.routeBase)} className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm font-semibold text-[var(--erp-ink)]'>
-                    <ArrowLeft aria-hidden='true' size={17} /> Back to escalations
+            <section className='space-y-6'>
+                <button
+                    type='button'
+                    onClick={() => navigate(roleConfig.routeBase)}
+                    className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                >
+                    <ArrowLeft size={18} />
+                    Back to list
                 </button>
-                <FeedbackState kind='permission' title='Escalation unavailable' description='This escalation does not exist or is outside your role and user scope.' />
+                <div className='bg-white rounded-2xl shadow-md p-6 text-[#667085]'>
+                    {loading ? 'Loading escalation…' : 'Escalation not found.'}
+                </div>
             </section>
         )
     }
 
-    const owner = formatEscalatedToDisplay(escalation)
-    const workflowState = getWorkflowState(escalation.status, { dueAt: resolveByDate })
-    const timelineEvents = buildWorkflowEvents({
-        status: escalation.status,
-        submittedLabel: 'Escalation raised',
-        submittedBy: escalation.escalatedBy,
-        submittedAt: escalation.escalatedAt || escalation.escalationDate,
-        owner,
-        remarks: escalation.resolutionRemarks,
-        decisionAt: escalation.resolvedAt,
-        dueAt: resolveByDate,
-    })
-    const nextAction = isReceived
-        ? (workflowState.terminal ? 'Resolution complete' : 'Review and update resolution status')
-        : (workflowState.terminal ? 'Review the recorded outcome' : `Await response from ${owner}`)
-
     return (
-        <section className='space-y-5'>
-            <PageHeader
-                title={escalation.id}
-                description={isReceived ? `Raised by ${escalation.escalatedBy}` : `Sent to ${owner}`}
-                status={workflowState.key}
-                context={isReceived ? 'Received escalation' : 'Sent escalation'}
-                meta={<StatusBadge status={escalation.status} label={`Recorded status: ${escalation.status}`} />}
-                actions={(
-                    <button type='button' onClick={() => navigate(roleConfig.routeBase)} className='inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm font-semibold text-[var(--erp-ink)]'>
-                        <ArrowLeft aria-hidden='true' size={17} /> Back to escalations
-                    </button>
-                )}
-            />
-
-            <IntegrationNotice
-                state='demo'
-                title='Browser-stored escalation workflow'
-                description='Status changes are local to this browser. Email, push notification and production audit delivery are not connected.'
-            />
-
-            <WorkflowContextBar
-                owner={owner}
-                due={resolveByDate ? formatDateTime(resolveByDate) : 'Not recorded'}
-                priority={escalation.priority}
-                nextAction={nextAction}
-            />
-
-            {workflowState.overdue && (
-                <div role='alert' className='rounded-[var(--erp-radius-surface)] border border-[#F3B8C2] bg-[#FDECEF] px-4 py-3'>
-                    <p className='text-sm font-semibold text-[#A51D35]'>Resolution overdue</p>
-                    <p className='mt-0.5 text-sm text-[var(--erp-slate)]'>The {RESOLUTION_SLA_HOURS}-hour response window ended at {formatDateTime(resolveByDate)}.</p>
-                </div>
-            )}
-
-            <div className='grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]'>
-                <div className='space-y-5'>
-                    {isReceived && !workflowState.terminal && (
-                        <Surface title='Resolution action' description='Review the complete escalation before recording a status change.' contentClassName='p-4 sm:p-5'>
-                            <div className='grid gap-4 sm:grid-cols-2'>
-                                <FormField id='resolution-status' label='Resolution status' hint={`Resolve or reject within ${RESOLUTION_SLA_HOURS} hours.`} required>
-                                    <select value={resolutionDraft} onChange={(event) => setResolutionEdit({ recordId: id, status: event.target.value, remarks: resolutionRemarks })} className='min-h-10 w-full rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm text-[var(--erp-ink)]'>
-                                        {RECEIVED_RESOLUTION_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                                    </select>
-                                </FormField>
-                                <FormField id='resolution-remarks' label='Resolution remarks' hint='Summarise what was checked and what happens next.'>
-                                    <textarea rows={3} value={resolutionRemarks} onChange={(event) => setResolutionEdit({ recordId: id, status: resolutionDraft, remarks: event.target.value })} className='w-full rounded-lg border border-[var(--erp-line-strong)] px-3 py-2 text-sm text-[var(--erp-ink)]' />
-                                </FormField>
-                            </div>
-                            <div className='mt-4 flex justify-end'>
-                                <button type='button' onClick={() => setConfirmOpen(true)} disabled={!resolutionDraft || resolutionDraft === escalation.status && resolutionRemarks.trim() === (escalation.resolutionRemarks || '')} className='min-h-10 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white disabled:opacity-50'>Review status update</button>
-                            </div>
-                        </Surface>
-                    )}
-
-                    <Surface title='Escalation information' contentClassName='p-4 sm:p-5'>
-                        <dl className='grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3'>
-                            <Field label='Escalation date' value={escalation.escalationDate} />
-                            <Field label='Escalated by' value={escalation.escalatedBy} />
-                            <Field label='Sender role' value={escalation.escalatedByRole} />
-                            <Field label='Escalated to' value={owner} />
-                            <Field label='Resolution SLA' value={`${RESOLUTION_SLA_HOURS} hours`} />
-                            <Field label='Resolve by' value={resolveByDate ? formatDateTime(resolveByDate) : '—'} />
-                            {escalation.resolvedAt && <Field label='Resolved at' value={formatDateTime(escalation.resolvedAt)} />}
-                            {escalation.resolutionRemarks && <div className='sm:col-span-2 lg:col-span-3'><Field label='Resolution remarks' value={escalation.resolutionRemarks} /></div>}
-                        </dl>
-                    </Surface>
-
-                    <Surface title='Reported details' description='Original content supplied by the sender.' contentClassName='p-4 sm:p-5'>
-                        <EscalationForm form={escalation} roleConfig={roleConfig} readOnly />
-                    </Surface>
-                </div>
-
-                <WorkflowTimeline events={timelineEvents} description='Only timestamps stored with this escalation are shown.' />
+        <section className='space-y-6'>
+            <div className='flex flex-wrap items-center gap-3'>
+                <button
+                    type='button'
+                    onClick={() => navigate(roleConfig.routeBase)}
+                    className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'
+                >
+                    <ArrowLeft size={18} />
+                    Back to list
+                </button>
             </div>
 
-            {workflowState.terminal && (
-                <IntegrationNotice
-                    state='disconnected'
-                    title='Reopen and complaint routing not connected'
-                    description='The production API must validate reopen permissions, preserve the prior decision and create the next SLA-bound owner step.'
-                />
+            <div className='bg-white rounded-2xl shadow-md p-4'>
+                <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
+                    <div>
+                        <h1 className='text-2xl font-semibold text-black'>{escalation.escalationId || escalation.id}</h1>
+                        {isReceived ? (
+                            <p className='text-xs text-[#515DEF] mt-1 font-medium'>Received escalation</p>
+                        ) : (
+                            <p className='text-xs text-[#808080] mt-1'>
+                                Routed to {escalation.escalatedTo} — track status below
+                            </p>
+                        )}
+                    </div>
+                    <div className='flex flex-wrap gap-2 self-start'>
+                        <span
+                            className={`px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap ${statusBadgeColor[escalation.status]}`}
+                        >
+                            {escalation.status}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {isReceived && (
+                <Section title='Resolution'>
+                    <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
+                        {useApi && (
+                            <div className='flex flex-col gap-y-2 sm:col-span-2 lg:col-span-3'>
+                                <label className='text-base font-medium text-[#808080]'>
+                                    Current status: {escalation.status}
+                                    {escalation.level > 0 ? ` · escalated up ${escalation.level} level(s) by the 24h clock` : ''}
+                                </label>
+                                {isSettled ? (
+                                    <span className='text-sm text-[#667085]'>
+                                        This escalation is {escalation.status.toLowerCase()}
+                                        {escalation.resolutionNote ? `: ${escalation.resolutionNote}` : '.'}
+                                    </span>
+                                ) : (
+                                    <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+                                        <select
+                                            value={pendingStatus}
+                                            onChange={(event) => setPendingStatus(event.target.value)}
+                                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                                        >
+                                            {['In Review', 'Resolved', 'Rejected'].map((status) => (
+                                                <option key={status} value={status}>
+                                                    {status}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <input
+                                            type='text'
+                                            value={note}
+                                            onChange={(event) => setNote(event.target.value)}
+                                            placeholder='Resolution note (required to resolve or reject)'
+                                            className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                                        />
+                                        <button
+                                            type='button'
+                                            disabled={busy}
+                                            onClick={() => submitApiStatus(pendingStatus, note)}
+                                            className='bg-[#515DEF] text-white text-sm px-6 py-2 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-60'
+                                        >
+                                            Update status
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <div className={`flex flex-col gap-y-2 ${useApi ? 'hidden' : ''}`}>
+                            <label className='text-base font-medium text-[#808080]'>Resolution status</label>
+                            <select
+                                value={escalation.status}
+                                onChange={handleResolutionChange}
+                                className='text-sm font-normal text-[#808080] border border-[#D9D9D9] rounded-md px-2 py-2 w-full'
+                            >
+                                {RECEIVED_RESOLUTION_STATUSES.map((status) => (
+                                    <option key={status} value={status}>
+                                        {status}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className='text-xs text-[#667085]'>
+                                Update status as you review this escalation. Select Resolved or Rejected when complete.
+                            </span>
+                        </div>
+                        <Field
+                            label='Resolution SLA'
+                            value={`Must be resolved within ${RESOLUTION_SLA_HOURS} hours`}
+                        />
+                        <Field label='Resolve by' value={resolveByDate ? formatDateTime(resolveByDate) : '—'} />
+                        {escalation.resolvedAt && (
+                            <Field label='Resolved at' value={formatDateTime(escalation.resolvedAt)} />
+                        )}
+                    </div>
+
+                    {isOverdue && (
+                        <div className='mt-6 flex items-start gap-3 rounded-xl border border-[#FF000033] bg-[#FF00000D] p-4'>
+                            <Clock size={18} className='text-[#FF0000] shrink-0 mt-0.5' />
+                            <div>
+                                <p className='text-sm font-semibold text-[#FF0000]'>Resolution overdue</p>
+                                <p className='text-sm text-[#667085] mt-1'>
+                                    This escalation was due by {formatDateTime(resolveByDate)} and is still unresolved.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {!isOverdue && !isSettled && resolveByDate && (
+                        <div className='mt-6 flex items-start gap-3 rounded-xl border border-[#515DEF33] bg-[#F8F9FF] p-4'>
+                            <Clock size={18} className='text-[#515DEF] shrink-0 mt-0.5' />
+                            <div>
+                                <p className='text-sm font-semibold text-[#515DEF]'>24-hour resolution window</p>
+                                <p className='text-sm text-[#667085] mt-1'>
+                                    Please resolve this escalation by {formatDateTime(resolveByDate)}.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </Section>
             )}
 
-            <ConfirmAction
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={commitResolution}
-                title={`Move escalation to ${resolutionDraft}?`}
-                description='Confirm the new state before updating this browser-stored escalation.'
-                confirmLabel='Update status'
-                tone={resolutionDraft === 'Rejected' ? 'danger' : 'primary'}
-            >
-                <p>The recorded status will change from <strong>{escalation.status}</strong> to <strong>{resolutionDraft}</strong>. This action does not send a notification.</p>
-            </ConfirmAction>
+            <Section title='Escalation information'>
+                <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>
+                    <Field label='Escalation ID' value={escalation.escalationId || escalation.id} />
+                    <Field label='Escalation date' value={escalation.escalationDate} />
+                    <Field label='Escalated by' value={escalation.escalatedBy} />
+                    <Field label='Role' value={escalation.escalatedByRole} />
+                    <Field label='Escalated to' value={formatEscalatedToDisplay(escalation)} />
+                </div>
+            </Section>
+
+            {useApi && isRaiser && ['Resolved', 'Rejected'].includes(escalation.status) && (
+                <div className='bg-white rounded-2xl shadow-md p-4 flex flex-wrap items-center justify-between gap-3'>
+                    <p className='text-sm text-[#667085]'>
+                        {escalation.status}
+                        {escalation.resolutionNote ? `: ${escalation.resolutionNote}` : ''}. Close it once you are satisfied.
+                    </p>
+                    <button
+                        type='button'
+                        disabled={busy}
+                        onClick={() => submitApiStatus('Closed')}
+                        className='bg-[#515DEF] text-white text-sm px-6 py-2 rounded-md hover:opacity-90 cursor-pointer disabled:opacity-60'
+                    >
+                        Close escalation
+                    </button>
+                </div>
+            )}
+
+            {Array.isArray(escalation.trail) && escalation.trail.length > 0 && (
+                <Section title='History'>
+                    <ol className='space-y-2 text-sm text-[#667085]'>
+                        {escalation.trail.map((step, index) => (
+                            <li key={`${step.at}-${index}`}>
+                                <span className='text-[#1E1E1E] font-medium'>{formatDateTime(step.at)}</span>
+                                {' — '}
+                                {step.action.replace(/_/g, ' ')}
+                                {step.fromRole && step.toRole ? ` (${step.fromRole} → ${step.toRole})` : step.toRole ? ` (to ${step.toRole})` : ''}
+                                {step.note ? ` · ${step.note}` : ''}
+                            </li>
+                        ))}
+                    </ol>
+                </Section>
+            )}
+
+            <Section title='Details'>
+                <EscalationForm form={escalation} roleConfig={roleConfig} readOnly />
+            </Section>
         </section>
     )
 }
 
 export default ViewEscalationPage
-

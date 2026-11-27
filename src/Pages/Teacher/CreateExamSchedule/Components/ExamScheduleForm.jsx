@@ -1,8 +1,11 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, Plus, Trash2 } from 'lucide-react'
-import { CLASSES, SECTIONS, SUBJECTS, DAYS, formatDate } from '../createExamScheduleData'
+import { SUBJECTS, DAYS, formatDate } from '../createExamScheduleData'
+import ClassCatalogStatus from '../../../../Common/RBAC/ClassCatalogStatus'
+import { useClassCatalogOptions } from '../../../../Common/RBAC/useClassCatalogOptions'
+import { canUseClassDetailsApi, listSubjects } from '../../../../services/classDetailsApi'
 
 const inputClass =
     'text-sm font-normal text-[#1E1E1E] border border-[#D9D9D9] rounded-md px-2 py-3 w-full'
@@ -24,6 +27,27 @@ const ExamScheduleForm = ({ onSubmit }) => {
     const [examDate, setExamDate] = useState(new Date())
     const [endDate, setEndDate] = useState(new Date())
     const [subjects, setSubjects] = useState([createSubjectRow()])
+    const [selectedClass, setSelectedClass] = useState('')
+    const [selectedSection, setSelectedSection] = useState('')
+    const catalog = useClassCatalogOptions(selectedClass)
+    const classOptions = catalog.classes
+    const sectionOptions = catalog.sections
+    const [subjectOptions, setSubjectOptions] = useState(SUBJECTS)
+
+    useEffect(() => {
+        if (!canUseClassDetailsApi()) return undefined
+        let cancelled = false
+        listSubjects()
+            .then((subjectRows) => {
+                if (cancelled) return
+                const names = (Array.isArray(subjectRows) ? subjectRows : []).map((row) => row.name).filter(Boolean)
+                if (names.length) setSubjectOptions(names)
+            })
+            .catch(() => {
+                /* keep subject fallbacks */
+            })
+        return () => { cancelled = true }
+    }, [])
 
     const updateSubject = (key, field, value) => {
         setSubjects((prev) =>
@@ -64,6 +88,9 @@ const ExamScheduleForm = ({ onSubmit }) => {
 
     return (
         <form id='exam-schedule-form' onSubmit={handleSubmit}>
+            <div className='mb-4'>
+                <ClassCatalogStatus status={catalog.status} error={catalog.error} onRetry={catalog.reload} />
+            </div>
             <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:mt-8 mt-2'>
                 <div className='flex flex-col gap-y-2 sm:col-span-2 lg:col-span-3'>
                     <label htmlFor='exam-name' className='text-base font-medium text-[#1E1E1E]'>Exam Name:</label>
@@ -71,18 +98,36 @@ const ExamScheduleForm = ({ onSubmit }) => {
                 </div>
                 <div className='flex flex-col gap-y-2'>
                     <label htmlFor='class-name' className='text-base font-medium text-[#1E1E1E]'>Class:</label>
-                    <select id='class-name' name='className' required className={selectClass}>
+                    <select
+                        id='class-name'
+                        name='className'
+                        required
+                        value={selectedClass}
+                        onChange={(e) => {
+                            setSelectedClass(e.target.value)
+                            setSelectedSection('')
+                        }}
+                        className={selectClass}
+                    >
                         <option value=''>--Select--</option>
-                        {CLASSES.map((item) => (
+                        {classOptions.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
                 </div>
                 <div className='flex flex-col gap-y-2'>
                     <label htmlFor='section' className='text-base font-medium text-[#1E1E1E]'>Section:</label>
-                    <select id='section' name='section' required className={selectClass}>
-                        <option value=''>--Select--</option>
-                        {SECTIONS.map((item) => (
+                    <select
+                        id='section'
+                        name='section'
+                        required
+                        value={selectedSection}
+                        onChange={(e) => setSelectedSection(e.target.value)}
+                        disabled={!selectedClass}
+                        className={selectClass}
+                    >
+                        <option value=''>{selectedClass ? '--Select--' : 'Select class first'}</option>
+                        {sectionOptions.map((item) => (
                             <option key={item} value={item}>{item}</option>
                         ))}
                     </select>
@@ -158,7 +203,7 @@ const ExamScheduleForm = ({ onSubmit }) => {
                                         className={selectClass}
                                     >
                                         <option value=''>--Select--</option>
-                                        {SUBJECTS.map((subject) => (
+                                        {subjectOptions.map((subject) => (
                                             <option key={subject} value={subject}>{subject}</option>
                                         ))}
                                     </select>

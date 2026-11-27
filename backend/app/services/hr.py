@@ -46,8 +46,11 @@ LIST_COLLECTIONS: dict[str, str] = {
 _KNOWN_ROLES = {code for code, _ in ALL_ROLES}
 _ROLE_ALIASES = {
     "teacher": "teacher",
-    "accounts": "accounthead",
-    "accountant": "accounthead",
+    "accounts": "accountassistant",
+    "accountant": "accountassistant",
+    "accountassistant": "accountassistant",
+    "accounthead": "accounthead",
+    "financemanager": "financemanager",
     "hr": "hr",
     "driver": "driver",
     "principal": "principal",
@@ -55,6 +58,15 @@ _ROLE_ALIASES = {
     "coordinator": "coordinator",
     "director": "director",
     "security": "gatekeeper",
+    "prm": "prm",
+    "pro": "pro",
+    "fileroom": "fileroom",
+    "cctv": "cctv",
+    "itsupportmanager": "itsupportmanager",
+    "jointdirector": "jointdirector",
+    "jointdirectoraudit": "jointdirectoraudit",
+    "qualityauditor": "qualityauditor",
+    "processauditor": "processauditor",
 }
 _INACTIVE = {"Inactive", "Relieved", "Terminated"}
 
@@ -151,7 +163,7 @@ def portal_employees(db: Session, actor: User) -> list[dict]:
 
 def create_staff(db: Session, actor: User, item: dict) -> dict:
     role_title = str(item.get("role") or "").strip()
-    if _role_code(role_title) is None:
+    if _assert_actor_may_assign_portal_role(db, actor, role_title) is None:
         fail(422, "role_required", "Pick a role from the fixed list.")
     email = str(item.get("email") or "").lower().strip()
     if not email:
@@ -224,7 +236,7 @@ def replace_portal_employees(db: Session, actor: User, items: list[dict]) -> lis
         _apply_portal(row, item, existing=previous is not None)
         db.flush()
         _provision_user(db, actor, row)
-        _sync_user_role(db, row)
+        _sync_user_role(db, actor, row)
         _remember_assignment(db, actor, row, previous)
         _sync_login_active(db, row)
     for existing in list_employees(db, actor):
@@ -407,6 +419,105 @@ def documents_for_employee(db: Session, actor: User, employee_code: str) -> list
     return [item for item in list_items(db, actor, "documents") if item.get("employeeId") == employee_code]
 
 
+RELIEVING_EXIT_TYPES = ("Resignation", "Retirement", "Relocation", "Other")
+_CLOSED_EXIT_STATUSES = {"completed", "relieved", "rejected", "withdrawn", "cancelled"}
+
+
+def _my_exit_rows(db: Session, actor: User, code: str) -> list[HrRecord]:
+    return [
+        row
+        for row in db.scalars(
+            select(HrRecord).where(HrRecord.campus_id == actor.campus_id, HrRecord.collection == "exits")
+        ).all()
+        if str((row.body or {}).get("employeeId") or "") == code
+    ]
+
+
+def my_relieving_applications(db: Session, actor: User) -> list[dict]:
+    """The signed-in employee's own exit / relieving records (never anyone else's)."""
+    own = _own_employee(db, actor)
+    if own is None:
+        return []
+    return [dict(row.body) for row in _my_exit_rows(db, actor, own.employee_code)]
+
+
+def apply_relieving(db: Session, actor: User, body: dict) -> dict:
+    """Staff self-service relieving application for their own employee record; HR reviews it in Exit Formalities."""
+    own = _own_employee(db, actor)
+    if own is None or own.campus_id != actor.campus_id:
+        fail(404, "no_employee_record", "No employee record is linked to your login. Contact HR.")
+    body = body if isinstance(body, dict) else {}
+    try:
+        last_day = date.fromisoformat(str(body.get("lastWorkingDate") or ""))
+    except ValueError:
+        fail(422, "invalid_date", "Last working date must be a valid date.")
+    if last_day < date.today():
+        fail(422, "invalid_date", "Last working date cannot be in the past.")
+    exit_type = str(body.get("exitType") or "Resignation")
+    if exit_type not in RELIEVING_EXIT_TYPES:
+        fail(422, "invalid_exit_type", f"Exit type must be one of: {', '.join(RELIEVING_EXIT_TYPES)}.")
+    reason = str(body.get("reason") or "").strip()
+    if not reason:
+        fail(422, "reason_required", "A reason is required.")
+    if len(reason) > 1000:
+        fail(422, "reason_too_long", "Reason can be at most 1000 characters.")
+    open_rows = [
+        row for row in _my_exit_rows(db, actor, own.employee_code)
+        if str((row.body or {}).get("status") or "").lower() not in _CLOSED_EXIT_STATUSES
+    ]
+    if open_rows:
+        fail(409, "already_applied", f"You already have an open relieving application ({open_rows[0].public_id}).")
+
+    public_id = _next_public_id(db, actor, "exits")
+    full_name = f"{own.first_name} {own.last_name}".strip()
+    record = {
+        "id": public_id,
+        "employeeId": own.employee_code,
+        "employeeName": full_name,
+        "department": own.department or "",
+        "lastWorkingDate": last_day.isoformat(),
+        "exitType": exit_type,
+        "reason": reason,
+        "status": "Pending HR",
+        "source": "employee-application",
+        "requestedByEmail": actor.email or "",
+        "requestedByUserId": str(actor.id),
+        "requestedAt": date.today().isoformat(),
+        "noticePeriod": "30 days",
+        "noticeServed": False,
+        "handover": False,
+        "assets": False,
+        "documents": False,
+        "finance": False,
+        "departmentClearance": False,
+        "hrClearance": False,
+        "exitInterview": False,
+        "exitInterviewResponse": None,
+    }
+    db.add(HrRecord(campus_id=actor.campus_id, collection="exits", public_id=public_id, body=record))
+    from app.models import Notification
+
+    hr_users = db.scalars(
+        select(User)
+        .join(Role, Role.id == User.role_id)
+        .where(User.campus_id == actor.campus_id, User.is_active.is_(True), Role.code == "hr")
+    ).all()
+    for user in hr_users:
+        db.add(
+            Notification(
+                campus_id=actor.campus_id,
+                user_id=user.id,
+                title=f"Relieving application {public_id}",
+                body=f"{full_name} ({own.employee_code}) applied for {exit_type}; last working day {last_day.isoformat()}.",
+                entity_type="hr_exit",
+                entity_id=public_id,
+            )
+        )
+    _audit_collection(db, actor, "RELIEVING_APPLIED", "exits", f"{public_id} {own.employee_code}")
+    db.commit()
+    return record
+
+
 def _check_collection(collection: str) -> None:
     if collection not in LIST_COLLECTIONS:
         fail(404, "not_found", "That HR collection does not exist.")
@@ -524,6 +635,7 @@ _DEPARTMENT_HEADS = {
     "accounthead",
     "transportmanager",
     "housekeepingmanager",
+    "maintenancemanager",
     "canteenmanager",
     "itsupportmanager",
     "librarian",
@@ -586,6 +698,33 @@ def _role_code(title: str) -> str | None:
     if compact in _KNOWN_ROLES:
         return compact
     return _ROLE_ALIASES.get(compact)
+
+
+def _assert_actor_may_assign_portal_role(db: Session, actor: User, role_title: str) -> str | None:
+    """Map a portal role title and enforce the same creatable-role rules as Admin user management.
+
+    Privileged codes (admin, superadmin, hr, finance, parent, …) must not be minted or
+    escalated onto through HR staffing. Unrecognised titles return ``None`` (no login link).
+    """
+    from app.services.admin_users import hr_assignable_portal_roles
+
+    code = _role_code(role_title)
+    if code is None:
+        return None
+    allowed = set(hr_assignable_portal_roles(role_code_for(db, actor)))
+    if code not in allowed:
+        fail(
+            403,
+            "forbidden",
+            f"Portal role '{code}' cannot be assigned from HR. Use Administrator user management for allowed staff roles only.",
+        )
+    return code
+
+
+def _portal_role_allowed_for_actor(db: Session, actor: User, code: str) -> bool:
+    from app.services.admin_users import hr_assignable_portal_roles
+
+    return code in set(hr_assignable_portal_roles(role_code_for(db, actor)))
 
 
 def _is_locked(collection: str, body: dict) -> bool:
@@ -688,12 +827,19 @@ def _provision_user(db: Session, actor: User, row: HrEmployee) -> str | None:
     code = _role_code(row.role_title or "")
     if code is None:
         return None
-    role = db.scalar(select(Role).where(Role.code == code))
-    if role is None:
-        return None
     existing = db.scalar(select(User).where(User.email == row.email))
     if existing is not None:
         row.user_id = existing.id
+        return None
+    # Creating a *new* login must follow Admin creatable-role rules (ASA-01).
+    if not _portal_role_allowed_for_actor(db, actor, code):
+        fail(
+            403,
+            "forbidden",
+            f"Portal role '{code}' cannot be assigned from HR. Use Administrator user management for allowed staff roles only.",
+        )
+    role = db.scalar(select(Role).where(Role.code == code))
+    if role is None:
         return None
     temporary = generate_temporary_password()
     user = User(
@@ -727,18 +873,36 @@ def _provision_user(db: Session, actor: User, row: HrEmployee) -> str | None:
     return temporary
 
 
-def _sync_user_role(db: Session, row: HrEmployee) -> None:
+def _sync_user_role(db: Session, actor: User, row: HrEmployee) -> None:
+    """Keep linked login role aligned with the HR title when the actor may assign that role.
+
+    Bulk portal saves re-post every employee, including seed rows that already hold privileged
+    roles. Re-saving those titles is a no-op. Escalating a login *to* a non-creatable role fails.
+    """
     if row.user_id is None:
         return
     code = _role_code(row.role_title or "")
-    role = db.scalar(select(Role).where(Role.code == code)) if code else None
+    if code is None:
+        return
     user = db.get(User, row.user_id)
     locked = {
         settings.admin_seed_email.lower(),
         settings.hr_seed_email.lower(),
         settings.director_seed_email.lower(),
     }
-    if role is None or user is None or (user.email or "").lower() in locked:
+    if user is None or (user.email or "").lower() in locked:
+        return
+    current = role_code_for(db, user)
+    if code == current:
+        return
+    if not _portal_role_allowed_for_actor(db, actor, code):
+        fail(
+            403,
+            "forbidden",
+            f"Portal role '{code}' cannot be assigned from HR. Use Administrator user management for allowed staff roles only.",
+        )
+    role = db.scalar(select(Role).where(Role.code == code))
+    if role is None:
         return
     user.role_id = role.id
 

@@ -1,4 +1,6 @@
-export const REQUESTS = [
+import { ensureCampusSeed, saveCampusJson, hydrateCampusKey, usesCampusApiForKey } from '../../../services/campusJsonStore'
+import { canUseOpsApi, createStationeryRequestApi, stationeryDecideRequestApi } from '../../../services/opsApi'
+const DEFAULT_REQUESTS = [
     {
         requestId: 'REQ-SS-2026-008',
         requestType: 'Stock Replenishment',
@@ -116,7 +118,8 @@ export const REQUESTS = [
     },
 ]
 
-export const REQUEST_TYPE_OPTIONS = ['Purchase', 'Stock Replenishment']
+// Restock is the business label; Stock Replenishment kept for existing records.
+export const REQUEST_TYPE_OPTIONS = ['Purchase', 'Restock', 'Stock Replenishment']
 
 export const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Urgent']
 
@@ -162,4 +165,75 @@ export const priorityBadgeColor = {
 }
 
 export const getRequestById = (id) =>
-    REQUESTS.find((entry) => entry.requestId === id)
+    getRequests().find((entry) => entry.requestId === id)
+
+export const REQUESTS_STORAGE_KEY = 'schoolerp-stationery-requests-v1'
+export function getRequests() {
+    return ensureCampusSeed('schoolerp-stationery-requests-v1', DEFAULT_REQUESTS)
+}
+export function saveRequests(rows) {
+    return saveCampusJson('schoolerp-stationery-requests-v1', rows)
+}
+export function hydrateRequestsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-stationery-requests-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-stationery-requests-v1', DEFAULT_REQUESTS)
+}
+
+/**
+ * Create a Store request. In API mode the server assigns the request number;
+ * offline demo mode keeps a browser copy with a local id.
+ */
+export async function createStoreRequest(draft, clientRequestId) {
+    const firstLine = Array.isArray(draft.lineItems) ? draft.lineItems[0] || {} : {}
+    if (canUseOpsApi()) {
+        try {
+            const record = await createStationeryRequestApi({
+                ...draft,
+                item: firstLine.item || draft.title,
+                quantity: Number(firstLine.quantity) || 1,
+                clientRequestId,
+            })
+            await hydrateRequestsFromApi()
+            return { success: true, api: true, record }
+        } catch (err) {
+            return { success: false, message: err?.message || 'Request could not be saved.' }
+        }
+    }
+    const requestId = `REQ-SS-${Date.now()}`
+    const record = { ...draft, requestId, status: 'Pending' }
+    const saved = await saveRequests([record, ...getRequests()])
+    return saved === false ? { success: false, message: 'Request could not be saved.' } : { success: true, record }
+}
+
+export async function decideStationeryRequest(requestId, decision, comment = '') {
+    if (!canUseOpsApi()) {
+        const rows = getRequests()
+        const current = rows.find((row) => row.requestId === requestId)
+        if (!current) return { success: false, message: 'Request not found.' }
+        const status = decision === 'approve' ? 'Approved' : 'Rejected'
+        const next = rows.map((row) => (
+            row.requestId === requestId
+                ? {
+                    ...row,
+                    status,
+                    currentStage: decision === 'approve' ? 'Ready to Issue' : 'Rejected',
+                    decisionComment: comment,
+                    decidedAt: new Date().toISOString(),
+                }
+                : row
+        ))
+        const saved = await saveRequests(next)
+        if (saved === false) return { success: false, message: 'Could not save decision.' }
+        return { success: true, record: next.find((row) => row.requestId === requestId) }
+    }
+    try {
+        const record = await stationeryDecideRequestApi(requestId, { decision, comment })
+        await hydrateRequestsFromApi()
+        return { success: true, api: true, record }
+    } catch (err) {
+        return { success: false, message: err?.message || 'Decision failed.' }
+    }
+}
+
+export const REQUESTS = DEFAULT_REQUESTS
+

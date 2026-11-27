@@ -1,46 +1,18 @@
-export const SUMMARY_CARDS = [
-    { label: 'Total Sales Today', value: '₹18,450', sub: '126 orders' },
-    { label: 'Total Sales This Month', value: '₹4,82,600', sub: 'June 2026' },
-    { label: 'Inventory Consumption Cost', value: '₹1,24,800', sub: 'This month' },
-    { label: 'Wastage Cost', value: '₹8,350', sub: 'This month' },
-    { label: 'Pending Vendor Bills', value: '₹62,000', sub: '2 invoices' },
-    { label: 'Top Selling Menu Item', value: 'Veg Biryani', sub: '348 orders' },
-    { label: 'Report Categories', value: '5', sub: 'Sales, Inventory, Wastage, Vendor, Orders' },
-]
+import {
+    hydrateCampusKey,
+    persistCampusJson,
+    usesCampusApiForKey,
+} from '../../../services/campusJsonStore'
+import { getOrders, hydrateOrdersFromApi } from '../Orders/ordersData'
+import { getRequests, hydrateRequestsFromApi } from '../RequestsApprovals/requestsData'
+import { formatAmount, parseAmount, parseCanteenDate } from '../Dashboard/dashboardData'
+
+export const REPORTS_STORAGE_KEY = 'schoolerp-canteen-reports-v1'
 
 export const REPORT_CATEGORIES = [
-    'Sales Report',
-    'Inventory Consumption Report',
-    'Wastage Report',
-    'Vendor Purchase Report',
     'Order Summary Report',
-]
-
-export const SALES_REPORT = [
-    { orderId: 'ORD-1042', customerName: 'Rahul Sharma', customerType: 'Student', orderDate: '10-06-2026', amount: '₹85', paymentMethod: 'Wallet', status: 'Preparing' },
-    { orderId: 'ORD-1041', customerName: 'Priya Nair', customerType: 'Student', orderDate: '10-06-2026', amount: '₹120', paymentMethod: 'Cash', status: 'Completed' },
-    { orderId: 'ORD-1040', customerName: 'Anita Verma', customerType: 'Staff', orderDate: '10-06-2026', amount: '₹60', paymentMethod: 'Wallet', status: 'Ready' },
-    { orderId: 'ORD-1039', customerName: 'Meena Devi', customerType: 'Student', orderDate: '09-06-2026', amount: '₹55', paymentMethod: 'Wallet', status: 'Cancelled' },
-    { orderId: 'ORD-1038', customerName: 'John Milton', customerType: 'Staff', orderDate: '09-06-2026', amount: '₹145', paymentMethod: 'Cash', status: 'Completed' },
-]
-
-export const INVENTORY_CONSUMPTION_REPORT = [
-    { itemName: 'Basmati Rice', openingStock: '25', consumedQuantity: '8', remainingStock: '17', unit: 'kg', consumptionDate: '10-06-2026' },
-    { itemName: 'Cooking Oil', openingStock: '15', consumedQuantity: '4', remainingStock: '11', unit: 'L', consumptionDate: '10-06-2026' },
-    { itemName: 'Fresh Vegetables', openingStock: '40', consumedQuantity: '18', remainingStock: '22', unit: 'kg', consumptionDate: '10-06-2026' },
-    { itemName: 'Chicken (Fresh)', openingStock: '12', consumedQuantity: '5', remainingStock: '7', unit: 'kg', consumptionDate: '09-06-2026' },
-]
-
-export const WASTAGE_REPORT = [
-    { itemName: 'Masala Dosa Batter', wastedQuantity: '3', unit: 'kg', reason: 'Expired — not used within shelf life', recordedBy: 'Rajesh Kumar', date: '10-06-2026' },
-    { itemName: 'Fresh Fruit Juice', wastedQuantity: '2', unit: 'L', reason: 'Spillage during prep', recordedBy: 'Priya Sharma', date: '09-06-2026' },
-    { itemName: 'Bread Slices', wastedQuantity: '1.5', unit: 'kg', reason: 'Stale — end of day discard', recordedBy: 'Rajesh Kumar', date: '08-06-2026' },
-]
-
-export const VENDOR_PURCHASE_REPORT = [
-    { purchaseId: 'PUR-2026-014', vendor: 'Green Farm Supplies', itemCount: 12, purchaseAmount: '₹62,000', invoiceNo: 'INV-GFS-4521', purchaseDate: '02-06-2026' },
-    { purchaseId: 'PUR-2026-011', vendor: 'Metro Dairy Products', itemCount: 6, purchaseAmount: '₹28,400', invoiceNo: 'INV-MDP-8892', purchaseDate: '28-05-2026' },
-    { purchaseId: 'PUR-2026-009', vendor: 'Kitchen Pro Equipment', itemCount: 1, purchaseAmount: '₹28,500', invoiceNo: 'INV-KPE-1104', purchaseDate: '05-06-2026' },
+    'Sales Report',
+    'Request Summary',
 ]
 
 export const orderStatusBadgeColor = {
@@ -48,4 +20,122 @@ export const orderStatusBadgeColor = {
     Ready: 'bg-[#FF980033] text-[#FF9800]',
     Completed: 'bg-[#4CAF5033] text-[#4CAF50]',
     Cancelled: 'bg-[#FF000033] text-[#FF0000]',
+}
+
+export const requestStatusBadgeColor = {
+    Pending: 'bg-[#FF980033] text-[#FF9800]',
+    Approved: 'bg-[#4CAF5033] text-[#4CAF50]',
+    Rejected: 'bg-[#FF000033] text-[#FF0000]',
+}
+
+const ORDER_STATUSES = ['Preparing', 'Ready', 'Completed', 'Cancelled']
+const REQUEST_STATUSES = ['Pending', 'Approved', 'Rejected']
+
+const orderStatusOf = (order) => String(order?.orderStatus || order?.status || '').trim()
+const requestStatusOf = (request) => String(request?.status || '').trim()
+
+const totalsByStatus = (rows, statuses, statusOf, amountOf) =>
+    statuses.map((status) => {
+        const matched = rows.filter((row) => statusOf(row) === status)
+        const amount = matched.reduce((sum, row) => sum + amountOf(row), 0)
+        return { status, count: matched.length, amount: formatAmount(amount) }
+    })
+
+const mapSalesRow = (order) => ({
+    orderId: order.orderId,
+    customerName: order.customerName || order.customer || '—',
+    customerType: order.customerType || order.type || '—',
+    orderDate: String(order.orderDateTime || order.orderDate || '—').split('·')[0].trim() || '—',
+    amount: order.totalAmount || formatAmount(order.amount),
+    paymentMethod: order.paymentMethod || '—',
+    status: orderStatusOf(order) || '—',
+    sortTime: parseCanteenDate(order.orderDateTime || order.orderDate)?.getTime() || 0,
+})
+
+export function getReportsView() {
+    const orders = getOrders()
+    const requests = getRequests()
+    const salesRows = [...orders]
+        .map(mapSalesRow)
+        .sort((a, b) => b.sortTime - a.sortTime)
+    const completed = orders.filter((order) => orderStatusOf(order) === 'Completed')
+    const open = orders.filter((order) => orderStatusOf(order) === 'Preparing' || orderStatusOf(order) === 'Ready')
+    const pending = requests.filter((row) => requestStatusOf(row) === 'Pending')
+    const salesTotal = orders
+        .filter((order) => orderStatusOf(order) !== 'Cancelled')
+        .reduce((sum, order) => sum + parseAmount(order.totalAmount || order.amount), 0)
+    const pendingAmount = pending.reduce((sum, row) => sum + parseAmount(row.requestedAmount || row.amount), 0)
+    const topItem = (() => {
+        const qty = new Map()
+        orders.forEach((order) => {
+            if (orderStatusOf(order) === 'Cancelled') return
+            const items = Array.isArray(order.items) ? order.items : []
+            items.forEach((item) => {
+                const name = typeof item === 'string' ? item : String(item?.itemName || item?.name || '').trim()
+                if (!name) return
+                const n = typeof item === 'string' ? 1 : Number(item?.quantity) || 1
+                qty.set(name, (qty.get(name) || 0) + n)
+            })
+        })
+        return [...qty.entries()].sort((a, b) => b[1] - a[1])[0] || null
+    })()
+
+    return {
+        summaryCards: [
+            {
+                label: 'Total Orders',
+                value: String(orders.length),
+                sub: open.length ? `${open.length} open` : 'No open orders',
+            },
+            {
+                label: 'Order Sales',
+                value: formatAmount(salesTotal),
+                sub: completed.length ? `${completed.length} completed` : 'No completed orders',
+            },
+            {
+                label: 'Pending Requests',
+                value: String(pending.length),
+                sub: pending.length ? formatAmount(pendingAmount) : 'No pending requests',
+            },
+            {
+                label: 'Top Selling Menu Item',
+                value: topItem ? topItem[0] : '—',
+                sub: topItem ? `${topItem[1]} sold` : 'No order items yet',
+            },
+        ],
+        orderStatusRows: totalsByStatus(
+            orders,
+            ORDER_STATUSES,
+            orderStatusOf,
+            (order) => parseAmount(order.totalAmount || order.amount),
+        ),
+        requestStatusRows: totalsByStatus(
+            requests,
+            REQUEST_STATUSES,
+            requestStatusOf,
+            (row) => parseAmount(row.requestedAmount || row.amount),
+        ),
+        recentOrders: salesRows.slice(0, 12),
+        salesReport: salesRows,
+    }
+}
+
+export function hydrateReportsFromApi() {
+    const jobs = [hydrateOrdersFromApi(), hydrateRequestsFromApi()]
+    if (usesCampusApiForKey(REPORTS_STORAGE_KEY)) {
+        jobs.push(hydrateCampusKey(REPORTS_STORAGE_KEY, []))
+    }
+    return Promise.all(jobs)
+}
+
+export function persistReportSnapshot(view = getReportsView()) {
+    if (!usesCampusApiForKey(REPORTS_STORAGE_KEY)) return Promise.resolve(false)
+    return persistCampusJson(REPORTS_STORAGE_KEY, [{
+        id: 'canteen-live-snapshot',
+        generatedAt: new Date().toISOString(),
+        orderTotalsByStatus: view.orderStatusRows,
+        requestTotalsByStatus: view.requestStatusRows,
+        recentOrders: view.recentOrders,
+        summary: view.summaryCards.map((card) => ({ label: card.label, value: card.value })),
+    }])
 }

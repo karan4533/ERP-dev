@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React from 'react'
 import { STATE_OPTIONS, getCitiesByState } from '../stateCityData'
 
 const defaultSelectClass =
@@ -14,34 +14,13 @@ const StateCityFields = ({
     cityId = 'city',
     selectClassName = defaultSelectClass,
 }) => {
-    const cities = useMemo(() => getCitiesByState(state), [state])
-    const [isCustomCity, setIsCustomCity] = useState(false)
-
-    // Sync isCustomCity if city exists and is not in cities list
-    useEffect(() => {
-        if (city && cities.length > 0 && !cities.includes(city)) {
-            setIsCustomCity(true)
-        }
-    }, [city, cities])
+    const cities = getCitiesByState(state)
 
     const handleStateChange = (event) => {
         const nextState = event.target.value
         onStateChange?.(nextState)
-        setIsCustomCity(false)
-        const newCities = getCitiesByState(nextState)
-        if (city && !newCities.includes(city)) {
+        if (city && !getCitiesByState(nextState).includes(city)) {
             onCityChange?.('')
-        }
-    }
-
-    const handleCitySelect = (event) => {
-        const val = event.target.value
-        if (val === '__CUSTOM__') {
-            setIsCustomCity(true)
-            onCityChange?.('')
-        } else {
-            setIsCustomCity(false)
-            onCityChange?.(val)
         }
     }
 
@@ -89,45 +68,19 @@ const StateCityFields = ({
                 </select>
             </div>
             <div className='flex flex-col gap-y-2'>
-                <div className='flex items-center justify-between'>
-                    <label htmlFor={cityId} className='text-base font-medium text-[#1E1E1E]'>City:</label>
-                    {state && (
-                        <button
-                            type='button'
-                            onClick={() => {
-                                setIsCustomCity(!isCustomCity)
-                                if (isCustomCity) onCityChange?.('')
-                            }}
-                            className='text-xs text-[#515DEF] hover:underline cursor-pointer'
-                        >
-                            {isCustomCity ? 'Choose from list' : 'Enter other city'}
-                        </button>
-                    )}
-                </div>
-                {isCustomCity ? (
-                    <input
-                        id={cityId}
-                        type='text'
-                        placeholder='Type city name'
-                        value={city}
-                        onChange={(e) => onCityChange?.(e.target.value)}
-                        className={selectClassName}
-                    />
-                ) : (
-                    <select
-                        id={cityId}
-                        value={city}
-                        onChange={handleCitySelect}
-                        disabled={!state}
-                        className={selectClassName}
-                    >
-                        <option value=''>{state ? `Select City (${cities.length} available)` : 'Select state first'}</option>
-                        {cities.map((item) => (
-                            <option key={item} value={item}>{item}</option>
-                        ))}
-                        <option value='__CUSTOM__'>+ Other (Type manually)...</option>
-                    </select>
-                )}
+                <label htmlFor={cityId} className='text-base font-medium text-[#1E1E1E]'>City:</label>
+                <select
+                    id={cityId}
+                    value={city}
+                    onChange={(event) => onCityChange?.(event.target.value)}
+                    disabled={!state}
+                    className={selectClassName}
+                >
+                    <option value=''>{state ? 'Select City' : 'Select state first'}</option>
+                    {cities.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                    ))}
+                </select>
             </div>
         </>
     )

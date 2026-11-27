@@ -1,21 +1,61 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
+import { apiRequest, getAccessToken, isApiAuthEnabled } from '../../../services/apiClient'
 import {
     ATTENDANCE_STATUSES,
     MY_ATTENDANCE_LIST,
     statusBadgeColor,
 } from './myAttendanceData'
 
+const mapHrRow = (row, index) => ({
+    id: row.id || row.public_id || `ATT-${index}`,
+    employeeId: row.employeeId || row.employee_code || '—',
+    name: row.name || row.employeeName || '—',
+    inTime: row.inTime || row.checkIn || '—',
+    outTime: row.outTime || row.checkOut || '—',
+    attendanceStatus: row.status || row.attendanceStatus || 'Present',
+    date: row.date || row.attendanceDate || '—',
+})
+
 const MyAttendance = () => {
     const [fromDate, setFromDate] = useState(new Date())
     const [toDate, setToDate] = useState(new Date())
     const [exportModal, setExportModal] = useState(false)
+    const api = isApiAuthEnabled() && Boolean(getAccessToken())
+    const [rows, setRows] = useState(() => (api ? [] : [...MY_ATTENDANCE_LIST]))
+    const [loadError, setLoadError] = useState('')
+
+    useEffect(() => {
+        if (!api) {
+            setRows([...MY_ATTENDANCE_LIST])
+            return undefined
+        }
+        let active = true
+        apiRequest('/hr/attendance/mine')
+            .then((payload) => {
+                if (!active) return
+                const list = Array.isArray(payload) ? payload : payload?.items || payload?.records || []
+                setRows(list.map(mapHrRow))
+                setLoadError('')
+            })
+            .catch((error) => {
+                if (!active) return
+                setRows([])
+                setLoadError(error?.message || 'Could not load attendance from the server.')
+            })
+        return () => {
+            active = false
+        }
+    }, [api])
+
+    const visible = useMemo(() => rows, [rows])
 
     return (
         <section>
+            {loadError ? <p className='text-sm text-[#B42318] mb-3'>{loadError}</p> : null}
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button type='button' className='bg-[#515DEF] text-white uppercase text-sm px-6 py-1.5 border border-[#515DEF] rounded-lg hover:opacity-90 transition-all duration-200 cursor-pointer'>
@@ -82,16 +122,6 @@ const MyAttendance = () => {
                         Export
                     </button>
                 </div>
-                <div className='flex gap-x-2 items-center my-2'>
-                    <select className='px-2 py-1.5 bg-white text-[#515DEF] border border-[#515DEF] rounded-md'>
-                        <option value='10'>10</option>
-                        <option value='20'>20</option>
-                        <option value='30'>30</option>
-                        <option value='40'>40</option>
-                        <option value='50'>50</option>
-                    </select>
-                    <span className='text-sm font-normal text-[#515DEF]'>Entries Per Page</span>
-                </div>
                 <div className='relative overflow-x-auto'>
                     <table className='w-full text-sm text-left rtl:text-right'>
                         <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
@@ -105,20 +135,28 @@ const MyAttendance = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {MY_ATTENDANCE_LIST.map((record) => (
-                                <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.employeeId}</td>
-                                    <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.name}</td>
-                                    <td className='px-2 py-4'>{record.date}</td>
-                                    <td className='px-2 py-4'>{record.inTime}</td>
-                                    <td className='px-2 py-4'>{record.outTime}</td>
-                                    <td className='px-2 py-4 rounded-e-lg'>
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.attendanceStatus]}`}>
-                                            {record.attendanceStatus}
-                                        </span>
+                            {visible.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className='px-2 py-8 text-center text-[#667085]'>
+                                        No attendance rows for your login yet.
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                visible.map((record) => (
+                                    <tr key={record.id} className='border-b text-[#667085] border-[#f2f4f7] hover:bg-[#f2f4f7] rounded-lg'>
+                                        <td className='px-2 py-4 font-medium text-[#1E1E1E] rounded-s-lg'>{record.employeeId}</td>
+                                        <td className='px-2 py-4 font-medium text-[#1E1E1E]'>{record.name}</td>
+                                        <td className='px-2 py-4'>{record.date}</td>
+                                        <td className='px-2 py-4'>{record.inTime}</td>
+                                        <td className='px-2 py-4'>{record.outTime}</td>
+                                        <td className='px-2 py-4 rounded-e-lg'>
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${statusBadgeColor[record.attendanceStatus] || ''}`}>
+                                                {record.attendanceStatus}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -126,7 +164,7 @@ const MyAttendance = () => {
 
             <div className='flex justify-between items-center px-4 mt-4'>
                 <p className='text-sm font-medium text-[#515DEF]'>
-                    Showing 1 to {MY_ATTENDANCE_LIST.length} of {MY_ATTENDANCE_LIST.length} entries
+                    Showing {visible.length} entries
                 </p>
                 <div className='flex justify-center gap-x-2 flex-wrap'>
                     <button type='button' className='size-8 flex justify-center items-center p-2 bg-white text-[#515DEF] border border-[#E2E8F0] hover:bg-[#515DEF] hover:text-white rounded-full cursor-pointer'>
@@ -141,7 +179,13 @@ const MyAttendance = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='my-attendance'
+                rows={Array.isArray(visible) ? visible : []}
+                exportDescription={<>You are exporting {Array.isArray(visible) ? visible.length : 0} record(s).</>}
+            />
         </section>
     )
 }

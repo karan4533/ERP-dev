@@ -1,51 +1,142 @@
-import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
-import { DataTable, DataToolbar, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
-import { FLEET_SUMMARY, FLEET_VEHICLES } from '../transportFinanceData'
-import { StaffAvatar, SummaryCards } from './TransportShared'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Plus, Search } from 'lucide-react'
+import { fleetStatusBadgeColor } from '../transportFinanceData'
+import {
+    StaffAvatar,
+    SummaryCards,
+    TableCard,
+    TablePagination,
+    tdClass,
+    thClass,
+} from './TransportShared'
+import { useFinance } from '../../financeDomain/FinanceContext'
+import {
+    getVehicles,
+    hydrateVehiclesFromApi,
+} from '../../../TransportManager/VehicleManagement/vehicleManagementData'
+import { mapOpsVehicleToFleetRow } from '../../financeDomain/financeOpsSync'
 
-const TYPE_FILTERS = ['All types', 'Bus', 'Van']
-const STATUS_FILTERS = ['All statuses', 'Active', 'In Service', 'Idle']
+const FleetServiceTab = ({ onAddVehicle }) => {
+    const { transportFleet, syncTransportOpsIntoFinance } = useFinance()
+    const [opsFleet, setOpsFleet] = useState(() => getVehicles().map(mapOpsVehicleToFleetRow))
 
-const FleetServiceTab = ({ fleetVehicles = FLEET_VEHICLES, onAddVehicle }) => {
-    const [query, setQuery] = useState('')
-    const [type, setType] = useState(TYPE_FILTERS[0])
-    const [status, setStatus] = useState(STATUS_FILTERS[0])
-    const rows = useMemo(() => fleetVehicles.filter((row) => {
-        if (type !== TYPE_FILTERS[0] && row.type !== type) return false
-        if (status !== STATUS_FILTERS[0] && row.status !== status) return false
-        const normalizedQuery = query.trim().toLowerCase()
-        if (!normalizedQuery) return true
-        return [row.regNo, row.type, row.route, row.driver, row.status].join(' ').toLowerCase().includes(normalizedQuery)
-    }), [fleetVehicles, query, status, type])
-    const columns = [
-        { key: 'regNo', label: 'Registration', required: true, render: (row) => <span className='font-mono text-xs font-semibold'>{row.regNo}</span> },
-        { key: 'type', label: 'Type' },
-        { key: 'route', label: 'Route', required: true },
-        { key: 'driver', label: 'Driver', render: (row) => <StaffAvatar initials={row.driverInitials} name={row.driver} /> },
-        { key: 'lastService', label: 'Last service' },
-        { key: 'nextServiceDue', label: 'Next service due' },
-        { key: 'odometer', label: 'Odometer' },
-        { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    ]
+    useEffect(() => {
+        hydrateVehiclesFromApi().finally(() => {
+            setOpsFleet(getVehicles().map(mapOpsVehicleToFleetRow))
+        })
+        syncTransportOpsIntoFinance?.().catch(() => {})
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount sync
+    }, [])
+
+    const vehicles = useMemo(() => {
+        const map = new Map()
+        ;[...(opsFleet || []), ...(transportFleet || [])].forEach((row) => {
+            const key = String(row.regNo || row.id || '').trim().toUpperCase()
+            if (!key) return
+            map.set(key, { ...map.get(key), ...row })
+        })
+        return [...map.values()]
+    }, [opsFleet, transportFleet])
+
+    const summary = useMemo(() => {
+        const total = vehicles.length
+        const active = vehicles.filter((row) => /active/i.test(row.status || '')).length
+        const service = vehicles.filter((row) => /service/i.test(row.status || '')).length
+        const idle = vehicles.filter((row) => /idle|unassigned/i.test(row.status || '')).length
+        return [
+            { label: 'Total Vehicles', value: String(total), sub: 'TM fleet + finance snapshot', iconTone: 'info' },
+            { label: 'Active on Routes', value: String(active), sub: 'Active status', subTone: 'success', iconTone: 'success' },
+            { label: 'Under Service', value: String(service), sub: 'In service / maintenance', subTone: 'danger', iconTone: 'danger' },
+            { label: 'Idle / other', value: String(idle || Math.max(0, total - active - service)), sub: 'Not active', iconTone: 'warning' },
+        ]
+    }, [vehicles])
 
     return (
-        <div className='space-y-5'>
-            <IntegrationNotice state='demo' title='Sample fleet with session-only additions' description='Seed vehicles are reference data. Vehicles added here remain only until this page reloads and do not update route allocation, compliance or asset accounting.' />
-            <SummaryCards cards={FLEET_SUMMARY} />
-            <section className='overflow-hidden rounded-[var(--erp-radius-surface)] border border-[var(--erp-line)] bg-white' aria-labelledby='fleet-register-title'>
-                <div className='flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5'>
-                    <div><h3 id='fleet-register-title' className='text-base font-semibold text-[var(--erp-ink)]'>Vehicle fleet register</h3><p className='mt-1 text-sm text-[var(--erp-slate)]'>Search route assignments, service dates and operational state.</p></div>
-                    <button type='button' onClick={onAddVehicle} className='inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--erp-indigo)] px-4 text-sm font-semibold text-white'><Plus aria-hidden='true' size={16} /> Add local vehicle</button>
-                </div>
-                <DataToolbar query={query} onQueryChange={setQuery} searchLabel='Search fleet' searchPlaceholder='Registration, route or driver…' resultCount={rows.length} onReset={() => { setQuery(''); setType(TYPE_FILTERS[0]); setStatus(STATUS_FILTERS[0]) }} filters={(
-                    <>
-                        <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Type<select value={type} onChange={(event) => setType(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{TYPE_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label>
-                        <label className='grid gap-1 text-xs font-semibold text-[var(--erp-slate)]'>Status<select value={status} onChange={(event) => setStatus(event.target.value)} className='min-h-10 rounded-lg border border-[var(--erp-line-strong)] bg-white px-3 text-sm'>{STATUS_FILTERS.map((item) => <option key={item}>{item}</option>)}</select></label>
-                    </>
-                )} />
-                <DataTable caption='Vehicle fleet register' rows={rows} columns={columns} rowKey='id' emptyTitle='No vehicles found' emptyDescription='Reset the filters to review the available fleet records.' renderActions={() => <button type='button' disabled title='Vehicle detail requires the connected transport API.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Details unavailable</button>} />
-            </section>
+        <div className='space-y-6'>
+            <SummaryCards cards={summary} />
+
+            <TableCard
+                title='Vehicle fleet register'
+                filters={(
+                    <div className='flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3'>
+                        <div className='relative min-w-[180px]'>
+                            <Search size={16} className='absolute left-3 top-1/2 -translate-y-1/2 text-[#808080]' />
+                            <input
+                                type='text'
+                                placeholder='Search vehicle / reg. no...'
+                                className='w-full text-sm border border-[#D9D9D9] rounded-md pl-9 pr-3 py-2'
+                            />
+                        </div>
+                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[110px]'>
+                            <option>All Types</option>
+                            <option>Bus</option>
+                            <option>Van</option>
+                        </select>
+                        <select className='text-sm border border-[#D9D9D9] rounded-md px-3 py-2 min-w-[110px]'>
+                            <option>All Status</option>
+                            <option>Active</option>
+                            <option>In Service</option>
+                            <option>Idle</option>
+                        </select>
+                        <button
+                            type='button'
+                            onClick={onAddVehicle}
+                            className='inline-flex items-center gap-2 bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all cursor-pointer'
+                        >
+                            <Plus size={16} />
+                            Add Vehicle
+                        </button>
+                    </div>
+                )}
+                footer={<TablePagination summary={`${vehicles.length} vehicles total`} />}
+            >
+                <table className='w-full text-sm text-left mt-4'>
+                    <thead className='text-xs bg-[#EDEEF5] whitespace-nowrap rounded-lg'>
+                        <tr>
+                            <th className={`${thClass} rounded-s-lg`}>Reg. No.</th>
+                            <th className={thClass}>Type</th>
+                            <th className={thClass}>Route</th>
+                            <th className={thClass}>Driver</th>
+                            <th className={thClass}>Last Service</th>
+                            <th className={thClass}>Next Service Due</th>
+                            <th className={thClass}>Odometer</th>
+                            <th className={thClass}>Status</th>
+                            <th className={`${thClass} rounded-e-lg`}>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {vehicles.length === 0 ? (
+                            <tr>
+                                <td colSpan={9} className={`${tdClass} text-center py-8 text-[#667085]`}>
+                                    No vehicles yet. Add one here or create them in Transport Manager → Vehicle Management.
+                                </td>
+                            </tr>
+                        ) : vehicles.map((row) => (
+                            <tr key={row.id || row.regNo} className='border-b border-[#f2f4f7] hover:bg-[#f2f4f7]'>
+                                <td className={`${tdClass} rounded-s-lg font-mono text-xs text-[#1E1E1E]`}>{row.regNo}</td>
+                                <td className={tdClass}>{row.type}</td>
+                                <td className={tdClass}>{row.route}</td>
+                                <td className={tdClass}>
+                                    <StaffAvatar initials={row.driverInitials} name={row.driver} />
+                                </td>
+                                <td className={tdClass}>{row.lastService}</td>
+                                <td className={tdClass}>{row.nextServiceDue}</td>
+                                <td className={tdClass}>{row.odometer}</td>
+                                <td className={tdClass}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${fleetStatusBadgeColor[row.status] || 'bg-[#EDEEF5] text-[#667085]'}`}>
+                                        {row.status}
+                                    </span>
+                                </td>
+                                <td className={`${tdClass} rounded-e-lg`}>
+                                    <button type='button' className='text-sm font-medium text-[#515DEF] hover:underline cursor-pointer'>
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </TableCard>
         </div>
     )
 }

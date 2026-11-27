@@ -1,17 +1,33 @@
-import { DataTable, IntegrationNotice, StatusBadge } from '../../../../Common/ui'
+import React from 'react'
 import { useFinance } from '../../financeDomain/FinanceContext'
-import { SettingsPanel } from './SettingsShared'
-
-const columns = [
-    { key: 'name', label: 'Terminal', required: true },
-    { key: 'terminalId', label: 'Terminal ID', render: (row) => <span className='font-mono text-xs'>{row.terminalId}</span> },
-    { key: 'provider', label: 'Provider', required: true },
-    { key: 'enabled', label: 'Status', render: (row) => <StatusBadge status={row.enabled ? 'Enabled' : 'Disabled'} /> },
-]
+import { SettingsPanel, tdClass, thClass } from './SettingsShared'
 
 const PosTerminalsTab = () => {
     const { posTerminals } = useFinance()
-    return <div className='space-y-5'><IntegrationNotice state='demo' title='Terminal configuration disconnected' description='Terminal records are browser demonstration data. Credentials, device verification and settlement mapping must be managed by the payment integration service.' /><SettingsPanel title='POS / swipe terminals' sub='Vendor-neutral terminal reference; no credentials are stored in this frontend.'><DataTable caption='POS terminal register' rows={posTerminals} columns={columns} rowKey='id' emptyTitle='No terminals configured' emptyDescription='Connect the payment configuration service to maintain terminals.' renderActions={() => <button type='button' disabled title='Terminal editing requires the connected payment service.' className='min-h-9 rounded-md border border-[var(--erp-line-strong)] px-3 text-sm font-semibold text-[var(--erp-muted)] opacity-60'>Edit unavailable</button>} /></SettingsPanel></div>
+    return (
+        <SettingsPanel title='POS / swipe terminals' sub='Vendor-neutral terminal master. Gateway credentials are not stored in this demo.'>
+            <table className='w-full text-sm'>
+                <thead className='text-xs bg-[#EDEEF5]'>
+                    <tr>
+                        <th className={`${thClass} rounded-s-lg`}>Name</th>
+                        <th className={thClass}>Terminal ID</th>
+                        <th className={thClass}>Provider</th>
+                        <th className={`${thClass} rounded-e-lg`}>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {posTerminals.map((item) => (
+                        <tr key={item.id} className='border-b border-[#F2F4F7]'>
+                            <td className={tdClass}>{item.name}</td>
+                            <td className={`${tdClass} font-mono text-xs`}>{item.terminalId}</td>
+                            <td className={tdClass}>{item.provider}</td>
+                            <td className={tdClass}>{item.enabled ? 'Enabled' : 'Disabled'}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </SettingsPanel>
+    )
 }
 
 export default PosTerminalsTab

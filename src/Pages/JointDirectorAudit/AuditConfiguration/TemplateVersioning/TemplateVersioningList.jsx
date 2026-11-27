@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
     ChevronLeft,
     ChevronRight,
@@ -10,11 +10,12 @@ import {
 } from 'lucide-react'
 import Dropdown from '../../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../../Common/CommonComponents/ExportModal'
+import { filterListRows } from '../../../../Common/listFiltering'
 import TemplateVersionCompareModal from './TemplateVersionCompareModal'
 import TemplateVersionViewModal from './TemplateVersionViewModal'
 import {
     TEMPLATE_FILTER_OPTIONS,
-    TEMPLATE_VERSIONS,
+    getAuditTemplateVersions, hydrateAuditTemplateVersionsFromApi, saveAuditTemplateVersions,
     VERSION_STATUS_OPTIONS,
     formatPublishedDate,
     versionStatusBadgeColor,
@@ -32,7 +33,17 @@ const formatToday = () => {
 }
 
 const TemplateVersioningList = () => {
-    const [versions, setVersions] = useState(TEMPLATE_VERSIONS)
+    const [versions, setVersionsState] = useState(() => getAuditTemplateVersions())
+    useEffect(() => {
+        hydrateAuditTemplateVersionsFromApi().finally(() => setVersionsState(getAuditTemplateVersions()))
+    }, [])
+    const setVersions = (updater) => {
+        setVersionsState((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater
+            saveAuditTemplateVersions(next)
+            return next
+        })
+    }
     const [search, setSearch] = useState('')
     const [templateFilter, setTemplateFilter] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
@@ -40,20 +51,19 @@ const TemplateVersioningList = () => {
     const [viewModal, setViewModal] = useState({ open: false, version: null })
     const [compareModal, setCompareModal] = useState({ open: false, version: null })
 
-    const filteredVersions = useMemo(() => versions
-        .filter((item) => {
-            const searchValue = search.trim().toLowerCase()
-            const matchesSearch = !searchValue
-                || item.version.toLowerCase().includes(searchValue)
-                || item.templateName.toLowerCase().includes(searchValue)
-                || item.createdBy.toLowerCase().includes(searchValue)
-            const matchesTemplate = !templateFilter || item.templateId === templateFilter
-            const matchesStatus = !statusFilter || item.status === statusFilter
-
-            return matchesSearch && matchesTemplate && matchesStatus
+    const filteredVersions = useMemo(() => {
+        const filtered = filterListRows(versions, {
+            search,
+            searchKeys: ['version', 'templateName', 'createdBy'],
+            equals: {
+                templateId: templateFilter,
+                status: statusFilter,
+            },
         })
-        .sort((a, b) => b.publishedDate.localeCompare(a.publishedDate) || b.version.localeCompare(a.version)),
-    [versions, search, templateFilter, statusFilter])
+        return [...filtered].sort(
+            (a, b) => b.publishedDate.localeCompare(a.publishedDate) || b.version.localeCompare(a.version),
+        )
+    }, [versions, search, templateFilter, statusFilter])
 
     const clearFilters = () => {
         setSearch('')
@@ -249,7 +259,14 @@ const TemplateVersioningList = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='templateversioninglist'
+                title='TemplateVersioningList'
+                rows={Array.isArray(filteredVersions) ? filteredVersions : []}
+                exportDescription={<>You are exporting {Array.isArray(filteredVersions) ? filteredVersions.length : 0} record(s).</>}
+            />
             <TemplateVersionViewModal
                 isOpen={viewModal.open}
                 version={viewModal.version}

@@ -11,7 +11,7 @@ Rules:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -34,6 +34,10 @@ LEAVE_TYPES = [
 ]
 MAX_PERMISSION_HOURS = 2.0
 NON_STAFF = {"student", "parent"}
+# School policy: Casual + Personal leave together at most 2 days per calendar month (pending and
+# approved requests count). Sick, Medical and Emergency leave are exempt.
+MONTHLY_CAPPED_TYPES = {"Casual Leave", "Personal Leave"}
+MAX_CAPPED_DAYS_PER_MONTH = 2
 
 # first approver (department head) per requester role - mirrors src/Common/LeaveRequest/leaveRequestConfigs.js
 DEPT_HEAD = {
@@ -43,6 +47,7 @@ DEPT_HEAD = {
     "director": "admin",
     "jointdirector": "director",
     "prm": "director",
+    "pro": "director",
     "gatekeeper": "gatekeepermanager",
     "gatekeepermanager": "director",
     "driver": "transportmanager",
@@ -115,6 +120,47 @@ def _reached(db: Session, row: LeaveRequest, role: str) -> bool:
     return role in chain and chain.index(role) <= appr.current_level
 
 
+def _days_by_month(from_date: date, to_date: date) -> dict[tuple[int, int], int]:
+    days: dict[tuple[int, int], int] = {}
+    current = from_date
+    while current <= to_date:
+        key = (current.year, current.month)
+        days[key] = days.get(key, 0) + 1
+        current += timedelta(days=1)
+    return days
+
+
+def _check_monthly_cap(db: Session, actor: User, from_date: date, to_date: date) -> None:
+    wanted = _days_by_month(from_date, to_date)
+    first_month = date(from_date.year, from_date.month, 1)
+    used: dict[tuple[int, int], int] = {}
+    for other in db.scalars(
+        select(LeaveRequest).where(
+            LeaveRequest.campus_id == actor.campus_id,
+            LeaveRequest.requester_id == actor.id,
+            LeaveRequest.leave_type.in_(MONTHLY_CAPPED_TYPES),
+            LeaveRequest.to_date >= first_month,
+            LeaveRequest.from_date <= to_date,
+        )
+    ).all():
+        appr = _appr(db, other)
+        if appr is not None and appr.status == "denied":
+            continue
+        for key, count in _days_by_month(other.from_date, other.to_date).items():
+            used[key] = used.get(key, 0) + count
+    for (year, month), count in sorted(wanted.items()):
+        already = used.get((year, month), 0)
+        if already + count > MAX_CAPPED_DAYS_PER_MONTH:
+            left = max(0, MAX_CAPPED_DAYS_PER_MONTH - already)
+            fail(
+                400,
+                "leave_limit",
+                f"Casual and Personal leave are limited to {MAX_CAPPED_DAYS_PER_MONTH} days per month. "
+                f"{date(year, month, 1):%B %Y}: {already} day(s) already requested, {left} left. "
+                "Sick, Medical and Emergency leave are not limited.",
+            )
+
+
 def create(
     db: Session,
     actor: User,
@@ -157,6 +203,9 @@ def create(
         if leave_type == "Permission" and other.leave_type == "Permission":
             continue
         fail(409, "conflict", f"Overlaps your request {other.leave_type} ({other.from_date} to {other.to_date}).")
+
+    if leave_type in MONTHLY_CAPPED_TYPES:
+        _check_monthly_cap(db, actor, from_date, to_date)
 
     next_no = (db.scalar(select(func.max(LeaveRequest.request_no)).where(LeaveRequest.campus_id == actor.campus_id)) or 0) + 1
     row = LeaveRequest(

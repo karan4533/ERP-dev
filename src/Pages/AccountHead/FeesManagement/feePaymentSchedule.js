@@ -27,12 +27,14 @@ const parseYearStart = (academicYear, startDate) => {
     return { year: startYear, monthIndex0: 5 }
 }
 
-const splitEqual = (total, parts) => {
+// Parts are whole rupees (receipts and labels show whole rupees); the leftover goes on the first
+// part so the parts always add up to the total exactly.
+export const splitEqual = (total, parts) => {
     const cents = Math.round(Number(total) * 100)
     if (!parts || parts < 1) return [cents / 100]
-    const base = Math.floor(cents / parts)
-    const remainder = cents - base * parts
-    return Array.from({ length: parts }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100)
+    const base = Math.floor(cents / parts / 100) * 100
+    const first = cents - base * (parts - 1)
+    return Array.from({ length: parts }, (_, index) => (index === 0 ? first : base) / 100)
 }
 
 const FREQUENCY_PLAN = {

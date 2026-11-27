@@ -174,13 +174,12 @@ export async function postStudentTransportFeeToFinance(assignment) {
             result,
         }
     } catch (error) {
+        // The browser finance copy is only a cache in API mode; the bill does not exist until Finance accepts it.
         return {
-            success: true,
-            api: false,
-            installmentsCreated: installments.length,
-            message: error?.message
-                || 'Saved locally — Finance API could not accept the transport bill yet.',
-            warning: true,
+            success: false,
+            api: true,
+            installmentsCreated: 0,
+            message: `Transport saved, but the fee bill was not posted to Finance: ${error?.message || 'Finance API rejected the request.'}`,
         }
     }
 }

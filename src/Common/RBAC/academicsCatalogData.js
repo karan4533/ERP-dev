@@ -1,5 +1,16 @@
 const STORAGE_KEY = 'schoolerp-academics-catalog'
 
+/** Fired after Class Details from the API are mirrored so open screens can refresh dropdowns. */
+export const CLASS_CATALOG_UPDATED_EVENT = 'schoolerp-class-catalog-updated'
+
+const emitClassCatalogUpdated = () => {
+    try {
+        window.dispatchEvent(new CustomEvent(CLASS_CATALOG_UPDATED_EVENT))
+    } catch {
+        /* ignore */
+    }
+}
+
 const emptyCatalog = () => ({
     classes: [],
     sections: [],
@@ -7,6 +18,8 @@ const emptyCatalog = () => ({
     assignments: [],
     classDetails: [],
 })
+
+const classKey = (value) => String(value || '').trim().toLowerCase().replace(/^(grade|class)\s+/, '')
 
 const loadCatalog = () => {
     try {
@@ -65,6 +78,21 @@ export const getClassDetails = () => loadCatalog().classDetails
 
 export const getClassDetailsById = (id) =>
     getClassDetails().find((item) => item.id === id) ?? null
+
+/**
+ * Active section names for one class from the mirrored Class Details catalog.
+ * Falls back to the flat campus section list when the class is not in the catalog yet.
+ */
+export const getSectionsForClass = (className) => {
+    const key = classKey(className)
+    if (!key) return getSections()
+    const detail = getClassDetails().find((item) => classKey(item.className) === key)
+    if (!detail) return getSections()
+    const names = (detail.sections || [])
+        .map((section) => String(section?.name || '').trim().toUpperCase())
+        .filter(Boolean)
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+}
 
 const syncClassAndSectionLists = (catalog) => {
     const classSet = new Set(catalog.classes)
@@ -131,6 +159,100 @@ export const saveClassDetails = (payload) => {
     syncClassAndSectionLists(catalog)
     saveCatalog(catalog)
     return { success: true, record }
+}
+
+/**
+ * Mirrors the server's classes and sections into this browser catalog so the screens that still
+ * read it (student allocation, assigned classes, activities, lesson plans, documents) offer the
+ * same classes. The server is the source of truth for a mirrored class: its name, sections,
+ * capacities, room and class teacher all come from the server. `records` must be the complete list
+ * of ACTIVE classes of the current academic year, so an API-sourced class that is no longer in it
+ * (deactivated, deleted or from an old year) leaves the browser catalog and the other screens'
+ * dropdowns. Entries created only in the browser (no `apiId`) are never removed. Writes only when
+ * something changed.
+ */
+export const mirrorApiClassDetails = (records) => {
+    const catalog = loadCatalog()
+    const before = JSON.stringify(catalog)
+
+    const mirroredIds = new Set((records || []).map((record) => String(record.id)))
+    const isStale = (item) => item.source === 'api' && item.apiId && !mirroredIds.has(String(item.apiId))
+    const stale = catalog.classDetails.filter(isStale)
+    catalog.classDetails = catalog.classDetails.filter((item) => !isStale(item))
+
+    // The flat class and section lists (getClasses, getSections) feed the other screens' dropdowns and
+    // only ever grow, so a class the server no longer lists must leave them too, unless something that
+    // is still here uses the name.
+    if (stale.length > 0) {
+        const keepClass = new Set()
+        const keepSection = new Set()
+        const keep = (className, sectionName) => {
+            if (className) keepClass.add(String(className).toLowerCase())
+            if (sectionName) keepSection.add(String(sectionName).toUpperCase())
+        }
+        catalog.classDetails.forEach((detail) => {
+            keep(detail.className)
+            ;(detail.sections || []).forEach((section) => keep(null, section?.name))
+        })
+        ;(records || []).forEach((record) => {
+            keep(record.className)
+            ;(record.sections || []).forEach((section) => keep(null, section.name))
+        })
+        catalog.assignments.forEach((item) => keep(item.className, item.section))
+        const goneClasses = new Set(stale.map((item) => String(item.className).toLowerCase()))
+        const goneSections = new Set(
+            stale.flatMap((item) => (item.sections || []).map((section) => String(section.name).toUpperCase())),
+        )
+        catalog.classes = catalog.classes.filter(
+            (name) => !goneClasses.has(String(name).toLowerCase()) || keepClass.has(String(name).toLowerCase()),
+        )
+        catalog.sections = catalog.sections.filter(
+            (name) => !goneSections.has(String(name).toUpperCase()) || keepSection.has(String(name).toUpperCase()),
+        )
+    }
+
+    ;(records || []).forEach((record) => {
+        const className = String(record.className || '').trim()
+        if (!className) return
+        const index = catalog.classDetails.findIndex(
+            (item) => String(item.className).toLowerCase() === className.toLowerCase(),
+        )
+        const local = index >= 0 ? catalog.classDetails[index] : null
+        const sections = record.sections || []
+        const taught = sections.find((section) => section.classTeacherName)
+        const roomed = sections.find((section) => section.roomNumber)
+        const now = new Date().toISOString()
+        const next = {
+            classTeacherEmail: '',
+            ...local,
+            id: local?.id || `CD-API-${String(record.id).slice(0, 8)}`,
+            className,
+            displayName: local?.displayName || className,
+            sections: sections.map((section) => ({
+                name: String(section.name).toUpperCase(),
+                capacity: section.capacity ? String(section.capacity) : '',
+            })),
+            classCapacity: record.capacity ? String(record.capacity) : '',
+            classTeacher: taught?.classTeacherName || '',
+            classRoomNumber: roomed?.roomNumber || '',
+            source: 'api',
+            apiId: record.id,
+            academicYearId: record.academicYearId || '',
+            createdAt: local?.createdAt || now,
+            updatedAt: local?.updatedAt || now,
+        }
+        if (index >= 0) catalog.classDetails[index] = next
+        else catalog.classDetails = [...catalog.classDetails, next]
+    })
+
+    syncClassAndSectionLists(catalog)
+    if (JSON.stringify(catalog) !== before) {
+        saveCatalog(catalog)
+        emitClassCatalogUpdated()
+    } else {
+        // Still notify listeners so a late-mounted screen after login hydrate can re-read.
+        emitClassCatalogUpdated()
+    }
 }
 
 export const removeClassDetails = (id) => {

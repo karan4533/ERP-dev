@@ -18,7 +18,6 @@ import UserAvatar from './UserAvatar'
 import MessageComposer from './MessageComposer'
 import { getAttachmentKind } from '../communicationData'
 import { formatMessageTime, groupMessagesByDate } from '../utils'
-import Dialog from '../../ui/Dialog'
 
 const attachmentIcon = (kind) => {
     if (kind === 'image') return ImageIcon
@@ -43,6 +42,7 @@ const ChatPanel = ({
     error,
     onBack,
     onSendMessage,
+    onOpenProfile,
     showBackButton,
 }) => {
     const scrollRef = useRef(null)
@@ -116,7 +116,17 @@ const ChatPanel = ({
         )
     }
 
-    const participant = conversation.participant
+    const isGroup = Boolean(conversation.isGroup)
+    const members = Array.isArray(conversation.participants) ? conversation.participants : []
+    const peopleById = new Map(members.filter(Boolean).map((person) => [String(person.id), person]))
+    const participant = conversation.participant || {}
+    const headerName = isGroup
+        ? conversation.title || 'Group conversation'
+        : participant.name || conversation.title || 'Unknown participant'
+    const headerColor = isGroup ? '#0C1E5B' : participant.avatarColor
+    const headerSubtitle = isGroup
+        ? `${members.length} members`
+        : [participant.employeeId || participant.id, participant.role].filter(Boolean).join(' · ') || '—'
 
     const handleCopy = async (content) => {
         try {
@@ -151,13 +161,19 @@ const ChatPanel = ({
                         <ArrowLeft size={18} />
                     </button>
                 )}
-                <UserAvatar name={participant.name} color={participant.avatarColor} size="lg" />
-                <div className="min-w-0">
-                    <p className="truncate font-semibold text-[#101828]">{participant.name}</p>
-                    <p className="truncate text-xs text-[#667085]">
-                        {participant.employeeId} · {participant.role}
-                    </p>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => onOpenProfile?.(isGroup ? null : conversation.participant)}
+                    disabled={typeof onOpenProfile !== 'function' || (!isGroup && !conversation.participant)}
+                    className="flex min-w-0 items-center gap-3 rounded-lg text-left enabled:cursor-pointer enabled:hover:bg-[#F9FAFB]"
+                    title={isGroup ? 'View group members' : 'View profile'}
+                >
+                    <UserAvatar name={headerName} color={headerColor} size="lg" />
+                    <div className="min-w-0">
+                        <p className="truncate font-semibold text-[#101828]">{headerName}</p>
+                        <p className="truncate text-xs text-[#667085]">{headerSubtitle}</p>
+                    </div>
+                </button>
             </header>
 
             <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-5">
@@ -174,8 +190,11 @@ const ChatPanel = ({
 
                     const message = item.message
                     const mine = message.senderId === currentUser.id
-                    const senderName = mine ? currentUser.name : participant.name
-                    const senderColor = mine ? currentUser.avatarColor : participant.avatarColor
+                    const sender = peopleById.get(String(message.senderId)) || (isGroup ? null : participant)
+                    const senderName = mine
+                        ? currentUser.name
+                        : message.senderName || sender?.name || 'Unknown participant'
+                    const senderColor = mine ? currentUser.avatarColor : sender?.avatarColor
                     const kind = message.attachment
                         ? getAttachmentKind(message.attachment.type, message.attachment.name)
                         : null
@@ -309,21 +328,19 @@ const ChatPanel = ({
                 />
             </div>
 
-            <Dialog
-                open={Boolean(previewImage)}
-                onClose={() => setPreviewImage(null)}
-                title='Image preview'
-                size='full'
-                contentClassName='flex items-center justify-center bg-[var(--erp-canvas)]'
-            >
-                {previewImage && (
+            {previewImage && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+                    onClick={() => setPreviewImage(null)}
+                >
                     <img
                         src={previewImage}
-                        alt='Message attachment preview'
-                        className='max-h-[75dvh] max-w-full rounded-lg object-contain'
+                        alt="Preview"
+                        className="max-h-full max-w-full rounded-xl object-contain"
+                        onClick={(e) => e.stopPropagation()}
                     />
-                )}
-            </Dialog>
+                </div>
+            )}
         </section>
     )
 }

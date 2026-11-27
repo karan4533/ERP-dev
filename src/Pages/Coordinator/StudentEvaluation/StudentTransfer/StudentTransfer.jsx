@@ -220,7 +220,14 @@ const StudentTransfer = () => {
                 </div>
             </div>
 
-            <ExportModal exportModal={exportModal} setExportModal={setExportModal} />
+            <ExportModal
+                exportModal={exportModal}
+                setExportModal={setExportModal}
+                filename='studenttransfer'
+                title='StudentTransfer'
+                rows={Array.isArray(transfers) ? transfers : []}
+                exportDescription={<>You are exporting {Array.isArray(transfers) ? transfers.length : 0} record(s).</>}
+            />
         </section>
     )
 }

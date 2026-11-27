@@ -1,4 +1,12 @@
-export const REQUESTS = [
+import {
+    ensureCampusSeed,
+    hydrateCampusKey,
+    persistCampusJson,
+    saveCampusJson,
+    setCampusMemory,
+    usesCampusApiForKey,
+} from '../../../services/campusJsonStore'
+const DEFAULT_REQUESTS = [
     {
         requestId: 'REQ-IT-2026-001',
         requestType: 'Hardware',
@@ -138,4 +146,97 @@ export const stageBadgeColor = {
 }
 
 export const getRequestById = (id) =>
-    REQUESTS.find((entry) => entry.requestId === id)
+    getRequests().find((entry) => entry.requestId === id)
+
+// Short type shown in the list column and its filter, matching the existing records.
+const SHORT_REQUEST_TYPE = {
+    'Hardware Purchase': 'Hardware',
+    'Software Purchase': 'Software',
+    'License Renewal': 'License',
+    'AMC Renewal': 'Hardware',
+    'Vendor Service': 'Software',
+}
+
+export const EMPTY_REQUEST_FORM = {
+    requestTypeFull: '',
+    title: '',
+    description: '',
+    estimatedCost: '',
+    budgetCategory: '',
+    vendor: '',
+    vendorContact: '',
+    quotationName: '',
+    supportingNames: [],
+}
+
+export const validateRequestForm = (form) => {
+    if (!REQUEST_TYPE_OPTIONS.includes(form.requestTypeFull)) return 'Select a request type.'
+    if (!form.title.trim()) return 'Enter a request title.'
+    if (!form.description.trim()) return 'Enter a description.'
+    return ''
+}
+
+const todayDmy = () => {
+    const now = new Date()
+    return `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`
+}
+
+const nextRequestId = (rows) => {
+    const prefix = `REQ-IT-${new Date().getFullYear()}-`
+    const max = rows.reduce((acc, row) => {
+        const id = String(row.requestId || '')
+        const serial = id.startsWith(prefix) ? Number(id.slice(prefix.length)) : 0
+        return Number.isFinite(serial) ? Math.max(acc, serial) : acc
+    }, 0)
+    return `${prefix}${String(max + 1).padStart(3, '0')}`
+}
+
+/** Load the latest list first so a new request never overwrites requests saved elsewhere. */
+export async function addRequest(form, { requestedBy } = {}) {
+    if (usesCampusApiForKey(REQUESTS_STORAGE_KEY)) {
+        const loaded = await hydrateRequestsFromApi()
+        if (!loaded) return { success: false, message: 'Could not load the current requests. Please try again.' }
+    }
+    const rows = getRequests()
+    const cost = form.estimatedCost.trim()
+    const record = {
+        requestId: nextRequestId(rows),
+        requestType: SHORT_REQUEST_TYPE[form.requestTypeFull] || 'Hardware',
+        requestTypeFull: form.requestTypeFull,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        vendor: form.vendor.trim(),
+        vendorContact: form.vendorContact.trim(),
+        amount: cost,
+        estimatedCost: cost,
+        budgetCategory: form.budgetCategory,
+        submittedDate: todayDmy(),
+        approvalStatus: AUTO_FILLED.status,
+        currentStage: AUTO_FILLED.sentTo,
+        requestedBy: requestedBy || AUTO_FILLED.requestedBy,
+        department: AUTO_FILLED.department,
+        sentTo: AUTO_FILLED.sentTo,
+        status: AUTO_FILLED.status,
+        attachments: [form.quotationName, ...form.supportingNames].filter(Boolean),
+    }
+    const saved = await persistCampusJson(REQUESTS_STORAGE_KEY, [record, ...rows])
+    if (!saved.success) {
+        if (saved.api) setCampusMemory(REQUESTS_STORAGE_KEY, rows, { push: false })
+        return { success: false, message: saved.message || 'The request could not be saved.' }
+    }
+    return { success: true, record }
+}
+
+export const REQUESTS_STORAGE_KEY = 'schoolerp-it-requests-v1'
+export function getRequests() {
+    return ensureCampusSeed('schoolerp-it-requests-v1', DEFAULT_REQUESTS)
+}
+export function saveRequests(rows) {
+    return saveCampusJson('schoolerp-it-requests-v1', rows)
+}
+export function hydrateRequestsFromApi() {
+    if (!usesCampusApiForKey('schoolerp-it-requests-v1')) return Promise.resolve(false)
+    return hydrateCampusKey('schoolerp-it-requests-v1', DEFAULT_REQUESTS)
+}
+export const REQUESTS = DEFAULT_REQUESTS
+

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'react-toastify'
@@ -6,7 +6,6 @@ import AdmissionEnquiryInfo from './Components/AdmissionEnquiryInfo'
 import {
     getAdmissionEnquiryById,
     getEnquiryRouteBase,
-    isAdminFrontOfficePath,
     toFormState,
     updateAdmissionEnquiryStatus,
 } from './admissionEnquiryData'
@@ -16,11 +15,57 @@ const ViewAdmissionEnquiry = () => {
     const navigate = useNavigate()
     const { pathname } = useLocation()
     const routeBase = getEnquiryRouteBase(pathname)
-    const isAdminView = isAdminFrontOfficePath(pathname)
-    const record = useMemo(() => getAdmissionEnquiryById(id), [id])
-    const form = useMemo(() => (record ? toFormState(record) : null), [record])
+    const [record, setRecord] = useState(null)
+    const [form, setForm] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [notFound, setNotFound] = useState(false)
 
-    if (!record || !form) {
+    useEffect(() => {
+        let cancelled = false
+        setLoading(true)
+        setNotFound(false)
+        setRecord(null)
+        setForm(null)
+
+        ;(async () => {
+            const row = await getAdmissionEnquiryById(id)
+            if (cancelled) return
+            if (!row) {
+                setNotFound(true)
+                setRecord(null)
+                setForm(null)
+            } else {
+                setRecord(row)
+                setForm(toFormState(row))
+            }
+            setLoading(false)
+        })()
+
+        return () => {
+            cancelled = true
+        }
+    }, [id])
+
+    const handleMarkSuccess = useCallback(async () => {
+        if (!id) return
+        const result = await updateAdmissionEnquiryStatus(id, 'Success')
+        if (!result.success) {
+            toast.error(result.message || 'Could not update status.')
+            return
+        }
+        toast.success('Enquiry marked as Success.')
+        navigate(routeBase)
+    }, [id, navigate, routeBase])
+
+    if (loading) {
+        return (
+            <section className='bg-white rounded-2xl shadow-md p-8 text-center'>
+                <p className='text-sm text-[#667085]'>Loading enquiry…</p>
+            </section>
+        )
+    }
+
+    if (notFound || !record || !form) {
         return (
             <section className='bg-white rounded-2xl shadow-md p-8 text-center'>
                 <h2 className='text-xl font-semibold text-[#0C1E5B]'>Enquiry not found</h2>
@@ -29,12 +74,6 @@ const ViewAdmissionEnquiry = () => {
                 </NavLink>
             </section>
         )
-    }
-
-    const handleMarkSuccess = () => {
-        updateAdmissionEnquiryStatus(record.id, 'Success')
-        toast.success('Enquiry marked as Success.')
-        navigate(routeBase)
     }
 
     return (
@@ -52,9 +91,11 @@ const ViewAdmissionEnquiry = () => {
                 <div className='flex flex-wrap items-start justify-between gap-3 mb-2'>
                     <div>
                         <h2 className='text-xl font-semibold text-black'>Admission Enquiry Details</h2>
-                        <p className='text-sm text-[#667085] mt-1'>ID: {record.id} · Status: {record.status}</p>
+                        <p className='text-sm text-[#667085] mt-1'>
+                            ID: {record.enquiryCode || record.id} · Status: {record.status}
+                        </p>
                     </div>
-                    {record.status !== 'Success' && !isAdminView && (
+                    {record.status !== 'Success' && (
                         <button
                             type='button'
                             onClick={handleMarkSuccess}

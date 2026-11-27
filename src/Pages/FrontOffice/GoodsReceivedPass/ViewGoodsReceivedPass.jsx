@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer } from 'lucide-react'
 import SignatorySection from './Components/SignatorySection'
@@ -6,6 +6,8 @@ import {
     calculateTotalItems,
     formatDisplayTime,
     getGoodsReceivedPassById,
+    getGoodsReceivedPassPaths,
+    loadGoodsReceivedPassById,
     statusBadgeColor,
 } from './goodsReceivedPassData'
 
@@ -13,7 +15,30 @@ const ViewGoodsReceivedPass = () => {
     const { id } = useParams()
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
-    const record = getGoodsReceivedPassById(id)
+    const paths = getGoodsReceivedPassPaths()
+    const [record, setRecord] = useState(() => getGoodsReceivedPassById(id))
+    const [loading, setLoading] = useState(() => !getGoodsReceivedPassById(id))
+    const [loadError, setLoadError] = useState('')
+
+    useEffect(() => {
+        let active = true
+        loadGoodsReceivedPassById(id)
+            .then((row) => {
+                if (active) {
+                    setRecord(row)
+                    setLoadError('')
+                }
+            })
+            .catch((error) => {
+                if (active) setLoadError(error?.message || 'Could not load goods received pass.')
+            })
+            .finally(() => {
+                if (active) setLoading(false)
+            })
+        return () => {
+            active = false
+        }
+    }, [id])
 
     useEffect(() => {
         if (searchParams.get('print') === '1' && record) {
@@ -24,8 +49,8 @@ const ViewGoodsReceivedPass = () => {
     if (!record) {
         return (
             <section>
-                <div className='bg-white rounded-2xl shadow-md p-8 text-center text-[#667085]'>
-                    Goods received pass not found.
+                <div className={`bg-white rounded-2xl shadow-md p-8 text-center ${loadError ? 'text-[#B42318]' : 'text-[#667085]'}`}>
+                    {loading ? 'Loading goods received pass…' : loadError || 'Goods received pass not found.'}
                 </div>
             </section>
         )
@@ -36,7 +61,7 @@ const ViewGoodsReceivedPass = () => {
     return (
         <section className='space-y-6 print:space-y-4'>
             <div className='flex flex-wrap items-center gap-3 print:hidden'>
-                <button type='button' onClick={() => navigate('/front-office/goods-received-pass-list')} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
+                <button type='button' onClick={() => navigate(paths.list)} className='inline-flex items-center gap-2 text-sm text-[#515DEF] border border-[#515DEF] rounded-md px-4 py-2 hover:bg-[#515DEF] hover:text-white transition-colors cursor-pointer'>
                     <ArrowLeft size={18} />
                     Back to list
                 </button>
@@ -57,7 +82,7 @@ const ViewGoodsReceivedPass = () => {
                     <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6'>
                         <div className='rounded-lg border border-[#D9D9D9] p-3'>
                             <p className='text-xs font-medium text-[#808080]'>G.R. No.</p>
-                            <p className='text-lg font-bold text-[#0C1E5B] mt-1'>{record.grNo}</p>
+                            <p className='text-lg font-bold text-[#0C1E5B] mt-1'>{record.grNo || record.id}</p>
                         </div>
                         <div className='rounded-lg border border-[#D9D9D9] p-3'>
                             <p className='text-xs font-medium text-[#808080]'>Payment Type</p>

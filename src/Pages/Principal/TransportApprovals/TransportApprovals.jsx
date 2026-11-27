@@ -24,11 +24,21 @@ const TransportApprovals = () => {
     }, [])
 
     const handleDecision = async (requestId, decision) => {
+        let remark = ''
+        if (decision === 'reject') {
+            remark = window.prompt('Rejection reason (required):', '')
+            if (remark == null) return
+            if (!remark.trim()) {
+                toast.error('A rejection reason is required.')
+                return
+            }
+        }
         setBusyId(requestId)
         try {
             const result = await decideTransportApproval(requestId, {
                 decision,
                 actor: 'principal',
+                remark: remark.trim(),
             })
             if (!result?.success) {
                 toast.error(result?.message || 'Could not update request.')

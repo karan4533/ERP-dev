@@ -1,31 +1,32 @@
-import React, { useMemo, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { Calendar, ChevronLeft, ChevronRight, Download, EllipsisIcon, Plus, Printer } from 'lucide-react'
 import Dropdown from '../../../Common/CommonComponents/Dropdown'
 import ExportModal from '../../../Common/CommonComponents/ExportModal'
-import { useAuth } from '../../../Context/AuthContext'
-import { canRoleDelete } from '../../../Common/RBAC/actionPermissions'
+import { filterListRows } from '../../../Common/listFiltering'
 import {
     STATUS_OPTIONS,
     deleteMaterialGatePass,
     formatDisplayTime,
+    getMaterialGatePassPaths,
     getMaterialGatePasses,
+    hydrateMaterialGatePassesFromApi,
     statusBadgeColor,
 } from './materialGatePassData'
-
-const parseDate = (value) => {
-    if (!value) return null
-    const [day, month, year] = value.split('-').map(Number)
-    if (!day || !month || !year) return null
-    return new Date(year, month - 1, day)
-}
+import { frontOfficeApiOn } from '../frontOfficeStore'
+import { canShowDeleteOption } from '../../../Common/CommonComponents/approvalGates'
+import { useAuth } from '../../../context/AuthContext'
+import { toast } from 'react-toastify'
 
 const MaterialGatePassList = () => {
-    const { role } = useAuth()
-    const canDelete = canRoleDelete(role)
-    const [records, setRecords] = useState(() => getMaterialGatePasses())
+    const { role } = useAuth() || {}
+    const showDelete = canShowDeleteOption(role)
+    const paths = getMaterialGatePassPaths()
+    const location = useLocation()
+    const [records, setRecords] = useState(() => (frontOfficeApiOn() ? [] : getMaterialGatePasses()))
+    const [loadError, setLoadError] = useState('')
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
     const [fromDate, setFromDate] = useState(null)
@@ -35,26 +36,44 @@ const MaterialGatePassList = () => {
     const [exportModal, setExportModal] = useState(false)
     const [deleteModal, setDeleteModal] = useState(false)
     const [selectedId, setSelectedId] = useState(null)
+    const [deleting, setDeleting] = useState(false)
 
-    const filteredRecords = useMemo(() => {
-        return records.filter((record) => {
-            const query = search.trim().toLowerCase()
-            const matchesSearch =
-                !query ||
-                record.mgpNo.toLowerCase().includes(query) ||
-                record.driverName.toLowerCase().includes(query) ||
-                record.vehicleNo.toLowerCase().includes(query) ||
-                record.createdBy.toLowerCase().includes(query)
+    useEffect(() => {
+        if (!frontOfficeApiOn()) {
+            setRecords(getMaterialGatePasses())
+            setLoadError('')
+            return undefined
+        }
+        let active = true
+        hydrateMaterialGatePassesFromApi()
+            .then((rows) => {
+                if (active) {
+                    setRecords(rows)
+                    setLoadError('')
+                }
+            })
+            .catch((error) => {
+                if (active) {
+                    setRecords([])
+                    setLoadError(error?.message || 'Could not load material gate passes.')
+                }
+            })
+        return () => {
+            active = false
+        }
+    }, [location.key])
 
-            const matchesStatus = !statusFilter || record.status === statusFilter
-
-            const recordDate = parseDate(record.date)
-            const matchesFrom = !fromDate || (recordDate && recordDate >= fromDate)
-            const matchesTo = !toDate || (recordDate && recordDate <= toDate)
-
-            return matchesSearch && matchesStatus && matchesFrom && matchesTo
-        })
-    }, [records, search, statusFilter, fromDate, toDate])
+    const filteredRecords = useMemo(
+        () => filterListRows(records, {
+            search,
+            searchKeys: ['mgpNo', 'driverName', 'vehicleNo', 'createdBy', 'id'],
+            equals: { status: statusFilter },
+            fromDate,
+            toDate,
+            dateKeys: ['date'],
+        }),
+        [records, search, statusFilter, fromDate, toDate],
+    )
 
     const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize))
     const paginatedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -67,16 +86,25 @@ const MaterialGatePassList = () => {
         setCurrentPage(1)
     }
 
-    const handleDelete = () => {
-        if (!selectedId) return
-        deleteMaterialGatePass(selectedId)
-        setRecords(getMaterialGatePasses())
-        setDeleteModal(false)
-        setSelectedId(null)
+    const handleDelete = async () => {
+        if (!showDelete || !selectedId || deleting) return
+        setDeleting(true)
+        try {
+            await deleteMaterialGatePass(selectedId)
+            setRecords(getMaterialGatePasses())
+            setDeleteModal(false)
+            setSelectedId(null)
+            toast.success('Material gate pass deleted.')
+        } catch (error) {
+            toast.error(error?.message || 'Could not delete material gate pass.')
+        } finally {
+            setDeleting(false)
+        }
     }
 
     return (
         <section>
+            {loadError ? <p className='text-sm text-[#B42318] mb-3'>{loadError}</p> : null}
             <div className='bg-white rounded-2xl shadow-md p-4'>
                 <div className='flex justify-between md:items-center sm:items-stretch md:flex-row sm:flex-col flex-col gap-y-4'>
                     <button
@@ -162,7 +190,7 @@ const MaterialGatePassList = () => {
                     <h2 className='text-xl font-medium text-black'>Material Gate Pass List</h2>
                     <div className='flex gap-x-2'>
                         <NavLink
-                            to='/front-office/add-material-gate-pass'
+                            to={paths.add}
                             className='bg-[#515DEF] text-white text-sm px-4 py-2 rounded-md hover:opacity-90 transition-all duration-200 cursor-pointer flex items-center gap-x-2'
                         >
                             <Plus size={16} />
@@ -236,9 +264,9 @@ const MaterialGatePassList = () => {
                                         <td className='px-2 py-4'>{record.createdBy}</td>
                                         <td className='px-2 py-4 text-center rounded-e-lg'>
                                             <Dropdown buttonContent={<EllipsisIcon size={16} className='text-black' />}>
-                                                <NavLink to={`/front-office/material-gate-pass/view/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
-                                                <NavLink to={`/front-office/material-gate-pass/edit/${record.id}`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Edit</NavLink>
-                                                {canDelete && (
+                                                <NavLink to={paths.view(record.id)} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>View</NavLink>
+                                                <NavLink to={paths.edit(record.id)} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>Edit</NavLink>
+                                                {showDelete ? (
                                                     <button
                                                         type='button'
                                                         onClick={() => {
@@ -249,8 +277,8 @@ const MaterialGatePassList = () => {
                                                     >
                                                         Delete
                                                     </button>
-                                                )}
-                                                <NavLink to={`/front-office/material-gate-pass/view/${record.id}?print=1`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
+                                                ) : null}
+                                                <NavLink to={`${paths.view(record.id)}?print=1`} className='block w-full text-left p-2 hover:bg-[#515DEF] hover:text-white rounded cursor-pointer'>
                                                     <span className='inline-flex items-center gap-1'><Printer size={14} /> Print</span>
                                                 </NavLink>
                                             </Dropdown>
@@ -300,6 +328,15 @@ const MaterialGatePassList = () => {
             <ExportModal
                 exportModal={exportModal}
                 setExportModal={setExportModal}
+                filename='material-gate-passes'
+                rows={filteredRecords.map((r) => ({
+                    id: r.id || r.publicId,
+                    passType: r.passType,
+                    date: r.date,
+                    driverName: r.driverName,
+                    vehicleNo: r.vehicleNo,
+                    status: r.status,
+                }))}
                 exportDescription={
                     <>
                         You are exporting {filteredRecords.length} record{filteredRecords.length === 1 ? '' : 's'}{' '}
@@ -308,7 +345,7 @@ const MaterialGatePassList = () => {
                 }
             />
 
-            {canDelete && deleteModal && (
+            {deleteModal && (
                 <div className='fixed inset-0 z-500 flex items-center justify-center'>
                     <div className='absolute inset-0 bg-black/40' onClick={() => setDeleteModal(false)} />
                     <div className='relative z-10 w-full max-w-md rounded-xl bg-white shadow-lg p-6'>
@@ -316,7 +353,7 @@ const MaterialGatePassList = () => {
                         <p className='text-sm text-[#667085] mt-2'>This action cannot be undone.</p>
                         <div className='flex gap-3 mt-6'>
                             <button type='button' onClick={() => setDeleteModal(false)} className='flex-1 rounded-md border border-[#D9D9D9] px-4 py-2 text-sm text-[#667085] hover:bg-[#F9FAFB] cursor-pointer'>Cancel</button>
-                            <button type='button' onClick={handleDelete} className='flex-1 rounded-md bg-[#FF0000] px-4 py-2 text-sm text-white hover:opacity-90 cursor-pointer'>Delete</button>
+                            <button type='button' onClick={handleDelete} disabled={deleting} className='flex-1 rounded-md bg-[#FF0000] px-4 py-2 text-sm text-white hover:opacity-90 cursor-pointer disabled:opacity-60'>{deleting ? 'Deleting…' : 'Delete'}</button>
                         </div>
                     </div>
                 </div>

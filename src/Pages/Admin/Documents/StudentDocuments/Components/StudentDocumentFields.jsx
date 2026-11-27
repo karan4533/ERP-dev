@@ -1,6 +1,24 @@
 import React from 'react'
+import { toast } from 'react-toastify'
 import DocumentFileUpload from '../../EmployeeDocuments/Components/DocumentFileUpload'
+import { openStoredDocument } from '../../../../../services/documentsApi'
 import { documentStatusColor } from '../studentDocumentsData'
+
+const ViewStoredFile = ({ downloadUrl }) => (
+    <button
+        type='button'
+        onClick={async () => {
+            try {
+                await openStoredDocument(downloadUrl)
+            } catch (error) {
+                toast.error(error?.status === 403 ? 'You do not have permission to open this file.' : 'The file could not be opened.')
+            }
+        }}
+        className='self-start text-xs font-medium text-[#515DEF] hover:underline cursor-pointer'
+    >
+        View file
+    </button>
+)
 
 const StudentDocumentFields = ({ slots, onChange, statusReadOnly = false, readOnly = false }) => {
     const readOnlyFieldClass =
@@ -24,6 +42,7 @@ const StudentDocumentFields = ({ slots, onChange, statusReadOnly = false, readOn
                         <div className={readOnlyFieldClass}>
                             {slot.fileName?.trim() ? slot.fileName : '—'}
                         </div>
+                        {slot.downloadUrl ? <ViewStoredFile downloadUrl={slot.downloadUrl} /> : null}
                     </div>
                 ))}
             </div>
@@ -58,7 +77,8 @@ const StudentDocumentFields = ({ slots, onChange, statusReadOnly = false, readOn
                     )}
                     <DocumentFileUpload
                         fileName={slot.fileName}
-                        onChange={(fileName) => updateSlot(slot.typeId, { fileName })}
+                        downloadUrl={slot.downloadUrl}
+                        onChange={(fileName, file) => updateSlot(slot.typeId, { fileName, file })}
                     />
                 </div>
             ))}

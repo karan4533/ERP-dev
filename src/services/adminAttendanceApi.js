@@ -129,5 +129,68 @@ export const loadEmployeeAttendance = async () => {
         warnings,
         roleOptions: uniqueSorted(records.map((record) => (record.role === DASH ? '' : record.role))),
         statusOptions: uniqueSorted(records.map((record) => (record.status === DASH ? '' : record.status))),
+        dailyTrend: buildDailyTrendFromRecords(records),
     }
+}
+
+const shiftIsoDate = (iso, deltaDays) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    const date = new Date(y, m - 1, d + deltaDays)
+    return toIsoDate(date)
+}
+
+const isPresentLike = (status) => /^(present|late)$/i.test(String(status || '').trim())
+
+/** Build last-N-day present rate from records that already carry a `date` field. */
+const buildDailyTrendFromRecords = (records, days = 7) => {
+    const today = toIsoDate(new Date())
+    const labels = []
+    const rates = []
+    for (let i = days - 1; i >= 0; i -= 1) {
+        const iso = shiftIsoDate(today, -i)
+        labels.push(iso.slice(5)) // MM-DD
+        const dayRows = records.filter((row) => row.date === iso)
+        if (!dayRows.length) {
+            rates.push(null)
+            continue
+        }
+        const present = dayRows.filter((row) => isPresentLike(row.status)).length
+        rates.push(Math.round((present / dayRows.length) * 100))
+    }
+    return { labels, rates }
+}
+
+/**
+ * Probe recent calendar days for any student marks (campus-wide). Used so Super Admin opens on a
+ * day that has data instead of an empty "today" table when teachers have not marked yet.
+ */
+export const findLatestStudentAttendanceDate = async ({ lookback = 21 } = {}) => {
+    const today = toIsoDate(new Date())
+    for (let i = 0; i < lookback; i += 1) {
+        const iso = shiftIsoDate(today, -i)
+        const rows = await listAttendanceApi({ date: iso })
+        if (Array.isArray(rows) && rows.length) return iso
+    }
+    return today
+}
+
+/**
+ * Last `days` of campus-wide student attendance rates for overview charts (honest nulls when empty).
+ */
+export const loadStudentAttendanceDailyTrend = async ({ days = 7 } = {}) => {
+    const today = toIsoDate(new Date())
+    const dates = Array.from({ length: days }, (_, i) => shiftIsoDate(today, -(days - 1 - i)))
+    const settled = await Promise.allSettled(dates.map((date) => listAttendanceApi({ date })))
+    const labels = []
+    const rates = []
+    settled.forEach((result, index) => {
+        labels.push(dates[index].slice(5))
+        if (result.status !== 'fulfilled' || !Array.isArray(result.value) || !result.value.length) {
+            rates.push(null)
+            return
+        }
+        const present = result.value.filter((row) => isPresentLike(row.attendanceStatus || row.status)).length
+        rates.push(Math.round((present / result.value.length) * 100))
+    })
+    return { labels, rates }
 }
